@@ -304,7 +304,7 @@ function synopsis(e){
 <h4>Engine TA evidence — multi-doctrine read</h4>
 <p>At entry the doctrine stack returned a <b>${T.bias||'neutral'}</b> composite bias with ${T.confluence||0} confirming factor(s)${T.reasons&&T.reasons.length?`: ${T.reasons.join(' + ')}`:''}.
 ${T.sfp?`A <b>${T.sfp.type}</b> swing-failure pattern printed at the $${fmtP(T.sfp.level)} key level ${T.sfp.age} candle(s) ago (strength ${T.sfp.strength}/100) — the sweep that failed to hold, per the Bulkowski reversal doctrine. `:`No swing-failure was present at a key level on this read. `}
-${T.elliott?`Elliott structure resolved as a completed five-wave ${T.elliott.dir} impulse (quality ${T.elliott.quality}/100, leg ratios ${T.elliott.ratios.map(r=>r.toFixed(2)).join('/')})${T.elliott.shortTop?' — a terminal wave-5 top: the Philakone short-the-fifth setup, traded only because confluence agreed':' — a terminal wave-5 bottom'}. `:`No completed five-wave impulse measured at entry. `}
+${T.elliott?`Elliott structure resolved as a completed five-wave ${T.elliott.dir} impulse (quality ${T.elliott.quality}/100, leg ratios w2 ${T.elliott.ratios.w2r} / w4 ${T.elliott.ratios.w4r} / w5-vs-1+3 ${T.elliott.ratios.w5w13})${T.elliott.shortTop?' — a terminal wave-5 top: the Philakone short-the-fifth setup, traded only because confluence agreed':' — a terminal wave-5 bottom'}. `:`No completed five-wave impulse measured at entry. `}
 ${T.wyckoff&&T.wyckoff.type&&T.wyckoff.type!=='ranging'?`Wyckoff schematic resolved a <b>${T.wyckoff.type}</b> range in <b>phase ${T.wyckoff.phase}</b>${T.wyckoff.event?` — latest event <b>${T.wyckoff.event}</b> (quality ${T.wyckoff.quality}/100${T.wyckoff.volX?`, ${T.wyckoff.volX}× volume`:''})`:''}${T.wyckoff.events&&T.wyckoff.events.length?` — event trail: ${T.wyckoff.events.join(' → ')}`:''}. `:'No Wyckoff schematic events measured. '}
 ${T.smc?`SMC read: ${T.smc.bos?`<b>${T.smc.bos} BOS</b> `:''}${T.smc.choch?`<b>${T.smc.choch} CHoCH</b> `:''}${!T.smc.bos&&!T.smc.choch?'no structural break — ':''}price in the <b>${T.smc.zone}</b> zone${T.smc.inOB?`, sitting inside a ${T.smc.inOB.dir} order block`:''}${T.smc.eqh?`, EQH liquidity resting at $${fmtP(T.smc.eqh)}`:''}${T.smc.eql?`, EQL liquidity at $${fmtP(T.smc.eql)}`:''}. `:''}
 ${T.eq?`EQ quartile read: last candle closed in <b>${T.eq.lastQ}</b> of its own range${T.eq.respect?`, <b>${T.eq.respect}</b> at the prior bar's 50% EQ`:''}${T.eq.swept?`, <b>${T.eq.swept}</b> vs prior bar mean`:''}${T.eq.wick?`, ${T.eq.wick} wick`:''} — dealing-range position <b>${T.eq.rangeQ}</b>. `:''}
@@ -347,6 +347,7 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} perpetual fundi
 <div class="srcs">SOURCES — NEPTUNE books registry: <a href="${B.u}" target="_blank" rel="noopener">${B.t} (${B.a})</a> · ${SUPPORT.map(s=>`<a href="${s.u}" target="_blank" rel="noopener">${s.t} (${s.a})</a>`).join(' · ')} — doctrine mappings per SYSTEM MANIFEST v2.0</div>`;
 }
 async function render(){
+  const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
   const [scan,detail,ledger,snap,prices,health,vault,funding]=await Promise.all([
     j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
@@ -431,7 +432,6 @@ async function render(){
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
     // account-scale mode: render $ P&L at the user's real size (10% notional/trade)
-    const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
     if($('acctIn')&&document.activeElement!==$('acctIn'))$('acctIn').value=acctN||'';
     const acctD=(pnl,not)=>acctN?' <span class="sub">$'+(pnl/100*acctN*0.1*((not??1000)/1000)).toFixed(2)+'</span>':'';
     if(acctN){
