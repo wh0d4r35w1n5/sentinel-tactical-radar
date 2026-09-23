@@ -955,6 +955,20 @@ async function main() {
         lev: LEVERAGE,
         liqPct: LIQ_PCT,
         feePct: FEE_PCT,
+        // multi-split take-profit ladder: bank 33%/33%/34% of the position
+        // at 40%/70%/100% of the target move — "no one ever went broke
+        // taking profit"; the engine harvests constantly, never waits for
+        // a single all-or-nothing print
+        tps: [
+          { at: 0.4, frac: 0.33 },
+          { at: 0.7, frac: 0.33 },
+          { at: 1.0, frac: 0.34 },
+        ],
+        // dynamic stop (% adverse→locked-profit, from entry): starts at the
+        // designed invalidation, moves to breakeven (zero-risk) once a safe
+        // buffer prints, ratchets up behind profit, and only trails the
+        // runner once price is past full target
+        stopAt: -s.stopPct,
         targetPct: s.targetPct,
         targetPrice: s.targetPrice,
         score: s.score,
@@ -987,15 +1001,41 @@ async function main() {
           : ((e.entry - px) / e.entry) * 100
       );
       e.lastPrice = px;
+      e.rawPnl = pnl;
       e.peakPnl = Math.max(e.peakPnl ?? -Infinity, pnl);
-      // lock 50%: once price covers half the target, bank half the
-      // position and move the stop on the remainder to breakeven
-      if (e.lockPnl == null && pnl >= e.targetPct / 2) {
+      // ---- multi-split take-profit: fill each rung as price covers its
+      // fraction of the target; banked portions are realized forever ----
+      if (e.tps) {
+        for (const tp of e.tps)
+          if (!tp.hit && pnl >= tp.at * e.targetPct) {
+            tp.hit = true; tp.pnl = pnl; tp.ts = now;
+          }
+        // ---- dynamic stop intelligence ----
+        // zero-risk: once price covers 40% of target (TP1 territory), the
+        // stop ratchets to breakeven — the trade can no longer lose
+        if (e.peakPnl >= e.targetPct * 0.4) e.stopAt = Math.max(e.stopAt, 0);
+        // profit ratchet: deeper into target → stop locks profit behind it
+        if (e.peakPnl >= e.targetPct * 0.7) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.4);
+        if (e.peakPnl >= e.targetPct * 0.9) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.65);
+        // trailing stop — CAREFUL mode: only once the runner is past full
+        // target does it trail (40% giveback of the peak), never earlier
+        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.6);
+      }
+      // legacy entries (pre-ladder) keep the lock-50 behavior
+      else if (e.lockPnl == null && pnl >= e.targetPct / 2) {
         e.lockPnl = pnl;
         e.lockedAt = now;
         e.beStop = true;
       }
     }
+    // blended P&L: banked split fractions are locked at their hit prices,
+    // the remainder marks live — this is the true realized+open position
+    const blended = (livePnl) => {
+      if (!e.tps) return e.lockPnl != null ? (e.lockPnl + livePnl) / 2 : livePnl;
+      const banked = e.tps.filter((t) => t.hit).reduce((a, t) => a + t.frac * t.pnl, 0);
+      const rem = e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0);
+      return banked + rem * livePnl;
+    };
     const fee = e.feePct ?? FEE_PCT;
     // funding carry hits leveraged P&L directly: ratePct per 8h × elapsed
     // funding periods, paid or earned per the entry's carry direction
@@ -1008,17 +1048,14 @@ async function main() {
       e.exitPrice = exitPx;
       e.exitTs = now;
       e.fundingPnl = pct(fundPnl);
-      const net =
-        e.lockPnl != null ? (e.lockPnl + rawPnl) / 2 - fee + fundPnl : rawPnl - fee + fundPnl;
-      e.pnlPct = pct(net);
+      e.pnlPct = pct(blended(rawPnl) - fee + fundPnl);
     };
-    const hit =
-      px &&
-      (e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice);
-    const beStopped = px && e.beStop && pnl <= 0;
-    const stopped = px && pnl <= -(e.stopPct ?? Math.max(4, e.targetPct));
-    // liquidation outranks the stop: if the wick reached the liq band the
-    // position is gone — whole margin lost (−100/lev on notional)
+    const hit = px && pnl >= e.targetPct; // full target = final rung fills
+    const beStopped = px && !e.tps && e.beStop && pnl <= 0;
+    const stopLevel = e.tps ? e.stopAt : -(e.stopPct ?? Math.max(4, e.targetPct));
+    const stopped = px && pnl <= stopLevel;
+    const trailed = stopped && stopLevel > 0; // stop was above entry → profit-lock exit
+    // liquidation outranks everything: a wick through the band kills it
     const liquidated = px && (e.lev || 0) > 1 && pnl <= -(e.liqPct ?? LIQ_PCT);
     const reversed =
       px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
@@ -1026,10 +1063,10 @@ async function main() {
     if (liquidated) settle('liquidated', px, -100 / (e.lev || LEVERAGE));
     else if (hit) settle('won', px, pnl);
     else if (beStopped) settle('breakeven', e.entry, 0);
-    else if (stopped) settle('stopped', px, pnl);
+    else if (stopped) settle(trailed ? 'trailed' : 'stopped', px, pnl);
     else if (reversed) settle('reversed', px, pnl);
-    else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.pnlPct ?? 0);
-    else e.pnlPct = pct(pnl - fee + fundPnl); // live mark net of modeled fees + carry
+    else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? e.pnlPct ?? 0);
+    else e.pnlPct = pct(blended(pnl) - fee + fundPnl); // live mark = banked + remainder
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');

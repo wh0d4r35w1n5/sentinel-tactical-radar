@@ -73,6 +73,7 @@ tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 .st.stopped,.st.reversed{background:rgba(255,93,93,.13);color:var(--red)}
 .st.liquidated{background:rgba(255,40,40,.28);color:#ff6b6b;border:1px solid rgba(255,60,60,.5)}
 .st.breakeven,.st.expired{background:rgba(255,184,77,.12);color:var(--amb)}
+.st.trailed{background:rgba(61,255,115,.16);color:var(--grn);border:1px solid rgba(61,255,115,.4)}
 .mbadge{display:inline-block;padding:0 5px;border:1px solid rgba(255,184,77,.4);border-radius:3px;font-size:9px;color:var(--amb);margin-left:4px}
 .drvr{margin-bottom:9px}
 .drvr .nm{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
@@ -336,6 +337,7 @@ function confList(e){
   if(e.social)add(e.social.dir?v(e.social.dir==='bull'):'inf',`LunarCrush: galaxy ${e.social.galaxy??'—'} · altRank ${e.social.altRank??'—'} · sentiment ${e.social.sentiment??'—'} · social vol ${e.social.socialVol??'—'}`);
   if(e.news)add(e.news.dir?v(e.news.dir==='bull'):e.news.fud?(L?'con':'sup'):'inf',`CryptoPanic: ${e.news.n} posts · sentiment ${e.news.sentiment??'—'}${e.news.imp?` · ${e.news.imp} important`:''}${e.news.hype?` · ${e.news.hype} hype-filtered`:''}${e.news.fud?' · FUD cluster':''}${e.news.heads&&e.news.heads[0]?` · "${e.news.heads[0]}"`:''}`);
   if(e.lev>1)add('inf',`10× isolated USDT-M perpetual — margin $${(e.margin??(e.notional??1000)/10).toLocaleString()} USD controls $${(e.notional??1000).toLocaleString()} USD notional · est. liquidation −${e.liqPct??9.2}% adverse${e.fundingPnl!=null?` · funding ${e.fundingPnl>=0?'+':''}${e.fundingPnl}%`:''}`);
+  if(e.tps){const hits=e.tps.filter(t=>t.hit);add('inf',`take-profit ladder 40/70/100% of target — ${hits.length}/3 rungs banked${hits.length?` (last +${hits[hits.length-1].pnl}%)`:''} · stop ${e.stopAt===0?'at breakeven (zero-risk)':e.stopAt>0?`locked +${e.stopAt}%`:`at −${Math.abs(e.stopAt??e.stopPct??4)}%`}${e.peakPnl>e.targetPct?' · trailing runner active':''}`)}
   if(e.mcap)add(e.mcap.dir?v(e.mcap.dir==='bull'):'inf',`market cap $${e.mcap.mcapUsd!=null?(e.mcap.mcapUsd/1e9>=1?(e.mcap.mcapUsd/1e9).toFixed(1)+'B':(e.mcap.mcapUsd/1e6).toFixed(0)+'M'):'—'} USD${e.mcap.rank?` · rank #${e.mcap.rank}`:''}${e.mcap.floatPct!=null?` · ${e.mcap.floatPct}% float unlocked${e.mcap.floatPct<30?' (dilution risk)':''}`:''}${e.mcap.athDistPct!=null?` · ${e.mcap.athDistPct}% vs ATH`:''}${e.mcap.volMcapPct!=null?` · vol/mcap ${e.mcap.volMcapPct}%`:''}${e.mcap.cmc?` · CMC rank ${e.mcap.cmc.rank}`:''}`);
   if(e.events)add(e.events.unlocks>0?(L?'con':'sup'):e.events.dir?v(e.events.dir==='bull'):'inf',`events ≤7d: ${e.events.n}${e.events.unlocks?` · ${e.events.unlocks} UNLOCK (supply risk)`:''}${e.events.catalysts?` · ${e.events.catalysts} catalyst`:''}${e.events.next&&e.events.next[0]?` — ${e.events.next[0]}`:''}`);
   if(e.carry==='earn')add('sup','carry: position earns funding while open');
@@ -363,6 +365,7 @@ function synopsis(e){
     breakeven:`After the lock fired, price retraced to the entry. The breakeven stop closed the runner at $${fmtP(e.exitPrice)} USD at ${end} UTC — the banked half preserved the realized +${pnl}% while the remainder scratched at zero.`,
     expired:`The 24-hour maximum holding horizon elapsed without target or stop contact. The position was marked out at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC — time-exposure limits enforced.`,
     liquidated:`Price wicked through the −${e.liqPct??9.2}% liquidation band on the 10× isolated position before the stop could rescue it — the margin ($${(e.margin??0).toLocaleString()} USD) was taken in full at ${end} UTC. This is the failure mode leverage introduces that spot never has: the position is force-closed, not stopped, and there is no recovery.`,
+    trailed:`The trailing stop locked the trade out at $${fmtP(e.exitPrice)} USD at ${end} UTC — profit-protection, not failure. The take-profit ladder had already banked${e.tps?' '+e.tps.filter(t=>t.hit).length+' rung(s)':''} along the way, and the dynamic stop finished +${Math.abs(e.stopAt??0)}% above entry, so the exit prints ${pnl}% — a win closed by the trail, which is exactly what the trail is for.`,
   }[e.status]||'';
   const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
     ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 USD notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
@@ -514,7 +517,10 @@ async function render(){
     } else $('acctNote').textContent='';
     $('journal').innerHTML=(ledger.entries||[]).map(e=>{
       const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice)+' USD':'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice)+' USD':'—');
-      const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'');
+      const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'')
+        +(e.tps?`<span class="mbadge" title="split take-profit ladder">${e.tps.map(t=>t.hit?'TP✓':'TP·').join('')}</span>`:'')
+        +(e.stopAt===0?'<span class="mbadge" title="stop moved to entry — trade cannot lose">ZERO-RISK</span>':'')
+        +(e.stopAt>0?`<span class="mbadge" title="stop locked in +${e.stopAt}% profit">LOCKED+${e.stopAt}%</span>`:'');
       const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
       const live=e.status==='open'?1:0;
       const key=e.asset+':'+e.ts;
