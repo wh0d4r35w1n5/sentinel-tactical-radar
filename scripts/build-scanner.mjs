@@ -921,11 +921,11 @@ async function main() {
     );
   // portfolio cap: open notional can't exceed 60% of equity — signals are
   // already score-sorted so the best setups get slots first.
-  // Tharp risk-based sizing: target 2% of equity AT RISK per trade, i.e.
-  // notional = 2% / stop distance — tighter stops carry bigger notional for
+  // Tharp risk-based sizing: target 1% of equity AT RISK per trade, i.e.
+  // notional = 1% / stop distance — tighter stops carry bigger notional for
   // the same dollar risk. Conviction scales the risk (A=full, B=half),
   // notional hard-capped at 30% of equity so one position can't eat the book.
-  const RISK_PCT = 0.02, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
+  const RISK_PCT = 0.01, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
   const deployed = () =>
     ledger.entries
       .filter((e) => e.status === 'open')
