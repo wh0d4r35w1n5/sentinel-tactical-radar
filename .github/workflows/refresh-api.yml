@@ -38,6 +38,9 @@ jobs:
 
       - name: Build scanner snapshot from Bitget
         run: node scripts/build-scanner.mjs
+        env:
+          COINGLASS_API_KEY: ${{ secrets.COINGLASS_API_KEY }}
+          LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
 
       - name: Build market snapshot (Jupiter + Solana + Bitget)
         run: node scripts/build-snapshot.mjs

@@ -28,7 +28,22 @@ Runs every 10 minutes + on demand:
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
 | `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/expired with P&L. |
 | `api/bitget-symbols.json` | The Bitget-listed coin universe used for filtering. |
+| `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
+| `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
 | `api/{config,hud-status,trades,bot-state,recovered-notes}.json` | Pulled from the upstream Netlify backend; last-good kept on failure. |
+
+### Optional intelligence feeds (keys → richer signals)
+
+The scanner auto-activates two key-gated feeds; without keys they honestly
+report `no-key` and are skipped:
+
+| Feed | Key source | Adds |
+|---|---|---|
+| CoinGlass | `COINGLASS_API_KEY` env or `scripts/api-keys.json` `{"coinglass":"..."}` (open-api-v4, free hobbyist tier) | 24h liquidations, global long/short account ratio |
+| LunarCrush | `LUNARCRUSH_API_KEY` env or `scripts/api-keys.json` `{"lunarcrush":"..."}` (api4 Bearer) | Galaxy Score, AltRank, sentiment, social volume per asset |
+
+`scripts/api-keys.json` is gitignored. For CI, add both as GitHub repo
+secrets named identically — the workflow passes env through.
 
 In-browser, Jupiter quote/swap requests go straight to `lite-api.jup.ag`
 (CORS-enabled). POST mutations (save config, toggle bot, record trade) are

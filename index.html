@@ -331,6 +331,8 @@ function confList(e){
   if(T.vwap)add(v(T.vwap.fade==='LONG'),`5-min VWAP ${T.vwap.devPct>0?'+':''}${T.vwap.devPct}% (z ${T.vwap.z}) → ${T.vwap.fade} fade doctrine`);
   if(e.harmonic)add(v(e.harmonic.dir==='bullish'),`${e.harmonic.dir} ${e.harmonic.type} validated · q${e.harmonic.quality}/100 · D @ $${fmtP(e.harmonic.dPrice)} USD`);
   if(e.ext)add(e.ext.dir===e.direction?'sup':'con',`external desk signal: ${e.ext.dir} (${e.ext.ageMin!=null?e.ext.ageMin+'m ago':'recent'})`);
+  if(e.deriv)add(e.deriv.dir?v(e.deriv.dir==='bull'):'inf',`derivatives: ${e.deriv.oiUsd?'OI $'+(e.deriv.oiUsd/1e6).toFixed(1)+'M USD · ':''}funding ${e.deriv.fundingTrend||'—'} · ${e.deriv.crowding||'—'}${e.deriv.longShortRatio?' · L/S '+e.deriv.longShortRatio:''}${e.deriv.liqLongUsd!=null?` · liq 24h $${((e.deriv.liqLongUsd+(e.deriv.liqShortUsd||0))/1e6).toFixed(1)}M USD`:''}`);
+  if(e.social)add(e.social.dir?v(e.social.dir==='bull'):'inf',`LunarCrush: galaxy ${e.social.galaxy??'—'} · altRank ${e.social.altRank??'—'} · sentiment ${e.social.sentiment??'—'} · social vol ${e.social.socialVol??'—'}`);
   if(e.carry==='earn')add('sup','carry: position earns funding while open');
   else if(e.carry==='pay')add('con','carry: position pays funding while open');
   else if(e.carry==='flat')add('inf','carry: funding flat');
@@ -412,8 +414,8 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} perpetual fundi
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,snap,prices,health,vault,funding]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json')]);
+  const [scan,detail,ledger,snap,prices,health,vault,funding,sent]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -573,7 +575,11 @@ async function render(){
   // funding radar — arb candidates + open-trade carry exposure
   if(funding&&funding.best){
     const co=ledger&&ledger.stats&&ledger.stats.discipline?ledger.stats.discipline.carryOpen:null;
-    $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago`;
+    const feeds=sent&&sent.feeds?sent.feeds:{};
+    const feedStr=`feeds: bitget <b class="up">live</b> · coinglass <b class="${feeds.coinglass==='live'?'up':'dn'}">${feeds.coinglass||'no-key'}</b> · lunarcrush <b class="${feeds.lunarcrush==='live'?'up':'dn'}">${feeds.lunarcrush||'no-key'}</b>`;
+    const crowded=sent&&sent.assets?Object.entries(sent.assets).filter(([a,x])=>x.crowding&&x.crowding!=='balanced'):[];
+    const crowdStr=crowded.length?' · '+crowded.slice(0,6).map(([a,x])=>`<b class="${x.crowding==='longs-crowded'?'dn':'up'}">${a}</b> ${x.crowding==='longs-crowded'?'longs crowded':'shorts crowded'}${x.oiUsd?' · OI $'+(x.oiUsd/1e6).toFixed(0)+'M':''}`).join(' · '):'';
+    $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago · ${feedStr}${crowdStr}`;
     $('fundRows').innerHTML=funding.best.map(f=>
       `<tr><td><b>${f.asset}</b></td>
       <td class="num ${f.ratePct>=0?'dn':'up'}">${f.ratePct>=0?'+':''}${f.ratePct}%</td>

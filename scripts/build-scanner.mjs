@@ -29,6 +29,7 @@ const PERP_TICKERS_URL =
 const FUND_URL = 'https://api.bitget.com/api/v2/mix/market/current-fund-rate';
 const FUND_HIST_URL =
   'https://api.bitget.com/api/v2/mix/market/history-fund-rate';
+const OI_URL = 'https://api.bitget.com/api/v2/mix/market/open-interest';
 const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
@@ -238,6 +239,85 @@ async function main() {
         })
       );
     }
+
+    // ---- derivatives + social intelligence ----
+    // Bitget public futures (keyless): open interest + funding history →
+    // positioning pressure. CoinGlass / LunarCrush activate when keys exist.
+    let KEYS = {};
+    try { KEYS = JSON.parse(fs.readFileSync(new URL('./api-keys.json', import.meta.url), 'utf8')); } catch {}
+    const CG_KEY = process.env.COINGLASS_API_KEY || KEYS.coinglass || null;
+    const LC_KEY = process.env.LUNARCRUSH_API_KEY || KEYS.lunarcrush || null;
+    const deriv = {}, social = {};
+    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key' };
+    for (let i = 0; i < fundSyms.length; i += 12) {
+      await Promise.all(
+        fundSyms.slice(i, i + 12).map(async (sym) => {
+          const asset = sym.replace('USDT', '');
+          const d = {};
+          try {
+            // open interest — size of open perp positions (Bitget public)
+            const oi = await fetch(`${OI_URL}?symbol=${sym}&productType=USDT-FUTURES`);
+            if (oi.ok) {
+              const od = (await oi.json()).data;
+              const sz = +((od && od.openInterestList && od.openInterestList[0]) || {}).size;
+              const px = perpPx[asset];
+              if (isFinite(sz) && px) { d.oiUsd = Math.round(sz * px); }
+            }
+            // funding history → trend (rising = longs paying more, crowding)
+            const fh = await fetch(`${FUND_HIST_URL}?symbol=${sym}&productType=USDT-FUTURES&pageSize=8`);
+            if (fh.ok) {
+              const hist = (await fh.json()).data || [];
+              const rates = hist.map((x) => +x.fundingRate).filter((x) => isFinite(x));
+              if (rates.length >= 4) {
+                const now = rates[0], prevAvg = rates.slice(1).reduce((a, x) => a + x, 0) / (rates.length - 1);
+                d.fundingTrend = now > prevAvg * 1.5 + 0.00002 ? 'rising' : now < prevAvg * 0.5 - 0.00002 ? 'falling' : 'flat';
+                // crowding: sustained positive & rising → longs crowded (squeeze fuel)
+                d.crowding = now > 0.0002 && d.fundingTrend !== 'falling' ? 'longs-crowded'
+                           : now < -0.0001 ? 'shorts-crowded' : 'balanced';
+              }
+            }
+          } catch {}
+          // CoinGlass (key-gated): liquidations + long/short account ratio
+          if (CG_KEY) {
+            try {
+              const H = { headers: { 'CG-API-KEY': CG_KEY } };
+              const [lq, ls] = await Promise.all([
+                fetch(`https://open-api-v4.coinglass.com/api/futures/liquidation/aggregated-history?symbol=${asset}&interval=1d&limit=1`, H),
+                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=${sym}&interval=1h&limit=1`, H),
+              ]);
+              if (lq.ok) {
+                const dd = (await lq.json()).data || [];
+                if (dd[0]) { d.liqLongUsd = Math.round(+dd[0].long_liquidation_usd || 0); d.liqShortUsd = Math.round(+dd[0].short_liquidation_usd || 0); }
+              }
+              if (ls.ok) {
+                const dd = (await ls.json()).data || [];
+                if (dd[0]) { d.longShortRatio = pct(+dd[0].global_account_long_percent / Math.max(1e-9, +dd[0].global_account_short_percent)); }
+              }
+            } catch {}
+          }
+          // positioning verdict: crowded side is squeeze fuel AGAINST it
+          if (d.crowding) d.dir = d.crowding === 'longs-crowded' ? 'bear' : d.crowding === 'shorts-crowded' ? 'bull' : null;
+          if (Object.keys(d).length) deriv[asset] = d;
+          // LunarCrush (key-gated): galaxy score, alt rank, sentiment, social volume
+          if (LC_KEY) {
+            try {
+              const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${asset.toLowerCase()}/v1`, { headers: { Authorization: `Bearer ${LC_KEY}` } });
+              if (lc.ok) {
+                const ld = (await lc.json()).data;
+                if (ld) social[asset] = {
+                  galaxy: ld.galaxy_score ?? null, altRank: ld.alt_rank ?? null,
+                  sentiment: ld.sentiment ?? null, socialVol: ld.social_volume_24h ?? null,
+                  interactions: ld.interactions_24h ?? null,
+                  dir: (ld.galaxy_score ?? 50) >= 65 ? 'bull' : (ld.galaxy_score ?? 50) <= 35 ? 'bear' : null,
+                };
+              }
+            } catch {}
+          }
+        })
+      );
+    }
+    deriv._feeds = feedStatus; social._feeds = feedStatus;
+    globalThis.__deriv = deriv; globalThis.__social = social;
   } catch {}
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
@@ -331,13 +411,20 @@ async function main() {
           ? (dir0 === (ext.dir === 'long' ? 'LONG' : 'SHORT') ? 6 : -4)
           : 3
         : 0; // agreement boosts, contradiction costs
+      // positioning pressure: crowded side is squeeze fuel — riding WITH
+      // the crowd's unwind direction boosts, joining the crowd costs
+      const dp = (globalThis.__deriv || {})[r.asset];
+      const derivBoost = dp && dp.dir
+        ? (dir0 === 'LONG' ? 'bull' : 'bear') === dp.dir ? 3 : -2
+        : 0;
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
-            extBoost,
+            extBoost +
+            derivBoost,
           0,
           100
         )
@@ -416,6 +503,8 @@ async function main() {
               : (direction === 'SHORT') === (funding[r.asset].ratePct > 0)
                 ? 'earn'
                 : 'pay',
+        deriv: (globalThis.__deriv || {})[r.asset] ?? null,
+        social: (globalThis.__social || {})[r.asset] ?? null,
         stopPct: pct(clamp(targetPct / 2, 2, 8)),
         ta: ta
           ? {
@@ -607,6 +696,25 @@ async function main() {
         note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. paper estimates, Bitget USDT-FUTURES.',
         best: rows2.slice(0, 10),
         rows: rows2,
+      })
+    );
+  } catch {}
+
+  // ---- derivatives + social intelligence: write api/sentiment.json ----
+  try {
+    const dv = globalThis.__deriv || {}, so = globalThis.__social || {};
+    const assets = {};
+    for (const a of new Set([...Object.keys(dv), ...Object.keys(so)])) {
+      if (a === '_feeds') continue;
+      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? null };
+    }
+    fs.writeFileSync(
+      path.join(API, 'sentiment.json'),
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        feeds: dv._feeds || {},
+        note: 'positioning pressure: open interest + funding trend (Bitget public futures). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment activate when API keys are configured (scripts/api-keys.json or env). Crowded positioning is treated as squeeze fuel against the crowd.',
+        assets,
       })
     );
   } catch {}

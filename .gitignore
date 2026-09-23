@@ -4,5 +4,7 @@ scripts/tg.session
 scripts/*.session-journal
 # derived vip feed — only committed via explicit publish flag (git add -f)
 api/ext-alpha.json
+# third-party data keys (CoinGlass / LunarCrush) — never commit
+scripts/api-keys.json
 node_modules/
 __pycache__/
