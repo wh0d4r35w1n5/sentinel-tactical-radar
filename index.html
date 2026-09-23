@@ -199,11 +199,12 @@ function pulseSVG(series){
 function ledgerEntryFor(asset){
   return ((LAST.ledger&&LAST.ledger.entries)||[]).find(e=>e.asset===asset&&e.status==='open');
 }
+const OPEN=new Set();
 function sigDetail(s,i){
   const c=(LAST.detail&&LAST.detail.coins||{})[s.asset]||{};
   const e=ledgerEntryFor(s.asset);
   const drv=(s.drivers||[]).map(d=>`<li>${d}</li>`).join('');
-  return `<tr class="detail" data-d="${i}" hidden><td colspan="9">
+  return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
     <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
     <ul class="ddrv">${drv}</ul>
     <div>${sparkSVG(c.spark,520,64)}</div>
@@ -242,7 +243,7 @@ async function render(){
   const majors=prices&&prices.majors?prices.majors:{};
   $('chips').innerHTML=['BTC','ETH','SOL'].map(s=>{
     const live=sigByAsset[s];const p=live?{price:live.lastPrice,changePct:live.changePct}:majors[s];
-    return p?`<span><b>${s}</b> <span class="num">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
+    return p?`<span><b>${s}</b> <span class="num" data-px="${s}USDT">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
   }).join('');
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
@@ -258,11 +259,11 @@ async function render(){
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-i="${i}" tabindex="0"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
-    <td class="num ${s.changePct>=0?'up':'dn'}">${s.changePct>=0?'+':''}${s.changePct}%</td>
-    <td class="num">${c.rsi14??'—'}</td><td class="num">$${fmtP(s.lastPrice)}</td>
+    <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
+    <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)}</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
     <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err">no signals</td></tr>';
   if(ledger){
@@ -294,23 +295,24 @@ async function render(){
       const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice):'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice):'—');
       const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'');
       const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
+      const live=e.status==='open'?1:0;
       return `<tr><td><b>${e.asset}</b></td>
       <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
       <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''}</td>
-      <td class="num">$${fmtP(e.entry)}</td><td class="num">${mark}</td>
+      <td class="num">$${fmtP(e.entry)}</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
       <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
-      <td class="num ${pnlCls}">${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%':'—'}</td>
-      <td><span class="st ${e.status}">${e.status.toUpperCase()}</span>${flags}</td>
+      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%':'—'}</td>
+      <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`;
     }).join('')||'<tr><td colspan="11" class="err">no tracked signals yet</td></tr>';
   }
   if(vault){
     const h=vault.holdings||{};
     $('vaultStats').innerHTML=[
-      ['Basket value','$'+(vault.valueUsd??0)],['Deposited','$'+(vault.depositedUsd??0)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+(vault.pnlUsd??0)]
+      ['Basket value',`<span data-vtotal>$${vault.valueUsd??0}</span>`],['Deposited','$'+(vault.depositedUsd??0)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+(vault.pnlUsd??0)]
     ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
     const rows=Object.entries(h).map(([s,x])=>
-      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)}</span></span><span class="num">$${x.valueUsd}</span></div>`).join('');
+      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)}</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${x.valueUsd}</span></div>`).join('');
     const fills=(vault.fills||[]).slice(0,5).map(f=>
       `<div class="ledger-row"><span class="sub">+ $${f.usd} from ${f.asset} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
     $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
@@ -333,10 +335,42 @@ async function render(){
     const h=health.scanner,hs=health.snapshot;
     $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(hs?` · snapshot slot ${Number(hs.slot).toLocaleString()}`:'');
   }
+  livePaint();
 }
 function toggleRow(tr){
-  const d=document.querySelector(`tr.detail[data-d="${tr.dataset.i}"]`);
-  if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden)}
+  const d=document.querySelector(`tr.detail[data-d="${tr.dataset.a}"]`);
+  if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden);
+    d.hidden?OPEN.delete(tr.dataset.a):OPEN.add(tr.dataset.a)}
+}
+// repaint price-derived cells on every WS tick — no refetch, no refresh
+function livePaint(){
+  const L=window.__live;if(!L)return;
+  document.querySelectorAll('[data-px],[data-mark]').forEach(el=>{
+    const p=L.price(el.dataset.px||el.dataset.sym);if(p)el.textContent='$'+fmtP(p);
+  });
+  document.querySelectorAll('[data-chg]').forEach(el=>{
+    const t=(L.tick||{})[el.dataset.chg];if(!t)return;
+    const c=+t.changeUtc24h*100;if(!isFinite(c))return;
+    el.textContent=(c>=0?'+':'')+c.toFixed(2)+'%';
+    el.className='num '+(c>=0?'up':'dn');
+  });
+  document.querySelectorAll('[data-pnl]').forEach(el=>{
+    const p=L.price(el.dataset.sym);if(!p)return;
+    const entry=+el.dataset.entry,tgt=+el.dataset.tgt;
+    const pnl=(el.dataset.dir==='LONG'?(p-entry)/entry:(entry-p)/entry)*100;
+    el.textContent=(pnl>=0?'+':'')+pnl.toFixed(2)+'%';
+    el.className='num '+(pnl>0?'up':pnl<0?'dn':'');
+    const st=el.closest('tr')&&el.closest('tr').querySelector('[data-st]');
+    if(st&&st.textContent==='OPEN'){
+      if(pnl>=tgt){st.textContent='TARGET ✓';st.className='st won'}
+      else if(pnl<=-Math.max(4,tgt)){st.textContent='STOP ✓';st.className='st stopped'}
+    }
+  });
+  let v=0;document.querySelectorAll('[data-vunits]').forEach(el=>{
+    const p=L.price(el.dataset.sym);
+    if(p){const val=(+el.dataset.vunits)*p;el.textContent='$'+val.toFixed(2);v+=val}
+  });
+  const ve=document.querySelector('[data-vtotal]');if(ve&&v)ve.textContent='$'+v.toFixed(2);
 }
 document.getElementById('sigBody').addEventListener('click',e=>{
   const tr=e.target.closest('tr.sig');if(tr)toggleRow(tr);
@@ -345,7 +379,9 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
   const tr=e.target.closest('tr.sig');
   if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleRow(tr)}
 });
-render();setInterval(render,60000);
+render();
+if(window.__live)__live.onTick(livePaint);
+setInterval(render,30000);
 </script>
 </body>
 </html>

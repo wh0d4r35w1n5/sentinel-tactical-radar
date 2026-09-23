@@ -47,6 +47,7 @@
         if (m && m.arg && m.arg.channel === 'ticker' && Array.isArray(m.data)) {
           m.data.forEach(function (d) { liveTick[d.instId] = d; });
           liveTickAt = Date.now();
+          emitTick();
         }
       } catch (e2) {}
     };
@@ -59,6 +60,21 @@
   setInterval(function () {
     if (ws && ws.readyState === 1) { try { ws.send('ping'); } catch (e) {} }
   }, 25000);
+
+  // pub/sub: pages can repaint on every WS tick (throttled ~2s)
+  var tickSubs = [], tickTimer = 0;
+  function emitTick() {
+    if (tickTimer) return;
+    tickTimer = setTimeout(function () {
+      tickTimer = 0;
+      tickSubs.forEach(function (f) { try { f(liveTick); } catch (e) {} });
+    }, 2000);
+  }
+  window.__live = {
+    onTick: function (f) { tickSubs.push(f); },
+    price: function (sym) { var t = liveTick[sym]; return t ? +t.lastPr : null; },
+    tick: liveTick,
+  };
 
   var lastPairs = null;
   function maybeStream(pairs) {
