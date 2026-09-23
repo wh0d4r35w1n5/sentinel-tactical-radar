@@ -235,10 +235,18 @@ async function main() {
       if (ta.sfp) return 'Key Level SFP';
       if (ta.reasons[0] === 'elliott-w5')
         return ta.elliott.shortTop ? 'Elliott W5 Short' : 'Elliott W5 Bottom';
-      if (ta.reasons[0] && ta.reasons[0].indexOf('wyckoff') === 0)
-        return ta.wyckoff.event === 'spring' ? 'Wyckoff Spring' : 'Wyckoff Upthrust';
+      if (ta.reasons[0] === 'wyckoff-spring' || ta.reasons[0] === 'wyckoff-test')
+        return 'Wyckoff Spring';
+      if (ta.reasons[0] === 'wyckoff-jtc' || ta.reasons[0] === 'wyckoff-lps')
+        return 'Wyckoff JTC';
+      if (ta.reasons[0] === 'wyckoff-utad') return 'Wyckoff Upthrust';
+      if (ta.reasons[0] === 'wyckoff-fti' || ta.reasons[0] === 'wyckoff-lpsy')
+        return 'Wyckoff Ice Break';
+      if (ta.reasons[0] === 'smc-choch') return 'SMC CHoCH';
+      if (ta.reasons[0] === 'smc-bos') return 'SMC BOS';
       if (ta.reasons[0] === 'ignition') return 'Momentum Ignition';
       if (ta.reasons[0] === 'vwap-reversion') return 'VWAP Reversion';
+      if (ta.reasons[0] === 'eq-edge') return 'PA Quartile';
     }
     return strategyFor(r, k);
   };
@@ -355,7 +363,30 @@ async function main() {
                 ? { dir: ta.elliott.dir, shortTop: ta.elliott.shortTop, longBottom: ta.elliott.longBottom, quality: ta.elliott.quality, ratios: ta.elliott.ratios }
                 : null,
               wyckoff: ta.wyckoff
-                ? { phase: ta.wyckoff.phase, event: ta.wyckoff.event ?? null, volX: ta.wyckoff.volX ?? null }
+                ? {
+                    type: ta.wyckoff.type,
+                    phase: ta.wyckoff.phase,
+                    event: ta.wyckoff.event ?? null,
+                    quality: ta.wyckoff.quality,
+                    volX: ta.wyckoff.eventDetail?.volX ?? null,
+                    tr: ta.wyckoff.tr ?? null,
+                    events: ta.wyckoff.events ?? [],
+                  }
+                : null,
+              smc: ta.smc
+                ? {
+                    bos: ta.smc.bos, choch: ta.smc.choch, trend: ta.smc.trend,
+                    zone: ta.smc.zone, inOB: ta.smc.inOB
+                      ? { dir: ta.smc.inOB.dir, top: ta.smc.inOB.top, bot: ta.smc.inOB.bot }
+                      : null,
+                    eqh: ta.smc.eqh, eql: ta.smc.eql,
+                  }
+                : null,
+              eq: ta.eq
+                ? {
+                    lastQ: ta.eq.lastQ, respect: ta.eq.respect, swept: ta.eq.swept,
+                    wick: ta.eq.wick, rangeQ: ta.eq.rangeQ, rangePos: ta.eq.rangePos,
+                  }
                 : null,
               candles: ta.candles,
               fvgOpen: ta.fvgs.length,

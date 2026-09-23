@@ -99,23 +99,205 @@
     return recent || out[0] || null;
   }
 
-  // ---------- Wyckoff range: spring / upthrust ----------
+  // ---------- Wyckoff: full schematic — TR, phases A-E, springs, JTC ----------
+  // Event grammar: SC/BC -> AR -> ST -> (spring|UTAD) -> test -> (JTC|FTI)
+  // -> (LPS|LPSY) -> markup/markdown. Phase = furthest confirmed stage.
   function wyckoff(cs, lookback) {
-    var n = cs.length, win = Math.min(lookback || 30, n - 5);
-    if (win < 10) return null;
-    var base = cs.slice(n - win - 5, n - 5);
-    var hi = Math.max.apply(null, base.map(function (c) { return c.h; }));
-    var lo = Math.min.apply(null, base.map(function (c) { return c.l; }));
-    var rng = hi - lo; if (rng <= 0) return null;
-    var avgV = base.reduce(function (a, c) { return a + (c.qv || 0); }, 0) / base.length;
-    for (var i = n - 5; i < n; i++) {
-      var c = cs[i], vol = avgV ? (c.qv || 0) / avgV : 1;
-      if (c.l < lo - rng * 0.02 && c.c > lo && vol > 1.1)
-        return { phase: 'accumulation', event: 'spring', level: lo, volX: +vol.toFixed(2), age: n - 1 - i, bias: 'LONG' };
-      if (c.h > hi + rng * 0.02 && c.c < hi && vol > 1.1)
-        return { phase: 'distribution', event: 'upthrust', level: hi, volX: +vol.toFixed(2), age: n - 1 - i, bias: 'SHORT' };
+    var n = cs.length;
+    if (n < 40) return null;
+    var win = Math.min(lookback || 60, n - 3);
+    var W = cs.slice(n - win);
+    var off = n - win;
+    var TAIL = 8; // events are detected only in the tail — bounds come from the base
+    var base = W.slice(0, -TAIL), tail = W.slice(-TAIL);
+    var med = function (a) {
+      var b = a.slice().sort(function (x, y) { return x - y; });
+      return b[Math.floor(b.length / 2)] || 0;
+    };
+    var volAvg = med(base.map(function (c) { return c.qv || 0; })) || 1;
+    var rngAvg = med(base.map(function (c) { return c.h - c.l; })) || 1e-9;
+
+    // trading range bounds: pivot clusters in the BASE only — the tail can't
+    // pollute its own levels (a spring's low must never become the support)
+    var piv = zigzag ? zigzag(base, 0.012) : [];
+    var pivL = piv.filter(function (p) { return p.type === 'L'; }).map(function (p) { return { p: p.p, i: p.i }; });
+    var pivH = piv.filter(function (p) { return p.type === 'H'; }).map(function (p) { return { p: p.p, i: p.i }; });
+    var allL = base.map(function (c) { return c.l; }), allH = base.map(function (c) { return c.h; });
+    var minL = Math.min.apply(null, allL), maxH = Math.max.apply(null, allH);
+    var band = (maxH - minL) * 0.12;
+    var lowsN = pivL.filter(function (p) { return p.p <= minL + band; });
+    var highsN = pivH.filter(function (p) { return p.p >= maxH - band; });
+    var support = lowsN.length ? med(lowsN.map(function (x) { return x.p; })) : minL;
+    var resist = highsN.length ? med(highsN.map(function (x) { return x.p; })) : maxH;
+    var widthPct = support ? (resist - support) / support * 100 : 0;
+    var inside = base.filter(function (c) { return c.c >= support * 0.995 && c.c <= resist * 1.005; }).length / base.length;
+    var isRange = inside > 0.55 && widthPct > 1.5 && widthPct < 60;
+
+    // event timeline — climaxes from the base, actionable events from the tail
+    var ev = [];
+    var firstThird = Math.floor(base.length / 3);
+    for (var b = 1; b < base.length; b++) {
+      var bc = base[b], bvx = (bc.qv || 0) / volAvg, bsp = bc.h - bc.l;
+      if (b < firstThird && bvx >= 2.2 && bsp >= rngAvg * 1.8) {
+        if (bc.l <= minL + (resist - support) * 0.1)
+          ev.push({ t: 'SC', i: off + b, volX: +bvx.toFixed(2) });
+        else if (bc.h >= resist - (resist - support) * 0.1)
+          ev.push({ t: 'BC', i: off + b, volX: +bvx.toFixed(2) });
+      }
     }
-    return { phase: 'range', hi: hi, lo: lo, bias: null };
+    for (var i = 0; i < tail.length; i++) {
+      var c = tail[i], vx = (c.qv || 0) / volAvg, spread = c.h - c.l;
+      if (!isRange) continue;
+      var penDn = (support - c.l) / support;         // penetration below support
+      var penUp = (c.h - resist) / resist;           // penetration above resist
+      var abs = off + base.length + i;               // absolute candle index
+      var lastJTC = ev.filter(function (e) { return e.t === 'JTC'; }).pop();
+      var lastSpr = ev.filter(function (e) { return e.t === 'spring'; }).pop();
+      var lastFTI = ev.filter(function (e) { return e.t === 'FTI'; }).pop();
+      // SPRING — false break of support, closes back inside (not after an FTI —
+      // dips below the ice are markdown continuation, not accumulation)
+      if (penDn > 0.003 && c.c > support && !(lastFTI && abs - lastFTI.i <= 8))
+        ev.push({ t: 'spring', i: abs, level: +support.toFixed(8),
+          pen: +(penDn * 100).toFixed(2), volX: +vx.toFixed(2),
+          noSupply: vx < 0.8, absorbed: vx > 1.5 });
+      // TEST — post-spring pullback holds above spring low on lighter volume
+      else if (lastSpr && abs > lastSpr.i && c.l >= support * 0.998 &&
+               c.l < support * 1.02 && vx < 0.95 && !lastSpr.tested) {
+        lastSpr.tested = true;
+        ev.push({ t: 'test', i: abs, volX: +vx.toFixed(2) });
+      }
+      // JTC — jump across the creek: decisive close above resistance
+      else if (penUp > 0.004 && c.c > resist * 1.002 && spread >= rngAvg * 1.2 && vx >= 1.2)
+        ev.push({ t: 'JTC', i: abs, level: +resist.toFixed(8),
+          volX: +vx.toFixed(2), spreadX: +(spread / rngAvg).toFixed(2) });
+      // LPS — pullback after JTC holds above the creek
+      else if (lastJTC && abs > lastJTC.i && c.l >= resist * 0.997 &&
+               c.c >= resist && vx < 1.2 && !lastJTC.lps) {
+        lastJTC.lps = true;
+        ev.push({ t: 'LPS', i: abs, volX: +vx.toFixed(2) });
+      }
+      // UTAD — false break of resistance, closes back inside (not after a JTC —
+      // pokes above the creek are markup continuation, not distribution)
+      if (penUp > 0.003 && c.c < resist && !(lastJTC && abs - lastJTC.i <= 8))
+        ev.push({ t: 'UTAD', i: abs, level: +resist.toFixed(8),
+          pen: +(penUp * 100).toFixed(2), volX: +vx.toFixed(2) });
+      // FTI — fall through the ice: decisive close below support
+      else if (penDn > 0.004 && c.c < support * 0.998 && spread >= rngAvg * 1.2 && vx >= 1.2)
+        ev.push({ t: 'FTI', i: abs, level: +support.toFixed(8),
+          volX: +vx.toFixed(2) });
+      // LPSY — rally after FTI fails under the ice
+      else if (lastFTI && abs > lastFTI.i && c.h <= support * 1.003 &&
+               c.c <= support && vx < 1.2 && !lastFTI.lpsy) {
+        lastFTI.lpsy = true;
+        ev.push({ t: 'LPSY', i: abs, volX: +vx.toFixed(2) });
+      }
+    }
+
+    // phase inference — furthest confirmed stage wins
+    var has = function (t) { return ev.some(function (e) { return e.t === t; }); };
+    var last = function (t) { return ev.filter(function (e) { return e.t === t; }).pop(); };
+    var lastClose = cs[n - 1].c;
+    var markup = lastClose > resist * 1.03 && has('JTC');
+    var markdown = lastClose < support * 0.97 && has('FTI');
+    var type = null, phase = null;
+    if (has('JTC') || has('LPS')) { type = 'accumulation'; phase = markup ? 'E' : 'D'; }
+    else if (has('FTI') || has('LPSY')) { type = 'distribution'; phase = markdown ? 'E' : 'D'; }
+    else if (has('spring') || has('test')) { type = 'accumulation'; phase = 'C'; }
+    else if (has('UTAD')) { type = 'distribution'; phase = 'C'; }
+    else if (has('SC') || has('BC')) { type = has('SC') ? 'accumulation' : 'distribution'; phase = 'A'; }
+    else if (isRange) { type = 'ranging'; phase = 'B'; }
+
+    // freshest actionable event
+    var act = last('LPS') || last('JTC') || last('test') || last('spring') ||
+              last('LPSY') || last('FTI') || last('UTAD') || null;
+    var bias = null, quality = 0;
+    if (act) {
+      var acc = act.t === 'spring' || act.t === 'test' || act.t === 'JTC' || act.t === 'LPS';
+      bias = acc ? 'LONG' : 'SHORT';
+      quality = 50;
+      if (act.t === 'spring') quality += (act.tested ? 18 : 0) + (act.absorbed ? 12 : act.noSupply ? 8 : 0) + Math.min(act.pen * 4, 10);
+      if (act.t === 'JTC') quality += (act.lps ? 18 : 0) + Math.min((act.volX - 1) * 15, 15) + Math.min((act.spreadX - 1) * 10, 8);
+      if (act.t === 'UTAD') quality += Math.min(act.pen * 4, 10) + Math.min((act.volX - 1) * 12, 12);
+      if (act.t === 'FTI') quality += (act.lpsy ? 18 : 0) + Math.min((act.volX - 1) * 15, 15);
+      if (act.t === 'LPS' || act.t === 'LPSY' || act.t === 'test') quality += 22;
+      quality = Math.min(100, Math.round(quality));
+    }
+    var phaseBias = type === 'accumulation' ? (phase === 'D' || phase === 'E' ? 'LONG' : null)
+                  : type === 'distribution' ? (phase === 'D' || phase === 'E' ? 'SHORT' : null) : null;
+    return {
+      type: type, phase: phase,
+      event: act ? act.t : null,
+      eventDetail: act,
+      events: ev.slice(-8).map(function (e) { return e.t; }),
+      tr: isRange ? { support: +support.toFixed(8), resist: +resist.toFixed(8), widthPct: +widthPct.toFixed(2) } : null,
+      quality: quality,
+      bias: bias || phaseBias,
+      spring: last('spring') || null, jtc: last('JTC') || null,
+      utad: last('UTAD') || null, fti: last('FTI') || null,
+      age: act ? n - 1 - act.i : null,
+    };
+  }
+
+  // ---------- LuxAlgo-style smart money concepts ----------
+  // BOS / CHoCH, order blocks, EQH/EQL liquidity pools, premium/discount.
+  function smc(cs) {
+    var n = cs.length;
+    if (n < 30 || !zigzag) return null;
+    var piv = zigzag(cs, 0.012);
+    var hs = piv.filter(function (p) { return p.type === 'H'; });
+    var ls = piv.filter(function (p) { return p.type === 'L'; });
+    if (hs.length < 2 || ls.length < 2) return null;
+    var lastH = hs[hs.length - 1], prevH = hs[hs.length - 2];
+    var lastL = ls[ls.length - 1], prevL = ls[ls.length - 2];
+    var close = cs[n - 1].c;
+    var uptrend = lastH.p > prevH.p && lastL.p > prevL.p;
+    var dntrend = lastH.p < prevH.p && lastL.p < prevL.p;
+    var bos = null, choch = null;
+    if (uptrend && close > lastH.p) bos = 'bullish';
+    if (dntrend && close < lastL.p) bos = 'bearish';
+    if (dntrend && close > lastH.p) choch = 'bullish';  // downtrend breaks swing high
+    if (uptrend && close < lastL.p) choch = 'bearish';  // uptrend breaks swing low
+
+    // order blocks — last opposite-color candle before a displacement move
+    var atr = 0; for (var a = n - 15; a < n; a++) atr += cs[a].h - cs[a].l;
+    atr = atr / 15 || 1e-9;
+    var obs = [];
+    for (var i = Math.max(1, n - 40); i < n - 2; i++) {
+      var c = cs[i], nx = cs[i + 1];
+      var disp = (nx.c - c.c);
+      if (c.c < c.o && disp > atr * 1.5 && nx.c > nx.o)
+        obs.push({ dir: 'bullish', top: c.h, bot: c.l, i: i, mitigated: false });
+      if (c.c > c.o && -disp > atr * 1.5 && nx.c < nx.o)
+        obs.push({ dir: 'bearish', top: c.h, bot: c.l, i: i, mitigated: false });
+    }
+    obs.forEach(function (o) {
+      for (var j = o.i + 2; j < n; j++)
+        if ((o.dir === 'bullish' && cs[j].c < o.bot) || (o.dir === 'bearish' && cs[j].c > o.top)) { o.mitigated = true; break; }
+    });
+    var openObs = obs.filter(function (o) { return !o.mitigated; }).slice(-3);
+    var inOB = openObs.find(function (o) { return close <= o.top && close >= o.bot; });
+
+    // equal highs/lows — liquidity pools resting at obvious levels
+    var eqh = null, eql = null;
+    for (var k = Math.max(0, hs.length - 4); k < hs.length; k++)
+      for (var m = k + 1; m < hs.length; m++)
+        if (Math.abs(hs[k].p - hs[m].p) / hs[m].p < 0.002) eqh = (hs[k].p + hs[m].p) / 2;
+    for (var k2 = Math.max(0, ls.length - 4); k2 < ls.length; k2++)
+      for (var m2 = k2 + 1; m2 < ls.length; m2++)
+        if (Math.abs(ls[k2].p - ls[m2].p) / ls[m2].p < 0.002) eql = (ls[k2].p + ls[m2].p) / 2;
+
+    // premium/discount — where in the dealing range is price
+    var rHi = Math.max.apply(null, hs.map(function (p) { return p.p; }));
+    var rLo = Math.min.apply(null, ls.map(function (p) { return p.p; }));
+    var eq = rLo + (rHi - rLo) / 2;
+    var pos = rHi > rLo ? (close - rLo) / (rHi - rLo) : 0.5;
+    var zone = pos > 0.618 ? 'premium' : pos < 0.382 ? 'discount' : 'equilibrium';
+    return {
+      bos: bos, choch: choch, trend: uptrend ? 'up' : dntrend ? 'down' : 'range',
+      orderBlocks: openObs, inOB: inOB || null,
+      eqh: eqh, eql: eql,
+      zone: zone, zonePos: +pos.toFixed(2), equilibrium: +eq.toFixed(8),
+    };
   }
 
   // ---------- candlestick patterns (last 3 candles) ----------
@@ -210,39 +392,104 @@
     };
   }
 
+  // ---------- price-action EQ levels (quartile gating) ----------
+  // Every candle's range splits into quartiles: 0% low / 25% / 50% EQ / 75% /
+  // 100% high. Where a candle CLOSES in its own range declares who won the bar;
+  // where the NEXT candle sits vs the prior candle's EQ gates continuation.
+  function eqLevels(cs) {
+    var n = cs.length;
+    if (n < 8) return null;
+    var quads = function (c) {
+      var r = c.h - c.l || 1e-9;
+      return { r: r, q25: c.l + r * 0.25, eq: c.l + r * 0.5, q75: c.l + r * 0.75,
+               pos: (c.c - c.l) / r, body: Math.abs(c.c - c.o) / r };
+    };
+    var last = cs[n - 1], prev = cs[n - 2];
+    var qL = quads(last), qP = quads(prev);
+    var lastQ = qL.pos >= 0.75 ? 'Q4' : qL.pos >= 0.5 ? 'Q3' : qL.pos >= 0.25 ? 'Q2' : 'Q1';
+    var prevBull = prev.c > prev.o, strongPrev = qP.body > 0.55;
+    // mean-respect: a strong prior candle's 50% EQ acts as the pivot — holding
+    // its EQ on the trade's side = the bar's auction was real
+    var respect =
+      strongPrev && prevBull && last.l >= qP.eq - qP.r * 0.05 && last.c >= qP.eq ? 'bullish-hold'
+      : strongPrev && !prevBull && last.h <= qP.eq + qP.r * 0.05 && last.c <= qP.eq ? 'bearish-hold'
+      : null;
+    // EQ sweep: price crossed the prior candle's midpoint and failed to hold it
+    var swept = prevBull && last.c < qP.eq ? 'lost-eq'
+              : !prevBull && last.c > qP.eq ? 'reclaimed-eq' : null;
+    // consecutive closes on one side of a strong bar's EQ = sustained control
+    var streak = 0, side = null;
+    for (var i = n - 1; i >= Math.max(1, n - 6); i--) {
+      var qi = quads(cs[i]), ref = i > 0 ? quads(cs[i - 1]).eq : qi.eq;
+      var d = cs[i].c >= ref ? 'up' : 'dn';
+      if (side && d !== side) break;
+      side = d; streak++;
+    }
+    // wick dominance — rejection quartiles
+    var uw = last.h - Math.max(last.o, last.c), dw = Math.min(last.o, last.c) - last.l;
+    var wick = dw > qL.r * 0.5 ? 'lower-reject' : uw > qL.r * 0.5 ? 'upper-reject' : null;
+    // dealing-range quartiles — where price sits in the swing range
+    var lo = Math.min.apply(null, cs.slice(-60).map(function (c) { return c.l; }));
+    var hi = Math.max.apply(null, cs.slice(-60).map(function (c) { return c.h; }));
+    var rPos = hi > lo ? (last.c - lo) / (hi - lo) : 0.5;
+    var rangeQ = rPos >= 0.75 ? 'Q4-premium' : rPos >= 0.5 ? 'Q3' : rPos >= 0.25 ? 'Q2' : 'Q1-discount';
+    // lean: quartile close + mean respect + range position, gated
+    var lean = null;
+    if ((lastQ === 'Q4' || respect === 'bullish-hold' || swept === 'reclaimed-eq') && rPos < 0.85) lean = 'LONG';
+    if ((lastQ === 'Q1' || respect === 'bearish-hold' || swept === 'lost-eq') && rPos > 0.15) lean = 'SHORT';
+    return {
+      lastQ: lastQ, closePos: +qL.pos.toFixed(2), bodyPct: +qL.body.toFixed(2),
+      prevEQ: qP.eq, respect: respect, swept: swept, streak: streak,
+      wick: wick, rangeQ: rangeQ, rangePos: +rPos.toFixed(2), lean: lean,
+    };
+  }
+
   // ---------- composite ----------
   function analyze(cs, cs5m) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
+        mc = smc(cs), eq = eqLevels(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
-    // bias: SFP leads, then completed W5, then wyckoff event, then ignition
+    // bias: SFP leads, then completed W5, then wyckoff event, then smc choch,
+    // then ignition — each lower rung only fires when the stronger ones are silent
     var bias = null, reasons = [];
     if (s) { bias = s.type === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('sfp'); }
     else if (e && e.complete && cs.length - 1 - e.dIdx <= 10) {
       bias = e.shortTop ? 'SHORT' : 'LONG'; reasons.push('elliott-w5');
-    } else if (w && w.event) { bias = w.bias; reasons.push('wyckoff-' + w.event); }
+    } else if (w && w.event) { bias = w.bias; reasons.push('wyckoff-' + w.event.toLowerCase()); }
+    else if (mc && mc.choch) { bias = mc.choch === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-choch'); }
+    else if (mc && mc.bos) { bias = mc.bos === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-bos'); }
     else if (ig) { bias = ig.dir; reasons.push('ignition'); }
     else if (vw && vw.stretched) { bias = vw.fade; reasons.push('vwap-reversion'); }
+    else if (eq && eq.lean) { bias = eq.lean; reasons.push('eq-edge'); }
     var confluence = 0;
     if (bias) {
-      if (s && (s.type === 'bullish') === (bias === 'LONG')) confluence++;
-      if (e && ((e.shortTop && bias === 'SHORT') || (e.longBottom && bias === 'LONG'))) confluence++;
+      var L = bias === 'LONG';
+      if (s && (s.type === 'bullish') === L) confluence++;
+      if (e && ((e.shortTop) === !L)) confluence++;
       if (w && w.bias === bias) confluence++;
+      if (w && w.quality >= 70) confluence++;            // confirmed wyckoff event
+      if (mc && ((mc.bos === 'bullish') === L || (mc.choch === 'bullish') === L)) confluence++;
+      if (mc && mc.inOB && (mc.inOB.dir === 'bullish') === L) confluence++;
+      if (mc && ((mc.zone === 'discount') === L) && mc.zone !== 'equilibrium') confluence++;
+      if (eq && eq.lean === bias) confluence++;
+      if (eq && ((eq.rangeQ === 'Q1-discount') === L)) confluence++;
       if (ig && ig.dir === bias) confluence++;
       if (vw && vw.fade === bias) confluence++;
-      if (st.trend === (bias === 'LONG' ? 'up' : 'down')) confluence++;
+      if (st.trend === (L ? 'up' : 'down')) confluence++;
       if (fb && fb.goldenPocket) confluence++;
-      if (cd.some(function (x) { return (x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star') === (bias === 'LONG'); })) confluence++;
+      if (cd.some(function (x) { return (x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star') === L; })) confluence++;
     }
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
+             smc: mc, eq: eq,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
   g.TAEngine = { analyze: analyze, sfp: sfp, fvgs: fvgs, elliott: elliott,
                  wyckoff: wyckoff, candlesticks: candlesticks, fib: fib,
                  structure: structure, ignition: ignition, keyLevels: keyLevels,
-                 vwap: vwap };
+                 vwap: vwap, smc: smc, eqLevels: eqLevels };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
