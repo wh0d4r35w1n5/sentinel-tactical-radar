@@ -920,14 +920,22 @@ async function main() {
         now - (e.exitTs ?? 0) < 3600e3
     );
   // portfolio cap: open notional can't exceed 60% of equity — signals are
-  // already score-sorted so the best setups get slots first; conviction sizing
-  // gives grade-A full notional, lower grades half (Tharp position sizing)
+  // already score-sorted so the best setups get slots first.
+  // Tharp risk-based sizing: target 2% of equity AT RISK per trade, i.e.
+  // notional = 2% / stop distance — tighter stops carry bigger notional for
+  // the same dollar risk. Conviction scales the risk (A=full, B=half),
+  // notional hard-capped at 30% of equity so one position can't eat the book.
+  const RISK_PCT = 0.02, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
   const deployed = () =>
     ledger.entries
       .filter((e) => e.status === 'open')
       .reduce((a, e) => a + (e.notional ?? NOTIONAL), 0);
   for (const s of signals) {
-    const notional = s.score >= 85 ? NOTIONAL : s.score >= 70 ? NOTIONAL * 0.75 : NOTIONAL * 0.5;
+    const stopFrac = (s.stopPct ?? Math.max(4, s.targetPct || 4)) / 100;
+    const conv = s.score >= 85 ? 1 : s.score >= 70 ? 0.75 : 0.5;
+    const notional = Math.round(
+      clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
+    );
     if (
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
