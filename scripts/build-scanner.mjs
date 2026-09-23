@@ -7,8 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
+import '../ta-engine.js';  // sets globalThis.TAEngine
 
 const Harmonics = globalThis.Harmonics;
+const TAEngine = globalThis.TAEngine;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
 const SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
@@ -21,6 +23,7 @@ const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
+const EXT_FILE = path.join(API, 'ext-alpha.json');
 const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
@@ -72,17 +75,32 @@ async function fetchKlines(symbol) {
   const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
   const prior = rows.slice(0, -6);
   const priorAvg = prior.reduce((a, r) => a + r.qv, 0) / (prior.length || 1);
-  const candles = rows.map(({ t, h, l, c }) => ({ t, h, l, c }));
+  const candles = rows.map(({ t, h, l, c, qv }) => ({ t, h, l, c, qv }));
+  let candles5m = null;
+  try {
+    const r5 = await fetch(
+      `${CANDLES_URL}?symbol=${symbol}&granularity=5min&limit=120`
+    );
+    if (r5.ok) {
+      const d5 = await r5.json();
+      if (Array.isArray(d5.data))
+        candles5m = d5.data
+          .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+          .sort((a, b) => a.t - b.t);
+    }
+  } catch {}
   return {
     rsi14: rsi(closes.slice(-48)),
     volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
     closes: closes.slice(-48), // sparkline stays 48h
     candles,
     harmonic: Harmonics.active(candles, 8),
+    ta: TAEngine.analyze(candles, candles5m),
   };
 }
 
 async function main() {
+  const now = Date.now();
   const [symbolsRes, tickersRes] = await Promise.all([
     fetch(SYMBOLS_URL),
     fetch(TICKERS_URL),
@@ -170,12 +188,57 @@ async function main() {
   const spreads = rows.map((r) => r.spreadPct).sort((a, b) => a - b);
   const surges = [...enriched.values()].map((k) => k.volRatio).sort((a, b) => a - b);
 
+  // ---- self-improvement: adapt doctrine weights to realized ledger R ----
+  let priorEntries = [];
+  try {
+    priorEntries =
+      JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8')).entries || [];
+  } catch {}
+  const stratR = {};
+  for (const e of priorEntries) {
+    if (e.status === 'open' || e.pnlPct == null) continue;
+    (stratR[e.strategy] ??= []).push(e.pnlPct / Math.max(4, e.targetPct || 4));
+  }
+  const stratAdj = Object.fromEntries(
+    Object.entries(stratR).map(([k, v]) => {
+      const avg = v.reduce((a, b) => a + b, 0) / v.length;
+      return [k, Math.round(clamp(avg * 4, -8, 8) * 10) / 10];
+    })
+  );
+
+  // ---- external desk feed (telegram vip) — derived asset/dir/ts only ----
+  let extSignals = [];
+  try {
+    const ex = JSON.parse(fs.readFileSync(EXT_FILE, 'utf8'));
+    extSignals = (ex.signals || []).filter(
+      (s) => s.asset && now - s.ts < 6 * 3600e3
+    );
+  } catch {}
+  const extFor = (asset) => {
+    const s = extSignals.find((x) => x.asset === asset);
+    return s ? { dir: s.dir, ts: s.ts, ageMin: Math.round((now - s.ts) / 6e4) } : null;
+  };
+
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
     if (k && k.volRatio > 1.8 && r.changePct > 0) return 'Volume Surge';
     if (r.changePct < -3) return 'Momentum Breakdown';
     if (k && k.rsi14 < 35) return 'Oversold Reversal';
     return 'Momentum Confluence';
+  };
+  // doctrine-driven naming when the TA engine produced a bias signal
+  const stratName = (r, k) => {
+    const ta = k && k.ta;
+    if (ta && ta.bias) {
+      if (ta.sfp) return 'Key Level SFP';
+      if (ta.reasons[0] === 'elliott-w5')
+        return ta.elliott.shortTop ? 'Elliott W5 Short' : 'Elliott W5 Bottom';
+      if (ta.reasons[0] && ta.reasons[0].indexOf('wyckoff') === 0)
+        return ta.wyckoff.event === 'spring' ? 'Wyckoff Spring' : 'Wyckoff Upthrust';
+      if (ta.reasons[0] === 'ignition') return 'Momentum Ignition';
+      if (ta.reasons[0] === 'vwap-reversion') return 'VWAP Reversion';
+    }
+    return strategyFor(r, k);
   };
 
   // signals need momentum metrics; pairs whose kline fetch failed get a
@@ -191,17 +254,36 @@ async function main() {
       const volumeScore = Math.round(rank(vols, r.quoteVolume) * 100);
       const liquidityScore = Math.round((1 - rank(spreads, r.spreadPct)) * 100);
       const surgeScore = Math.round(rank(surges, k.volRatio) * 100);
+      const strategy = stratName(r, k);
+      const ext = extFor(r.asset);
+      const dir0 =
+        (k.ta && k.ta.bias) || (r.changePct >= 0 ? 'LONG' : 'SHORT');
+      const extBoost = ext
+        ? ext.dir
+          ? (dir0 === (ext.dir === 'long' ? 'LONG' : 'SHORT') ? 6 : -4)
+          : 3
+        : 0; // agreement boosts, contradiction costs
       const score = Math.round(
-        momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 + surgeScore * 0.15
+        clamp(
+          momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
+            surgeScore * 0.15 +
+            Math.min((k.ta?.confluence || 0) * 3, 12) +
+            (stratAdj[strategy] || 0) +
+            extBoost,
+          0,
+          100
+        )
       );
-      return { ...r, k, momentumScore, volumeScore, liquidityScore, surgeScore, score };
+      return { ...r, k, strategy, ext, momentumScore, volumeScore, liquidityScore, surgeScore, score };
     })
     .sort((a, b) => b.score - a.score);
   const signals = ranked
     .slice(0, MAX_SIGNALS)
     .map((r) => {
-      const direction = r.changePct >= 0 ? 'LONG' : 'SHORT';
-      const strategy = strategyFor(r, r.k);
+      const ta = r.k.ta ?? null;
+      const direction =
+        ta && ta.bias ? ta.bias : r.changePct >= 0 ? 'LONG' : 'SHORT';
+      const strategy = r.strategy;
       const targetPct = pct(clamp(r.rangePct * 0.35, 3, 15));
       const hasK = enriched.has(r.asset);
       const drivers = [
@@ -211,6 +293,10 @@ async function main() {
           : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
         `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
       ];
+      if (r.ext)
+        drivers.push(
+          `desk feed flagged ${r.ext.asset ?? r.asset} ${r.ext.dir ?? ''} ${r.ext.ageMin}m ago`
+        );
       return {
         asset: r.asset,
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
@@ -251,6 +337,31 @@ async function main() {
             ? r.lastPrice * (1 + targetPct / 100)
             : r.lastPrice * (1 - targetPct / 100),
         signalFamily: 'momentum',
+        ext: r.ext ?? null,
+        stopPct: pct(Math.max(4, targetPct)),
+        ta: ta
+          ? {
+              bias: ta.bias,
+              confluence: ta.confluence,
+              reasons: ta.reasons,
+              sfp: ta.sfp
+                ? { type: ta.sfp.type, level: ta.sfp.level, strength: ta.sfp.strength, age: ta.sfp.age }
+                : null,
+              elliott: ta.elliott
+                ? { dir: ta.elliott.dir, shortTop: ta.elliott.shortTop, longBottom: ta.elliott.longBottom, quality: ta.elliott.quality, ratios: ta.elliott.ratios }
+                : null,
+              wyckoff: ta.wyckoff
+                ? { phase: ta.wyckoff.phase, event: ta.wyckoff.event ?? null, volX: ta.wyckoff.volX ?? null }
+                : null,
+              candles: ta.candles,
+              fvgOpen: ta.fvgs.length,
+              fvgNearest: ta.fvgs[0] ?? null,
+              goldenPocket: ta.fib?.goldenPocket ?? false,
+              fibClusters: ta.fib?.clusters ?? 0,
+              trend: ta.structure?.trend ?? null,
+              vwap: ta.vwap ? { z: ta.vwap.z, devPct: ta.vwap.devPct, fade: ta.vwap.fade } : null,
+            }
+          : null,
         momentumScore: r.momentumScore,
         rangePosition: round(r.rangePosition),
         reversalScore: r.surgeScore,
@@ -398,7 +509,6 @@ async function main() {
     ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
   }
   ledger.entries ??= [];
-  const now = Date.now();
   const openFor = (a, d) =>
     ledger.entries.some(
       (e) => e.asset === a && e.direction === d && e.status === 'open'
@@ -411,8 +521,20 @@ async function main() {
         e.status !== 'open' &&
         now - (e.exitTs ?? 0) < REENTRY_COOLDOWN_MS
     );
+  // a reversal close locks the whole asset for an hour — no ping-pong
+  const recentReversed = (a) =>
+    ledger.entries.some(
+      (e) =>
+        e.asset === a &&
+        e.status === 'reversed' &&
+        now - (e.exitTs ?? 0) < 3600e3
+    );
   for (const s of signals) {
-    if (!openFor(s.asset, s.direction) && !recentClosed(s.asset, s.direction)) {
+    if (
+      !openFor(s.asset, s.direction) &&
+      !recentClosed(s.asset, s.direction) &&
+      !recentReversed(s.asset)
+    ) {
       ledger.entries.unshift({
         asset: s.asset,
         direction: s.direction,
@@ -423,6 +545,9 @@ async function main() {
         grade: s.grade,
         strategy: s.strategy,
         harmonic: s.harmonic ?? null,
+        ta: s.ta ?? null,
+        ext: s.ext ?? null,
+        stopPct: s.stopPct ?? Math.max(4, s.targetPct),
         ts: now,
         status: 'open',
         exitPrice: null,
@@ -491,6 +616,43 @@ async function main() {
     avgPnlPct: closed.length
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
+  };
+  // Van Tharp: R-multiples + SQN — the actual holy grail metric
+  const Rs = closed
+    .filter((e) => e.pnlPct != null)
+    .map((e) => e.pnlPct / Math.max(4, e.targetPct || 4));
+  const avgR = Rs.length ? Rs.reduce((a, b) => a + b, 0) / Rs.length : null;
+  const stdR =
+    Rs.length > 1
+      ? Math.sqrt(Rs.reduce((a, b) => a + (b - avgR) ** 2, 0) / (Rs.length - 1))
+      : null;
+  const sqn = stdR ? (avgR / stdR) * Math.sqrt(Rs.length) : null;
+  ledger.stats.avgR = avgR != null ? round(avgR, 2) : null;
+  ledger.stats.expectancyR = ledger.stats.avgR;
+  ledger.stats.sqn = sqn != null ? round(sqn, 2) : null;
+  ledger.stats.sqnBand =
+    sqn == null
+      ? null
+      : sqn >= 7
+        ? 'holy grail'
+        : sqn >= 5
+          ? 'superb'
+          : sqn >= 3
+            ? 'excellent'
+            : sqn >= 2.5
+              ? 'good'
+              : sqn >= 2.0
+                ? 'average'
+                : sqn >= 1.6
+                  ? 'below average'
+                  : 'poor';
+  // self-improving: doctrine weights learned from realized performance
+  ledger.model = {
+    stratAdj,
+    samples: Object.fromEntries(
+      Object.entries(stratR).map(([k, v]) => [k, v.length])
+    ),
+    updatedAt: snap.refreshedAt,
   };
   const by = (key) => {
     const g = {};

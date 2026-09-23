@@ -1,0 +1,8 @@
+# telegram credentials/session — never commit
+scripts/tg-config.json
+scripts/tg.session
+scripts/*.session-journal
+# derived vip feed — only committed via explicit publish flag (git add -f)
+api/ext-alpha.json
+node_modules/
+__pycache__/

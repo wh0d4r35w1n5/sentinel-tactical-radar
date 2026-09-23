@@ -240,12 +240,22 @@ const BOOKS={
  'Momentum Breakdown':{t:'Super Trader',a:'Van K. Tharp',u:'https://www.vantharp.com',d:'cut losses fast when the thesis breaks; expectancy is built from asymmetric R-multiples, not win rate'},
  'Oversold Reversal':{t:'Encyclopedia of Chart Patterns',a:'Thomas N. Bulkowski',u:'https://thepatternsite.com',d:'mean-reversion at statistical extremes — exhaustion readings precede snap-back moves'},
  'Momentum Confluence':{t:'Think and Grow Rich',a:'Napoleon Hill',u:'https://en.wikipedia.org/wiki/Think_and_Grow_Rich',d:'decision stacking: conviction compounds when independent factors agree on one direction'},
+ 'Key Level SFP':{t:'Encyclopedia of Chart Patterns',a:'Thomas N. Bulkowski',u:'https://thepatternsite.com',d:'swing-failure at a major key level — the sweep that fails to hold is the highest-quality reversal tell in the registry'},
+ 'Elliott W5 Short':{t:'Technical Analysis of the Financial Markets',a:'John J. Murphy',u:'https://en.wikipedia.org/wiki/John_J._Murphy_(technical_analyst)',d:'terminal fifth-wave exhaustion — the Philakone doctrine: measure the impulse, short the measured completion of wave 5'},
+ 'Elliott W5 Bottom':{t:'Technical Analysis of the Financial Markets',a:'John J. Murphy',u:'https://en.wikipedia.org/wiki/John_J._Murphy_(technical_analyst)',d:'fifth-wave capitulation completion — the mirror of the Philakone top-short, applied to terminal downside impulses'},
+ 'Wyckoff Spring':{t:'Encyclopedia of Chart Patterns',a:'Thomas N. Bulkowski',u:'https://thepatternsite.com',d:'range low sweep with volume expansion closing back inside — institutional accumulation footprint'},
+ 'Wyckoff Upthrust':{t:'Encyclopedia of Chart Patterns',a:'Thomas N. Bulkowski',u:'https://thepatternsite.com',d:'range high sweep rejected back inside on volume — distribution footprint, longs are trapped fuel'},
+ 'Momentum Ignition':{t:'Think and Grow Rich',a:'Napoleon Hill',u:'https://en.wikipedia.org/wiki/Think_and_Grow_Rich',d:'consecutive-body expansion after compression — the decisive first thrust, committed to without hesitation'},
+ 'VWAP Reversion':{t:'Lepus Proprietary Trading',a:'Peter Jackson methodology',u:'https://www.lepusproprietarytrading.com.au/trader-coaching',d:'price is tethered to VWAP — extreme deviations revert; mechanical, repeatable process over prediction'},
+ 'External VIP':{t:'External signal confluence',a:'cryptopasta_vip_bot',u:'https://t.me/cryptopasta_vip_bot',d:'independent desk signal aligned with engine confluence — treated as one more factor, never a sole trigger'},
 };
 const SUPPORT=[
  {t:'Super Trader',a:'Van K. Tharp',u:'https://www.vantharp.com',d:'position sizing and stop discipline govern every entry'},
  {t:'Rich Dad Poor Dad',a:'Robert T. Kiyosaki',u:'https://www.richdad.com',d:'income buys assets — realized gains sweep into the Vault basket'},
  {t:'The Barefoot Investor',a:'Scott Pape',u:'https://barefootinvestor.com',d:'bucketing: profits are routed to long-term buckets, never re-gambled'},
  {t:'The Richest Man in Babylon',a:'George S. Clason',u:'https://en.wikipedia.org/wiki/The_Richest_Man_in_Babylon',d:'a part of all you earn is yours to keep — 20% of every win is sequestered'},
+ {t:'Crypto Risk Management Framework',a:'Michael Sloggett',u:'https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html',d:'1% risk per idea, invalidation before entry, ≥1:2 asymmetry — discipline separates pros from gamblers'},
+ {t:'Lepus Proprietary Trading',a:'Lepus / Peter Jackson',u:'https://www.lepusproprietarytrading.com.au/',d:'mechanical VWAP reversion process on fast timeframes — repeatable execution beats prediction'},
 ];
 function synopsis(e){
   const dir=e.direction==='LONG'?'long':'short';
@@ -269,6 +279,18 @@ function synopsis(e){
   const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
     ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
     :`No vault sweep was triggered by this entry — sweeps fire only on realized profits, so capital is never diverted out of losing outcomes.`;
+  const T=e.ta||null;
+  const taTxt=T?`
+<h4>Engine TA evidence — multi-doctrine read</h4>
+<p>At entry the doctrine stack returned a <b>${T.bias||'neutral'}</b> composite bias with ${T.confluence||0} confirming factor(s)${T.reasons&&T.reasons.length?`: ${T.reasons.join(' + ')}`:''}.
+${T.sfp?`A <b>${T.sfp.type}</b> swing-failure pattern printed at the $${fmtP(T.sfp.level)} key level ${T.sfp.age} candle(s) ago (strength ${T.sfp.strength}/100) — the sweep that failed to hold, per the Bulkowski reversal doctrine. `:`No swing-failure was present at a key level on this read. `}
+${T.elliott?`Elliott structure resolved as a completed five-wave ${T.elliott.dir} impulse (quality ${T.elliott.quality}/100, leg ratios ${T.elliott.ratios.map(r=>r.toFixed(2)).join('/')})${T.elliott.shortTop?' — a terminal wave-5 top: the Philakone short-the-fifth setup, traded only because confluence agreed':' — a terminal wave-5 bottom'}. `:`No completed five-wave impulse measured at entry. `}
+${T.wyckoff&&T.wyckoff.event?`Wyckoff read flagged a <b>${T.wyckoff.event}</b> inside a ${T.wyckoff.phase} range${T.wyckoff.volX?` on ${T.wyckoff.volX}× volume`:''}. `:'No Wyckoff spring/upthrust event measured. '}
+${T.candles&&T.candles.length?`Candlestick evidence: ${T.candles.join(', ')}. `:''}
+${T.fvgOpen?`ICT structure showed ${T.fvgOpen} open fair-value gap(s)${T.fvgNearest?`, nearest a ${T.fvgNearest.dir} FVG spanning $${fmtP(T.fvgNearest.lo)}–$${fmtP(T.fvgNearest.hi)}`:''}. `:'No open fair-value gaps nearby. '}
+${T.goldenPocket?`Price sat inside the fib golden pocket (0.618–0.66 retracement of the prior leg) — a measured entry zone, not a chased one. `:''}${T.fibClusters?`${T.fibClusters} fib level cluster(s) aligned with the entry zone. `:''}
+${T.vwap?`VWAP read (session): ${T.vwap.devPct}% deviation (z=${T.vwap.z})${T.vwap.fade?' — stretched beyond the fade band, per the Lepus/Jackson mechanical reversion doctrine':' — inside the normal tether'}.`:''}
+Every factor above is a measurable heuristic on the entry-window candles — none of them is a guarantee, and the composite only ever moves the score, never overrides the stop.</p>`:'';
   const harmTxt=e.harmonic?`
 <h4>Harmonic validation — Bulkowski-grade XABCD</h4>
 <p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)}. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
@@ -276,7 +298,8 @@ function synopsis(e){
 <h4>Executive summary</h4>
 <p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} (${when} UTC)${mk?`, last marked at $${fmtP(mk)}`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
 <h4>Signal genesis</h4>
-<p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}.</p>
+<p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned ${e.ta&&e.ta.bias?`by the TA engine's composite bias (${e.ta.bias}) — doctrine evidence overrode the raw momentum sign where they disagreed`:`from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}`}.</p>
+${e.ext?`<h4>External desk confluence</h4><p>The private desk feed flagged <b>${e.asset}</b>${e.ext.dir?` with a <b>${e.ext.dir}</b> lean`:''} ${e.ext.ageMin} minutes before this snapshot — treated as one bounded confluence factor (±a few points), never a sole trigger. Only derived metadata (asset/direction/timestamp) is used; the source feed's content is not republished.</p>`:''}
 <h4>Confluence breakdown</h4>
 <p>Four weighted factors produced the grade: 24h momentum rank (40%), quote-volume rank (25%), order-book liquidity via inverse spread rank (20%), and hourly volume-surge rank (15%). The profit target was derived mechanically as 35% of the prevailing 24h range, clamped to a 3–15% band — yielding a +/−${e.targetPct}% objective at $${fmtP(e.targetPrice)}. Stop distance was set at max(4%, target) adverse excursion, so invalidation always sits outside ordinary noise.</p>
 <h4>Primary doctrine — ${B.a}</h4>
@@ -285,7 +308,7 @@ function synopsis(e){
 <p>Position risk was framed per <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a>: a fixed $1,000 dry-run notional, a predefined invalidation at −${Math.max(4,e.targetPct)}%, and a target of +${e.targetPct}% — an expectancy structure where one winner roughly pays for ${(e.targetPct/Math.max(4,e.targetPct)).toFixed(1)} losers. Tharp's core law is that R-multiples, not predictions, compound equity; every ledger entry enforces it by construction rather than by discretion.</p>
 <h4>Trade management protocol</h4>
 <p>${lockTxt}The standing rules each evaluation tick are: (1) target contact → settle <i>won</i>; (2) adverse excursion beyond −${Math.max(4,e.targetPct)}% → settle <i>stopped</i>; (3) a fresh opposite-direction signal on ${e.asset} → settle <i>reversed</i>; (4) 24h without resolution → settle <i>expired</i>; (5) half-target contact → LOCK-50, banking half and moving the stop to breakeven. ${e.beStop?'The breakeven stop was armed on this entry.':'The breakeven stop had not armed on this entry at the time of writing.'}</p>
-${harmTxt}
+${harmTxt}${taTxt}
 <h4>Outcome accounting</h4>
 <p>${outcome} Open positions are excluded from win-rate math — only decisive outcomes (won, stopped, reversed) count, and the headline rate stays hidden until at least five decisive closes exist.</p>
 <h4>Invalidation &amp; counterfactual</h4>
@@ -343,7 +366,7 @@ async function render(){
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.ext?' <span class="mbadge" title="flagged by external desk feed">DESK</span>':''} <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
@@ -355,7 +378,8 @@ async function render(){
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
       <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
-      <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L</div></div></div>`;
+      <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L${st.sqn!=null?` · SQN ${st.sqn} <span class="sub">${st.sqnBand||''}</span>`:''}${st.avgR!=null?` · ${st.avgR}R avg`:''}</div></div></div>`+
+      (ledger.model&&Object.keys(ledger.model.stratAdj||{}).length?`<div class="sub" style="margin-top:4px">adaptive weights (learned from realized R): ${Object.entries(ledger.model.stratAdj).map(([k,v])=>`${k} ${v>0?'+':''}${v}`).join(' · ')}</div>`:'');
     $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
       const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
@@ -409,7 +433,7 @@ async function render(){
     if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
   }
   // logic drivers: strategy influence = live signal share + ledger weight
-  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich'};
+  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical','External VIP':'cryptopasta · External Desk'};
   const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
   const stratStats=(ledger&&ledger.stats&&ledger.stats.byStrategy)||{};
   const allStrat=[...new Set([...Object.keys(sigN),...Object.keys(stratStats)])];
