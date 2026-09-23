@@ -6,6 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
+
+const Harmonics = globalThis.Harmonics;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
 const SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
@@ -51,22 +54,31 @@ function rsi(closes, period = 14) {
 
 async function fetchKlines(symbol) {
   const res = await fetch(
-    `${CANDLES_URL}?symbol=${symbol}&granularity=1h&limit=48`
+    `${CANDLES_URL}?symbol=${symbol}&granularity=1h&limit=120`
   );
   if (!res.ok) return null;
   const { data } = await res.json();
   if (!Array.isArray(data) || data.length < 20) return null;
   const rows = data
-    .map((c) => ({ ts: Number(c[0]), close: Number(c[4]), qv: Number(c[6]) }))
-    .sort((a, b) => a.ts - b.ts); // oldest first
-  const closes = rows.map((r) => r.close);
+    .map((c) => ({
+      t: Number(c[0]),
+      h: Number(c[2]),
+      l: Number(c[3]),
+      c: Number(c[4]),
+      qv: Number(c[6]),
+    }))
+    .sort((a, b) => a.t - b.t); // oldest first
+  const closes = rows.map((r) => r.c);
   const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
   const prior = rows.slice(0, -6);
   const priorAvg = prior.reduce((a, r) => a + r.qv, 0) / (prior.length || 1);
+  const candles = rows.map(({ t, h, l, c }) => ({ t, h, l, c }));
   return {
-    rsi14: rsi(closes),
+    rsi14: rsi(closes.slice(-48)),
     volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
-    closes,
+    closes: closes.slice(-48), // sparkline stays 48h
+    candles,
+    harmonic: Harmonics.active(candles, 8),
   };
 }
 
@@ -212,7 +224,15 @@ async function main() {
         summary: hasK
           ? `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum, RSI(1h) ${Math.round(r.k.rsi14)}, volume ${round(r.k.volRatio, 1)}× baseline.`
           : `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum on $${(r.quoteVolume / 1e6).toFixed(0)}M quote volume.`,
-        harmonic: null,
+        harmonic: r.k.harmonic
+          ? {
+              type: r.k.harmonic.type,
+              dir: r.k.harmonic.dir,
+              quality: r.k.harmonic.quality,
+              ratios: r.k.harmonic.ratios,
+              dPrice: r.k.harmonic.dPrice,
+            }
+          : null,
         lowPrice: r.lowPrice,
         rangePct: pct(r.rangePct),
         strategy,
@@ -402,6 +422,7 @@ async function main() {
         score: s.score,
         grade: s.grade,
         strategy: s.strategy,
+        harmonic: s.harmonic ?? null,
         ts: now,
         status: 'open',
         exitPrice: null,

@@ -11,6 +11,8 @@
 <meta property="og:description" content="Live crypto signal scanner — Bitget spot breadth, ranked setups, Jupiter execution quotes."/>
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
 <script src="/sentinel-tactical-radar/live-feed.js"></script>
+<script src="/sentinel-tactical-radar/harmonics.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#070b08;--panel:#0b120d;--line:rgba(61,255,115,.14);--grn:#3dff73;--grn-dim:#9fe8b3;--red:#ff5d5d;--amb:#ffb84d;--txt:#cfe9d4;--mut:#5f7a66}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -89,6 +91,11 @@ tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 tr.jrow{cursor:pointer}
 tr.jrow:hover td,tr.jrow.open td{background:rgba(61,255,115,.05)}
 tr.jsyn td{background:rgba(61,255,115,.02);padding:14px 18px}
+.chwrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+@media(max-width:860px){.chwrap{grid-template-columns:1fr}}
+.cht{height:210px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.chlab{font-size:9px;letter-spacing:.18em;color:var(--mut);text-transform:uppercase;padding:0 0 4px}
+.chlab b{color:var(--grn-dim)}
 .ml{display:flex;gap:14px;font-size:12px}
 .ml>div{flex:1}
 .ml .h{font-size:10px;color:var(--mut);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase}
@@ -262,6 +269,9 @@ function synopsis(e){
   const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
     ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
     :`No vault sweep was triggered by this entry — sweeps fire only on realized profits, so capital is never diverted out of losing outcomes.`;
+  const harmTxt=e.harmonic?`
+<h4>Harmonic validation — Bulkowski-grade XABCD</h4>
+<p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)}. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
   return `
 <h4>Executive summary</h4>
 <p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} (${when} UTC)${mk?`, last marked at $${fmtP(mk)}`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
@@ -275,6 +285,7 @@ function synopsis(e){
 <p>Position risk was framed per <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a>: a fixed $1,000 dry-run notional, a predefined invalidation at −${Math.max(4,e.targetPct)}%, and a target of +${e.targetPct}% — an expectancy structure where one winner roughly pays for ${(e.targetPct/Math.max(4,e.targetPct)).toFixed(1)} losers. Tharp's core law is that R-multiples, not predictions, compound equity; every ledger entry enforces it by construction rather than by discretion.</p>
 <h4>Trade management protocol</h4>
 <p>${lockTxt}The standing rules each evaluation tick are: (1) target contact → settle <i>won</i>; (2) adverse excursion beyond −${Math.max(4,e.targetPct)}% → settle <i>stopped</i>; (3) a fresh opposite-direction signal on ${e.asset} → settle <i>reversed</i>; (4) 24h without resolution → settle <i>expired</i>; (5) half-target contact → LOCK-50, banking half and moving the stop to breakeven. ${e.beStop?'The breakeven stop was armed on this entry.':'The breakeven stop had not armed on this entry at the time of writing.'}</p>
+${harmTxt}
 <h4>Outcome accounting</h4>
 <p>${outcome} Open positions are excluded from win-rate math — only decisive outcomes (won, stopped, reversed) count, and the headline rate stays hidden until at least five decisive closes exist.</p>
 <h4>Invalidation &amp; counterfactual</h4>
@@ -378,8 +389,12 @@ async function render(){
       <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%':'—'}</td>
       <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
-      +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11"><div class="syn">${synopsis(e)}</div></td></tr>`;
+      +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11">
+      <div class="chwrap"><div><div class="chlab">Before · <b>setup window</b> — 48h into entry + fib/drawing overlays</div><div class="cht" data-chb></div></div>
+      <div><div class="chlab">After · <b>outcome window</b> — entry to ${e.status==='open'?'now':'exit'}</div><div class="cht" data-cha></div></div></div>
+      <div class="syn">${synopsis(e)}</div></td></tr>`;
     }).join('')||'<tr><td colspan="11" class="err">no tracked signals yet</td></tr>';
+    JOPEN.forEach(k=>{CHARTED.delete(k);mountJournalCharts(k)});
   }
   if(vault){
     const h=vault.holdings||{};
@@ -455,11 +470,68 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
   if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleRow(tr)}
 });
 const JOPEN=new Set();
+const CHARTED=new Set();
+async function candlesFor(asset,fromMs,toMs){
+  const r=await fetch(`https://api.bitget.com/api/v2/spot/market/candles?symbol=${asset}USDT&granularity=1h&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
+  const j=await r.json();
+  const seen=new Set();
+  return (j.data||[]).map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4]}))
+    .sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
+}
+function drawChart(el,e,cs,after){
+  if(!cs.length)return;
+  const chart=LightweightCharts.createChart(el,{layout:{background:{type:'solid',color:'transparent'},textColor:'#9fe8b3',fontSize:10,attributionLogo:false},
+    grid:{vertLines:{color:'rgba(61,255,115,.05)'},horzLines:{color:'rgba(61,255,115,.05)'}},
+    timeScale:{timeVisible:true,borderColor:'rgba(61,255,115,.2)',secondsVisible:false},
+    rightPriceScale:{borderColor:'rgba(61,255,115,.2)'},
+    crosshair:{mode:0},width:el.clientWidth||520,height:210});
+  const s=chart.addCandlestickSeries({upColor:'#3dff73',downColor:'#ff5d5d',wickUpColor:'#3dff73',wickDownColor:'#ff5d5d',borderVisible:false});
+  s.setData(cs.map(c=>({time:c.t/1000,open:c.o,high:c.h,low:c.l,close:c.c})));
+  const snap=t=>cs.reduce((b,c)=>Math.abs(c.t-t)<Math.abs(b.t-t)?c:b).t/1000;
+  const ls=(price,color,style,title)=>s.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
+  ls(e.entry,'#e6f2ff',2,'ENTRY');
+  if(e.targetPrice)ls(e.targetPrice,'#3dff73',0,`TGT ${e.direction==='LONG'?'+':'−'}${e.targetPct}%`);
+  const stopPx=e.direction==='LONG'?e.entry*(1-Math.max(4,e.targetPct)/100):e.entry*(1+Math.max(4,e.targetPct)/100);
+  ls(stopPx,'#ff5d5d',2,'STOP');
+  if(!after){
+    // fib retracement grid over the setup window's swing range
+    const hi=Math.max(...cs.map(c=>c.h)),lo=Math.min(...cs.map(c=>c.l));
+    [0.236,0.382,0.5,0.618,0.786].forEach(f=>{
+      s.createPriceLine({price:hi-(hi-lo)*f,color:'rgba(159,232,179,.3)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:(f*100).toFixed(1)+'%'});
+    });
+  }
+  // expert TA: overlay best-validated harmonic (gartley/bat/butterfly/crab)
+  const pats=(window.Harmonics&&Harmonics.detect(cs))||[];
+  const pat=(e.harmonic&&pats.find(p=>p.type===e.harmonic.type))||pats[0];
+  if(pat){
+    const ls2=chart.addLineSeries({color:'#6ee7ff',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false});
+    ls2.setData(pat.points.map(p=>({time:p.t/1000,value:p.p})));
+  }
+  const marks=[{time:snap(e.ts),position:e.direction==='LONG'?'belowBar':'aboveBar',color:'#e6f2ff',shape:e.direction==='LONG'?'arrowUp':'arrowDown',text:'ENTRY '+e.direction[0]}];
+  if(after&&e.exitTs&&e.exitPrice!=null)
+    marks.push({time:snap(e.exitTs),position:e.pnlPct>=0?'belowBar':'aboveBar',color:e.pnlPct>=0?'#3dff73':'#ff5d5d',shape:'circle',text:(e.status||'').toUpperCase()+' '+(e.pnlPct>=0?'+':'')+e.pnlPct+'%'});
+  s.setMarkers(marks);
+  chart.timeScale().fitContent();
+}
+async function mountJournalCharts(key){
+  if(CHARTED.has(key)||!window.LightweightCharts)return;
+  const row=document.querySelector(`tr.jsyn[data-js="${key}"]`);
+  const e=(LAST.ledger&&LAST.ledger.entries||[]).find(x=>x.asset+':'+x.ts===key);
+  if(!row||row.hidden||!e)return;
+  CHARTED.add(key);
+  const pad=6*3600e3;
+  const [csB,csA]=await Promise.all([
+    candlesFor(e.asset,e.ts-48*3600e3,e.ts+pad).catch(()=>[]),
+    candlesFor(e.asset,e.ts-pad,(e.exitTs||Date.now())+pad).catch(()=>[])]);
+  const eb=row.querySelector('[data-chb]'),ea=row.querySelector('[data-cha]');
+  if(eb)drawChart(eb,e,csB,false);
+  if(ea)drawChart(ea,e,csA,true);
+}
 document.getElementById('journal').addEventListener('click',e=>{
   const tr=e.target.closest('tr.jrow');if(!tr)return;
   const d=document.querySelector(`tr.jsyn[data-js="${tr.dataset.j}"]`);
   if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden);
-    d.hidden?JOPEN.delete(tr.dataset.j):JOPEN.add(tr.dataset.j)}
+    d.hidden?JOPEN.delete(tr.dataset.j):(JOPEN.add(tr.dataset.j),mountJournalCharts(tr.dataset.j))}
 });
 render();
 if(window.__live)__live.onTick(livePaint);
