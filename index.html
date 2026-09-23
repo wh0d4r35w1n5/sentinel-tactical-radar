@@ -166,7 +166,7 @@ footer a{color:var(--grn-dim)}
     </div>
   </div>
   <div class="panel" style="margin-top:16px;border-style:dashed;border-color:rgba(255,209,102,.4)">
-    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0</span></div>
+    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0 AUD · wallet figures AUD, market prices USD</span></div>
     <div class="stats" id="walletStats" style="grid-template-columns:repeat(5,1fr)"></div>
   </div>
   <div class="panel" style="margin-top:16px">
@@ -242,8 +242,8 @@ function sigDetail(s,i){
     <ul class="ddrv">${drv}</ul>
     <div>${sparkSVG(c.spark,520,64)}</div>
     <div class="dmeta">
-      <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M</b></span>
-      <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)}–${fmtP(s.highPrice)})</span>
+      <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M USD</b></span>
+      <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)} USD–${fmtP(s.highPrice)} USD)</span>
       <span>spread <b>${s.spreadPct}%</b></span>
       <span>risk <b>${s.riskPct}%</b></span>
       ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
@@ -289,45 +289,45 @@ function synopsis(e){
   const pnl=e.pnlPct;
   const lockTxt=e.lockPnl!=null?`At +${e.lockPnl}% the LOCK-50 protocol fired: half the notional was banked and the protective stop on the remainder was advanced to the entry price, converting the position into a risk-free runner. `:'';
   const outcome={
-    open:`The position remains open and under continuous mark-to-market surveillance — the mark in this journal repaints on every Bitget WebSocket tick rather than waiting for the next settlement pass. Live P&L stands at ${pnl!=null?(pnl>=0?'+':'')+pnl+'%':'unpriced'} as of the latest tick. Resolution paths remain: target contact at $${fmtP(e.targetPrice)}, a hard stop at −${(e.stopPct??Math.max(4,e.targetPct))}% adverse excursion, a fresh opposite-direction signal on the same asset (reversal close), or the 24-hour expiry horizon — whichever condition the tape reaches first decides the outcome, and no other outcome is permitted.`,
-    won:`The ${e.direction==='LONG'?'upside':'downside'} target at $${fmtP(e.targetPrice)} was reached at ${end} UTC — ${heldStr} after entry. Final blended P&L printed ${pnl>=0?'+':''}${pnl}%.`,
-    stopped:`Price moved adversely through the −${(e.stopPct??Math.max(4,e.targetPct))}% invalidation band. The stop executed at $${fmtP(e.exitPrice)} at ${end} UTC, ${heldStr} after entry, closing the idea at ${pnl}% — a controlled loss inside designed parameters.`,
-    reversed:`The engine emitted a fresh ${e.direction==='LONG'?'SHORT':'LONG'} signal on the same asset while this position was open — a thesis contradiction. Per reversal doctrine the position was closed at $${fmtP(e.exitPrice)} (${pnl}%) at ${end} UTC rather than riding into a flipped signal set.`,
-    breakeven:`After the lock fired, price retraced to the entry. The breakeven stop closed the runner at $${fmtP(e.exitPrice)} at ${end} UTC — the banked half preserved the realized +${pnl}% while the remainder scratched at zero.`,
-    expired:`The 24-hour maximum holding horizon elapsed without target or stop contact. The position was marked out at $${fmtP(e.exitPrice)} (${pnl}%) at ${end} UTC — time-exposure limits enforced.`,
+    open:`The position remains open and under continuous mark-to-market surveillance — the mark in this journal repaints on every Bitget WebSocket tick rather than waiting for the next settlement pass. Live P&L stands at ${pnl!=null?(pnl>=0?'+':'')+pnl+'%':'unpriced'} as of the latest tick. Resolution paths remain: target contact at $${fmtP(e.targetPrice)} USD, a hard stop at −${(e.stopPct??Math.max(4,e.targetPct))}% adverse excursion, a fresh opposite-direction signal on the same asset (reversal close), or the 24-hour expiry horizon — whichever condition the tape reaches first decides the outcome, and no other outcome is permitted.`,
+    won:`The ${e.direction==='LONG'?'upside':'downside'} target at $${fmtP(e.targetPrice)} USD was reached at ${end} UTC — ${heldStr} after entry. Final blended P&L printed ${pnl>=0?'+':''}${pnl}%.`,
+    stopped:`Price moved adversely through the −${(e.stopPct??Math.max(4,e.targetPct))}% invalidation band. The stop executed at $${fmtP(e.exitPrice)} USD at ${end} UTC, ${heldStr} after entry, closing the idea at ${pnl}% — a controlled loss inside designed parameters.`,
+    reversed:`The engine emitted a fresh ${e.direction==='LONG'?'SHORT':'LONG'} signal on the same asset while this position was open — a thesis contradiction. Per reversal doctrine the position was closed at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC rather than riding into a flipped signal set.`,
+    breakeven:`After the lock fired, price retraced to the entry. The breakeven stop closed the runner at $${fmtP(e.exitPrice)} USD at ${end} UTC — the banked half preserved the realized +${pnl}% while the remainder scratched at zero.`,
+    expired:`The 24-hour maximum holding horizon elapsed without target or stop contact. The position was marked out at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC — time-exposure limits enforced.`,
   }[e.status]||'';
   const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
-    ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
+    ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 USD notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
     :`No vault sweep was triggered by this entry — sweeps fire only on realized profits, so capital is never diverted out of losing outcomes.`;
   const T=e.ta||null;
   const taTxt=T?`
 <h4>Engine TA evidence — multi-doctrine read</h4>
 <p>At entry the doctrine stack returned a <b>${T.bias||'neutral'}</b> composite bias with ${T.confluence||0} confirming factor(s)${T.reasons&&T.reasons.length?`: ${T.reasons.join(' + ')}`:''}.
-${T.sfp?`A <b>${T.sfp.type}</b> swing-failure pattern printed at the $${fmtP(T.sfp.level)} key level ${T.sfp.age} candle(s) ago (strength ${T.sfp.strength}/100) — the sweep that failed to hold, per the Bulkowski reversal doctrine. `:`No swing-failure was present at a key level on this read. `}
+${T.sfp?`A <b>${T.sfp.type}</b> swing-failure pattern printed at the $${fmtP(T.sfp.level)} USD key level ${T.sfp.age} candle(s) ago (strength ${T.sfp.strength}/100) — the sweep that failed to hold, per the Bulkowski reversal doctrine. `:`No swing-failure was present at a key level on this read. `}
 ${T.elliott?`Elliott structure resolved as a completed five-wave ${T.elliott.dir} impulse (quality ${T.elliott.quality}/100, leg ratios w2 ${T.elliott.ratios.w2r} / w4 ${T.elliott.ratios.w4r} / w5-vs-1+3 ${T.elliott.ratios.w5w13})${T.elliott.shortTop?' — a terminal wave-5 top: the Philakone short-the-fifth setup, traded only because confluence agreed':' — a terminal wave-5 bottom'}. `:`No completed five-wave impulse measured at entry. `}
 ${T.wyckoff&&T.wyckoff.type&&T.wyckoff.type!=='ranging'?`Wyckoff schematic resolved a <b>${T.wyckoff.type}</b> range in <b>phase ${T.wyckoff.phase}</b>${T.wyckoff.event?` — latest event <b>${T.wyckoff.event}</b> (quality ${T.wyckoff.quality}/100${T.wyckoff.volX?`, ${T.wyckoff.volX}× volume`:''})`:''}${T.wyckoff.events&&T.wyckoff.events.length?` — event trail: ${T.wyckoff.events.join(' → ')}`:''}. `:'No Wyckoff schematic events measured. '}
-${T.smc?`SMC read: ${T.smc.bos?`<b>${T.smc.bos} BOS</b> `:''}${T.smc.choch?`<b>${T.smc.choch} CHoCH</b> `:''}${!T.smc.bos&&!T.smc.choch?'no structural break — ':''}price in the <b>${T.smc.zone}</b> zone${T.smc.inOB?`, sitting inside a ${T.smc.inOB.dir} order block`:''}${T.smc.eqh?`, EQH liquidity resting at $${fmtP(T.smc.eqh)}`:''}${T.smc.eql?`, EQL liquidity at $${fmtP(T.smc.eql)}`:''}. `:''}
+${T.smc?`SMC read: ${T.smc.bos?`<b>${T.smc.bos} BOS</b> `:''}${T.smc.choch?`<b>${T.smc.choch} CHoCH</b> `:''}${!T.smc.bos&&!T.smc.choch?'no structural break — ':''}price in the <b>${T.smc.zone}</b> zone${T.smc.inOB?`, sitting inside a ${T.smc.inOB.dir} order block`:''}${T.smc.eqh?`, EQH liquidity resting at $${fmtP(T.smc.eqh)} USD`:''}${T.smc.eql?`, EQL liquidity at $${fmtP(T.smc.eql)} USD`:''}. `:''}
 ${T.eq?`EQ quartile read: last candle closed in <b>${T.eq.lastQ}</b> of its own range${T.eq.respect?`, <b>${T.eq.respect}</b> at the prior bar's 50% EQ`:''}${T.eq.swept?`, <b>${T.eq.swept}</b> vs prior bar mean`:''}${T.eq.wick?`, ${T.eq.wick} wick`:''} — dealing-range position <b>${T.eq.rangeQ}</b>. `:''}
 ${T.candles&&T.candles.length?`Candlestick evidence: ${T.candles.join(', ')}. `:''}
-${T.fvgOpen?`ICT structure showed ${T.fvgOpen} open fair-value gap(s)${T.fvgNearest?`, nearest a ${T.fvgNearest.dir} FVG spanning $${fmtP(T.fvgNearest.lo)}–$${fmtP(T.fvgNearest.hi)}`:''}. `:'No open fair-value gaps nearby. '}
+${T.fvgOpen?`ICT structure showed ${T.fvgOpen} open fair-value gap(s)${T.fvgNearest?`, nearest a ${T.fvgNearest.dir} FVG spanning $${fmtP(T.fvgNearest.lo)} USD–$${fmtP(T.fvgNearest.hi)} USD`:''}. `:'No open fair-value gaps nearby. '}
 ${T.goldenPocket?`Price sat inside the fib golden pocket (0.618–0.66 retracement of the prior leg) — a measured entry zone, not a chased one. `:''}${T.fibClusters?`${T.fibClusters} fib level cluster(s) aligned with the entry zone. `:''}
 ${T.vwap?`VWAP read (session): ${T.vwap.devPct}% deviation (z=${T.vwap.z})${T.vwap.fade?' — stretched beyond the fade band, per the Lepus/Jackson mechanical reversion doctrine':' — inside the normal tether'}.`:''}
 Every factor above is a measurable heuristic on the entry-window candles — none of them is a guarantee, and the composite only ever moves the score, never overrides the stop.</p>`:'';
   const harmTxt=e.harmonic?`
 <h4>Harmonic validation — Bulkowski-grade XABCD</h4>
-<p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)}. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
+<p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)} USD. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
   return `
 <h4>Executive summary</h4>
-<p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} (${when} UTC)${mk?`, last marked at $${fmtP(mk)}`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
+<p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} USD (${when} UTC)${mk?`, last marked at $${fmtP(mk)} USD`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
 <h4>Signal genesis</h4>
-<p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned ${e.ta&&e.ta.bias?`by the TA engine's composite bias (${e.ta.bias}) — doctrine evidence overrode the raw momentum sign where they disagreed`:`from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}`}.</p>
+<p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K USD daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned ${e.ta&&e.ta.bias?`by the TA engine's composite bias (${e.ta.bias}) — doctrine evidence overrode the raw momentum sign where they disagreed`:`from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}`}.</p>
 ${e.ext?`<h4>External desk confluence</h4><p>The private desk feed flagged <b>${e.asset}</b>${e.ext.dir?` with a <b>${e.ext.dir}</b> lean`:''} ${e.ext.ageMin} minutes before this snapshot — treated as one bounded confluence factor (±a few points), never a sole trigger. Only derived metadata (asset/direction/timestamp) is used; the source feed's content is not republished.</p>`:''}
 <h4>Confluence breakdown</h4>
-<p>Four weighted factors produced the grade: 24h momentum rank (40%), quote-volume rank (25%), order-book liquidity via inverse spread rank (20%), and hourly volume-surge rank (15%). The profit target was derived mechanically as 35% of the prevailing 24h range, clamped to a 3–15% band — yielding a +/−${e.targetPct}% objective at $${fmtP(e.targetPrice)}. Stop distance was set at max(4%, target) adverse excursion, so invalidation always sits outside ordinary noise.</p>
+<p>Four weighted factors produced the grade: 24h momentum rank (40%), quote-volume rank (25%), order-book liquidity via inverse spread rank (20%), and hourly volume-surge rank (15%). The profit target was derived mechanically as 35% of the prevailing 24h range, clamped to a 3–15% band — yielding a +/−${e.targetPct}% objective at $${fmtP(e.targetPrice)} USD. Stop distance was set at max(4%, target) adverse excursion, so invalidation always sits outside ordinary noise.</p>
 <h4>Primary doctrine — ${B.a}</h4>
 <p>This signal was generated under the "${e.strategy}" driver, which the NEPTUNE registry maps to <a href="${B.u}" target="_blank" rel="noopener"><i>${B.t}</i> — ${B.a}</a>. The governing rule: ${B.d}. In this instance the doctrine resolved to a ${dir} expression because ${e.direction==='LONG'?'momentum and range position aligned upward':'downside momentum dominated the confluence stack'}. The engine does not improvise on the book's logic — it parameterizes it: the book supplies the <i>shape</i> of a valid trade, the market supplies the trigger.</p>
 <h4>Risk frame — Tharp</h4>
-<p>Position risk was framed per <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a> and <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener">Michael Sloggett's risk framework</a>: conviction-sized notional of $${((e.notional??1000)).toLocaleString()} on a $10,000 paper equity (${(((e.notional??1000)/10000)*100).toFixed(0)}% of account), a predefined invalidation at −${e.stopPct??(e.stopPct??Math.max(4,e.targetPct))}%, and a target of +${e.targetPct}% — a designed reward:risk of 1 : ${(e.targetPct/(e.stopPct??(e.stopPct??Math.max(4,e.targetPct)))).toFixed(1)}. A 0.2% round-trip fee is modeled on every close (Bitget spot taker both sides), and total deployed notional is capped at 60% of equity — the book cannot overcommit. R-multiples, not predictions, compound equity; every ledger entry enforces it by construction rather than by discretion.</p>
+<p>Position risk was framed per <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a> and <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener">Michael Sloggett's risk framework</a>: conviction-sized notional of ${((e.notional??1000)).toLocaleString()} USD on a $10,000 USD paper equity (${(((e.notional??1000)/10000)*100).toFixed(0)}% of account), a predefined invalidation at −${e.stopPct??(e.stopPct??Math.max(4,e.targetPct))}%, and a target of +${e.targetPct}% — a designed reward:risk of 1 : ${(e.targetPct/(e.stopPct??(e.stopPct??Math.max(4,e.targetPct)))).toFixed(1)}. A 0.2% round-trip fee is modeled on every close (Bitget spot taker both sides), and total deployed notional is capped at 60% of equity — the book cannot overcommit. R-multiples, not predictions, compound equity; every ledger entry enforces it by construction rather than by discretion.</p>
 <h4>Trade management protocol</h4>
 <p>${lockTxt}The standing rules each evaluation tick are: (1) target contact → settle <i>won</i>; (2) adverse excursion beyond −${(e.stopPct??Math.max(4,e.targetPct))}% → settle <i>stopped</i>; (3) a fresh opposite-direction signal on ${e.asset} → settle <i>reversed</i>; (4) 24h without resolution → settle <i>expired</i>; (5) half-target contact → LOCK-50, banking half and moving the stop to breakeven. ${e.beStop?'The breakeven stop was armed on this entry.':'The breakeven stop had not armed on this entry at the time of writing.'}</p>
 ${harmTxt}${taTxt}
@@ -335,7 +335,7 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} perpetual fundi
 <h4>Outcome accounting</h4>
 <p>${outcome} Open positions are excluded from win-rate math — only decisive outcomes (won, stopped, reversed) count, and the headline rate stays hidden until at least five decisive closes exist.</p>
 <h4>Invalidation &amp; counterfactual</h4>
-<p>Every entry also carries the failure map: had ${sym} moved ${e.direction==='LONG'?'down':'up'} through −${(e.stopPct??Math.max(4,e.targetPct))}% from $${fmtP(e.entry)} — roughly $${fmtP(e.direction==='LONG'?e.entry*(1-(e.stopPct??Math.max(4,e.targetPct))/100):e.entry*(1+(e.stopPct??Math.max(4,e.targetPct))/100))} — the thesis would have been declared wrong and the position cut without negotiation. Likewise, any fresh ${e.direction==='LONG'?'SHORT':'LONG'} emission on ${e.asset} would have constituted a doctrinal contradiction and forced an immediate reversal close. The engine treats these paths as equally first-class outcomes: a stopped trade is not a malfunction, it is the design working. What the system refuses to do is hold a dead thesis — the 24-hour expiry exists because time-in-market is itself a risk factor that must be budgeted, a principle drawn from the same risk literature that governs the stop distance.</p>
+<p>Every entry also carries the failure map: had ${sym} moved ${e.direction==='LONG'?'down':'up'} through −${(e.stopPct??Math.max(4,e.targetPct))}% from $${fmtP(e.entry)} USD — roughly $${fmtP(e.direction==='LONG'?e.entry*(1-(e.stopPct??Math.max(4,e.targetPct))/100):e.entry*(1+(e.stopPct??Math.max(4,e.targetPct))/100))} USD — the thesis would have been declared wrong and the position cut without negotiation. Likewise, any fresh ${e.direction==='LONG'?'SHORT':'LONG'} emission on ${e.asset} would have constituted a doctrinal contradiction and forced an immediate reversal close. The engine treats these paths as equally first-class outcomes: a stopped trade is not a malfunction, it is the design working. What the system refuses to do is hold a dead thesis — the 24-hour expiry exists because time-in-market is itself a risk factor that must be budgeted, a principle drawn from the same risk literature that governs the stop distance.</p>
 <h4>Psychology &amp; discipline</h4>
 <p>The registry assigns <a href="https://en.wikipedia.org/wiki/Think_and_Grow_Rich" target="_blank" rel="noopener"><i>Think and Grow Rich</i> — Napoleon Hill</a> the role of confidence amplifier: once confluence is established, the engine commits fully rather than half-sizing into doubt — the ${e.score}/100 score either cleared the emission bar or the trade would not exist. The counterweight is <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a>: discipline is enforced at the exits, where no narrative is permitted to override the stop, the reversal rule, or the clock. Between those poles the engine has no psychology to defend — it cannot hope, cannot freeze, and cannot average down. That is the entire point of encoding the doctrine: the books supply judgment, the code removes hesitation.</p>
 <h4>Audit trail</h4>
@@ -364,17 +364,17 @@ async function render(){
   const o=scan.overview;
   $('stats').innerHTML=[
     ['Pairs scanned',o.scannedPairs],['Breadth',o.breadthPct+'%'],['Median Δ24h',o.medianChangePct+'%'],
-    ['Long / Short',`${o.longSignals} / ${o.shortSignals}`],['Quote vol','$'+(o.totalVolume/1e9).toFixed(2)+'B'],['Avg spread',o.averageSpreadPct+'%']
+    ['Long / Short',`${o.longSignals} / ${o.shortSignals}`],['Quote vol','$'+(o.totalVolume/1e9).toFixed(2)+'B USD'],['Avg spread',o.averageSpreadPct+'%']
   ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
   if(snap&&snap.assets&&snap.assets.input){
     $('rail').hidden=false;
-    $('rail').innerHTML=`JUPITER RAIL · SOL <b class="num">$${Number(snap.assets.input.usdPrice).toFixed(2)}</b> via ${snap.spot.routeLabel} · slot ${Number(snap.rpc.slot).toLocaleString()} · rpc ${snap.rpc.latencyMs}ms`;
+    $('rail').innerHTML=`JUPITER RAIL · SOL <b class="num">$${Number(snap.assets.input.usdPrice).toFixed(2)} USD</b> via ${snap.spot.routeLabel} · slot ${Number(snap.rpc.slot).toLocaleString()} · rpc ${snap.rpc.latencyMs}ms`;
   }
   const sigByAsset={};(scan.signals||[]).forEach(s=>sigByAsset[s.asset]=s);
   const majors=prices&&prices.majors?prices.majors:{};
   $('chips').innerHTML=['BTC','ETH','SOL'].map(s=>{
     const live=sigByAsset[s];const p=live?{price:live.lastPrice,changePct:live.changePct}:majors[s];
-    return p?`<span><b>${s}</b> <span class="num" data-px="${s}USDT">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
+    return p?`<span><b>${s}</b> <span class="num" data-px="${s}USDT">$${fmtP(p.price)} USD</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
   }).join('');
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
@@ -394,8 +394,8 @@ async function render(){
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
-    <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)}</td>
-    <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
+    <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)} USD</td>
+    <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
     <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err">no signals</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
@@ -433,15 +433,15 @@ async function render(){
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
     // account-scale mode: render $ P&L at the user's real size (10% notional/trade)
     if($('acctIn')&&document.activeElement!==$('acctIn'))$('acctIn').value=acctN||'';
-    const acctD=(pnl,not)=>acctN?' <span class="sub">$'+(pnl/100*acctN*0.1*((not??1000)/1000)).toFixed(2)+'</span>':'';
+    const acctD=(pnl,not)=>acctN?' <span class="sub">$'+(pnl/100*acctN*0.1*((not??1000)/1000)).toFixed(2)+' AUD</span>':'';
     if(acctN){
       // sequential compounding on closed trades, engine sizing (10%/trade)
       let eq=acctN;
       closed.sort((a,b)=>(a.exitTs||0)-(b.exitTs||0)).forEach(e=>eq*=1+0.1*e.pnlPct/100);
-      $('acctNote').textContent=`→ realized $${eq.toFixed(2)} (${((eq/acctN-1)*100).toFixed(2)}%)`;
+      $('acctNote').textContent=`→ realized $${eq.toFixed(2)} AUD (${((eq/acctN-1)*100).toFixed(2)}%)`;
     } else $('acctNote').textContent='';
     $('journal').innerHTML=(ledger.entries||[]).map(e=>{
-      const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice):'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice):'—');
+      const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice)+' USD':'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice)+' USD':'—');
       const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'');
       const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
       const live=e.status==='open'?1:0;
@@ -449,8 +449,8 @@ async function render(){
       return `<tr class="jrow" data-j="${key}" tabindex="0"><td><b>${e.asset}</b></td>
       <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
       <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''}</td>
-      <td class="num">$${fmtP(e.entry)}</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
-      <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
+      <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
+      <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' USD <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
       <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
       <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
@@ -464,18 +464,19 @@ async function render(){
   if(vault){
     const h=vault.holdings||{};
     const vScale=acctN?acctN/10000:1;
-    const vSfx=acctN?` <span class="sub">@ $${acctN} acct</span>`:'';
+    const vCur=acctN?'AUD':'USD';
+    const vSfx=acctN?` <span class="sub">@ $${acctN} AUD acct</span>`:'';
     $('vaultStats').innerHTML=[
-      ['Basket value',`<span data-vtotal>$${((vault.valueUsd??0)*vScale).toFixed(2)}</span>${vSfx}`],['Deposited','$'+((vault.depositedUsd??0)*vScale).toFixed(2)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+((vault.pnlUsd??0)*vScale).toFixed(2)]
+      ['Basket value',`<span data-vtotal>$${((vault.valueUsd??0)*vScale).toFixed(2)} ${vCur}</span>${vSfx}`],['Deposited','$'+((vault.depositedUsd??0)*vScale).toFixed(2)+' '+vCur],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+((vault.pnlUsd??0)*vScale).toFixed(2)+' '+vCur]
     ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
     const rows=Object.entries(h).map(([s,x])=>
-      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)}</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${x.valueUsd}</span></div>`).join('');
+      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)} USD</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${(x.valueUsd*vScale).toFixed(2)} ${vCur}</span></div>`).join('');
     const fills=(vault.fills||[]).slice(0,5).map(f=>
-      `<div class="ledger-row"><span class="sub">+ $${f.usd} from ${f.asset} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
+      `<div class="ledger-row"><span class="sub">+ $${(f.usd*vScale).toFixed(2)} ${vCur} from ${f.asset} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
     $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
     if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
   }
-  // ---- paper wallet: trading acct ($1k AUD start) + vault ($0 start) ----
+  // ---- paper wallet: trading acct ($1k AUD start) + vault ($0 AUD start) ----
   const acctN2=parseFloat(localStorage.acctSize||'');
   const acct=(acctN2>0)?acctN2:1000;
   const closedW=(ledger?ledger.entries||[]:[]).filter(e=>e.status!=='open');
@@ -488,11 +489,11 @@ async function render(){
   const vUsd=((vault&&vault.valueUsd)||0)*(acct/10000);
   WALLET={acct,realized:eqR,openMark,dep:depD,vault:vUsd};
   $('walletStats').innerHTML=[
-    ['Equity',`<b class="num" data-weq>$${(eqR+openMark).toFixed(2)}</b>`,'start $'+acct.toLocaleString()+' AUD · PAPER'],
-    ['Cash available',`<span class="num" data-wcash>$${Math.max(0,eqR+openMark-depD).toFixed(2)}</span>`,'deployed $'+depD.toFixed(0)],
-    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)}</span>`,closedW.length+' closed'],
-    ['Open marks',`<span class="num ${openMark>=0?'up':'dn'}" data-wopen>${openMark>=0?'+':'−'}$${Math.abs(openMark).toFixed(2)}</span>`,OPENPOS.length+' positions live'],
-    ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)}</span>`,'started $0 · 20% of wins'],
+    ['Equity',`<b class="num" data-weq>$${(eqR+openMark).toFixed(2)} AUD</b>`,'start $'+acct.toLocaleString()+' AUD · PAPER'],
+    ['Cash available',`<span class="num" data-wcash>$${Math.max(0,eqR+openMark-depD).toFixed(2)} AUD</span>`,'deployed $'+depD.toFixed(0)+' AUD'],
+    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)} AUD</span>`,closedW.length+' closed'],
+    ['Open marks',`<span class="num ${openMark>=0?'up':'dn'}" data-wopen>${openMark>=0?'+':'−'}$${Math.abs(openMark).toFixed(2)} AUD</span>`,OPENPOS.length+' positions live'],
+    ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)} AUD</span>`,'started $0 AUD · 20% of wins'],
   ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
   const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical','External VIP':'cryptopasta · External Desk'};
@@ -508,7 +509,7 @@ async function render(){
   // funding radar — arb candidates + open-trade carry exposure
   if(funding&&funding.best){
     const co=ledger&&ledger.stats&&ledger.stats.discipline?ledger.stats.discipline.carryOpen:null;
-    $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago`;
+    $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago`;
     $('fundRows').innerHTML=funding.best.map(f=>
       `<tr><td><b>${f.asset}</b></td>
       <td class="num ${f.ratePct>=0?'dn':'up'}">${f.ratePct>=0?'+':''}${f.ratePct}%</td>
@@ -534,7 +535,7 @@ function toggleRow(tr){
 function livePaint(){
   const L=window.__live;if(!L)return;
   document.querySelectorAll('[data-px],[data-mark]').forEach(el=>{
-    const p=L.price(el.dataset.px||el.dataset.sym);if(p)el.textContent='$'+fmtP(p);
+    const p=L.price(el.dataset.px||el.dataset.sym);if(p)el.textContent='$'+fmtP(p)+' USD';
   });
   document.querySelectorAll('[data-chg]').forEach(el=>{
     const t=(L.tick||{})[el.dataset.chg];if(!t)return;
@@ -547,7 +548,7 @@ function livePaint(){
     const entry=+el.dataset.entry,tgt=+el.dataset.tgt;
     const pnl=(el.dataset.dir==='LONG'?(p-entry)/entry:(entry-p)/entry)*100;
     const acctN=parseFloat(localStorage.acctSize||'');
-    el.innerHTML=(pnl>=0?'+':'')+pnl.toFixed(2)+'%'+(acctN>0?` <span class="sub">$${(pnl/100*acctN*0.1).toFixed(2)}</span>`:'');
+    el.innerHTML=(pnl>=0?'+':'')+pnl.toFixed(2)+'%'+(acctN>0?` <span class="sub">$${(pnl/100*acctN*0.1).toFixed(2)} AUD</span>`:'');
     el.className='num '+(pnl>0?'up':pnl<0?'dn':'');
     const st=el.closest('tr')&&el.closest('tr').querySelector('[data-st]');
     if(st&&st.textContent==='OPEN'){
@@ -555,26 +556,23 @@ function livePaint(){
       else if(pnl<=-Math.max(4,tgt)){st.textContent='STOP ✓';st.className='st stopped'}
     }
   });
+  const aN=parseFloat(localStorage.acctSize||'');
+  const vSc=aN>0?aN/10000:1,vCur=aN>0?' AUD':' USD';
   let v=0;document.querySelectorAll('[data-vunits]').forEach(el=>{
     const p=L.price(el.dataset.sym);
-    if(p){const val=(+el.dataset.vunits)*p;el.textContent='$'+val.toFixed(2);v+=val}
+    if(p){const val=(+el.dataset.vunits)*p*vSc;el.textContent='$'+val.toFixed(2)+vCur;v+=val}
   });
-  const ve=document.querySelector('[data-vtotal]');if(ve&&v)ve.textContent='$'+v.toFixed(2);
-  // live paper-wallet marks
+  const ve=document.querySelector('[data-vtotal]');if(ve&&v)ve.textContent='$'+v.toFixed(2)+vCur;
+  // live paper-wallet marks — wallet is always AUD (acct defaults 1000 AUD)
   const W=WALLET;
   if(W&&W.acct){
     let om=0;
     OPENPOS.forEach(o=>{const p=L.price(o.sym);if(p){let pc=(o.dir==='LONG'?(p-o.entry)/o.entry:(o.entry-p)/o.entry)*100;if(o.lock!=null)pc=(o.lock+pc)/2;om+=pc/100*o.not*(W.acct/10000)}});
-    const we=document.querySelector('[data-weq]');if(we)we.textContent='$'+(W.realized+om).toFixed(2);
-    const wo=document.querySelector('[data-wopen]');if(wo){wo.textContent=(om>=0?'+':'−')+'$'+Math.abs(om).toFixed(2);wo.className='num '+(om>=0?'up':'dn')}
-    const wc=document.querySelector('[data-wcash]');if(wc)wc.textContent='$'+Math.max(0,W.realized+om-W.dep).toFixed(2);
-    const wv=document.querySelector('[data-wvault]');if(wv&&v)wv.textContent='$'+(v*W.acct/10000).toFixed(2);
+    const we=document.querySelector('[data-weq]');if(we)we.textContent='$'+(W.realized+om).toFixed(2)+' AUD';
+    const wo=document.querySelector('[data-wopen]');if(wo){wo.textContent=(om>=0?'+':'−')+'$'+Math.abs(om).toFixed(2)+' AUD';wo.className='num '+(om>=0?'up':'dn')}
+    const wc=document.querySelector('[data-wcash]');if(wc)wc.textContent='$'+Math.max(0,W.realized+om-W.dep).toFixed(2)+' AUD';
+    const wv=document.querySelector('[data-wvault]');if(wv&&v)wv.textContent='$'+(v*W.acct/10000).toFixed(2)+' AUD';
   }
-  const aN=parseFloat(localStorage.acctSize||'');
-  if(aN>0){document.querySelectorAll('[data-vunits]').forEach(el=>{
-    const cur=parseFloat(el.textContent.replace('$',''));
-    if(!isNaN(cur))el.textContent='$'+(cur*aN/10000).toFixed(2)});
-    if(ve&&v)ve.textContent='$'+(v*aN/10000).toFixed(2);}
 }
 document.getElementById('acctIn').addEventListener('change',e=>{
   localStorage.acctSize=e.target.value;render();
