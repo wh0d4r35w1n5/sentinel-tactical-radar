@@ -72,7 +72,7 @@ async function main() {
   const snap = {
     status: 'live',
     refreshedAt: new Date().toISOString(),
-    pollSeconds: 5,
+    pollSeconds: 60,
     pair: prev.pair ?? {
       inputMint: SOL_MINT,
       outputMint: USDC_MINT,

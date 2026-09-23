@@ -135,6 +135,17 @@ async function main() {
       })
     );
   }
+  // one retry pass for rate-limited/missed klines
+  const missing = candidates.filter((r) => !enriched.has(r.asset));
+  if (missing.length) {
+    await new Promise((r) => setTimeout(r, 1500));
+    await Promise.all(
+      missing.map(async (r) => {
+        const k = await fetchKlines(r.pair).catch(() => null);
+        if (k) enriched.set(r.asset, k);
+      })
+    );
+  }
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
   const chgs = rows.map((r) => r.changePct).sort((a, b) => a - b);

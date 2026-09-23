@@ -34,27 +34,43 @@ header{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:
 .stat{background:rgba(61,255,115,.04);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .stat .v{font-size:20px;font-weight:700;color:var(--txt)}
 .stat .k{font-size:10px;color:var(--mut);letter-spacing:.12em;text-transform:uppercase}
+.rail{margin-top:12px;padding:9px 12px;border:1px dashed rgba(61,255,115,.25);border-radius:8px;font-size:11px;color:var(--grn-dim)}
 .tape{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--panel);margin-bottom:16px;white-space:nowrap}
 .tape-inner{display:inline-block;padding:8px 0;animation:tape 40s linear infinite}
 .tape span{display:inline-block;padding:0 22px;font-size:12px}
 @keyframes tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .up{color:var(--grn)}.dn{color:var(--red)}
-.grid{display:grid;grid-template-columns:1.7fr 1fr;gap:16px}
+.grid{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;align-items:start}
 @media(max-width:860px){.grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:16px}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{font-size:10px;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 td{padding:8px;border-bottom:1px solid rgba(61,255,115,.06)}
-tr:hover td{background:rgba(61,255,115,.03)}
+tbody tr.sig{cursor:pointer}
+tbody tr.sig:hover td,tbody tr.sig.open td{background:rgba(61,255,115,.05)}
+tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em}
 .tag.long{background:rgba(61,255,115,.12);color:var(--grn)}
 .tag.short{background:rgba(255,93,93,.12);color:var(--red)}
 .grade{font-weight:700;color:var(--grn)}
 .ledger-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(61,255,115,.07);font-size:12px}
+.ledger-row:last-child{border-bottom:0}
+.ml{display:flex;gap:14px;font-size:12px}
+.ml>div{flex:1}
+.ml .h{font-size:10px;color:var(--mut);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase}
+.ml .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(61,255,115,.05)}
+.dhead{font-size:12px;margin-bottom:8px}
+.dhead .thesis{color:var(--txt)}
+.ddrv{color:var(--grn-dim);font-size:11px;margin:6px 0}
+.ddrv li{margin-left:16px}
+.dmeta{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--mut)}
+.dmeta b{color:var(--txt)}
 footer{padding:18px 22px;border-top:1px solid var(--line);color:var(--mut);font-size:11px;display:flex;gap:16px;flex-wrap:wrap}
 footer a{color:var(--grn-dim)}
 .spark{display:block}
 .num{font-variant-numeric:tabular-nums}
 .err{color:var(--amb);padding:20px;text-align:center}
+@media(prefers-reduced-motion:reduce){.tape-inner,.dot{animation:none}}
 </style>
 </head>
 <body>
@@ -75,18 +91,28 @@ footer a{color:var(--grn-dim)}
     <div class="panel">
       <div class="ptitle">Market breadth · Bitget spot USDT</div>
       <div class="stats" id="stats"></div>
+      <div class="rail" id="rail" hidden></div>
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
   <div class="grid">
     <div class="panel">
-      <div class="ptitle">Ranked signals · momentum confluence</div>
+      <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail</span></div>
       <table><thead><tr><th>Asset</th><th>Side</th><th>Grade</th><th>Score</th><th>24h</th><th>RSI 1h</th><th>Price</th><th>Target</th><th>48h</th></tr></thead><tbody id="sigBody"></tbody></table>
     </div>
-    <div class="panel">
-      <div class="ptitle">Signal track record</div>
-      <div id="ledgerStats" style="margin-bottom:12px"></div>
-      <div id="ledger"></div>
+    <div class="col">
+      <div class="panel">
+        <div class="ptitle">Signal track record</div>
+        <div id="ledgerStats" style="margin-bottom:12px"></div>
+        <div id="ledger"></div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">Top movers / laggards · 24h</div>
+        <div class="ml">
+          <div><div class="h">Movers</div><div id="mv"></div></div>
+          <div><div class="h">Laggards</div><div id="lg"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -95,12 +121,14 @@ footer a{color:var(--grn-dim)}
   <span>Snapshots rebuilt every ~10 min via GitHub Actions</span>
   <span><a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar">source repo</a> · mirrored frontend, self-hosted data layer</span>
 </footer>
+<noscript><div class="err">This dashboard needs JavaScript to load live snapshots.</div></noscript>
 <script>
 const API='/sentinel-tactical-radar/api/';
 const $=id=>document.getElementById(id);
-const fmtP=p=>p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
+const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
 const ago=t=>{const s=(Date.now()-t)/1e3;return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 const j=u=>fetch(u,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+let LAST={};
 
 function sparkSVG(vals,w=90,h=26){
   if(!vals||vals.length<2)return'';
@@ -120,13 +148,34 @@ function pulseSVG(series){
   <path d="${line} L${W},${H} L0,${H} Z" fill="rgba(61,255,115,.07)"/>
   <path d="${line}" fill="none" stroke="var(--grn)" stroke-width="1.6"/>`;
 }
+function ledgerEntryFor(asset){
+  return ((LAST.ledger&&LAST.ledger.entries)||[]).find(e=>e.asset===asset&&e.status==='open');
+}
+function sigDetail(s,i){
+  const c=(LAST.detail&&LAST.detail.coins||{})[s.asset]||{};
+  const e=ledgerEntryFor(s.asset);
+  const drv=(s.drivers||[]).map(d=>`<li>${d}</li>`).join('');
+  return `<tr class="detail" data-d="${i}" hidden><td colspan="9">
+    <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
+    <ul class="ddrv">${drv}</ul>
+    <div>${sparkSVG(c.spark,520,64)}</div>
+    <div class="dmeta">
+      <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M</b></span>
+      <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)}–${fmtP(s.highPrice)})</span>
+      <span>spread <b>${s.spreadPct}%</b></span>
+      <span>risk <b>${s.riskPct}%</b></span>
+      ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
+    </div></td></tr>`;
+}
 async function render(){
   const [scan,detail,ledger,snap]=await Promise.all([
     j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json')]);
-  if(!scan)return;
+  if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
+  LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
+  const next=Math.max(0,Math.round((t+600e3-Date.now())/6e4));
   $('liveChip').className='live'+(stale?' stale':'');
-  $('liveTxt').textContent=(stale?'STALE · ':'LIVE · ')+ago(t)+' ago';
+  $('liveTxt').textContent=(stale?'STALE · ':'LIVE · ')+ago(t)+' ago'+(stale?'':` · next sync ~${next}m`);
   const p=scan.pulse||{};
   $('pulseVal').textContent=(p.series&&p.series.length?p.series.at(-1).value:'—')+(p.delta!=null?` (${p.delta>=0?'+':''}${p.delta})`:'');
   pulseSVG(p.series);
@@ -136,19 +185,23 @@ async function render(){
     ['Pairs scanned',o.scannedPairs],['Breadth',o.breadthPct+'%'],['Median Δ24h',o.medianChangePct+'%'],
     ['Long / Short',`${o.longSignals} / ${o.shortSignals}`],['Quote vol','$'+(o.totalVolume/1e9).toFixed(2)+'B'],['Avg spread',o.averageSpreadPct+'%']
   ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
+  if(snap&&snap.assets&&snap.assets.input){
+    $('rail').hidden=false;
+    $('rail').innerHTML=`JUPITER RAIL · SOL <b class="num">$${Number(snap.assets.input.usdPrice).toFixed(2)}</b> via ${snap.spot.routeLabel} · slot ${Number(snap.rpc.slot).toLocaleString()} · rpc ${snap.rpc.latencyMs}ms`;
+  }
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
   const coins=(detail&&detail.coins)||{};
-  $('sigBody').innerHTML=(scan.signals||[]).map(s=>{
+  $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-i="${i}"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}">${s.changePct>=0?'+':''}${s.changePct}%</td>
     <td class="num">${c.rsi14??'—'}</td><td class="num">$${fmtP(s.lastPrice)}</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
-    <td>${sparkSVG(c.spark)}</td></tr>`}).join('')||'<tr><td colspan="9" class="err">no signals</td></tr>';
+    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err">no signals</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
@@ -160,10 +213,14 @@ async function render(){
       const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
       return `<div class="ledger-row"><span><b>${e.asset}</b> <span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction[0]}</span> <span class="sub">${ago(e.ts)} ago</span></span><span class="num ${cls}">${lbl}</span></div>`}).join('')||'<div class="sub">no tracked signals yet</div>';
   }
-  if(snap&&snap.assets&&snap.assets.input){
-    $('pulseSub').textContent+=` · SOL $${Number(snap.assets.input.usdPrice).toFixed(2)} via ${snap.spot.routeLabel} · slot ${snap.rpc.slot}`;
-  }
+  const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
+  $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
 }
+document.getElementById('sigBody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr.sig');if(!tr)return;
+  const d=document.querySelector(`tr.detail[data-d="${tr.dataset.i}"]`);
+  if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden)}
+});
 render();setInterval(render,60000);
 </script>
 </body>
