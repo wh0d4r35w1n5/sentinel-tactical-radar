@@ -2,11 +2,15 @@ name: Refresh API snapshots
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: refresh-api
+  cancel-in-progress: false
 
 jobs:
   refresh:
@@ -14,11 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pull latest API snapshots
+      - name: Pull upstream state snapshots
         run: |
           set -u
           origin="https://sentinel-tactical-radar-staging.netlify.app/api"
-          for ep in config hud-status trades market-snapshot bot-state recovered-notes; do
+          for ep in config hud-status trades bot-state recovered-notes; do
             if curl -sf --max-time 30 "$origin/$ep" -o "api/$ep.json.new"; then
               mv "api/$ep.json.new" "api/$ep.json"
               echo "updated $ep"
@@ -30,6 +34,9 @@ jobs:
 
       - name: Build scanner snapshot from Bitget
         run: node scripts/build-scanner.mjs
+
+      - name: Build market snapshot (Jupiter + Solana + Bitget)
+        run: node scripts/build-snapshot.mjs
 
       - name: Commit if changed
         run: |
