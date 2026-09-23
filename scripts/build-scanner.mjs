@@ -17,6 +17,10 @@ const KLINE_CANDIDATES = 48; // top-volume pairs get 1h momentum metrics
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
+const LEDGER_FILE = path.join(API, 'signal-ledger.json');
+const LEDGER_MAX = 300;
+const LEDGER_TTL_MS = 24 * 3600 * 1000;
+const STOP_PCT = 8; // adverse move that marks a signal stopped
 
 const pct = (x) => Math.round(x * 100) / 100;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -57,6 +61,7 @@ async function fetchKlines(symbol) {
   return {
     rsi14: rsi(closes),
     volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
+    closes,
   };
 }
 
@@ -275,8 +280,92 @@ async function main() {
   };
 
   fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
+
+  // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
+  const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
+  const coinDetail = {};
+  for (const r of rows.slice(0, KLINE_CANDIDATES)) {
+    const k = enriched.get(r.asset);
+    if (!k) continue;
+    coinDetail[r.asset] = {
+      price: r.lastPrice,
+      changePct: pct(r.changePct),
+      quoteVolume: Math.round(r.quoteVolume),
+      rsi14: Math.round(k.rsi14),
+      volRatio: round(k.volRatio, 2),
+      spark: k.closes,
+    };
+  }
+  fs.writeFileSync(
+    path.join(API, 'coin-detail.json'),
+    JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
+  );
+
+  // ---- signal ledger: open entries + settled outcomes ----
+  let ledger = { entries: [], stats: {} };
+  try {
+    ledger = JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8'));
+  } catch {}
+  ledger.entries ??= [];
+  const now = Date.now();
+  const openFor = (a, d) =>
+    ledger.entries.some(
+      (e) => e.asset === a && e.direction === d && e.status === 'open'
+    );
+  for (const s of signals) {
+    if (!openFor(s.asset, s.direction)) {
+      ledger.entries.unshift({
+        asset: s.asset,
+        direction: s.direction,
+        entry: s.entryPrice,
+        targetPct: s.targetPct,
+        targetPrice: s.targetPrice,
+        score: s.score,
+        grade: s.grade,
+        strategy: s.strategy,
+        ts: now,
+        status: 'open',
+        exitPrice: null,
+        exitTs: null,
+        pnlPct: null,
+      });
+    }
+  }
+  for (const e of ledger.entries) {
+    if (e.status !== 'open') continue;
+    const px = priceByAsset.get(e.asset);
+    if (!px) continue;
+    const pnl =
+      e.direction === 'LONG'
+        ? ((px - e.entry) / e.entry) * 100
+        : ((e.entry - px) / e.entry) * 100;
+    const hit =
+      e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice;
+    if (hit || pnl <= -STOP_PCT || now - e.ts > LEDGER_TTL_MS) {
+      e.status = hit ? 'won' : pnl <= -STOP_PCT ? 'stopped' : 'expired';
+      e.exitPrice = px;
+      e.exitTs = now;
+      e.pnlPct = pct(pnl);
+    } else {
+      e.pnlPct = pct(pnl); // live mark on open entries
+    }
+  }
+  ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
+  const closed = ledger.entries.filter((e) => e.status !== 'open');
+  const wins = closed.filter((e) => e.status === 'won').length;
+  ledger.stats = {
+    open: ledger.entries.filter((e) => e.status === 'open').length,
+    closed: closed.length,
+    wins,
+    winRate: closed.length ? pct((wins / closed.length) * 100) : null,
+    avgPnlPct: closed.length
+      ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
+      : null,
+  };
+  fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+
   console.log(
-    `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched)`
+    `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched) | ledger ${ledger.stats.open} open, ${wins}/${closed.length} won`
   );
 }
 
