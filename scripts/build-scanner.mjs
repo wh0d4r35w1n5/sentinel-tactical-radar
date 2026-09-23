@@ -13,9 +13,13 @@ const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
-const SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
-const TICKERS_URL = 'https://api.bitget.com/api/v2/spot/market/tickers';
-const CANDLES_URL = 'https://api.bitget.com/api/v2/spot/market/candles';
+// Universe = Bitget USDT-M perpetual futures: crypto + RWA contracts
+// (stocks, indexes, FX, metals) — everything tradeable from the futures account.
+const CONTRACTS_URL =
+  'https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES';
+const TICKERS_URL =
+  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
+const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
 const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
 const KLINE_CANDIDATES = 48; // top-volume pairs get 1h momentum metrics
@@ -49,6 +53,25 @@ const STABLE_FIAT = new Set([
   'GBP', 'BRL', 'TRY', 'AUD', 'USDG', 'CUSD', 'XUSD', 'USDS', 'SUSDE',
 ]);
 
+// asset-class labels for RWA perps (contracts API flags isRwa but not the kind)
+const IDX_SET = new Set(
+  'SPX SPY QQQ VOO TQQQ SQQQ HSI DJI NAS100 US500 US30 NDX DAX FTSE NI225'.split(' ')
+);
+const METAL_SET = new Set('XAU XAG XPT XPD HG COPPER'.split(' '));
+const FX_SET = new Set(
+  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH'.split(' ')
+);
+const assetClass = (base, isRwa) =>
+  IDX_SET.has(base)
+    ? 'index'
+    : METAL_SET.has(base)
+      ? 'metal'
+      : FX_SET.has(base)
+        ? 'fx'
+        : isRwa
+          ? 'stock'
+          : 'crypto';
+
 function rsi(closes, period = 14) {
   if (closes.length < period + 1) return 50;
   let gain = 0, loss = 0;
@@ -63,7 +86,7 @@ function rsi(closes, period = 14) {
 
 async function fetchKlines(symbol) {
   const res = await fetch(
-    `${CANDLES_URL}?symbol=${symbol}&granularity=1h&limit=120`
+    `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`
   );
   if (!res.ok) return null;
   const { data } = await res.json();
@@ -85,7 +108,7 @@ async function fetchKlines(symbol) {
   let candles5m = null;
   try {
     const r5 = await fetch(
-      `${CANDLES_URL}?symbol=${symbol}&granularity=5min&limit=120`
+      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`
     );
     if (r5.ok) {
       const d5 = await r5.json();
@@ -108,7 +131,7 @@ async function fetchKlines(symbol) {
 async function main() {
   const now = Date.now();
   const [symbolsRes, tickersRes] = await Promise.all([
-    fetch(SYMBOLS_URL),
+    fetch(CONTRACTS_URL),
     fetch(TICKERS_URL),
   ]);
   if (!symbolsRes.ok || !tickersRes.ok)
@@ -116,21 +139,22 @@ async function main() {
   const { data: symbols } = await symbolsRes.json();
   const { data: tickers } = await tickersRes.json();
 
+  // contracts list drives the universe: every USDT-M perpetual — crypto,
+  // stocks (TSLA/NVDA/AAPL...), indexes (SPX/QQQ...), metals (XAU/XAG), FX.
   const online = symbols.filter(
-    (s) => s.status === 'online' && s.areaSymbol !== 'yes'
+    (s) => s.symbolStatus === 'normal' && s.quoteCoin === 'USDT'
   );
   const listed = new Set(online.map((s) => (s.baseCoin ?? '').toUpperCase()));
   fs.writeFileSync(
     path.join(API, 'bitget-symbols.json'),
     JSON.stringify([...listed].sort())
   );
+  const contractBySymbol = new Map(
+    online.map((s) => [s.symbol.toUpperCase(), s])
+  );
   const usdtPairs = new Set(
     online
-      .filter(
-        (s) =>
-          s.quoteCoin === 'USDT' &&
-          !STABLE_FIAT.has((s.baseCoin ?? '').toUpperCase())
-      )
+      .filter((s) => !STABLE_FIAT.has((s.baseCoin ?? '').toUpperCase()))
       .map((s) => s.symbol.toUpperCase())
   );
 
@@ -142,10 +166,16 @@ async function main() {
       const low = Number(t.low24h);
       const bid = Number(t.bidPr);
       const ask = Number(t.askPr);
+      const c = contractBySymbol.get(t.symbol.toUpperCase());
+      const base = t.symbol.replace(/USDT$/i, '').toUpperCase();
       return {
         asset: t.symbol.replace(/USDT$/i, ''),
         symbol: `${t.symbol.replace(/USDT$/i, '')}USD`,
         pair: t.symbol,
+        cls: assetClass(base, c?.isRwa === 'YES'),
+        maxLever: Number(c?.maxLever) || null,
+        indexPrice: Number(t.indexPrice) || null,
+        markPrice: Number(t.markPrice) || null,
         lastPrice: last,
         changePct: Number(t.changeUtc24h) * 100,
         quoteVolume: Number(t.quoteVolume),
@@ -212,16 +242,17 @@ async function main() {
             const rate = +f.fundingRate;
             if (isFinite(rate)) {
               const row = rows.find((x) => x.asset === asset);
-              const spot = row ? row.lastPrice : null;
-              const perp = perpPx[asset] ?? null;
+              const perp = row ? row.lastPrice : perpPx[asset] ?? null;
+              // universe is futures-native: basis is perp mark vs index price
+              const index = row?.indexPrice ?? null;
               const annualPct = rate * 3 * 365 * 100; // 8h funding x3/day
               const basisPct =
-                spot && perp ? ((perp - spot) / spot) * 100 : null;
+                index && perp ? ((perp - index) / index) * 100 : null;
               funding[asset] = {
                 ratePct: pct(rate * 100),
                 annualPct: pct(annualPct),
                 nextTs: f.nextUpdate ? +f.nextUpdate : null,
-                perp, spot, basisPct: basisPct != null ? pct(basisPct) : null,
+                perp, index, basisPct: basisPct != null ? pct(basisPct) : null,
                 // arb math: ~0.32% round-trip to open+close the pair
                 // (spot taker + perp taker); breakeven = hours of funding
                 // needed to cover entry+exit costs
@@ -606,6 +637,8 @@ async function main() {
         );
       return {
         asset: r.asset,
+        cls: r.cls,
+        maxLever: r.maxLever,
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
         social: null,
@@ -940,6 +973,10 @@ async function main() {
     const notional = Math.round(
       clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
     );
+    // contract leverage cap — most RWA perps max at 20x, some at 5x;
+    // paper lev is min(10x target, contract max), liq band scales with it
+    const lev = Math.min(LEVERAGE, s.maxLever ?? LEVERAGE);
+    const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
     if (
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
@@ -948,12 +985,13 @@ async function main() {
     ) {
       ledger.entries.unshift({
         asset: s.asset,
+        cls: s.cls ?? 'crypto',
         direction: s.direction,
         entry: s.entryPrice,
         notional,
-        margin: Math.round(notional / LEVERAGE),
-        lev: LEVERAGE,
-        liqPct: LIQ_PCT,
+        margin: Math.round(notional / lev),
+        lev,
+        liqPct,
         feePct: FEE_PCT,
         // multi-split take-profit ladder: bank 33%/33%/34% of the position
         // at 40%/70%/100% of the target move — "no one ever went broke

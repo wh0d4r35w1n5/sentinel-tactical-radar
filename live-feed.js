@@ -35,7 +35,7 @@
         ws.send(JSON.stringify({
           op: 'subscribe',
           args: ids.slice(i, i + 100).map(function (id) {
-            return { instType: 'SPOT', channel: 'ticker', instId: id };
+            return { instType: 'USDT-FUTURES', channel: 'ticker', instId: id };
           }),
         }));
       }
@@ -117,7 +117,7 @@
     var c = null;
     try { c = JSON.parse(localStorage.getItem(SYM_KEY)); } catch (e) {}
     if (c && Date.now() - c.ts < 6 * 3600e3) return c.data;
-    var r = await orig('https://api.bitget.com/api/v2/spot/public/symbols');
+    var r = await orig('https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES');
     var j = await r.json();
     var data = j.data || [];
     try { localStorage.setItem(SYM_KEY, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {}
@@ -125,7 +125,7 @@
   }
   async function getTickers() {
     if (tickersCache.data && Date.now() - tickersCache.t < 10000) return tickersCache.data;
-    var r = await orig('https://api.bitget.com/api/v2/spot/market/tickers');
+    var r = await orig('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES');
     var j = await r.json();
     tickersCache = { t: Date.now(), data: j.data || [] };
     return tickersCache.data;
@@ -136,7 +136,7 @@
     var tks = await getTickers();
     var pairs = {};
     syms.forEach(function (s) {
-      if (s.status === 'online' && s.areaSymbol !== 'yes' &&
+      if (s.symbolStatus === 'normal' &&
           s.quoteCoin === 'USDT' && !STABLE[(s.baseCoin || '').toUpperCase()])
         pairs[s.symbol.toUpperCase()] = 1;
     });

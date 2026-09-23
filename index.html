@@ -75,6 +75,10 @@ tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 .st.breakeven,.st.expired{background:rgba(255,184,77,.12);color:var(--amb)}
 .st.trailed{background:rgba(61,255,115,.16);color:var(--grn);border:1px solid rgba(61,255,115,.4)}
 .mbadge{display:inline-block;padding:0 5px;border:1px solid rgba(255,184,77,.4);border-radius:3px;font-size:9px;color:var(--amb);margin-left:4px}
+.cls-stock{border-color:rgba(77,163,255,.5);color:#4da3ff}
+.cls-index{border-color:rgba(178,107,255,.5);color:#b26bff}
+.cls-metal{border-color:rgba(255,215,80,.55);color:#ffd750}
+.cls-fx{border-color:rgba(80,220,220,.5);color:#50dcdc}
 .drvr{margin-bottom:9px}
 .drvr .nm{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
 .drvr .bar{height:6px;border-radius:4px;background:rgba(61,255,115,.07);overflow:hidden}
@@ -465,7 +469,7 @@ async function render(){
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.ext?' <span class="mbadge" title="flagged by external desk feed">DESK</span>':''} <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''}${s.ext?' <span class="mbadge" title="flagged by external desk feed">DESK</span>':''} <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
@@ -524,7 +528,7 @@ async function render(){
       const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
       const live=e.status==='open'?1:0;
       const key=e.asset+':'+e.ts;
-      return `<tr class="jrow" data-j="${key}" tabindex="0"><td><b>${e.asset}</b></td>
+      return `<tr class="jrow" data-j="${key}" tabindex="0"><td><b>${e.asset}</b>${e.cls&&e.cls!=='crypto'?` <span class="mbadge cls-${e.cls}" title="USDT-M ${e.cls} perpetual">${e.cls.toUpperCase()}</span>`:''}</td>
       <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
       <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
       <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
@@ -669,7 +673,7 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
 const JOPEN=new Set();
 const CHARTED=new Set();
 async function candlesFor(asset,fromMs,toMs){
-  const r=await fetch(`https://api.bitget.com/api/v2/spot/market/candles?symbol=${asset}USDT&granularity=1h&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
+  const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=1H&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
   const j=await r.json();
   const seen=new Set();
   return (j.data||[]).map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4]}))
