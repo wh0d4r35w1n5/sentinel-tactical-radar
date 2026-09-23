@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="color-scheme" content="dark"/>
+<meta name="theme-color" content="#070b08"/>
 <title>Sentinel Tactical Radar</title>
 <meta name="description" content="Live crypto signal scanner — Bitget spot breadth, ranked setups, Jupiter execution quotes."/>
 <meta property="og:title" content="Sentinel Tactical Radar"/>
@@ -126,6 +127,7 @@ footer a{color:var(--grn-dim)}
   <span>Data: Bitget spot · Jupiter · Solana RPC</span>
   <span>Snapshots rebuilt every ~10 min via GitHub Actions</span>
   <span><a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar">source repo</a> · mirrored frontend, self-hosted data layer</span>
+  <span id="health"></span>
 </footer>
 <noscript><div class="err">This dashboard needs JavaScript to load live snapshots.</div></noscript>
 <script>
@@ -174,8 +176,8 @@ function sigDetail(s,i){
     </div></td></tr>`;
 }
 async function render(){
-  const [scan,detail,ledger,snap,prices]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json')]);
+  const [scan,detail,ledger,snap,prices,health]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -238,6 +240,10 @@ async function render(){
   }
   const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
+  if(health&&health.scanner){
+    const h=health.scanner,hs=health.snapshot;
+    $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(hs?` · snapshot slot ${Number(hs.slot).toLocaleString()}`:'');
+  }
 }
 function toggleRow(tr){
   const d=document.querySelector(`tr.detail[data-d="${tr.dataset.i}"]`);

@@ -123,6 +123,22 @@ async function main() {
   };
 
   fs.writeFileSync(FILE, JSON.stringify(snap));
+
+  let health = {};
+  try {
+    health = JSON.parse(
+      fs.readFileSync(path.join(API, 'health.json'), 'utf8')
+    );
+  } catch {}
+  health.snapshot = {
+    ok: true,
+    at: snap.refreshedAt,
+    slot: snap.rpc.slot,
+    rpcLatencyMs: snap.rpc.latencyMs,
+    route: snap.spot.routeLabel,
+  };
+  fs.writeFileSync(path.join(API, 'health.json'), JSON.stringify(health));
+
   console.log(
     `snapshot: slot ${snap.rpc.slot} (${snap.rpc.latencyMs}ms), SOL $${solUsd}, route ${snap.spot.routeLabel}`
   );

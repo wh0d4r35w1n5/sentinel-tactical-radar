@@ -414,6 +414,21 @@ async function main() {
   ledger.stats.worst = sortedClosed[0]?.asset ?? null;
   fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
 
+  // pipeline health for the landing footer
+  let health = {};
+  try {
+    health = JSON.parse(fs.readFileSync(path.join(API, 'health.json'), 'utf8'));
+  } catch {}
+  health.scanner = {
+    ok: true,
+    at: snap.refreshedAt,
+    pairs: rows.length,
+    signals: signals.length,
+    klineEnriched: enriched.size,
+    ledgerOpen: ledger.stats.open,
+  };
+  fs.writeFileSync(path.join(API, 'health.json'), JSON.stringify(health));
+
   console.log(
     `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched) | ledger ${ledger.stats.open} open, ${wins}/${closed.length} won`
   );
