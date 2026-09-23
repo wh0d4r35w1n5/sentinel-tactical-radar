@@ -536,6 +536,10 @@ async function main() {
   );
 
   // ---- signal ledger: open entries + settled outcomes ----
+  const EQUITY = 10000; // paper account, USD model
+  const NOTIONAL = 1000; // full-size position = 10% of equity
+  const MAX_DEPLOYED = EQUITY * 0.6; // portfolio cap — 60% deployed max
+  const FEE_PCT = 0.2; // Bitget spot ~0.1% x2 sides, modeled round-trip
   let ledger = { entries: [], stats: {} };
   let ledgerCorrupt = false;
   try {
@@ -564,16 +568,27 @@ async function main() {
         e.status === 'reversed' &&
         now - (e.exitTs ?? 0) < 3600e3
     );
+  // portfolio cap: open notional can't exceed 60% of equity — signals are
+  // already score-sorted so the best setups get slots first; conviction sizing
+  // gives grade-A full notional, lower grades half (Tharp position sizing)
+  const deployed = () =>
+    ledger.entries
+      .filter((e) => e.status === 'open')
+      .reduce((a, e) => a + (e.notional ?? NOTIONAL), 0);
   for (const s of signals) {
+    const notional = s.score >= 85 ? NOTIONAL : s.score >= 70 ? NOTIONAL * 0.75 : NOTIONAL * 0.5;
     if (
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
-      !recentReversed(s.asset)
+      !recentReversed(s.asset) &&
+      deployed() + notional <= MAX_DEPLOYED
     ) {
       ledger.entries.unshift({
         asset: s.asset,
         direction: s.direction,
         entry: s.entryPrice,
+        notional,
+        feePct: FEE_PCT,
         targetPct: s.targetPct,
         targetPrice: s.targetPrice,
         score: s.score,
@@ -613,12 +628,14 @@ async function main() {
         e.beStop = true;
       }
     }
+    const fee = e.feePct ?? FEE_PCT;
     const settle = (status, exitPx, rawPnl) => {
       e.status = status;
       e.exitPrice = exitPx;
       e.exitTs = now;
-      e.pnlPct =
-        e.lockPnl != null ? pct((e.lockPnl + rawPnl) / 2) : pct(rawPnl);
+      const net =
+        e.lockPnl != null ? (e.lockPnl + rawPnl) / 2 - fee : rawPnl - fee;
+      e.pnlPct = pct(net);
     };
     const hit =
       px &&
@@ -633,7 +650,7 @@ async function main() {
     else if (stopped) settle('stopped', px, pnl);
     else if (reversed) settle('reversed', px, pnl);
     else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.pnlPct ?? 0);
-    else e.pnlPct = pnl; // live mark on open entries
+    else e.pnlPct = pct(pnl - fee); // live mark net of modeled fees
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');
@@ -692,15 +709,15 @@ async function main() {
     updatedAt: snap.refreshedAt,
   };
   // ---- Sloggett risk-protocol adherence scorecard (paper equity model) ----
-  const EQUITY = 10000; // paper account
-  const NOTIONAL = 1000; // per-trade
   const closedAll = closed.filter((e) => e.pnlPct != null);
   const rrList = closedAll.map(
     (e) => (e.targetPct || 4) / (e.stopPct ?? Math.max(4, e.targetPct || 4))
   );
   const riskPctList = closedAll.map(
-    (e) => ((e.stopPct ?? Math.max(4, e.targetPct || 4)) * NOTIONAL) / EQUITY
-  ); // stop% × notional → $ risk → % of paper equity
+    (e) =>
+      ((e.stopPct ?? Math.max(4, e.targetPct || 4)) * (e.notional ?? NOTIONAL)) /
+      EQUITY
+  ); // stop% × actual notional → $ risk → % of paper equity
   let maxConsecL = 0,
     cur = 0;
   for (const e of [...closedAll].sort((a, b) => a.exitTs - b.exitTs)) {
