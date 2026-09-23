@@ -60,6 +60,24 @@ tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 .grade{font-weight:700;color:var(--grn)}
 .ledger-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(61,255,115,.07);font-size:12px}
 .ledger-row:last-child{border-bottom:0}
+.pressbar{height:8px;border-radius:5px;background:rgba(61,255,115,.08);border:1px solid var(--line);overflow:hidden;margin:10px 0 6px}
+.pressbar i{display:block;height:100%;background:linear-gradient(90deg,var(--amb),var(--grn));border-radius:5px}
+.pressrow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(61,255,115,.05);font-size:11px}
+.jscroll{overflow-x:auto}
+.jscroll table{min-width:960px}
+.st{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em}
+.st.open{background:rgba(61,255,115,.1);color:var(--grn-dim)}
+.st.won{background:rgba(61,255,115,.16);color:var(--grn)}
+.st.stopped,.st.reversed{background:rgba(255,93,93,.13);color:var(--red)}
+.st.breakeven,.st.expired{background:rgba(255,184,77,.12);color:var(--amb)}
+.mbadge{display:inline-block;padding:0 5px;border:1px solid rgba(255,184,77,.4);border-radius:3px;font-size:9px;color:var(--amb);margin-left:4px}
+.drvr{margin-bottom:9px}
+.drvr .nm{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+.drvr .bar{height:6px;border-radius:4px;background:rgba(61,255,115,.07);overflow:hidden}
+.drvr .bar i{display:block;height:100%;background:var(--grn);border-radius:4px}
+.drvr .bk{font-size:10px;color:var(--mut)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:860px){.duo{grid-template-columns:1fr}}
 .ml{display:flex;gap:14px;font-size:12px}
 .ml>div{flex:1}
 .ml .h{font-size:10px;color:var(--mut);letter-spacing:.14em;margin-bottom:6px;text-transform:uppercase}
@@ -101,6 +119,12 @@ footer a{color:var(--grn-dim)}
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
+  <div class="panel" style="margin-bottom:16px">
+    <div class="ptitle">Signal pressure · how close the engine is to firing</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
+    <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
+    <div id="pressList"></div>
+  </div>
   <div class="grid">
     <div class="panel">
       <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail</span></div>
@@ -121,6 +145,21 @@ footer a{color:var(--grn-dim)}
           <div><div class="h">Laggards</div><div id="lg"></div></div>
         </div>
       </div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="ptitle">Trade journal · every tracked signal, full accounting</div>
+    <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
+  </div>
+  <div class="duo">
+    <div class="panel">
+      <div class="ptitle">VaultKit · 20% of every win sweeps into a hold basket</div>
+      <div class="stats" id="vaultStats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px"></div>
+      <div id="vaultRows"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Logic drivers · book-weighted strategy influence</div>
+      <div id="drivers"></div>
     </div>
   </div>
 </div>
@@ -177,8 +216,8 @@ function sigDetail(s,i){
     </div></td></tr>`;
 }
 async function render(){
-  const [scan,detail,ledger,snap,prices,health]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json')]);
+  const [scan,detail,ledger,snap,prices,health,vault]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -208,6 +247,14 @@ async function render(){
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
+  const pr=scan.pressure||{};
+  if(pr.candidates&&pr.candidates.length){
+    $('pressPct').textContent='engine pressure '+pr.pct+'%';
+    $('pressFill').style.width=pr.pct+'%';
+    $('pressList').innerHTML=pr.candidates.map(c=>
+      `<div class="pressrow"><span><b>${c.asset}</b> <span class="tag ${c.lean==='LONG'?'long':'short'}">${c.lean[0]}</span></span>
+      <span class="sub">score ${c.score} · −${c.gap} to cutoff · blocked by <b>${c.blocker}</b></span></div>`).join('');
+  }
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
@@ -222,7 +269,7 @@ async function render(){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
-      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">W / L${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
+      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
       <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L</div></div></div>`;
     $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
@@ -241,7 +288,45 @@ async function render(){
     const bs=(ledger.stats&&ledger.stats.byStrategy)||{};
     $('byStrat').innerHTML=Object.entries(bs).map(([k,v])=>
       `<div class="ledger-row"><span class="sub">${k}</span><span class="num">${v.winRate}% <span class="sub">(${v.n})</span></span></div>`).join('');
+    // full trade journal — every entry, all fields
+    const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
+    $('journal').innerHTML=(ledger.entries||[]).map(e=>{
+      const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice):'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice):'—');
+      const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'');
+      const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
+      return `<tr><td><b>${e.asset}</b></td>
+      <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
+      <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''}</td>
+      <td class="num">$${fmtP(e.entry)}</td><td class="num">${mark}</td>
+      <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
+      <td class="num ${pnlCls}">${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%':'—'}</td>
+      <td><span class="st ${e.status}">${e.status.toUpperCase()}</span>${flags}</td>
+      <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`;
+    }).join('')||'<tr><td colspan="11" class="err">no tracked signals yet</td></tr>';
   }
+  if(vault){
+    const h=vault.holdings||{};
+    $('vaultStats').innerHTML=[
+      ['Basket value','$'+(vault.valueUsd??0)],['Deposited','$'+(vault.depositedUsd??0)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+(vault.pnlUsd??0)]
+    ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
+    const rows=Object.entries(h).map(([s,x])=>
+      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)}</span></span><span class="num">$${x.valueUsd}</span></div>`).join('');
+    const fills=(vault.fills||[]).slice(0,5).map(f=>
+      `<div class="ledger-row"><span class="sub">+ $${f.usd} from ${f.asset} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
+    $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
+    if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
+  }
+  // logic drivers: strategy influence = live signal share + ledger weight
+  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich'};
+  const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
+  const stratStats=(ledger&&ledger.stats&&ledger.stats.byStrategy)||{};
+  const allStrat=[...new Set([...Object.keys(sigN),...Object.keys(stratStats)])];
+  const tot=Math.max(1,allStrat.reduce((a,k)=>a+(sigN[k]||0)+(stratStats[k]||{}).n||0,0));
+  $('drivers').innerHTML=allStrat.map(k=>{
+    const w=Math.round(((sigN[k]||0)+(stratStats[k]||{}).n||0)/tot*100);
+    const perf=stratStats[k];
+    return `<div class="drvr"><div class="nm"><span>${k} <span class="bk">${BOOKS[k]||''}</span></span><span class="num">${w}%${perf?` · ${perf.winRate}% wr`:' live'}</span></div>
+    <div class="bar"><i style="width:${w}%"></i></div></div>`}).join('')||'<div class="sub">no driver data yet</div>';
   const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
   if(health&&health.scanner){

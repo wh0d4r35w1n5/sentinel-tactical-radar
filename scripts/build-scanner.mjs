@@ -22,6 +22,10 @@ const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
 const UNTRACKED_TTL_MS = 3600 * 1000; // asset out of universe -> expire after 1h
+const VAULT_FILE = path.join(API, 'vault.json');
+const VAULT_PCT = 0.2; // share of realized gains swept into the hold basket
+const TRADE_NOTIONAL = 1000; // dry-run $ per signal
+const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 
 const pct = (x) => Math.round(x * 100) / 100;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -165,7 +169,7 @@ async function main() {
   // signals need momentum metrics; pairs whose kline fetch failed get a
   // neutral profile instead of being dropped from the board entirely
   const neutral = { rsi14: 50, volRatio: 1, closes: null };
-  const signals = rows
+  const ranked = rows
     .slice(0, KLINE_CANDIDATES)
     .map((r) => {
       const k = enriched.get(r.asset) ?? neutral;
@@ -180,7 +184,8 @@ async function main() {
       );
       return { ...r, k, momentumScore, volumeScore, liquidityScore, surgeScore, score };
     })
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.score - a.score);
+  const signals = ranked
     .slice(0, MAX_SIGNALS)
     .map((r) => {
       const direction = r.changePct >= 0 ? 'LONG' : 'SHORT';
@@ -266,8 +271,40 @@ async function main() {
     if (aud) fx = { audPerUsd: aud, usdPerAud: round(1 / aud, 4) };
   } catch {}
 
+  // ---- signal pressure: near-miss candidates + what's blocking them ----
+  const FACTORS = [
+    ['momentumScore', 'momentum'],
+    ['volumeScore', 'quote volume'],
+    ['liquidityScore', 'liquidity'],
+    ['surgeScore', 'vol surge'],
+  ];
+  const cutoff = ranked[MAX_SIGNALS - 1]?.score ?? 0;
+  const pressureList = ranked
+    .slice(MAX_SIGNALS, MAX_SIGNALS + 10)
+    .map((r) => ({
+      asset: r.asset,
+      score: r.score,
+      gap: Math.max(0, cutoff - r.score),
+      lean: r.changePct >= 0 ? 'LONG' : 'SHORT',
+      blocker: FACTORS.reduce((a, b) => (r[b[0]] < r[a[0]] ? b : a))[1],
+    }));
+  const pressurePct = cutoff
+    ? Math.round(
+        (pressureList.reduce((a, c) => a + c.score, 0) /
+          (pressureList.length || 1) /
+          cutoff) *
+          100
+      )
+    : 0;
+
   const snap = {
     fx,
+    pressure: {
+      pct: Math.min(pressurePct, 99),
+      cutoff,
+      candidates: pressureList,
+      scanning: ranked.length,
+    },
     pulse: {
       low: Math.min(...values),
       high: Math.max(...values),
@@ -385,32 +422,51 @@ async function main() {
           ? ((px - e.entry) / e.entry) * 100
           : ((e.entry - px) / e.entry) * 100
       );
+      e.lastPrice = px;
+      e.peakPnl = Math.max(e.peakPnl ?? -Infinity, pnl);
+      // lock 50%: once price covers half the target, bank half the
+      // position and move the stop on the remainder to breakeven
+      if (e.lockPnl == null && pnl >= e.targetPct / 2) {
+        e.lockPnl = pnl;
+        e.lockedAt = now;
+        e.beStop = true;
+      }
     }
+    const settle = (status, exitPx, rawPnl) => {
+      e.status = status;
+      e.exitPrice = exitPx;
+      e.exitTs = now;
+      e.pnlPct =
+        e.lockPnl != null ? pct((e.lockPnl + rawPnl) / 2) : pct(rawPnl);
+    };
     const hit =
       px &&
       (e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice);
+    const beStopped = px && e.beStop && pnl <= 0;
     const stopped = px && pnl <= -Math.max(4, e.targetPct);
     const reversed =
       px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
     const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
-    if (hit || stopped || reversed || expired) {
-      e.status = hit ? 'won' : stopped ? 'stopped' : reversed ? 'reversed' : 'expired';
-      e.exitPrice = px ?? e.exitPrice;
-      e.exitTs = now;
-      e.pnlPct = pnl;
-    } else {
-      e.pnlPct = pnl; // live mark on open entries
-    }
+    if (hit) settle('won', px, pnl);
+    else if (beStopped) settle('breakeven', e.entry, 0);
+    else if (stopped) settle('stopped', px, pnl);
+    else if (reversed) settle('reversed', px, pnl);
+    else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.pnlPct ?? 0);
+    else e.pnlPct = pnl; // live mark on open entries
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');
   const wins = closed.filter((e) => e.status === 'won').length;
+  const losses = closed.filter(
+    (e) => e.status === 'stopped' || e.status === 'reversed'
+  ).length;
   ledger.stats = {
     open: ledger.entries.filter((e) => e.status === 'open').length,
     closed: closed.length,
     wins,
-    losses: closed.length - wins,
-    winRate: closed.length >= 5 ? pct((wins / closed.length) * 100) : null,
+    losses,
+    flat: closed.length - wins - losses, // breakeven + expired
+    winRate: wins + losses >= 5 ? pct((wins / (wins + losses)) * 100) : null,
     avgPnlPct: closed.length
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
@@ -436,6 +492,67 @@ async function main() {
   ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
   ledger.stats.worst = sortedClosed[0]?.asset ?? null;
   if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+
+  // ---- vault: a fixed share of every realized gain compounds into a
+  // hold-forever BTC/ETH/SOL basket, marked to live prices ----
+  let vault = { depositedUsd: 0, holdings: {}, fills: [] };
+  let vaultCorrupt = false;
+  try {
+    vault = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
+  } catch (err) {
+    vaultCorrupt = err.code !== 'ENOENT';
+  }
+  vault.fills ??= [];
+  vault.holdings ??= {};
+  for (const e of closed) {
+    if (e.vaulted || (e.pnlPct ?? 0) <= 0) continue;
+    const usd = TRADE_NOTIONAL * (e.pnlPct / 100) * VAULT_PCT;
+    vault.depositedUsd = pct(vault.depositedUsd + usd);
+    vault.fills.unshift({
+      ts: e.exitTs ?? now,
+      asset: e.asset,
+      status: e.status,
+      pnlPct: e.pnlPct,
+      usd: round(usd, 2),
+    });
+    for (const sym of VAULT_ASSETS) {
+      const p = priceByAsset.get(sym);
+      if (!p) continue;
+      const h = (vault.holdings[sym] ??= { units: 0, costUsd: 0 });
+      h.units += usd / VAULT_ASSETS.length / p;
+      h.costUsd = round(h.costUsd + usd / VAULT_ASSETS.length, 2);
+    }
+    e.vaulted = true;
+    if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+  }
+  let valueUsd = 0;
+  const holdings = {};
+  for (const [sym, h] of Object.entries(vault.holdings)) {
+    const p = priceByAsset.get(sym);
+    const v = h.units * (p ?? 0);
+    valueUsd += v;
+    holdings[sym] = {
+      units: round(h.units, 6),
+      costUsd: h.costUsd,
+      valueUsd: round(v, 2),
+      price: p ?? null,
+    };
+  }
+  if (!vaultCorrupt) {
+    fs.writeFileSync(
+      VAULT_FILE,
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        vaultPct: VAULT_PCT,
+        notional: TRADE_NOTIONAL,
+        depositedUsd: vault.depositedUsd,
+        valueUsd: round(valueUsd, 2),
+        pnlUsd: round(valueUsd - vault.depositedUsd, 2),
+        fills: vault.fills.slice(0, 200),
+        holdings,
+      })
+    );
+  }
 
   // pipeline health for the landing footer
   let health = {};
