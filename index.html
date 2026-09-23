@@ -166,7 +166,7 @@ footer a{color:var(--grn-dim)}
     </div>
   </div>
   <div class="panel" style="margin-top:16px">
-    <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span></div>
+    <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
   </div>
   <div class="duo">
@@ -419,6 +419,16 @@ async function render(){
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
+    // account-scale mode: render $ P&L at the user's real size (10% notional/trade)
+    const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
+    if($('acctIn')&&document.activeElement!==$('acctIn'))$('acctIn').value=acctN||'';
+    const acctD=(pnl)=>acctN?' <span class="sub">$'+(pnl/100*acctN*0.1).toFixed(2)+'</span>':'';
+    if(acctN){
+      // sequential compounding on closed trades, engine sizing (10%/trade)
+      let eq=acctN;
+      closed.sort((a,b)=>(a.exitTs||0)-(b.exitTs||0)).forEach(e=>eq*=1+0.1*e.pnlPct/100);
+      $('acctNote').textContent=`→ realized $${eq.toFixed(2)} (${((eq/acctN-1)*100).toFixed(2)}%)`;
+    } else $('acctNote').textContent='';
     $('journal').innerHTML=(ledger.entries||[]).map(e=>{
       const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice):'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice):'—');
       const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'');
@@ -430,7 +440,7 @@ async function render(){
       <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''}</td>
       <td class="num">$${fmtP(e.entry)}</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
       <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
-      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%':'—'}</td>
+      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct):'—'}</td>
       <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
       +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11">
@@ -442,8 +452,10 @@ async function render(){
   }
   if(vault){
     const h=vault.holdings||{};
+    const vScale=acctN?acctN/10000:1;
+    const vSfx=acctN?` <span class="sub">@ $${acctN} acct</span>`:'';
     $('vaultStats').innerHTML=[
-      ['Basket value',`<span data-vtotal>$${vault.valueUsd??0}</span>`],['Deposited','$'+(vault.depositedUsd??0)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+(vault.pnlUsd??0)]
+      ['Basket value',`<span data-vtotal>$${((vault.valueUsd??0)*vScale).toFixed(2)}</span>${vSfx}`],['Deposited','$'+((vault.depositedUsd??0)*vScale).toFixed(2)],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+((vault.pnlUsd??0)*vScale).toFixed(2)]
     ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
     const rows=Object.entries(h).map(([s,x])=>
       `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)}</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${x.valueUsd}</span></div>`).join('');
@@ -492,7 +504,8 @@ function livePaint(){
     const p=L.price(el.dataset.sym);if(!p)return;
     const entry=+el.dataset.entry,tgt=+el.dataset.tgt;
     const pnl=(el.dataset.dir==='LONG'?(p-entry)/entry:(entry-p)/entry)*100;
-    el.textContent=(pnl>=0?'+':'')+pnl.toFixed(2)+'%';
+    const acctN=parseFloat(localStorage.acctSize||'');
+    el.innerHTML=(pnl>=0?'+':'')+pnl.toFixed(2)+'%'+(acctN>0?` <span class="sub">$${(pnl/100*acctN*0.1).toFixed(2)}</span>`:'');
     el.className='num '+(pnl>0?'up':pnl<0?'dn':'');
     const st=el.closest('tr')&&el.closest('tr').querySelector('[data-st]');
     if(st&&st.textContent==='OPEN'){
@@ -505,7 +518,15 @@ function livePaint(){
     if(p){const val=(+el.dataset.vunits)*p;el.textContent='$'+val.toFixed(2);v+=val}
   });
   const ve=document.querySelector('[data-vtotal]');if(ve&&v)ve.textContent='$'+v.toFixed(2);
+  const aN=parseFloat(localStorage.acctSize||'');
+  if(aN>0){document.querySelectorAll('[data-vunits]').forEach(el=>{
+    const cur=parseFloat(el.textContent.replace('$',''));
+    if(!isNaN(cur))el.textContent='$'+(cur*aN/10000).toFixed(2)});
+    if(ve&&v)ve.textContent='$'+(v*aN/10000).toFixed(2);}
 }
+document.getElementById('acctIn').addEventListener('change',e=>{
+  localStorage.acctSize=e.target.value;render();
+});
 document.getElementById('sigBody').addEventListener('click',e=>{
   const tr=e.target.closest('tr.sig');if(tr)toggleRow(tr);
 });
@@ -535,7 +556,8 @@ function drawChart(el,e,cs,after){
   const ls=(price,color,style,title)=>s.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
   ls(e.entry,'#e6f2ff',2,'ENTRY');
   if(e.targetPrice)ls(e.targetPrice,'#3dff73',0,`TGT ${e.direction==='LONG'?'+':'−'}${e.targetPct}%`);
-  const stopPx=e.direction==='LONG'?e.entry*(1-Math.max(4,e.targetPct)/100):e.entry*(1+Math.max(4,e.targetPct)/100);
+  const sPct=e.stopPct??Math.max(4,e.targetPct);
+  const stopPx=e.direction==='LONG'?e.entry*(1-sPct/100):e.entry*(1+sPct/100);
   ls(stopPx,'#ff5d5d',2,'STOP');
   if(!after){
     // fib retracement grid over the setup window's swing range
