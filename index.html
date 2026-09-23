@@ -88,6 +88,13 @@ tr.detail td{background:rgba(61,255,115,.025);padding:12px 14px}
 .syn a:hover{color:#fff}
 .syn .srcs{font-size:10px;color:var(--mut);margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
 .syn .srcs a{color:var(--grn-dim)}
+ul.conf{list-style:none;margin:4px 0 10px;padding:0;columns:2;column-gap:24px;font-size:11.5px;line-height:1.6}
+ul.conf li{break-inside:avoid;padding-left:14px;position:relative}
+ul.conf li::before{position:absolute;left:0}
+ul.conf li.sup{color:#cfe8d6}ul.conf li.sup::before{content:'✓';color:var(--grn)}
+ul.conf li.con{color:#e8cfcf}ul.conf li.con::before{content:'✗';color:var(--red)}
+ul.conf li.inf{color:var(--mut)}ul.conf li.inf::before{content:'·'}
+.cf{font-size:9px;color:var(--mut);white-space:nowrap}
 tr.jrow{cursor:pointer}
 tr.jrow:hover td,tr.jrow.open td{background:rgba(61,255,115,.05)}
 tr.jsyn td{background:rgba(61,255,115,.02);padding:14px 18px}
@@ -277,6 +284,50 @@ const SUPPORT=[
  {t:'Crypto Risk Management Framework',a:'Michael Sloggett',u:'https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html',d:'1% risk per idea, invalidation before entry, ≥1:2 asymmetry — discipline separates pros from gamblers'},
  {t:'Lepus Proprietary Trading',a:'Lepus / Peter Jackson',u:'https://www.lepusproprietarytrading.com.au/',d:'mechanical VWAP reversion process on fast timeframes — repeatable execution beats prediction'},
 ];
+// Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
+function confList(e){
+  const L=e.direction==='LONG',T=e.ta||{};
+  const v=b=>b? (L?'sup':'con') : (L?'con':'sup'); // bullish factor → sup/con vs direction
+  const items=[];
+  const add=(s,l)=>items.push([s,l]);
+  if(e.score!=null)add('inf',`composite score ${e.score}/100 · grade ${e.grade||'—'} · strategy "${e.strategy||'—'}"`);
+  if(T.bias)add(T.bias===e.direction?'sup':'con',`TA composite bias resolved ${T.bias}`);
+  if(T.sfp)add(v(T.sfp.type==='bullish'),`${T.sfp.type} swing-failure @ $${fmtP(T.sfp.level)} USD — strength ${T.sfp.strength}/100, ${T.sfp.age} candle(s) old`);
+  if(T.elliott){const bull=T.elliott.dir==='down'&&T.elliott.longBottom,bear=T.elliott.dir==='up'&&T.elliott.shortTop;
+    add(bull?v(true):bear?v(false):'inf',`Elliott five-wave ${T.elliott.dir} impulse · quality ${T.elliott.quality}/100${T.elliott.shortTop?' · terminal W5 top':''}${T.elliott.longBottom?' · terminal W5 bottom':''}`)}
+  if(T.wyckoff){const wy=T.wyckoff;const bull=wy.type==='accumulation',bear=wy.type==='distribution';
+    const ev=(wy.events||[]).map(x=>x.type).join(' → ');
+    add(wy.type==='ranging'?'inf':v(bull),`Wyckoff ${wy.type}${wy.phase?' · phase '+wy.phase:''}${ev?' · trail: '+ev:''}${wy.tr?` · TR $${fmtP(wy.tr.support)}–$${fmtP(wy.tr.resist)} USD (${wy.tr.widthPct}% wide)`:''}${wy.volX?' · vol '+wy.volX+'×':''}`)}
+  if(T.smc){const s=T.smc;
+    if(s.bos)add(v(s.bos==='bullish'),`SMC ${s.bos} BOS — structure break`);
+    if(s.choch)add(v(s.choch==='bullish'),`SMC ${s.choch} CHoCH — character change`);
+    if(s.inOB)add(v(s.inOB.dir==='bullish'),`inside ${s.inOB.dir} order block $${fmtP(s.inOB.bot)}–$${fmtP(s.inOB.top)} USD`);
+    if(s.zone)add(s.zone==='discount'?v(true):s.zone==='premium'?v(false):'inf',`dealing-range zone: ${s.zone}`);
+    if(s.eqh!=null)add('inf',`EQH liquidity pool @ $${fmtP(s.eqh)} USD`);
+    if(s.eql!=null)add('inf',`EQL liquidity pool @ $${fmtP(s.eql)} USD`);
+    if(s.trend)add('inf',`SMC trend state: ${s.trend}`)}
+  if(T.eq){const q=T.eq;
+    if(q.lastQ)add(q.lastQ==='Q4'?v(true):q.lastQ==='Q1'?v(false):'inf',`last candle closed ${q.lastQ} of its own range (25/50/75% quartiles)`);
+    if(q.respect)add(v(q.respect==='held'),`prior-bar 50% EQ ${q.respect}`);
+    if(q.swept)add(v(q.swept==='reclaimed-eq'),`EQ state: ${q.swept}`);
+    if(q.wick)add(v(q.wick==='reject-low'),`wick read: ${q.wick}`);
+    if(q.rangeQ)add(q.rangeQ==='Q1'?v(true):q.rangeQ==='Q4'?v(false):'inf',`dealing-range quartile ${q.rangeQ} (${Math.round((q.rangePos??0)*100)}% up the range)`)}
+  (T.candles||[]).forEach(c=>{const bull=/hammer|bull|morning|marubozu-up/.test(c);
+    add(v(bull),`candlestick: ${c}`)});
+  if(T.fvgOpen)add('inf',`${T.fvgOpen} open fair-value gap(s) on the book`);
+  if(T.fvgNearest)add(v(T.fvgNearest.type==='bullish'),`nearest FVG ${T.fvgNearest.type} $${fmtP(T.fvgNearest.bot)}–$${fmtP(T.fvgNearest.top)} USD${T.fvgNearest.filled?' (filled)':''}`);
+  if(T.goldenPocket)add(v(true),'price inside fib golden pocket (0.618–0.65 retracement zone)');
+  if(T.fibClusters)add('inf',`${T.fibClusters} fib-cluster confluence points mapped`);
+  if(T.trend)add(v(T.trend==='up'),`market structure trend: ${T.trend}`);
+  if(T.vwap)add(v(T.vwap.fade==='LONG'),`5-min VWAP ${T.vwap.devPct>0?'+':''}${T.vwap.devPct}% (z ${T.vwap.z}) → ${T.vwap.fade} fade doctrine`);
+  if(e.harmonic)add(v(e.harmonic.dir==='bullish'),`${e.harmonic.dir} ${e.harmonic.type} validated · q${e.harmonic.quality}/100 · D @ $${fmtP(e.harmonic.dPrice)} USD`);
+  if(e.ext)add(e.ext.dir===e.direction?'sup':'con',`external desk signal: ${e.ext.dir} (${e.ext.ageMin!=null?e.ext.ageMin+'m ago':'recent'})`);
+  if(e.carry==='earn')add('sup','carry: position earns funding while open');
+  else if(e.carry==='pay')add('con','carry: position pays funding while open');
+  else if(e.carry==='flat')add('inf','carry: funding flat');
+  if(e.momentumScore!=null||e.reversalScore!=null)add('inf',`raw factors — momentum ${e.momentumScore??'—'} · surge ${e.reversalScore??'—'} · liquidity ${e.liquidityScore??'—'} · range pos ${e.rangePosition??'—'}`);
+  return items;
+}
 function synopsis(e){
   const dir=e.direction==='LONG'?'long':'short';
   const sym=e.asset+'/USDT';
@@ -319,6 +370,10 @@ Every factor above is a measurable heuristic on the entry-window candles — non
   return `
 <h4>Executive summary</h4>
 <p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} USD (${when} UTC)${mk?`, last marked at $${fmtP(mk)} USD`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
+${(()=>{const cl=confList(e);const sup=cl.filter(c=>c[0]==='sup').length,con=cl.filter(c=>c[0]==='con').length,inf=cl.length-sup-con;
+return `<h4>Confluence map — ${sup} supporting · ${con} conflicting · ${inf} measured</h4>
+<ul class="conf">${cl.map(([s,l])=>`<li class="${s}">${s==='sup'?'✓':s==='con'?'✗':'·'} ${l}</li>`).join('')}</ul>
+<p class="sub" style="margin-top:-4px">Only factors actually measured at entry are listed — a null field is omitted, never assumed. Conflicting evidence is shown, not hidden.</p>`})()}
 <h4>Signal genesis</h4>
 <p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K USD daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned ${e.ta&&e.ta.bias?`by the TA engine's composite bias (${e.ta.bias}) — doctrine evidence overrode the raw momentum sign where they disagreed`:`from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}`}.</p>
 ${e.ext?`<h4>External desk confluence</h4><p>The private desk feed flagged <b>${e.asset}</b>${e.ext.dir?` with a <b>${e.ext.dir}</b> lean`:''} ${e.ext.ageMin} minutes before this snapshot — treated as one bounded confluence factor (±a few points), never a sole trigger. Only derived metadata (asset/direction/timestamp) is used; the source feed's content is not republished.</p>`:''}
@@ -448,7 +503,7 @@ async function render(){
       const key=e.asset+':'+e.ts;
       return `<tr class="jrow" data-j="${key}" tabindex="0"><td><b>${e.asset}</b></td>
       <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
-      <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''}</td>
+      <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
       <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
       <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' USD <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
       <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-tgt="${e.targetPct}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
