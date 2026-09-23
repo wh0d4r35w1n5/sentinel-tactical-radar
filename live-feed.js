@@ -20,6 +20,61 @@
   var tickersCache = { t: 0, data: null };
   var postState = null;
 
+  // ---- live ticker stream (Bitget public WS, REST fallback) ----
+  var liveTick = {};       // instId -> latest ticker row
+  var liveTickAt = 0;      // last ws update
+  var ws = null, wsSubscribed = false, wsRetry = 0;
+
+  function wsConnect(pairIds) {
+    if (ws || typeof WebSocket !== 'function') return;
+    try { ws = new WebSocket('wss://ws.bitget.com/v2/ws/public'); } catch (e) { return; }
+    ws.onopen = function () {
+      wsRetry = 0;
+      var ids = pairIds || Object.keys(lastPairs || {});
+      for (var i = 0; i < ids.length; i += 100) {
+        ws.send(JSON.stringify({
+          op: 'subscribe',
+          args: ids.slice(i, i + 100).map(function (id) {
+            return { instType: 'SPOT', channel: 'ticker', instId: id };
+          }),
+        }));
+      }
+      wsSubscribed = true;
+    };
+    ws.onmessage = function (e) {
+      try {
+        var m = JSON.parse(e.data);
+        if (m && m.arg && m.arg.channel === 'ticker' && Array.isArray(m.data)) {
+          m.data.forEach(function (d) { liveTick[d.instId] = d; });
+          liveTickAt = Date.now();
+        }
+      } catch (e2) {}
+    };
+    ws.onclose = ws.onerror = function () {
+      ws = null; wsSubscribed = false;
+      var delay = Math.min(30000, 2000 * ++wsRetry);
+      setTimeout(function () { wsConnect(); }, delay);
+    };
+  }
+  setInterval(function () {
+    if (ws && ws.readyState === 1) { try { ws.send('ping'); } catch (e) {} }
+  }, 25000);
+
+  var lastPairs = null;
+  function maybeStream(pairs) {
+    lastPairs = pairs;
+    if (!wsSubscribed) wsConnect(Object.keys(pairs));
+  }
+  // overlay ws updates onto REST rows (ws payload uses same field names)
+  function withLive(rows) {
+    var fresh = Date.now() - liveTickAt < 30000;
+    if (!fresh) return rows;
+    return rows.map(function (t) {
+      var live = liveTick[t.symbol];
+      return live ? Object.assign({}, t, live) : t;
+    });
+  }
+
   function J(x) {
     return new Response(JSON.stringify(x), {
       status: 200,
@@ -69,7 +124,8 @@
           s.quoteCoin === 'USDT' && !STABLE[(s.baseCoin || '').toUpperCase()])
         pairs[s.symbol.toUpperCase()] = 1;
     });
-    var rows = tks
+    maybeStream(pairs);
+    var rows = withLive(tks)
       .filter(function (t) { return pairs[t.symbol.toUpperCase()]; })
       .map(function (t) {
         var last = +t.lastPr, hi = +t.high24h, lo = +t.low24h, bid = +t.bidPr, ask = +t.askPr;
@@ -143,8 +199,19 @@
     var med = chgs.length ? pct(chgs[chgs.length >> 1]) : 0;
     var breadth = rows.length ? pct((adv / rows.length) * 100) : 0;
 
+    // seed pulse/fx from the static snapshot on first build (its history
+    // is server-side accumulated); localStorage then extends it per-visitor
     var hist = [];
     try { hist = JSON.parse(localStorage.getItem(PULSE_KEY)) || []; } catch (e) {}
+    var fx = { audPerUsd: 1.5, usdPerAud: 0.667 };
+    if (!hist.length && !buildScanner._seeded) {
+      buildScanner._seeded = true;
+      try {
+        var seed = await (await orig(BASE + 'market-scanner.json', { cache: 'no-store' })).json();
+        if (seed && seed.pulse && Array.isArray(seed.pulse.series)) hist = seed.pulse.series;
+        if (seed && seed.fx) fx = seed.fx;
+      } catch (e) {}
+    }
     var now = Date.now();
     if (!hist.length || now - hist[hist.length - 1].ts > 30000) {
       hist.push({ ts: now, value: pct(100 + med) });
@@ -154,7 +221,7 @@
     var vals = hist.map(function (p) { return p.value; });
 
     return {
-      fx: { audPerUsd: 1.5, usdPerAud: 0.667 },
+      fx: fx,
       pulse: {
         low: Math.min.apply(null, vals), high: Math.max.apply(null, vals),
         delta: pct((vals[vals.length - 1] || 100) - (vals[0] || 100)),
@@ -211,6 +278,24 @@
           }
         }
         if (method === 'GET') {
+          if (name === 'market-snapshot.json')
+            return (async function () {
+              var r = await orig(input, init);
+              var j = await r.json().catch(function () { return {}; });
+              try {
+                var t = (await getTickers()).find(function (x) { return x.symbol === 'SOLUSDT'; });
+                var live = liveTick['SOLUSDT'];
+                var px = +(live ? live.lastPr : t && t.lastPr);
+                var chg = +(live ? live.changeUtc24h : t && t.changeUtc24h);
+                if (isFinite(px) && j.assets && j.assets.input) {
+                  j.assets.input.usdPrice = px;
+                  j.assets.input.priceChange24h = chg * 100;
+                  j.refreshedAt = new Date().toISOString();
+                  j.source = 'bitget-live';
+                }
+              } catch (e) {}
+              return J(j);
+            })().catch(function () { return orig(input, init); });
           if (name === 'config.json')
             return getMerged(input, init, function (j) { return Object.assign({}, j, loadPost().config); });
           if (name === 'bot-state.json')

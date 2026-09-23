@@ -10,6 +10,7 @@
 <meta property="og:title" content="Sentinel Tactical Radar"/>
 <meta property="og:description" content="Live crypto signal scanner — Bitget spot breadth, ranked setups, Jupiter execution quotes."/>
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
+<script src="/sentinel-tactical-radar/live-feed.js"></script>
 <style>
 :root{--bg:#070b08;--panel:#0b120d;--line:rgba(61,255,115,.14);--grn:#3dff73;--grn-dim:#9fe8b3;--red:#ff5d5d;--amb:#ffb84d;--txt:#cfe9d4;--mut:#5f7a66}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -103,7 +104,7 @@ footer a{color:var(--grn-dim)}
   <div class="grid">
     <div class="panel">
       <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail</span></div>
-      <table><thead><tr><th>Asset</th><th>Side</th><th>Grade</th><th>Score</th><th>24h</th><th>RSI 1h</th><th>Price</th><th>Target</th><th>48h</th></tr></thead><tbody id="sigBody"></tbody></table>
+      <div style="overflow-x:auto"><table><thead><tr><th>Asset</th><th>Side</th><th>Grade</th><th>Score</th><th>24h</th><th>RSI 1h</th><th>Price</th><th>Target</th><th>48h</th></tr></thead><tbody id="sigBody"></tbody></table></div>
     </div>
     <div class="col">
       <div class="panel">
@@ -124,8 +125,8 @@ footer a{color:var(--grn-dim)}
   </div>
 </div>
 <footer>
-  <span>Data: Bitget spot · Jupiter · Solana RPC</span>
-  <span>Snapshots rebuilt every ~10 min via GitHub Actions</span>
+  <span>Data: Bitget spot (live WS stream) · Jupiter · Solana RPC</span>
+  <span>Snapshots rebuilt every ~10 min via GitHub Actions · browser overlay is tick-level</span>
   <span><a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar">source repo</a> · mirrored frontend, self-hosted data layer</span>
   <span id="health"></span>
 </footer>
@@ -181,9 +182,10 @@ async function render(){
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
+  const isLive=scan.source==='bitget-live';
   const next=Math.max(0,Math.round((t+600e3-Date.now())/6e4));
   $('liveChip').className='live'+(stale?' stale':'');
-  $('liveTxt').textContent=(stale?'STALE · ':'LIVE · ')+ago(t)+' ago'+(stale?'':` · next sync ~${next}m`);
+  $('liveTxt').textContent=isLive?'LIVE · bitget stream':(stale?'STALE · ':'LIVE · ')+ago(t)+' ago'+(stale?'':` · next sync ~${next}m`);
   const p=scan.pulse||{};
   $('pulseVal').textContent=(p.series&&p.series.length?p.series.at(-1).value:'—')+(p.delta!=null?` (${p.delta>=0?'+':''}${p.delta})`:'');
   pulseSVG(p.series);
@@ -197,10 +199,12 @@ async function render(){
     $('rail').hidden=false;
     $('rail').innerHTML=`JUPITER RAIL · SOL <b class="num">$${Number(snap.assets.input.usdPrice).toFixed(2)}</b> via ${snap.spot.routeLabel} · slot ${Number(snap.rpc.slot).toLocaleString()} · rpc ${snap.rpc.latencyMs}ms`;
   }
-  if(prices&&prices.majors){
-    $('chips').innerHTML=Object.entries(prices.majors).map(([s,p])=>
-      `<span><b>${s}</b> <span class="num">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`).join('');
-  }
+  const sigByAsset={};(scan.signals||[]).forEach(s=>sigByAsset[s.asset]=s);
+  const majors=prices&&prices.majors?prices.majors:{};
+  $('chips').innerHTML=['BTC','ETH','SOL'].map(s=>{
+    const live=sigByAsset[s];const p=live?{price:live.lastPrice,changePct:live.changePct}:majors[s];
+    return p?`<span><b>${s}</b> <span class="num">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
+  }).join('');
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
