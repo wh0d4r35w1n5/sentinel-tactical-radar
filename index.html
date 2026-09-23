@@ -333,6 +333,7 @@ function confList(e){
   if(e.ext)add(e.ext.dir===e.direction?'sup':'con',`external desk signal: ${e.ext.dir} (${e.ext.ageMin!=null?e.ext.ageMin+'m ago':'recent'})`);
   if(e.deriv)add(e.deriv.dir?v(e.deriv.dir==='bull'):'inf',`derivatives: ${e.deriv.oiUsd?'OI $'+(e.deriv.oiUsd/1e6).toFixed(1)+'M USD · ':''}funding ${e.deriv.fundingTrend||'—'} · ${e.deriv.crowding||'—'}${e.deriv.longShortRatio?' · L/S '+e.deriv.longShortRatio:''}${e.deriv.liqLongUsd!=null?` · liq 24h $${((e.deriv.liqLongUsd+(e.deriv.liqShortUsd||0))/1e6).toFixed(1)}M USD`:''}`);
   if(e.social)add(e.social.dir?v(e.social.dir==='bull'):'inf',`LunarCrush: galaxy ${e.social.galaxy??'—'} · altRank ${e.social.altRank??'—'} · sentiment ${e.social.sentiment??'—'} · social vol ${e.social.socialVol??'—'}`);
+  if(e.news)add(e.news.dir?v(e.news.dir==='bull'):e.news.fud?(L?'con':'sup'):'inf',`CryptoPanic: ${e.news.n} posts · sentiment ${e.news.sentiment??'—'}${e.news.imp?` · ${e.news.imp} important`:''}${e.news.hype?` · ${e.news.hype} hype-filtered`:''}${e.news.fud?' · FUD cluster':''}${e.news.heads&&e.news.heads[0]?` · "${e.news.heads[0]}"`:''}`);
   if(e.carry==='earn')add('sup','carry: position earns funding while open');
   else if(e.carry==='pay')add('con','carry: position pays funding while open');
   else if(e.carry==='flat')add('inf','carry: funding flat');
@@ -576,7 +577,7 @@ async function render(){
   if(funding&&funding.best){
     const co=ledger&&ledger.stats&&ledger.stats.discipline?ledger.stats.discipline.carryOpen:null;
     const feeds=sent&&sent.feeds?sent.feeds:{};
-    const feedStr=`feeds: bitget <b class="up">live</b> · coinglass <b class="${feeds.coinglass==='live'?'up':'dn'}">${feeds.coinglass||'no-key'}</b> · lunarcrush <b class="${feeds.lunarcrush==='live'?'up':'dn'}">${feeds.lunarcrush||'no-key'}</b>`;
+    const feedStr=`feeds: bitget <b class="up">live</b> · coinglass <b class="${feeds.coinglass==='live'?'up':'dn'}">${feeds.coinglass||'no-key'}</b> · lunarcrush <b class="${feeds.lunarcrush==='live'?'up':'dn'}">${feeds.lunarcrush||'no-key'}</b> · cryptopanic <b class="${feeds.cryptopanic==='live'?'up':'dn'}">${feeds.cryptopanic||'no-key'}</b>`;
     const crowded=sent&&sent.assets?Object.entries(sent.assets).filter(([a,x])=>x.crowding&&x.crowding!=='balanced'):[];
     const crowdStr=crowded.length?' · '+crowded.slice(0,6).map(([a,x])=>`<b class="${x.crowding==='longs-crowded'?'dn':'up'}">${a}</b> ${x.crowding==='longs-crowded'?'longs crowded':'shorts crowded'}${x.oiUsd?' · OI $'+(x.oiUsd/1e6).toFixed(0)+'M':''}`).join(' · '):'';
     $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago · ${feedStr}${crowdStr}`;

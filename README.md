@@ -41,6 +41,7 @@ report `no-key` and are skipped:
 |---|---|---|
 | CoinGlass | `COINGLASS_API_KEY` env or `scripts/api-keys.json` `{"coinglass":"..."}` (open-api-v4, free hobbyist tier) | 24h liquidations, global long/short account ratio |
 | LunarCrush | `LUNARCRUSH_API_KEY` env or `scripts/api-keys.json` `{"lunarcrush":"..."}` (api4 Bearer) | Galaxy Score, AltRank, sentiment, social volume per asset |
+| CryptoPanic | `CRYPTOPANIC_API_KEY` env or `scripts/api-keys.json` `{"cryptopanic":"..."}` — optional `cryptopanicPlan` (default `growth`) | Bullshit-filtered news context: vote-weighted sentiment per asset, hype-word spam discounted to ~zero, FUD clusters penalize longs. News is context, never a trigger — hard-capped at ±2 score. |
 
 `scripts/api-keys.json` is gitignored. For CI, add both as GitHub repo
 secrets named identically — the workflow passes env through.

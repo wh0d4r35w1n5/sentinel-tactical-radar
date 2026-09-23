@@ -247,8 +247,10 @@ async function main() {
     try { KEYS = JSON.parse(fs.readFileSync(new URL('./api-keys.json', import.meta.url), 'utf8')); } catch {}
     const CG_KEY = process.env.COINGLASS_API_KEY || KEYS.coinglass || null;
     const LC_KEY = process.env.LUNARCRUSH_API_KEY || KEYS.lunarcrush || null;
-    const deriv = {}, social = {};
-    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key' };
+    const CP_KEY = process.env.CRYPTOPANIC_API_KEY || KEYS.cryptopanic || null;
+    const CP_PLAN = process.env.CRYPTOPANIC_PLAN || KEYS.cryptopanicPlan || 'growth';
+    const deriv = {}, social = {}, news = {};
+    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key' };
     for (let i = 0; i < fundSyms.length; i += 12) {
       await Promise.all(
         fundSyms.slice(i, i + 12).map(async (sym) => {
@@ -316,8 +318,53 @@ async function main() {
         })
       );
     }
-    deriv._feeds = feedStatus; social._feeds = feedStatus;
-    globalThis.__deriv = deriv; globalThis.__social = social;
+    // CryptoPanic (key-gated): public crypto news → bullshit-filtered.
+    // News is treated as CONTEXT, never a trigger: hype-word spam is
+    // discounted to zero, only vote-validated important posts move the
+    // needle, and the total influence is capped hard in the score.
+    if (CP_KEY) {
+      try {
+        const curList = fundSyms.map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const cp = await fetch(
+          `https://cryptopanic.com/api/${CP_PLAN}/v2/posts/?auth_token=${CP_KEY}&kind=news&filter=important&currencies=${encodeURIComponent(curList)}`
+        );
+        if (cp.ok) {
+          const posts = (await cp.json()).results || [];
+          const HYPE = /moon|100x|1000x|guarantee|parabolic|insane|don't miss|dont miss|lambo|rocket|🚀|next bitcoin|free money|shitcoin|pump it|bags|ape in|easily|hopium/i;
+          const nowMs = Date.now();
+          for (const p of posts) {
+            const title = p.title || '';
+            const v = p.votes || {};
+            const pos = +v.positive || 0, neg = +v.negative || 0, imp = +v.important || 0;
+            const ageH = (nowMs - Date.parse(p.published_at || 0)) / 3.6e6;
+            if (!isFinite(ageH) || ageH > 72) continue; // stale news = noise
+            const recency = Math.max(0.2, 1 - ageH / 72);
+            const hype = HYPE.test(title) ? 1 : 0;
+            const weight = recency * (1 + imp * 0.5) * (hype ? 0.15 : 1); // hype posts ~zeroed
+            for (const c of p.currencies || []) {
+              const a = (c.code || '').toUpperCase();
+              if (!a) continue;
+              const n = (news[a] ??= { n: 0, pos: 0, neg: 0, imp: 0, hype: 0, heads: [] });
+              n.n++;
+              n.pos += pos * weight; n.neg += neg * weight; n.imp += imp; n.hype += hype;
+              if (n.heads.length < 3 && title) n.heads.push(title.slice(0, 90));
+            }
+          }
+          for (const a of Object.keys(news)) {
+            const n = news[a], tot = n.pos + n.neg;
+            n.sentiment = tot > 0 ? pct((n.pos - n.neg) / tot) : null;
+            // mostly-bullshit guard: need ≥2 important posts AND a decisive
+            // vote ratio before direction is claimed; fud cluster = bear
+            n.dir = n.imp >= 2 && n.sentiment != null
+              ? n.sentiment > 0.25 ? 'bull' : n.sentiment < -0.25 ? 'bear' : null
+              : null;
+            if (n.neg > n.pos * 1.5 && n.neg > 1) n.fud = true;
+          }
+        }
+      } catch {}
+    }
+    deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
+    globalThis.__deriv = deriv; globalThis.__social = social; globalThis.__news = news;
   } catch {}
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
@@ -417,6 +464,13 @@ async function main() {
       const derivBoost = dp && dp.dir
         ? (dir0 === 'LONG' ? 'bull' : 'bear') === dp.dir ? 3 : -2
         : 0;
+      // news context — hard-capped ±2; hype posts already zeroed upstream,
+      // a FUD cluster actively costs longs (avoidance, not trigger)
+      const nw = (globalThis.__news || {})[r.asset];
+      const newsBoost = nw
+        ? (nw.dir && ((dir0 === 'LONG' ? 'bull' : 'bear') === nw.dir ? 2 : -2))
+          + (nw.fud && dir0 === 'LONG' ? -2 : 0)
+        : 0;
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -424,7 +478,8 @@ async function main() {
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
             extBoost +
-            derivBoost,
+            derivBoost +
+            newsBoost,
           0,
           100
         )
@@ -505,6 +560,7 @@ async function main() {
                 : 'pay',
         deriv: (globalThis.__deriv || {})[r.asset] ?? null,
         social: (globalThis.__social || {})[r.asset] ?? null,
+        news: (globalThis.__news || {})[r.asset] ?? null,
         stopPct: pct(clamp(targetPct / 2, 2, 8)),
         ta: ta
           ? {
@@ -702,11 +758,11 @@ async function main() {
 
   // ---- derivatives + social intelligence: write api/sentiment.json ----
   try {
-    const dv = globalThis.__deriv || {}, so = globalThis.__social || {};
+    const dv = globalThis.__deriv || {}, so = globalThis.__social || {}, nw2 = globalThis.__news || {};
     const assets = {};
-    for (const a of new Set([...Object.keys(dv), ...Object.keys(so)])) {
+    for (const a of new Set([...Object.keys(dv), ...Object.keys(so), ...Object.keys(nw2)])) {
       if (a === '_feeds') continue;
-      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? null };
+      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), news: nw2[a] ?? null, dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? null };
     }
     fs.writeFileSync(
       path.join(API, 'sentiment.json'),
