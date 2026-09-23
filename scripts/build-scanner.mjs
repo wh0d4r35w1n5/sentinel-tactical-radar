@@ -249,8 +249,11 @@ async function main() {
     const LC_KEY = process.env.LUNARCRUSH_API_KEY || KEYS.lunarcrush || null;
     const CP_KEY = process.env.CRYPTOPANIC_API_KEY || KEYS.cryptopanic || null;
     const CP_PLAN = process.env.CRYPTOPANIC_PLAN || KEYS.cryptopanicPlan || 'growth';
-    const deriv = {}, social = {}, news = {};
-    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key' };
+    const CMC_KEY = process.env.CMC_API_KEY || KEYS.cmc || null;
+    const CMCAL_ID = process.env.COINMARKETCAL_CLIENT_ID || KEYS.coinmarketcalId || null;
+    const CMCAL_SECRET = process.env.COINMARKETCAL_CLIENT_SECRET || KEYS.coinmarketcalSecret || null;
+    const deriv = {}, social = {}, news = {}, mcaps = {}, events = {};
+    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key', coingecko: 'live', coinmarketcap: CMC_KEY ? 'live' : 'no-key', coinmarketcal: CMCAL_ID && CMCAL_SECRET ? 'live' : 'no-key' };
     for (let i = 0; i < fundSyms.length; i += 12) {
       await Promise.all(
         fundSyms.slice(i, i + 12).map(async (sym) => {
@@ -318,6 +321,90 @@ async function main() {
         })
       );
     }
+
+    // CoinGecko (keyless): market-cap intelligence — rank, float unlocked %,
+    // ATH distance, volume/mcap turnover. The CMC-equivalent quality layer.
+    try {
+      const syms = fundSyms.map((s) => s.replace('USDT', '').toLowerCase()).join(',');
+      const cg = await fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${encodeURIComponent(syms)}&price_change_percentage=24h`
+      );
+      if (cg.ok) {
+        for (const c of (await cg.json()) || []) {
+          const a = (c.symbol || '').toUpperCase();
+          if (!a) continue;
+          const floatPct = c.max_supply ? pct((c.circulating_supply / c.max_supply) * 100) : null;
+          const volMcap = c.market_cap ? pct((c.total_volume / c.market_cap) * 100) : null;
+          mcaps[a] = {
+            mcapUsd: c.market_cap ?? null, rank: c.market_cap_rank ?? null,
+            volMcapPct: volMcap, athDistPct: c.ath_change_percentage != null ? pct(c.ath_change_percentage) : null,
+            floatPct,
+            // low float = dilution/unlock risk (bear); blue-chip near ATH =
+            // strength context; everything else neutral
+            dir: floatPct != null && floatPct < 30 ? 'bear'
+               : (c.market_cap_rank ?? 999) <= 25 && (c.ath_change_percentage ?? -100) > -25 ? 'bull' : null,
+          };
+        }
+      }
+    } catch {}
+    // CoinMarketCap (key-gated): cross-verification overlay — CMC rank,
+    // 24h volume change, tags. Cheap batch quotes call.
+    if (CMC_KEY) {
+      try {
+        const syms = fundSyms.map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const r = await fetch(
+          `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(syms)}`,
+          { headers: { 'X-CMC_PRO_API_KEY': CMC_KEY } }
+        );
+        if (r.ok) {
+          const dd = (await r.json()).data || {};
+          for (const [sym, v] of Object.entries(dd)) {
+            const q = ((v || {})[0] || v).quote?.USD || {};
+            const a = sym.toUpperCase();
+            (mcaps[a] ??= {}).cmc = {
+              rank: (v[0] || v).cmc_rank ?? null,
+              volChg24h: q.volume_change_24h != null ? pct(q.volume_change_24h) : null,
+            };
+          }
+        }
+      } catch {}
+    }
+    // CoinMarketCal (key-gated): scheduled events in next 7d — token
+    // unlocks = supply-dump risk, listings/upgrades = catalysts. Event
+    // risk is a flag on the position, never a signal by itself.
+    if (CMCAL_ID && CMCAL_SECRET) {
+      try {
+        const tk = await fetch(
+          `https://api.coinmarketcal.com/oauth/v2/token?grant_type=client_credentials&client_id=${CMCAL_ID}&client_secret=${CMCAL_SECRET}`,
+          { method: 'POST' }
+        );
+        if (tk.ok) {
+          const tok = (await tk.json()).access_token;
+          const coins = fundSyms.map((s) => s.replace('USDT', '').toLowerCase()).slice(0, 20).join(',');
+          const ev = await fetch(
+            `https://api.coinmarketcal.com/v1/events?max=30&coins=${encodeURIComponent(coins)}&dateRangeStart=${new Date().toISOString().slice(0, 10)}`,
+            { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' } }
+          );
+          if (ev.ok) {
+            for (const p of (await ev.json()).body || []) {
+              const cats = (p.categories || []).map((x) => (x.name || '').toLowerCase()).join(' ');
+              const isUnlock = /unlock|vesting|cliff/.test(cats + ' ' + (p.title?.en || ''));
+              const isCatalyst = /listing|mainnet|launch|upgrade|fork|airdrop/.test(cats + ' ' + (p.title?.en || ''));
+              const days = p.date_event ? Math.round((Date.parse(p.date_event) - Date.now()) / 864e5) : null;
+              if (days == null || days > 7) continue;
+              for (const c of p.coins || []) {
+                const a = (c.symbol || '').toUpperCase();
+                const n = (events[a] ??= { n: 0, unlocks: 0, catalysts: 0, next: [] });
+                n.n++; if (isUnlock) n.unlocks++; if (isCatalyst) n.catalysts++;
+                if (n.next.length < 2) n.next.push(`${p.title?.en?.slice(0, 60)} (${days}d)`);
+                n.dir = isUnlock ? 'bear' : isCatalyst ? 'bull' : n.dir ?? null;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
     // CryptoPanic (key-gated): public crypto news → bullshit-filtered.
     // News is treated as CONTEXT, never a trigger: hype-word spam is
     // discounted to zero, only vote-validated important posts move the
@@ -364,7 +451,9 @@ async function main() {
       } catch {}
     }
     deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
+    mcaps._feeds = feedStatus; events._feeds = feedStatus;
     globalThis.__deriv = deriv; globalThis.__social = social; globalThis.__news = news;
+    globalThis.__mcaps = mcaps; globalThis.__events = events;
   } catch {}
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
@@ -471,6 +560,13 @@ async function main() {
         ? (nw.dir && ((dir0 === 'LONG' ? 'bull' : 'bear') === nw.dir ? 2 : -2))
           + (nw.fud && dir0 === 'LONG' ? -2 : 0)
         : 0;
+      // market-cap quality + event risk — low float into an unlock is the
+      // classic dump setup; catalysts are context, never a trigger
+      const mc = (globalThis.__mcaps || {})[r.asset];
+      const ev2 = (globalThis.__events || {})[r.asset];
+      const mcapBoost = (mc && mc.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === mc.dir ? 2 : -1) : 0)
+        + (ev2 && ev2.unlocks > 0 && dir0 === 'LONG' ? -3 : 0)
+        + (ev2 && ev2.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === ev2.dir ? 1 : 0) : 0);
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -479,7 +575,8 @@ async function main() {
             (stratAdj[strategy] || 0) +
             extBoost +
             derivBoost +
-            newsBoost,
+            newsBoost +
+            mcapBoost,
           0,
           100
         )
@@ -561,6 +658,8 @@ async function main() {
         deriv: (globalThis.__deriv || {})[r.asset] ?? null,
         social: (globalThis.__social || {})[r.asset] ?? null,
         news: (globalThis.__news || {})[r.asset] ?? null,
+        mcap: (globalThis.__mcaps || {})[r.asset] ?? null,
+        events: (globalThis.__events || {})[r.asset] ?? null,
         stopPct: pct(clamp(targetPct / 2, 2, 8)),
         ta: ta
           ? {
@@ -758,11 +857,12 @@ async function main() {
 
   // ---- derivatives + social intelligence: write api/sentiment.json ----
   try {
-    const dv = globalThis.__deriv || {}, so = globalThis.__social || {}, nw2 = globalThis.__news || {};
+    const dv = globalThis.__deriv || {}, so = globalThis.__social || {}, nw2 = globalThis.__news || {},
+          mcap = globalThis.__mcaps || {}, evs = globalThis.__events || {};
     const assets = {};
-    for (const a of new Set([...Object.keys(dv), ...Object.keys(so), ...Object.keys(nw2)])) {
+    for (const a of new Set([...Object.keys(dv), ...Object.keys(so), ...Object.keys(nw2), ...Object.keys(mcap), ...Object.keys(evs)])) {
       if (a === '_feeds') continue;
-      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), news: nw2[a] ?? null, dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? null };
+      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), ...(mcap[a] || {}), news: nw2[a] ?? null, events: evs[a] ?? null, dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? (mcap[a] || {}).dir ?? null };
     }
     fs.writeFileSync(
       path.join(API, 'sentiment.json'),
