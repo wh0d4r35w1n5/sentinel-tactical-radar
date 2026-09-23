@@ -461,6 +461,11 @@ async function main() {
               fibClusters: ta.fib?.clusters ?? 0,
               trend: ta.structure?.trend ?? null,
               vwap: ta.vwap ? { z: ta.vwap.z, devPct: ta.vwap.devPct, fade: ta.vwap.fade } : null,
+              eng: ta.eng
+                ? Object.fromEntries(
+                    Object.entries(ta.eng).map(([k, x]) => [k, x ? { dir: x.dir, label: x.label } : null])
+                  )
+                : null,
             }
           : null,
         momentumScore: r.momentumScore,

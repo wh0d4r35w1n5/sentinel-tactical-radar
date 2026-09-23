@@ -95,6 +95,11 @@ ul.conf li.sup{color:#cfe8d6}ul.conf li.sup::before{content:'✓';color:var(--gr
 ul.conf li.con{color:#e8cfcf}ul.conf li.con::before{content:'✗';color:var(--red)}
 ul.conf li.inf{color:var(--mut)}ul.conf li.inf::before{content:'·'}
 .cf{font-size:9px;color:var(--mut);white-space:nowrap}
+.engrow{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+.echip{font-size:9.5px;padding:1px 7px;border:1px solid var(--line);border-radius:3px;letter-spacing:.04em;color:var(--mut)}
+.echip b{color:var(--txt);font-weight:600}
+.echip.bull{border-color:rgba(61,255,115,.4);color:var(--grn)}.echip.bull b{color:var(--grn)}
+.echip.bear{border-color:rgba(255,92,92,.4);color:var(--red)}.echip.bear b{color:var(--red)}
 tr.jrow{cursor:pointer}
 tr.jrow:hover td,tr.jrow.open td{background:rgba(61,255,115,.05)}
 tr.jsyn td{background:rgba(61,255,115,.02);padding:14px 18px}
@@ -247,6 +252,7 @@ function sigDetail(s,i){
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
     <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
     <ul class="ddrv">${drv}</ul>
+    ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${x.label||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
     <div>${sparkSVG(c.spark,520,64)}</div>
     <div class="dmeta">
       <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M USD</b></span>
@@ -319,6 +325,9 @@ function confList(e){
   if(T.goldenPocket)add(v(true),'price inside fib golden pocket (0.618–0.65 retracement zone)');
   if(T.fibClusters)add('inf',`${T.fibClusters} fib-cluster confluence points mapped`);
   if(T.trend)add(v(T.trend==='up'),`market structure trend: ${T.trend}`);
+  if(T.eng){['rsi','macd','obv','dow','minor','major','macro','superMacro','rev','mtf'].forEach(k=>{
+    const x=T.eng[k];if(!x)return;
+    add(x.dir?v(x.dir==='bull'):'inf',`${({rsi:'RSI eng',macd:'MACD eng',obv:'OBV eng',dow:'Dow eng',minor:'Minor',major:'Major',macro:'Macro',superMacro:'Super-macro',rev:'Reversal eng',mtf:'MTF eng'})[k]} — ${x.label}`)});}
   if(T.vwap)add(v(T.vwap.fade==='LONG'),`5-min VWAP ${T.vwap.devPct>0?'+':''}${T.vwap.devPct}% (z ${T.vwap.z}) → ${T.vwap.fade} fade doctrine`);
   if(e.harmonic)add(v(e.harmonic.dir==='bullish'),`${e.harmonic.dir} ${e.harmonic.type} validated · q${e.harmonic.quality}/100 · D @ $${fmtP(e.harmonic.dPrice)} USD`);
   if(e.ext)add(e.ext.dir===e.direction?'sup':'con',`external desk signal: ${e.ext.dir} (${e.ext.ageMin!=null?e.ext.ageMin+'m ago':'recent'})`);

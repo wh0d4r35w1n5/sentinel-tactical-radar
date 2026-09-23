@@ -444,6 +444,194 @@
     };
   }
 
+  // ---------- indicator primitives (sub-engine shared) ----------
+  function emaSeries(v, p) {
+    var k = 2 / (p + 1), o = [], e = v[0];
+    for (var i = 0; i < v.length; i++) { e = i ? v[i] * k + e * (1 - k) : v[i]; o.push(e); }
+    return o;
+  }
+  function rsiSeries(v, p) {
+    p = p || 14; var out = new Array(v.length).fill(null);
+    if (v.length <= p) return out;
+    var g = 0, l = 0, i, d;
+    for (i = 1; i <= p; i++) { d = v[i] - v[i - 1]; if (d > 0) g += d; else l -= d; }
+    g /= p; l /= p; out[p] = 100 - 100 / (1 + (l ? g / l : 1e9));
+    for (i = p + 1; i < v.length; i++) {
+      d = v[i] - v[i - 1];
+      g = (g * (p - 1) + Math.max(d, 0)) / p; l = (l * (p - 1) + Math.max(-d, 0)) / p;
+      out[i] = 100 - 100 / (1 + (l ? g / l : 1e9));
+    }
+    return out;
+  }
+  // aggregate candles k:1 into a higher timeframe
+  function agg(cs, k) {
+    var out = [];
+    for (var i = 0; i + k <= cs.length; i += k) {
+      var b = cs.slice(i, i + k);
+      out.push({ t: b[0].t, o: b[0].o, c: b[k - 1].c,
+                 h: Math.max.apply(null, b.map(function (c) { return c.h; })),
+                 l: Math.min.apply(null, b.map(function (c) { return c.l; })),
+                 qv: b.reduce(function (a, c) { return a + (c.qv || 0); }, 0) });
+    }
+    return out;
+  }
+  // price-vs-indicator divergence on the last two pivots (regular + hidden)
+  function divergence(cs, ind, dev) {
+    var p = zigzag(cs, dev || 0.012);
+    var hs = p.filter(function (x) { return x.type === 'H'; }),
+        ls = p.filter(function (x) { return x.type === 'L'; });
+    var at = function (i) { return ind[i] == null ? null : ind[i]; };
+    var cands = [];
+    if (ls.length >= 2) {
+      var a = ls[ls.length - 2], b = ls[ls.length - 1], ia = at(a.i), ib = at(b.i);
+      if (ia != null && ib != null) {
+        if (b.p < a.p && ib > ia) cands.push({ type: 'bullish', age: cs.length - 1 - b.i });
+        else if (b.p > a.p && ib < ia) cands.push({ type: 'hidden-bull', age: cs.length - 1 - b.i });
+      }
+    }
+    if (hs.length >= 2) {
+      var a2 = hs[hs.length - 2], b2 = hs[hs.length - 1], ja = at(a2.i), jb = at(b2.i);
+      if (ja != null && jb != null) {
+        if (b2.p > a2.p && jb < ja) cands.push({ type: 'bearish', age: cs.length - 1 - b2.i });
+        else if (b2.p < a2.p && jb > ja) cands.push({ type: 'hidden-bear', age: cs.length - 1 - b2.i });
+      }
+    }
+    if (!cands.length) return null;
+    cands.sort(function (x, y) { return x.age - y.age; });
+    return cands[0];
+  }
+  // pivot-sequence trend: HH+HL up / LH+LL down / mixed range
+  function trendOf(cs, dev) {
+    if (!cs || cs.length < 8) return null;
+    var p = zigzag(cs, dev || 0.015);
+    var hs = p.filter(function (x) { return x.type === 'H'; }),
+        ls = p.filter(function (x) { return x.type === 'L'; });
+    if (hs.length < 2 || ls.length < 2) {
+      // too few pivots (smooth trend) — fall back to regression slope
+      var sl = linSlope(cs.map(function (c) { return c.c; }), Math.min(30, cs.length));
+      var st = sl > 0.005 ? 'up' : sl < -0.005 ? 'down' : 'range';
+      return { trend: st, dir: st === 'up' ? 'bull' : st === 'down' ? 'bear' : null, lastPivot: null };
+    }
+    var hh = hs[hs.length - 1].p > hs[hs.length - 2].p,
+        hl = ls[ls.length - 1].p > ls[ls.length - 2].p;
+    var t = hh && hl ? 'up' : !hh && !hl ? 'down' : 'range';
+    var lastP = p[p.length - 1];
+    return { trend: t, dir: t === 'up' ? 'bull' : t === 'down' ? 'bear' : null,
+             lastPivot: lastP ? lastP.type : null };
+  }
+  function linSlope(v, n) {
+    var s = v.slice(-n); if (s.length < 4) return 0;
+    var x0 = s[0], x1 = s[s.length - 1];
+    return x0 ? (x1 - x0) / Math.abs(x0) : 0;
+  }
+  function obvSeries(cs) {
+    var o = [0];
+    for (var i = 1; i < cs.length; i++)
+      o.push(o[i - 1] + (cs[i].c > cs[i - 1].c ? 1 : cs[i].c < cs[i - 1].c ? -1 : 0) * (cs[i].qv || 0));
+    return o;
+  }
+
+  // ---------- ENGINE: RSI + divergences ----------
+  function rsiEng(cs) {
+    var cl = cs.map(function (c) { return c.c; });
+    if (cl.length < 20) return null;
+    var r = rsiSeries(cl), last = r[r.length - 1];
+    if (last == null) return null;
+    var zone = last <= 30 ? 'oversold' : last >= 70 ? 'overbought' : last <= 42 ? 'low' : last >= 58 ? 'high' : 'neutral';
+    var div = divergence(cs, r, 0.012);
+    var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
+            : last <= 30 ? 'bull' : last >= 70 ? 'bear' : last > 50 ? 'bull' : 'bear';
+    return { dir: dir, rsi: +last.toFixed(1), zone: zone, div: div ? div.type : null, divAge: div ? div.age : null,
+      label: 'RSI ' + last.toFixed(1) + ' ' + zone + (div ? ' · ' + div.type + ' divergence ' + div.age + 'b ago' : ' · no divergence') };
+  }
+  // ---------- ENGINE: MACD ----------
+  function macdEng(cs) {
+    var cl = cs.map(function (c) { return c.c; });
+    if (cl.length < 36) return null;
+    var e12 = emaSeries(cl, 12), e26 = emaSeries(cl, 26);
+    var m = cl.map(function (_, i) { return e12[i] - e26[i]; });
+    var sig = emaSeries(m, 9), hist = m.map(function (x, i) { return x - sig[i]; });
+    var n = cl.length, h0 = hist[n - 1], cross = null;
+    for (var i = n - 1; i > Math.max(0, n - 30); i--)
+      if ((hist[i] > 0) !== (hist[i - 1] > 0)) { cross = { dir: h0 > 0 ? 'bull' : 'bear', age: n - 1 - i }; break; }
+    var rising = h0 > hist[n - 2] && hist[n - 2] > hist[n - 3];
+    var falling = h0 < hist[n - 2] && hist[n - 2] < hist[n - 3];
+    var div = divergence(cs, m, 0.012);
+    var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
+            : cross && cross.age <= 8 ? cross.dir
+            : h0 > 0 ? 'bull' : 'bear';
+    return { dir: dir, aboveZero: m[n - 1] > 0, cross: cross ? cross.dir + ' ' + cross.age + 'b' : null,
+             histDir: rising ? 'rising' : falling ? 'falling' : 'flat', div: div ? div.type : null,
+      label: 'MACD ' + (m[n - 1] > 0 ? 'above' : 'below') + ' zero · hist ' + (rising ? 'rising' : falling ? 'falling' : 'flat')
+             + (cross ? ' · ' + cross.dir + ' cross ' + cross.age + 'b ago' : '') + (div ? ' · ' + div.type + ' div' : '') };
+  }
+  // ---------- ENGINE: Volume + OBV ----------
+  function obvEng(cs) {
+    if (cs.length < 24) return null;
+    var obv = obvSeries(cs), cl = cs.map(function (c) { return c.c; });
+    var oS = linSlope(obv, 20), pS = linSlope(cl, 20);
+    var div = divergence(cs, obv, 0.012);
+    var mxO = Math.max.apply(null, obv.slice(-60, -1)), mnO = Math.min.apply(null, obv.slice(-60, -1));
+    var mxP = Math.max.apply(null, cl.slice(-60, -1)), mnP = Math.min.apply(null, cl.slice(-60, -1));
+    var lastO = obv[obv.length - 1], lastP = cl[cl.length - 1];
+    var stealth = lastO >= mxO && lastP < mxP, distrib = lastO <= mnO && lastP > mnP;
+    var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
+            : stealth ? 'bull' : distrib ? 'bear' : oS > 0.001 ? 'bull' : oS < -0.001 ? 'bear' : null;
+    return { dir: dir, obvSlope: +(oS * 100).toFixed(2), priceSlope: +(pS * 100).toFixed(2),
+             div: div ? div.type : null, stealth: stealth, distrib: distrib,
+      label: 'OBV ' + (oS > 0 ? 'rising' : 'falling') + ' ' + (oS * 100).toFixed(1) + '%/20b vs price ' + (pS * 100).toFixed(1) + '%'
+             + (stealth ? ' · stealth accumulation (OBV new high, price lagging)' : distrib ? ' · distribution (OBV new low, price holding)' : '')
+             + (div ? ' · ' + div.type + ' div' : '') };
+  }
+  // ---------- ENGINE: Dow Theory via price-vs-OBV confirmation ----------
+  // Dow: volume must confirm the trend; trends persist until proven reversed.
+  // Simplified to the price-vs-OBV study — when volume flows lead price, the
+  // quiet phases (accumulation/distribution) show before the move.
+  function dowEng(cs) {
+    if (cs.length < 30) return null;
+    var pt = trendOf(cs, 0.02), obv = obvSeries(cs);
+    var oS = linSlope(obv, 30), pS = linSlope(cs.map(function (c) { return c.c; }), 30);
+    var oT = oS > 0.002 ? 'up' : oS < -0.002 ? 'down' : 'flat';
+    var pT = pt ? pt.trend : 'range';
+    var phase, confirmed;
+    if (pT === 'up' && oT === 'up') { phase = 'markup'; confirmed = true; }
+    else if (pT === 'down' && oT === 'down') { phase = 'markdown'; confirmed = true; }
+    else if ((pT !== 'up') && oT === 'up') { phase = 'accumulation'; confirmed = false; }
+    else if ((pT !== 'down') && oT === 'down') { phase = 'distribution'; confirmed = false; }
+    else { phase = 'unclear'; confirmed = false; }
+    var dir = phase === 'accumulation' || phase === 'markup' ? 'bull'
+            : phase === 'distribution' || phase === 'markdown' ? 'bear' : null;
+    return { dir: dir, phase: phase, confirmed: confirmed, priceTrend: pT, obvTrend: oT,
+      label: 'Dow: ' + phase + (confirmed ? ' (volume confirms)' : ' (non-confirmation — volume leads)')
+             + ' · price ' + pT + ' / OBV ' + oT };
+  }
+  // ---------- ENGINE: trend reversal (minor flips inside major) ----------
+  function revEng(cs, ev) {
+    var minor = trendOf(cs.slice(-18), 0.008), major = trendOf(cs, 0.02);
+    if (!minor || !major || minor.trend === 'range' || major.trend === 'range' || minor.trend === major.trend) return null;
+    var wantBull = minor.trend === 'up'; // minor up inside major down = bullish reversal attempt
+    var trig = ev && ((ev.sfp && (ev.sfp.type === 'bullish') === wantBull)
+      || (ev.mc && ev.mc.choch && (ev.mc.choch === 'bullish') === wantBull)
+      || (ev.eng && ev.eng.rsi && ev.eng.rsi.div && (ev.eng.rsi.div.indexOf('bull') >= 0) === wantBull)
+      || (ev.w && (wantBull ? /spring|jtc|lps|test/.test(ev.w.event || '') : /utad|fti|lpsy/.test(ev.w.event || ''))));
+    return { dir: wantBull ? 'bull' : 'bear', confirmed: !!trig,
+      label: 'trend reversal ' + (wantBull ? 'bullish' : 'bearish') + ': minor ' + minor.trend + ' vs major ' + major.trend
+             + (trig ? ' · trigger confirmed' : ' · unconfirmed — no trigger yet') };
+  }
+  // ---------- ENGINE: multi-timeframe alignment ----------
+  function mtfEng(cs) {
+    var ltf = trendOf(cs, 0.01), mtf = trendOf(agg(cs, 4), 0.015), htf = trendOf(agg(cs, 8), 0.02);
+    if (!ltf || !mtf || !htf) return null;
+    var ts = [ltf.trend, mtf.trend, htf.trend];
+    var ups = ts.filter(function (t) { return t === 'up'; }).length,
+        dns = ts.filter(function (t) { return t === 'down'; }).length;
+    var aligned = ups === 3 || dns === 3;
+    var dir = ups > dns ? 'bull' : dns > ups ? 'bear' : null;
+    return { dir: dir, aligned: aligned, ltf: ltf.trend, mtf: mtf.trend, htf: htf.trend,
+      label: 'MTF 1h ' + ltf.trend + ' · 4h ' + mtf.trend + ' · 8h ' + htf.trend
+             + (aligned ? ' — fully aligned' : ' — mixed/transition') };
+  }
+
   // ---------- composite ----------
   function analyze(cs, cs5m) {
     if (!cs || cs.length < 20 || !zigzag) return null;
@@ -463,6 +651,18 @@
     else if (ig) { bias = ig.dir; reasons.push('ignition'); }
     else if (vw && vw.stretched) { bias = vw.fade; reasons.push('vwap-reversion'); }
     else if (eq && eq.lean) { bias = eq.lean; reasons.push('eq-edge'); }
+    // sub-engines: RSI/MACD/OBV/Dow/trends/reversal/MTF — confirmation layer
+    var eng = {
+      rsi: rsiEng(cs), macd: macdEng(cs), obv: obvEng(cs), dow: dowEng(cs),
+      minor: trendOf(cs.slice(-18), 0.008), major: trendOf(cs, 0.02),
+      macro: trendOf(agg(cs, 4), 0.02), superMacro: trendOf(agg(cs, 8), 0.025),
+      mtf: mtfEng(cs),
+    };
+    eng.rev = revEng(cs, { sfp: s, mc: mc, w: w, eng: eng });
+    if (eng.minor) eng.minor.label = 'minor trend (18b): ' + eng.minor.trend;
+    if (eng.major) eng.major.label = 'major trend (window): ' + eng.major.trend;
+    if (eng.macro) eng.macro.label = 'macro (4h): ' + eng.macro.trend;
+    if (eng.superMacro) eng.superMacro.label = 'super-macro (12h): ' + eng.superMacro.trend;
     var confluence = 0;
     if (bias) {
       var L = bias === 'LONG';
@@ -480,16 +680,25 @@
       if (st.trend === (L ? 'up' : 'down')) confluence++;
       if (fb && fb.goldenPocket) confluence++;
       if (cd.some(function (x) { return (x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star') === L; })) confluence++;
+      // engine votes — bounded so confirmations can't swamp primary signals
+      var ev = 0;
+      ['rsi', 'macd', 'obv', 'dow', 'rev'].forEach(function (k) {
+        var x = eng[k]; if (x && x.dir && (x.dir === 'bull') === L) ev++;
+      });
+      if (eng.mtf && eng.mtf.aligned && eng.mtf.dir === (L ? 'bull' : 'bear')) ev++;
+      confluence += Math.min(4, ev);
     }
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
-             smc: mc, eq: eq,
+             smc: mc, eq: eq, eng: eng,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
   g.TAEngine = { analyze: analyze, sfp: sfp, fvgs: fvgs, elliott: elliott,
                  wyckoff: wyckoff, candlesticks: candlesticks, fib: fib,
                  structure: structure, ignition: ignition, keyLevels: keyLevels,
-                 vwap: vwap, smc: smc, eqLevels: eqLevels };
+                 vwap: vwap, smc: smc, eqLevels: eqLevels,
+                 rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
+                 mtfEng: mtfEng, revEng: revEng };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
