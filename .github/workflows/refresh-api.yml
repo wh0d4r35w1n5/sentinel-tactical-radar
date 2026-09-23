@@ -23,7 +23,7 @@ jobs:
           set -u
           origin="https://sentinel-tactical-radar-staging.netlify.app/api"
           for ep in config hud-status trades bot-state recovered-notes; do
-            if curl -sf --max-time 30 "$origin/$ep" -o "api/$ep.json.new"; then
+            if curl -sf --retry 2 --retry-delay 3 --max-time 30 "$origin/$ep" -o "api/$ep.json.new"; then
               mv "api/$ep.json.new" "api/$ep.json"
               echo "updated $ep"
             else

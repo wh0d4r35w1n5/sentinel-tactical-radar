@@ -161,10 +161,13 @@ async function main() {
     return 'Momentum Confluence';
   };
 
+  // signals need momentum metrics; pairs whose kline fetch failed get a
+  // neutral profile instead of being dropped from the board entirely
+  const neutral = { rsi14: 50, volRatio: 1, closes: null };
   const signals = rows
-    .filter((r) => enriched.has(r.asset))
+    .slice(0, KLINE_CANDIDATES)
     .map((r) => {
-      const k = enriched.get(r.asset);
+      const k = enriched.get(r.asset) ?? neutral;
       const momentumRank = rank(chgs, r.changePct);
       const rsiTilt = clamp((k.rsi14 - 30) / 40, 0, 1); // 30→0, 70→1
       const momentumScore = Math.round(momentumRank * 60 + rsiTilt * 40);
@@ -182,9 +185,12 @@ async function main() {
       const direction = r.changePct >= 0 ? 'LONG' : 'SHORT';
       const strategy = strategyFor(r, r.k);
       const targetPct = pct(clamp(r.rangePct * 0.35, 3, 15));
+      const hasK = enriched.has(r.asset);
       const drivers = [
         `24h momentum ${r.changePct >= 0 ? '+' : ''}${pct(r.changePct)}%`,
-        `RSI(1h) ${Math.round(r.k.rsi14)} · volume ${round(r.k.volRatio, 1)}× baseline`,
+        hasK
+          ? `RSI(1h) ${Math.round(r.k.rsi14)} · volume ${round(r.k.volRatio, 1)}× baseline`
+          : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
         `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
       ];
       return {
@@ -197,7 +203,9 @@ async function main() {
         assetId: r.asset.toLowerCase(),
         drivers,
         riskPct: pct(clamp(r.spreadPct * 2 + Math.abs(r.changePct) * 0.08, 0.3, 8)),
-        summary: `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum, RSI(1h) ${Math.round(r.k.rsi14)}, volume ${round(r.k.volRatio, 1)}× baseline.`,
+        summary: hasK
+          ? `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum, RSI(1h) ${Math.round(r.k.rsi14)}, volume ${round(r.k.volRatio, 1)}× baseline.`
+          : `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum on $${(r.quoteVolume / 1e6).toFixed(0)}M quote volume.`,
         harmonic: null,
         lowPrice: r.lowPrice,
         rangePct: pct(r.rangePct),
@@ -312,6 +320,17 @@ async function main() {
     JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
   );
 
+  // headline prices for the landing header chips
+  const majors = {};
+  for (const sym of ['BTC', 'ETH', 'SOL']) {
+    const r = rows.find((x) => x.asset === sym);
+    if (r) majors[sym] = { price: r.lastPrice, changePct: pct(r.changePct) };
+  }
+  fs.writeFileSync(
+    path.join(API, 'prices.json'),
+    JSON.stringify({ refreshedAt: snap.refreshedAt, majors })
+  );
+
   // ---- signal ledger: open entries + settled outcomes ----
   let ledger = { entries: [], stats: {} };
   try {
@@ -373,6 +392,26 @@ async function main() {
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
   };
+  const by = (key) => {
+    const g = {};
+    for (const e of closed) {
+      const k = e[key] ?? 'other';
+      (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+      g[k].wins += e.status === 'won' ? 1 : 0;
+      g[k].pnl += e.pnlPct ?? 0;
+    }
+    return Object.fromEntries(
+      Object.entries(g).map(([k, v]) => [
+        k,
+        { n: v.n, winRate: pct((v.wins / v.n) * 100), avgPnlPct: pct(v.pnl / v.n) },
+      ])
+    );
+  };
+  ledger.stats.byDirection = by('direction');
+  ledger.stats.byStrategy = by('strategy');
+  const sortedClosed = [...closed].sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0));
+  ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
+  ledger.stats.worst = sortedClosed[0]?.asset ?? null;
   fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
 
   console.log(

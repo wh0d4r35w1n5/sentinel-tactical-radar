@@ -20,6 +20,9 @@ header{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:
 .dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pu 2.4s ease-in-out infinite}
 @keyframes pu{50%{opacity:.35}}
 .stale .dot{background:var(--amb);box-shadow:0 0 8px var(--amb)}
+.chips{display:flex;gap:14px;font-size:11px}
+.chips b{color:var(--txt);font-weight:600}
+.chips .sub{font-size:10px}
 .spacer{flex:1}
 .btn{color:#06130a;background:var(--grn);text-decoration:none;padding:9px 16px;border-radius:6px;font-weight:700;letter-spacing:.08em;font-size:12px}
 .btn:hover{filter:brightness(1.12)}
@@ -77,6 +80,7 @@ footer a{color:var(--grn-dim)}
 <header>
   <span class="logo">◈ SENTINEL TACTICAL RADAR</span>
   <span class="live" id="liveChip"><span class="dot"></span><span id="liveTxt">CONNECTING…</span></span>
+  <span class="chips" id="chips"></span>
   <span class="spacer"></span>
   <a class="btn" href="/sentinel-tactical-radar/radar/">OPEN TERMINAL →</a>
 </header>
@@ -104,6 +108,8 @@ footer a{color:var(--grn-dim)}
       <div class="panel">
         <div class="ptitle">Signal track record</div>
         <div id="ledgerStats" style="margin-bottom:12px"></div>
+        <svg id="pnlSvg" viewBox="0 0 300 64" width="100%" height="56" preserveAspectRatio="none" style="margin-bottom:8px"></svg>
+        <div id="byStrat" style="margin-bottom:10px"></div>
         <div id="ledger"></div>
       </div>
       <div class="panel">
@@ -168,8 +174,8 @@ function sigDetail(s,i){
     </div></td></tr>`;
 }
 async function render(){
-  const [scan,detail,ledger,snap]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json')]);
+  const [scan,detail,ledger,snap,prices]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -189,13 +195,17 @@ async function render(){
     $('rail').hidden=false;
     $('rail').innerHTML=`JUPITER RAIL · SOL <b class="num">$${Number(snap.assets.input.usdPrice).toFixed(2)}</b> via ${snap.spot.routeLabel} · slot ${Number(snap.rpc.slot).toLocaleString()} · rpc ${snap.rpc.latencyMs}ms`;
   }
+  if(prices&&prices.majors){
+    $('chips').innerHTML=Object.entries(prices.majors).map(([s,p])=>
+      `<span><b>${s}</b> <span class="num">$${fmtP(p.price)}</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`).join('');
+  }
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-i="${i}"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-i="${i}" tabindex="0"><td><b>${s.asset}</b> <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}">${s.changePct>=0?'+':''}${s.changePct}%</td>
@@ -212,14 +222,33 @@ async function render(){
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
       const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
       return `<div class="ledger-row"><span><b>${e.asset}</b> <span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction[0]}</span> <span class="sub">${ago(e.ts)} ago</span></span><span class="num ${cls}">${lbl}</span></div>`}).join('')||'<div class="sub">no tracked signals yet</div>';
+    // cumulative P&L curve over closed entries
+    const closed=(ledger.entries||[]).filter(e=>e.status!=='open').sort((a,b)=>a.exitTs-b.exitTs);
+    if(closed.length>1){
+      let cum=0;const pts=closed.map(e=>cum+=e.pnlPct||0);
+      const mn=Math.min(0,...pts),mx=Math.max(0,...pts),rg=mx-mn||1,W=300,H=64;
+      const xy=pts.map((v,i)=>[(i/(pts.length-1))*W,H-8-((v-mn)/rg)*(H-16)]);
+      const line=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+      $('pnlSvg').innerHTML=`<line x1="0" x2="${W}" y1="${H-8-((0-mn)/rg)*(H-16)}" y2="${H-8-((0-mn)/rg)*(H-16)}" stroke="rgba(159,232,179,.25)" stroke-dasharray="3 3"/><path d="${line}" fill="none" stroke="${cum>=0?'var(--grn)':'var(--red)'}" stroke-width="1.5"/>`;
+    } else $('pnlSvg').innerHTML='';
+    // per-strategy breakdown
+    const bs=(ledger.stats&&ledger.stats.byStrategy)||{};
+    $('byStrat').innerHTML=Object.entries(bs).map(([k,v])=>
+      `<div class="ledger-row"><span class="sub">${k}</span><span class="num">${v.winRate}% <span class="sub">(${v.n})</span></span></div>`).join('');
   }
   const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
 }
-document.getElementById('sigBody').addEventListener('click',e=>{
-  const tr=e.target.closest('tr.sig');if(!tr)return;
+function toggleRow(tr){
   const d=document.querySelector(`tr.detail[data-d="${tr.dataset.i}"]`);
   if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden)}
+}
+document.getElementById('sigBody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr.sig');if(tr)toggleRow(tr);
+});
+document.getElementById('sigBody').addEventListener('keydown',e=>{
+  const tr=e.target.closest('tr.sig');
+  if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleRow(tr)}
 });
 render();setInterval(render,60000);
 </script>
