@@ -637,17 +637,19 @@ async function main() {
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');
-  const wins = closed.filter((e) => e.status === 'won').length;
-  const losses = closed.filter(
-    (e) => e.status === 'stopped' || e.status === 'reversed'
-  ).length;
+  // money truth: a profitable exit is a win regardless of which rule closed it
+  const wins = closed.filter((e) => (e.pnlPct ?? 0) > 0).length;
+  const losses = closed.filter((e) => (e.pnlPct ?? 0) < 0).length;
+  const byStatus = {};
+  closed.forEach((e) => (byStatus[e.status] = (byStatus[e.status] || 0) + 1));
   ledger.stats = {
     open: ledger.entries.filter((e) => e.status === 'open').length,
     closed: closed.length,
     wins,
     losses,
-    flat: closed.length - wins - losses, // breakeven + expired
-    winRate: wins + losses >= 5 ? pct((wins / (wins + losses)) * 100) : null,
+    flat: closed.length - wins - losses,
+    byStatus,
+    winRate: closed.length >= 5 ? pct((wins / closed.length) * 100) : null,
     avgPnlPct: closed.length
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
@@ -724,7 +726,7 @@ async function main() {
     for (const e of closed) {
       const k = e[key] ?? 'other';
       (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
-      g[k].wins += e.status === 'won' ? 1 : 0;
+      g[k].wins += (e.pnlPct ?? 0) > 0 ? 1 : 0;
       g[k].pnl += e.pnlPct ?? 0;
     }
     return Object.fromEntries(
