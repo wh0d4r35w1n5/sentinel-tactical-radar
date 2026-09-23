@@ -222,7 +222,7 @@ async function render(){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
-      <div class="stat"><div class="v num">${st.winRate!=null?st.winRate+'%':'—'}</div><div class="k">Win rate</div></div>
+      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">W / L${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
       <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L</div></div></div>`;
     $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';

@@ -20,7 +20,8 @@ const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
 const LEDGER_MAX = 300;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
-const STOP_PCT = 8; // adverse move that marks a signal stopped
+const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
+const UNTRACKED_TTL_MS = 3600 * 1000; // asset out of universe -> expire after 1h
 
 const pct = (x) => Math.round(x * 100) / 100;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -342,8 +343,16 @@ async function main() {
     ledger.entries.some(
       (e) => e.asset === a && e.direction === d && e.status === 'open'
     );
+  const recentClosed = (a, d) =>
+    ledger.entries.some(
+      (e) =>
+        e.asset === a &&
+        e.direction === d &&
+        e.status !== 'open' &&
+        now - (e.exitTs ?? 0) < REENTRY_COOLDOWN_MS
+    );
   for (const s of signals) {
-    if (!openFor(s.asset, s.direction)) {
+    if (!openFor(s.asset, s.direction) && !recentClosed(s.asset, s.direction)) {
       ledger.entries.unshift({
         asset: s.asset,
         direction: s.direction,
@@ -361,23 +370,33 @@ async function main() {
       });
     }
   }
+  const freshDir = new Map(signals.map((s) => [s.asset, s.direction]));
   for (const e of ledger.entries) {
     if (e.status !== 'open') continue;
     const px = priceByAsset.get(e.asset);
-    if (!px) continue;
-    const pnl =
-      e.direction === 'LONG'
-        ? ((px - e.entry) / e.entry) * 100
-        : ((e.entry - px) / e.entry) * 100;
+    const age = now - e.ts;
+    let pnl = e.pnlPct;
+    if (px) {
+      pnl = pct(
+        e.direction === 'LONG'
+          ? ((px - e.entry) / e.entry) * 100
+          : ((e.entry - px) / e.entry) * 100
+      );
+    }
     const hit =
-      e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice;
-    if (hit || pnl <= -STOP_PCT || now - e.ts > LEDGER_TTL_MS) {
-      e.status = hit ? 'won' : pnl <= -STOP_PCT ? 'stopped' : 'expired';
-      e.exitPrice = px;
+      px &&
+      (e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice);
+    const stopped = px && pnl <= -Math.max(4, e.targetPct);
+    const reversed =
+      px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
+    const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
+    if (hit || stopped || reversed || expired) {
+      e.status = hit ? 'won' : stopped ? 'stopped' : reversed ? 'reversed' : 'expired';
+      e.exitPrice = px ?? e.exitPrice;
       e.exitTs = now;
-      e.pnlPct = pct(pnl);
+      e.pnlPct = pnl;
     } else {
-      e.pnlPct = pct(pnl); // live mark on open entries
+      e.pnlPct = pnl; // live mark on open entries
     }
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
@@ -387,7 +406,8 @@ async function main() {
     open: ledger.entries.filter((e) => e.status === 'open').length,
     closed: closed.length,
     wins,
-    winRate: closed.length ? pct((wins / closed.length) * 100) : null,
+    losses: closed.length - wins,
+    winRate: closed.length >= 5 ? pct((wins / closed.length) * 100) : null,
     avgPnlPct: closed.length
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
