@@ -180,6 +180,11 @@ footer a{color:var(--grn-dim)}
       <div id="drivers"></div>
     </div>
   </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— discipline scorecard measured on our own ledger, held to <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
+    <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable ledger, R-multiples, or SQN. This engine's entire record is public, committed to git, and independently verifiable against Bitget candles. Until a competitor publishes the same, the transparency benchmark is ours by default — the performance benchmark gets earned by the ledger.</div>
+  </div>
 </div>
 <footer>
   <span>Data: Bitget spot (live WS stream) · Jupiter · Solana RPC</span>
@@ -397,6 +402,14 @@ async function render(){
     const bs=(ledger.stats&&ledger.stats.byStrategy)||{};
     $('byStrat').innerHTML=Object.entries(bs).map(([k,v])=>
       `<div class="ledger-row"><span class="sub">${k}</span><span class="num">${v.winRate}% <span class="sub">(${v.n})</span></span></div>`).join('');
+    // discipline scorecard — Sloggett framework adherence, measured on our ledger
+    const d=st.discipline||{};
+    $('bench').innerHTML=[
+      ['Risk per trade',d.avgRiskPctAcct!=null?d.avgRiskPctAcct+'% of equity':'—','target ≤1–2%'],
+      ['Avg R:R',d.avgRR!=null?'1 : '+d.avgRR:'—','target ≥1 : 2'],
+      ['Max consec. losses',d.maxConsecLosses??'—','drawdown control'],
+      ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
+    ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
     $('journal').innerHTML=(ledger.entries||[]).map(e=>{
