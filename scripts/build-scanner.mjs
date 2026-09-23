@@ -18,7 +18,7 @@ const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
-const LEDGER_MAX = 300;
+const LEDGER_MAX = 2000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
 const UNTRACKED_TTL_MS = 3600 * 1000; // asset out of universe -> expire after 1h
@@ -334,9 +334,12 @@ async function main() {
 
   // ---- signal ledger: open entries + settled outcomes ----
   let ledger = { entries: [], stats: {} };
+  let ledgerCorrupt = false;
   try {
     ledger = JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8'));
-  } catch {}
+  } catch (err) {
+    ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
+  }
   ledger.entries ??= [];
   const now = Date.now();
   const openFor = (a, d) =>
@@ -432,7 +435,7 @@ async function main() {
   const sortedClosed = [...closed].sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0));
   ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
   ledger.stats.worst = sortedClosed[0]?.asset ?? null;
-  fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+  if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
 
   // pipeline health for the landing footer
   let health = {};
