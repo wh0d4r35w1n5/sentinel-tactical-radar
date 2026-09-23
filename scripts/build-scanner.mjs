@@ -888,9 +888,11 @@ async function main() {
 
   // ---- signal ledger: open entries + settled outcomes ----
   const EQUITY = 10000; // paper account, USD model
-  const NOTIONAL = 1000; // full-size position = 10% of equity
-  const MAX_DEPLOYED = EQUITY * 0.6; // portfolio cap — 60% deployed max
-  const FEE_PCT = 0.2; // Bitget spot ~0.1% x2 sides, modeled round-trip
+  const NOTIONAL = 1000; // legacy fallback notional (pre-leverage entries)
+  const MAX_DEPLOYED = EQUITY * 4; // notional exposure cap — 400% of equity = 40% margin at 10x
+  const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
+  const LEVERAGE = 10; // 10x isolated perpetuals
+  const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
   let ledger = { entries: [], stats: {} };
   let ledgerCorrupt = false;
   try {
@@ -923,8 +925,10 @@ async function main() {
   // already score-sorted so the best setups get slots first.
   // Tharp risk-based sizing: target 1% of equity AT RISK per trade, i.e.
   // notional = 1% / stop distance — tighter stops carry bigger notional for
-  // the same dollar risk. Conviction scales the risk (A=full, B=half),
-  // notional hard-capped at 30% of equity so one position can't eat the book.
+  // the same dollar risk. 10x isolated: margin = notional/10, so a 30%
+  // notional position only locks 3% margin. Conviction scales the risk
+  // (A=full, B=half); notional capped at 30% of equity — concentration is
+  // still concentration regardless of how little margin it posts.
   const RISK_PCT = 0.01, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
   const deployed = () =>
     ledger.entries
@@ -947,6 +951,9 @@ async function main() {
         direction: s.direction,
         entry: s.entryPrice,
         notional,
+        margin: Math.round(notional / LEVERAGE),
+        lev: LEVERAGE,
+        liqPct: LIQ_PCT,
         feePct: FEE_PCT,
         targetPct: s.targetPct,
         targetPrice: s.targetPrice,
@@ -990,12 +997,19 @@ async function main() {
       }
     }
     const fee = e.feePct ?? FEE_PCT;
+    // funding carry hits leveraged P&L directly: ratePct per 8h × elapsed
+    // funding periods, paid or earned per the entry's carry direction
+    const fundPnl =
+      e.funding && e.carry && e.carry !== 'flat'
+        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1)
+        : 0;
     const settle = (status, exitPx, rawPnl) => {
       e.status = status;
       e.exitPrice = exitPx;
       e.exitTs = now;
+      e.fundingPnl = pct(fundPnl);
       const net =
-        e.lockPnl != null ? (e.lockPnl + rawPnl) / 2 - fee : rawPnl - fee;
+        e.lockPnl != null ? (e.lockPnl + rawPnl) / 2 - fee + fundPnl : rawPnl - fee + fundPnl;
       e.pnlPct = pct(net);
     };
     const hit =
@@ -1003,15 +1017,19 @@ async function main() {
       (e.direction === 'LONG' ? px >= e.targetPrice : px <= e.targetPrice);
     const beStopped = px && e.beStop && pnl <= 0;
     const stopped = px && pnl <= -(e.stopPct ?? Math.max(4, e.targetPct));
+    // liquidation outranks the stop: if the wick reached the liq band the
+    // position is gone — whole margin lost (−100/lev on notional)
+    const liquidated = px && (e.lev || 0) > 1 && pnl <= -(e.liqPct ?? LIQ_PCT);
     const reversed =
       px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
     const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
-    if (hit) settle('won', px, pnl);
+    if (liquidated) settle('liquidated', px, -100 / (e.lev || LEVERAGE));
+    else if (hit) settle('won', px, pnl);
     else if (beStopped) settle('breakeven', e.entry, 0);
     else if (stopped) settle('stopped', px, pnl);
     else if (reversed) settle('reversed', px, pnl);
     else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.pnlPct ?? 0);
-    else e.pnlPct = pct(pnl - fee); // live mark net of modeled fees
+    else e.pnlPct = pct(pnl - fee + fundPnl); // live mark net of modeled fees + carry
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');
@@ -1144,7 +1162,7 @@ async function main() {
   vault.holdings ??= {};
   for (const e of closed) {
     if (e.vaulted || (e.pnlPct ?? 0) <= 0) continue;
-    const usd = TRADE_NOTIONAL * (e.pnlPct / 100) * VAULT_PCT;
+    const usd = (e.notional ?? TRADE_NOTIONAL) * (e.pnlPct / 100) * VAULT_PCT;
     vault.depositedUsd = pct(vault.depositedUsd + usd);
     vault.fills.unshift({
       ts: e.exitTs ?? now,
@@ -1182,7 +1200,6 @@ async function main() {
       JSON.stringify({
         refreshedAt: snap.refreshedAt,
         vaultPct: VAULT_PCT,
-        notional: TRADE_NOTIONAL,
         depositedUsd: vault.depositedUsd,
         valueUsd: round(valueUsd, 2),
         pnlUsd: round(valueUsd - vault.depositedUsd, 2),
