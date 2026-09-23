@@ -165,6 +165,10 @@ footer a{color:var(--grn-dim)}
       </div>
     </div>
   </div>
+  <div class="panel" style="margin-top:16px;border-style:dashed;border-color:rgba(255,209,102,.4)">
+    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0</span></div>
+    <div class="stats" id="walletStats" style="grid-template-columns:repeat(5,1fr)"></div>
+  </div>
   <div class="panel" style="margin-top:16px">
     <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
@@ -179,6 +183,11 @@ footer a{color:var(--grn-dim)}
       <div class="ptitle">Logic drivers · book-weighted strategy influence</div>
       <div id="drivers"></div>
     </div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="ptitle">Funding radar · Bitget perp funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
+    <div id="carryStats" class="sub" style="margin-bottom:8px"></div>
+    <div class="jscroll"><table><thead><tr><th>Coin</th><th>Funding 8h</th><th>Annualized</th><th>Basis</th><th>Arb play</th><th>Breakeven</th></tr></thead><tbody id="fundRows"></tbody></table></div>
   </div>
   <div class="panel" style="margin-top:16px">
     <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— discipline scorecard measured on our own ledger, held to <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
@@ -200,6 +209,7 @@ const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigi
 const ago=t=>{const s=(Date.now()-t)/1e3;return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 const j=u=>fetch(u,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
 let LAST={};
+let OPENPOS=[],WALLET=null;
 
 function sparkSVG(vals,w=90,h=26){
   if(!vals||vals.length<2)return'';
@@ -321,6 +331,7 @@ ${e.ext?`<h4>External desk confluence</h4><p>The private desk feed flagged <b>${
 <h4>Trade management protocol</h4>
 <p>${lockTxt}The standing rules each evaluation tick are: (1) target contact → settle <i>won</i>; (2) adverse excursion beyond −${(e.stopPct??Math.max(4,e.targetPct))}% → settle <i>stopped</i>; (3) a fresh opposite-direction signal on ${e.asset} → settle <i>reversed</i>; (4) 24h without resolution → settle <i>expired</i>; (5) half-target contact → LOCK-50, banking half and moving the stop to breakeven. ${e.beStop?'The breakeven stop was armed on this entry.':'The breakeven stop had not armed on this entry at the time of writing.'}</p>
 ${harmTxt}${taTxt}
+${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} perpetual funding was <b>${e.funding.ratePct>0?'+':''}${e.funding.ratePct}%</b> per 8h (${e.funding.annualPct}% annualized${e.funding.basisPct!=null?`, spot/perp basis ${e.funding.basisPct>=0?'+':''}${e.funding.basisPct}%`:''}). This position is on the <b>${e.carry==='earn'?'receiving':e.carry==='pay'?'paying':'neutral'}</b> side of carry — ${e.carry==='earn'?'if held as a perp, funding would pay this position while it runs':'if held as a perp, funding would cost this position while it runs'} — a real edge/cost input the journal now tracks per trade.</p>`:''}
 <h4>Outcome accounting</h4>
 <p>${outcome} Open positions are excluded from win-rate math — only decisive outcomes (won, stopped, reversed) count, and the headline rate stays hidden until at least five decisive closes exist.</p>
 <h4>Invalidation &amp; counterfactual</h4>
@@ -336,8 +347,8 @@ ${harmTxt}${taTxt}
 <div class="srcs">SOURCES — NEPTUNE books registry: <a href="${B.u}" target="_blank" rel="noopener">${B.t} (${B.a})</a> · ${SUPPORT.map(s=>`<a href="${s.u}" target="_blank" rel="noopener">${s.t} (${s.a})</a>`).join(' · ')} — doctrine mappings per SYSTEM MANIFEST v2.0</div>`;
 }
 async function render(){
-  const [scan,detail,ledger,snap,prices,health,vault]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json')]);
+  const [scan,detail,ledger,snap,prices,health,vault,funding]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'market-snapshot.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,snap};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -464,6 +475,25 @@ async function render(){
     $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
     if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
   }
+  // ---- paper wallet: trading acct ($1k AUD start) + vault ($0 start) ----
+  const acctN2=parseFloat(localStorage.acctSize||'');
+  const acct=(acctN2>0)?acctN2:1000;
+  const closedW=(ledger?ledger.entries||[]:[]).filter(e=>e.status!=='open');
+  let eqR=acct;
+  closedW.forEach(e=>{eqR*=1+((e.pnlPct??0)/100)*((e.notional??1000)/10000)});
+  OPENPOS.length=0;
+  ((ledger&&ledger.entries)||[]).forEach(e=>{if(e.status==='open')OPENPOS.push({sym:e.asset+'USDT',entry:e.entry,dir:e.direction,not:e.notional??1000,lock:e.lockPnl??null,pnl:e.pnlPct})});
+  const openMark=OPENPOS.reduce((a,o)=>a+(o.pnl??0)/100*o.not*(acct/10000),0);
+  const depD=OPENPOS.reduce((a,o)=>a+o.not*(acct/10000),0);
+  const vUsd=((vault&&vault.valueUsd)||0)*(acct/10000);
+  WALLET={acct,realized:eqR,openMark,dep:depD,vault:vUsd};
+  $('walletStats').innerHTML=[
+    ['Equity',`<b class="num" data-weq>$${(eqR+openMark).toFixed(2)}</b>`,'start $'+acct.toLocaleString()+' AUD · PAPER'],
+    ['Cash available',`<span class="num" data-wcash>$${Math.max(0,eqR+openMark-depD).toFixed(2)}</span>`,'deployed $'+depD.toFixed(0)],
+    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)}</span>`,closedW.length+' closed'],
+    ['Open marks',`<span class="num ${openMark>=0?'up':'dn'}" data-wopen>${openMark>=0?'+':'−'}$${Math.abs(openMark).toFixed(2)}</span>`,OPENPOS.length+' positions live'],
+    ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)}</span>`,'started $0 · 20% of wins'],
+  ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
   const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical','External VIP':'cryptopasta · External Desk'};
   const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
@@ -475,6 +505,18 @@ async function render(){
     const perf=stratStats[k];
     return `<div class="drvr"><div class="nm"><span>${k} <span class="bk">${BOOKS[k]||''}</span></span><span class="num">${w}%${perf?` · ${perf.winRate}% wr`:' live'}</span></div>
     <div class="bar"><i style="width:${w}%"></i></div></div>`}).join('')||'<div class="sub">no driver data yet</div>';
+  // funding radar — arb candidates + open-trade carry exposure
+  if(funding&&funding.best){
+    const co=ledger&&ledger.stats&&ledger.stats.discipline?ledger.stats.discipline.carryOpen:null;
+    $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago`;
+    $('fundRows').innerHTML=funding.best.map(f=>
+      `<tr><td><b>${f.asset}</b></td>
+      <td class="num ${f.ratePct>=0?'dn':'up'}">${f.ratePct>=0?'+':''}${f.ratePct}%</td>
+      <td class="num">${f.annualPct}%</td>
+      <td class="num">${f.basisPct!=null?(f.basisPct>=0?'+':'')+f.basisPct+'%':'—'}</td>
+      <td class="sub">${f.arb==='LONG_SPOT_SHORT_PERP'?'long spot + short perp':'short spot + long perp'}</td>
+      <td class="num">${f.breakevenH!=null?f.breakevenH+'h':'—'}</td></tr>`).join('')||'<tr><td colspan="6" class="err">no funding data</td></tr>';
+  }
   const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
   if(health&&health.scanner){
@@ -518,6 +560,16 @@ function livePaint(){
     if(p){const val=(+el.dataset.vunits)*p;el.textContent='$'+val.toFixed(2);v+=val}
   });
   const ve=document.querySelector('[data-vtotal]');if(ve&&v)ve.textContent='$'+v.toFixed(2);
+  // live paper-wallet marks
+  const W=WALLET;
+  if(W&&W.acct){
+    let om=0;
+    OPENPOS.forEach(o=>{const p=L.price(o.sym);if(p){let pc=(o.dir==='LONG'?(p-o.entry)/o.entry:(o.entry-p)/o.entry)*100;if(o.lock!=null)pc=(o.lock+pc)/2;om+=pc/100*o.not*(W.acct/10000)}});
+    const we=document.querySelector('[data-weq]');if(we)we.textContent='$'+(W.realized+om).toFixed(2);
+    const wo=document.querySelector('[data-wopen]');if(wo){wo.textContent=(om>=0?'+':'−')+'$'+Math.abs(om).toFixed(2);wo.className='num '+(om>=0?'up':'dn')}
+    const wc=document.querySelector('[data-wcash]');if(wc)wc.textContent='$'+Math.max(0,W.realized+om-W.dep).toFixed(2);
+    const wv=document.querySelector('[data-wvault]');if(wv&&v)wv.textContent='$'+(v*W.acct/10000).toFixed(2);
+  }
   const aN=parseFloat(localStorage.acctSize||'');
   if(aN>0){document.querySelectorAll('[data-vunits]').forEach(el=>{
     const cur=parseFloat(el.textContent.replace('$',''));

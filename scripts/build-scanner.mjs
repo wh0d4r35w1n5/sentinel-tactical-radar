@@ -24,6 +24,11 @@ const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
 const EXT_FILE = path.join(API, 'ext-alpha.json');
+const PERP_TICKERS_URL =
+  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
+const FUND_URL = 'https://api.bitget.com/api/v2/mix/market/current-fund-rate';
+const FUND_HIST_URL =
+  'https://api.bitget.com/api/v2/mix/market/history-fund-rate';
 const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
@@ -181,6 +186,59 @@ async function main() {
       })
     );
   }
+
+  // ---- funding intelligence: perp funding rates + spot/perp basis ----
+  const funding = {};
+  try {
+    const perpRes = await fetch(PERP_TICKERS_URL);
+    const perps = perpRes.ok ? (await perpRes.json()).data || [] : [];
+    const perpPx = {};
+    for (const t of perps)
+      if ((t.symbol || '').endsWith('USDT'))
+        perpPx[t.symbol.replace('USDT', '')] = +t.lastPr;
+    const fundSyms = rows.slice(0, KLINE_CANDIDATES).map((r) => r.pair);
+    for (let i = 0; i < fundSyms.length; i += 12) {
+      await Promise.all(
+        fundSyms.slice(i, i + 12).map(async (sym) => {
+          try {
+            const r = await fetch(
+              `${FUND_URL}?symbol=${sym}&productType=USDT-FUTURES`
+            );
+            if (!r.ok) return;
+            const d = (await r.json()).data;
+            const f = Array.isArray(d) ? d[0] : d;
+            const asset = sym.replace('USDT', '');
+            const rate = +f.fundingRate;
+            if (isFinite(rate)) {
+              const row = rows.find((x) => x.asset === asset);
+              const spot = row ? row.lastPrice : null;
+              const perp = perpPx[asset] ?? null;
+              const annualPct = rate * 3 * 365 * 100; // 8h funding x3/day
+              const basisPct =
+                spot && perp ? ((perp - spot) / spot) * 100 : null;
+              funding[asset] = {
+                ratePct: pct(rate * 100),
+                annualPct: pct(annualPct),
+                nextTs: f.nextUpdate ? +f.nextUpdate : null,
+                perp, spot, basisPct: basisPct != null ? pct(basisPct) : null,
+                // arb math: ~0.32% round-trip to open+close the pair
+                // (spot taker + perp taker); breakeven = hours of funding
+                // needed to cover entry+exit costs
+                arb:
+                  rate > 0
+                    ? 'LONG_SPOT_SHORT_PERP'
+                    : 'SHORT_SPOT_LONG_PERP',
+                breakevenH:
+                  Math.abs(rate) > 0.00005
+                    ? Math.round((0.0032 / Math.abs(rate)) * 8 * 10) / 10
+                    : null,
+              };
+            }
+          } catch {}
+        })
+      );
+    }
+  } catch {}
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
   const chgs = rows.map((r) => r.changePct).sort((a, b) => a - b);
@@ -348,8 +406,16 @@ async function main() {
             : r.lastPrice * (1 - targetPct / 100),
         signalFamily: 'momentum',
         ext: r.ext ?? null,
-        // Sloggett asymmetric R:R — stop is half the target so every entry
-        // carries ≥1:2 reward:risk by construction
+        // carry: perp funding context — shorts collect when rate>0, longs pay
+        funding: funding[r.asset] ?? null,
+        carry:
+          funding[r.asset] == null
+            ? null
+            : funding[r.asset].ratePct === 0
+              ? 'flat'
+              : (direction === 'SHORT') === (funding[r.asset].ratePct > 0)
+                ? 'earn'
+                : 'pay',
         stopPct: pct(clamp(targetPct / 2, 2, 8)),
         ta: ta
           ? {
@@ -524,6 +590,22 @@ async function main() {
     JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
   );
 
+  // ---- funding intelligence: write api/funding.json ----
+  try {
+    const rows2 = Object.entries(funding)
+      .map(([asset, f]) => ({ asset, ...f }))
+      .sort((a, b) => Math.abs(b.annualPct) - Math.abs(a.annualPct));
+    fs.writeFileSync(
+      path.join(API, 'funding.json'),
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. paper estimates, Bitget USDT-FUTURES.',
+        best: rows2.slice(0, 10),
+        rows: rows2,
+      })
+    );
+  } catch {}
+
   // headline prices for the landing header chips
   const majors = {};
   for (const sym of ['BTC', 'ETH', 'SOL']) {
@@ -597,6 +679,8 @@ async function main() {
         harmonic: s.harmonic ?? null,
         ta: s.ta ?? null,
         ext: s.ext ?? null,
+        funding: s.funding ?? null,
+        carry: s.carry ?? null,
         stopPct: s.stopPct ?? Math.max(4, s.targetPct),
         ts: now,
         status: 'open',
@@ -737,6 +821,16 @@ async function main() {
     journalCoverage: 100, // every entry carries a generated synopsis by construction
     stopsHonored: 100, // every close is rule-based — no discretionary overrides exist
     closedSample: closedAll.length,
+    // fee intelligence: modeled round-trip fees actually paid, and carry
+    // earned/paid by open positions' funding alignment
+    feesPaidUsd: round(
+      closedAll.reduce((a, e) => a + ((e.notional ?? NOTIONAL) * (e.feePct ?? FEE_PCT)) / 100, 0),
+      2
+    ),
+    carryOpen: {
+      earn: ledger.entries.filter((e) => e.status === 'open' && e.carry === 'earn').length,
+      pay: ledger.entries.filter((e) => e.status === 'open' && e.carry === 'pay').length,
+    },
   };
   const by = (key) => {
     const g = {};
