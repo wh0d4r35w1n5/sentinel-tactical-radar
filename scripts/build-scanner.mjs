@@ -46,11 +46,11 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // results stay comparable across engine edits (audit requirement — keep
 // v1.0 untouched results separate from whatever follows)
 // frozen-rule versioning: v1.0 = static 10x; v1.1 = dynamic leverage +
-// cluster governor; v1.2 = forensic overhaul; v1.3 = Van Tharp doctrine —
-// runner rung (the R-distribution had ZERO +2R trades by construction),
-// retracement trail, six market types (direction × volatility), capture
-// ratio + R-histogram stats, objectives tracking.
-const ENGINE_VERSION = 'v1.3';
+// cluster governor; v1.2 = forensic overhaul; v1.3 = runner rung +
+// retracement trail + six market types; v1.4 = Tharp doctrine ENFORCED —
+// market-type gating (bear tape blocks momentum longs, bull tape blocks
+// momentum shorts, chop raises the floor), volatile-regime heat haircut.
+const ENGINE_VERSION = 'v1.4';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -1288,6 +1288,21 @@ async function main() {
   // archive (the eval engine grades them) but no position opens. Standing
   // down is a legitimate output.
   const MIN_ENTRY_SCORE = 70;
+  // ---- Tharp's core law enforced: no system works in every market type.
+  // bear tape → only reversal-family LONGs trade; bull tape → only
+  // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
+  // (the forensic bleeders were exactly momentum-in-chop). Volatile tapes
+  // get a 0.75× heat haircut — chop is where books die.
+  const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP']);
+  const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown']);
+  const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
+  const mktAllows = (s) => {
+    if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
+    if (mktType.startsWith('bull')) return s.direction === 'LONG' || EXH_SHORT.has(s.strategy);
+    return s.score >= MIN_ENTRY_SCORE + 8 || MEANREV.has(s.strategy);
+  };
+  const volHaircut = mktType.endsWith('volatile') ? 0.75 : 1;
+  const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
@@ -1403,13 +1418,14 @@ async function main() {
     );
     const newHeatPct = (stopFrac * notional) / EQUITY * 100;
     if (
-      s.score >= MIN_ENTRY_SCORE &&
+      s.score >= entryFloor &&
+      mktAllows(s) &&
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
-      openRiskPct() + newHeatPct <= heatCapFor(s.direction) &&
-      openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP
+      openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut &&
+      openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut
     ) {
       ledger.entries.unshift({
         asset: s.asset,
@@ -2013,11 +2029,33 @@ async function main() {
       rets.sort((a, b) => a - b);
       return rets[Math.floor(rets.length / 2)] * 100;
     };
+    // parallel prefetch: one fetch per ASSET over the union of its pending
+    // windows (was one serial fetch per record — same tape refetched 24×)
+    const byAsset = new Map();
+    for (const p of toEval) {
+      const w = byAsset.get(p.s.asset) ?? { min: p.run.ts, end: 0 };
+      w.min = Math.min(w.min, p.run.ts);
+      w.end = Math.max(w.end, Math.min(p.run.ts + HORIZONS[2], now));
+      byAsset.set(p.s.asset, w);
+    }
+    const assetCandles = new Map();
+    {
+      const assets = [...byAsset.keys()];
+      for (let i = 0; i < assets.length; i += 6) {
+        await Promise.all(
+          assets.slice(i, i + 6).map(async (a) => {
+            const w = byAsset.get(a);
+            assetCandles.set(a, await fetch5mRange(a, w.min, w.end).catch(() => null));
+          })
+        );
+      }
+    }
     for (const p of toEval) {
       const { key, run, s } = p;
       const sgn = s.direction === 'LONG' ? 1 : -1;
       const end = Math.min(run.ts + HORIZONS[2], now);
-      const cs = await fetch5mRange(s.asset, run.ts, end).catch(() => null);
+      const all = assetCandles.get(s.asset);
+      const cs = all && all.filter((c) => c.t >= run.ts - 300e3 && c.t <= end + 300e3);
       if (!cs || !cs.length) continue;
       // entry fill: emission mark plus adverse half-spread (worst case)
       const half = (s.spreadPct ?? 0) / 200;
