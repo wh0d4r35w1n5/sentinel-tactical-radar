@@ -23,7 +23,8 @@ const TICKERS_URL =
 const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
 const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
-const KLINE_CANDIDATES = 48; // top-volume pairs get 1h momentum metrics
+const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: skips third-party intel feeds + RSS
+const KLINE_CANDIDATES = RAPID ? 16 : 48; // top-volume pairs get 1h momentum metrics
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
@@ -421,6 +422,8 @@ async function main() {
     const CMCAL_SECRET = process.env.COINMARKETCAL_CLIENT_SECRET || KEYS.coinmarketcalSecret || null;
     const deriv = {}, social = {}, news = {}, mcaps = {}, events = {};
     const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key', coingecko: 'live', coinmarketcap: CMC_KEY ? 'live' : 'no-key', coinmarketcal: CMCAL_ID && CMCAL_SECRET ? 'live' : 'no-key' };
+    if (RAPID) for (const k of Object.keys(feedStatus)) if (k !== 'bitget') feedStatus[k] = 'rapid';
+    if (!RAPID)
     for (let i = 0; i < fundSyms.length; i += 12) {
       await Promise.all(
         fundSyms.slice(i, i + 12).map(async (sym) => {
@@ -495,6 +498,7 @@ async function main() {
       rows.filter((r) => r.cls === 'crypto').map((r) => r.asset.toUpperCase())
     );
     const cryptoOf = (syms) => syms.filter((s) => isCrypto.has(s.replace('USDT', '')));
+    if (!RAPID) {
     // CoinGecko (keyless): market-cap intelligence — rank, float unlocked %,
     // ATH distance, volume/mcap turnover. The CMC-equivalent quality layer.
     try {
@@ -624,6 +628,7 @@ async function main() {
         }
       } catch {}
     }
+    } // end !RAPID intel gather — rapid mode leaves deriv/social/news/mcaps/events empty
     deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
     mcaps._feeds = feedStatus; events._feeds = feedStatus;
     globalThis.__deriv = deriv; globalThis.__social = social; globalThis.__news = news;
@@ -1039,9 +1044,11 @@ async function main() {
   try {
     history = JSON.parse(fs.readFileSync(PULSE_FILE, 'utf8'));
   } catch {}
-  history.push({ ts: Date.now(), value: pct(100 + medianChangePct) });
-  history = history.slice(-PULSE_MAX_POINTS);
-  fs.writeFileSync(PULSE_FILE, JSON.stringify(history));
+  if (!RAPID) {
+    history.push({ ts: Date.now(), value: pct(100 + medianChangePct) });
+    history = history.slice(-PULSE_MAX_POINTS);
+    fs.writeFileSync(PULSE_FILE, JSON.stringify(history));
+  }
   const values = history.map((p) => p.value);
 
   let fx = { audPerUsd: 1.5, usdPerAud: 0.667 };
@@ -1215,6 +1222,7 @@ async function main() {
   // Key-free public feeds. Headlines are tagged to universe assets and a
   // keyword tone estimate — display context, deliberately NOT a score input
   // (headline sentiment is noise until the eval engine proves otherwise).
+  if (!RAPID)
   try {
     const FEEDS = [
       { src: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
