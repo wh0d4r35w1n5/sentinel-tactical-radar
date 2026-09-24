@@ -52,6 +52,10 @@ const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
 const MAX_NOTIONAL = +(process.env.LIVE_MAX_NOTIONAL_USD || 50);
 const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || 3);
+// dust-account mode: when scaled notional lands under the contract minimum,
+// floor up to the exchange minimum instead of skipping — for tiny real
+// accounts proving the pipeline. Requires LIVE_FLOOR_MIN=1; never default.
+const FLOOR_MIN = process.env.LIVE_FLOOR_MIN === '1';
 const PAPER_EQUITY = 10000; // plan notional is denominated in the $10k model
 
 const log = (...a) => console.log('[exec]', ...a);
@@ -413,7 +417,20 @@ async function main() {
         state.errors.push(`${o.symbol}: absent from ${MODE} contract catalog — unroutable`);
         continue;
       }
-      const size = sizeFor(cm, o.symbol, notional, o.refEntry);
+      let size = sizeFor(cm, o.symbol, notional, o.refEntry);
+      if (!size && FLOOR_MIN) {
+        // floor to the contract minimum — but only if the margin needed
+        // (notional/leverage) leaves >20% of equity free afterwards
+        const c = cm[o.symbol];
+        const minQty = Math.max(c.minTradeNum, c.minTradeUSDT / o.refEntry);
+        const minNotional = minQty * o.refEntry;
+        const marginNeeded = minNotional / o.leverage;
+        if (marginNeeded <= equityUsd * 0.8) {
+          const p = Math.pow(10, c.sizePlace);
+          size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
+          state.actions.push(`${o.symbol}: scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
+        }
+      }
       if (!size) { state.errors.push(`${o.symbol}: size below contract minimum`); continue; }
       const sgn = o.direction === 'LONG' ? 1 : -1;
       const holdSide = o.direction === 'LONG' ? 'long' : 'short';
@@ -454,7 +471,7 @@ async function main() {
           size, holdSide
         );
         await Promise.all([...tpPlans, slPlan]);
-        state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${o.leverage}x notional $${round(notional, 2)}`);
+        state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${o.leverage}x notional $${round(size * fill, 2)}`);
         opened++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting
