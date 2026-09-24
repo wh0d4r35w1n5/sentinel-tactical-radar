@@ -525,7 +525,9 @@ async function render(){
         ['Factor ICs → 24h α',[['RSI',evals.stats.icRsi],['VOL',evals.stats.icVol],['MOM',evals.stats.icMom],['RANK',evals.stats.icRank]].map(([k,v])=>`${k} ${v!=null?v:'—'}`).join(' · '),'which component actually predicts'],
       ]:[]),
       ...(corr&&corr.meanBoardCorr!=null?[['Board coupling',corr.meanBoardCorr,'mean pairwise corr · high = diversification is an illusion']]:[]),
-      ...(o.regime?[['Tape regime',o.regime,'measured breadth + median move · drives leverage + heat budget']]:[]),
+      ...(o.regime?[['Tape regime',o.regime+' · '+(o.mktType||''),'market SQN '+(o.marketSQN??'—')+' · ATR '+(o.atrPct??'—')+'% · drives leverage + heat']]:[]),
+      ...(st.rDist?[['R-distribution',Object.entries(st.rDist).map(([k,v])=>`${k}:${v}`).join(' · '),'the system IS this shape — needs a ≥+2R tail']]:[]),
+      ...(st.capturePct!=null?[['Capture ratio',st.capturePct+'%','of peak favorable excursion banked · forensic leak metric']]:[]),
       ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
       ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
@@ -555,7 +557,10 @@ async function render(){
         ['Median alpha',es.medAlpha24h!=null?(es.medAlpha24h>=0?'+':'')+es.medAlpha24h+'%':'—','vs market basket · 24h'],
         [`${curVer} PF / SQN`,`${pf??'—'} / ${sqn??'—'}`,'strategy edge, this ruleset'],
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
-      $('evNote').textContent=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not, so selection bias cannot hide in this panel.`;
+      // objectives scorecard — Tharp: objectives come before the system
+      const obj=st.objectives||{};
+      const chips=Object.values(obj).map(x=>`<span style="display:inline-block;margin-right:6px;padding:1px 7px;border-radius:3px;border:1px solid ${x.ok?'var(--grn)':'var(--bd)'};color:${x.ok?'var(--grn)':'var(--mut)'};font-size:9px">${x.ok?'✓':'○'} ${x.target} <b>${x.cur!=null?x.cur:'—'}</b></span>`).join('');
+      $('evNote').innerHTML=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not.<div style="margin-top:6px">${chips}</div>`;
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};

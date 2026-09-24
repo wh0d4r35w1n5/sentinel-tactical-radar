@@ -46,10 +46,11 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // results stay comparable across engine edits (audit requirement — keep
 // v1.0 untouched results separate from whatever follows)
 // frozen-rule versioning: v1.0 = static 10x; v1.1 = dynamic leverage +
-// cluster governor; v1.2 = forensic overhaul — realistic targets (≤8%),
-// tight designed stops (≤4%), 6h dead-zone time-stop, climax-entry penalty,
-// strategy circuit-breaker. Every ruleset change MUST bump this.
-const ENGINE_VERSION = 'v1.2';
+// cluster governor; v1.2 = forensic overhaul; v1.3 = Van Tharp doctrine —
+// runner rung (the R-distribution had ZERO +2R trades by construction),
+// retracement trail, six market types (direction × volatility), capture
+// ratio + R-histogram stats, objectives tracking.
+const ENGINE_VERSION = 'v1.3';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -642,6 +643,46 @@ async function main() {
     for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sy2 += (ys[i] - my) ** 2; }
     return sy2 > 0 ? round(sxy / sy2, 2) : null;
   };
+  // ---- Tharp market type: direction × volatility, measured objectively ----
+  // Direction = market SQN of the universe-median 1h return series over
+  // 48h (√N·mean/std — Tharp's own trendiness statistic). Volatility =
+  // mean 1h ATR% across candidates, banded quiet/normal/volatile. Six
+  // types: bull/bear/side × quiet/volatile. His rule: a system designed
+  // for one type is insane to run in another — so every signal/entry/eval
+  // record carries this tag and the eval engine grades by it.
+  let marketSQN = 0, mktType = 'side-normal', atrPct = null;
+  {
+    const med1h = [];
+    for (let i = 1; i <= 48; i++) {
+      const xs = [];
+      for (const k of enriched.values()) {
+        const cs = k.candles || [];
+        if (cs.length > i && cs[cs.length - i - 1].c > 0)
+          xs.push(((cs[cs.length - i].c - cs[cs.length - i - 1].c) / cs[cs.length - i - 1].c) * 100);
+      }
+      if (xs.length > 20) {
+        xs.sort((a, b) => a - b);
+        med1h.push(xs[Math.floor(xs.length / 2)]);
+      }
+    }
+    if (med1h.length > 10) {
+      const m = med1h.reduce((a, b) => a + b, 0) / med1h.length;
+      const s = Math.sqrt(med1h.reduce((a, b) => a + (b - m) ** 2, 0) / (med1h.length - 1));
+      marketSQN = s > 0 ? round((m / s) * Math.sqrt(med1h.length), 2) : 0;
+    }
+    const atrs = [...enriched.values()].map((k) => {
+      const cs = (k.candles || []).slice(-25);
+      if (cs.length < 5) return null;
+      let s = 0;
+      for (let i = 1; i < cs.length; i++)
+        s += Math.max(cs[i].h - cs[i].l, Math.abs(cs[i].h - cs[i - 1].c), Math.abs(cs[i].l - cs[i - 1].c)) / cs[i].c;
+      return (s / (cs.length - 1)) * 100;
+    }).filter((x) => x != null);
+    atrPct = atrs.length ? round(atrs.reduce((a, b) => a + b, 0) / atrs.length, 2) : null;
+    const dirClass = marketSQN > 0.5 ? 'bull' : marketSQN < -0.5 ? 'bear' : 'side';
+    const volClass = atrPct == null ? 'normal' : atrPct < 0.55 ? 'quiet' : atrPct > 1.0 ? 'volatile' : 'normal';
+    mktType = dirClass + '-' + volClass;
+  }
   // direction-aware momentum: a candidate is scored on the strength of the
   // move in ITS traded direction — a −8% dump traded SHORT is strong
   // downside momentum, not a high score riding the wrong side
@@ -845,6 +886,7 @@ async function main() {
         // over the last 48h of 1h returns (null when klines are missing)
         betaBtc: betaTo(r.asset, 'BTC'),
         corrBtc: corrTo(r.asset, 'BTC') != null ? round(corrTo(r.asset, 'BTC'), 2) : null,
+        mktType,
         direction,
         highPrice: r.highPrice,
         lastPrice: r.lastPrice,
@@ -1031,6 +1073,9 @@ async function main() {
       socialCoverage: 0,
       medianChangePct,
       regime,
+      mktType,
+      marketSQN,
+      atrPct,
       averageSpreadPct: pct(rows.reduce((a, r) => a + r.spreadPct, 0) / (rows.length || 1)),
     },
     refreshedAt: new Date().toISOString(),
@@ -1376,15 +1421,17 @@ async function main() {
         lev,
         liqPct,
         feePct: FEE_PCT,
-        // multi-split take-profit ladder: bank 33%/33%/34% of the position
-        // at 40%/70%/100% of the target move — "no one ever went broke
-        // taking profit"; the engine harvests constantly, never waits for
-        // a single all-or-nothing print
+        // take-profit ladder + RUNNER: bank 30%/30%/25% at 40%/70%/100% of
+        // target, and leave a 15% runner that never has a limit — it trails
+        // behind the peak. Forensic: zero trades ever reached +2R because
+        // the ladder closed everything at target. Tharp: the right tail is
+        // where expectancy lives — the runner is how we reach it.
         tps: [
-          { at: 0.4, frac: 0.33 },
-          { at: 0.7, frac: 0.33 },
-          { at: 1.0, frac: 0.34 },
+          { at: 0.4, frac: 0.3 },
+          { at: 0.7, frac: 0.3 },
+          { at: 1.0, frac: 0.25 },
         ],
+        runner: 0.15, // residual fraction that trails past target
         // dynamic stop (% adverse→locked-profit, from entry): starts at the
         // designed invalidation, moves to breakeven (zero-risk) once a safe
         // buffer prints, ratchets up behind profit, and only trails the
@@ -1399,6 +1446,7 @@ async function main() {
         ta: s.ta ?? null,
         mkt0: medianChangePct, // universe median 24h change at entry — benchmark for alpha
         regime, // measured tape regime at entry — leverage/heat keyed off this
+        mktType, // Tharp six-type tag: direction × volatility at entry
         funding: s.funding ?? null,
         carry: s.carry ?? null,
         stopPct,
@@ -1487,10 +1535,18 @@ async function main() {
           if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
             tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = tsC ?? now;
           }
-        if (e.peakPnl >= e.targetPct * 0.4) e.stopAt = Math.max(e.stopAt, 0);
-        if (e.peakPnl >= e.targetPct * 0.7) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.4);
-        if (e.peakPnl >= e.targetPct * 0.9) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.65);
-        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.6);
+        // retracement trail (Tharp: give back at most half the excursion):
+        // past 40% of target the stop floors at breakeven AND trails at
+        // 50% of the running peak — a fade keeps half the move instead of
+        // round-tripping to a +0.3% scratch. Forensic capture was 16%.
+        if (e.peakPnl >= e.targetPct * 0.4)
+          e.stopAt = Math.max(e.stopAt, Math.max(0, e.peakPnl * 0.5));
+        if (e.peakPnl >= e.targetPct * 0.9)
+          e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.65);
+        // past target the runner trails at 55% of peak — wide enough to
+        // breathe through continuation pullbacks, tight enough to keep
+        // most of an overshoot
+        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.55);
       } else if (e.lockPnl == null && fav >= e.targetPct / 2) {
         e.lockPnl = fav;
         e.lockedAt = tsC ?? now;
@@ -1526,8 +1582,15 @@ async function main() {
     const checkFavorable = (fav, markPx, tsC) => {
       applyFavorable(fav, tsC);
       if (e.peakPnl >= e.targetPct) {
-        settle('won', e.targetPrice ?? markPx, e.targetPct, tsC);
-        return true;
+        // v1.3+: the ladder's last rung banks at target but a 15% runner
+        // stays on and trails — the trade only settles when the trail,
+        // stop, reversal or TTL closes it. Older entries (no runner field)
+        // keep their original settle-at-target semantics.
+        if (e.runner) e.targetHit = e.targetHit ?? tsC ?? now;
+        else {
+          settle('won', e.targetPrice ?? markPx, e.targetPct, tsC);
+          return true;
+        }
       }
       return false;
     };
@@ -1702,6 +1765,29 @@ async function main() {
                 : sqn >= 1.6
                   ? 'below average'
                   : 'poor';
+  // Tharp: the system IS its R-multiple distribution — publish the shape
+  const rHist = { '≤-1R': 0, '-1..-0.5': 0, '-0.5..0': 0, '0..+0.5': 0, '+0.5..1': 0, '+1..2': 0, '≥+2': 0 };
+  for (const r of Rs)
+    rHist[r <= -1 ? '≤-1R' : r <= -0.5 ? '-1..-0.5' : r < 0 ? '-0.5..0' : r < 0.5 ? '0..+0.5' : r < 1 ? '+0.5..1' : r < 2 ? '+1..2' : '≥+2']++;
+  ledger.stats.rDist = rHist;
+  ledger.stats.maxR = Rs.length ? round(Math.max(...Rs), 2) : null;
+  ledger.stats.minR = Rs.length ? round(Math.min(...Rs), 2) : null;
+  // capture efficiency: how much of each trade's favorable excursion was
+  // actually banked — the forensic leak metric (was 16%)
+  const cap = closed.filter((e) => e.peakPnl != null && e.peakPnl > 0);
+  ledger.stats.capturePct = cap.length
+    ? pct((closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length) /
+        (cap.reduce((a, e) => a + e.peakPnl, 0) / cap.length) * 100)
+    : null;
+  // Tharp's first rule: objectives come BEFORE the system. Stated openly,
+  // measured every build — the dashboard grades us against them.
+  ledger.stats.objectives = {
+    sqn: { target: 'SQN ≥ 2.5 at n≥100', cur: ledger.stats.sqn, n: closed.length, ok: (sqn ?? 0) >= 2.5 && closed.length >= 100 },
+    capture: { target: 'capture ≥ 40% of excursion', cur: ledger.stats.capturePct, ok: (ledger.stats.capturePct ?? 0) >= 40 },
+    expectancy: { target: 'expectancy ≥ +0.25R', cur: ledger.stats.avgR, ok: (avgR ?? 0) >= 0.25 },
+    maxdd: { target: 'max drawdown < 5%', cur: ledger.stats.maxDrawdownPct, ok: (ledger.stats.maxDrawdownPct ?? 0) < 5 },
+    sample: { target: '≥100 closed for a real verdict', cur: closed.length, ok: closed.length >= 100 },
+  };
   // self-improving: doctrine weights learned from realized performance —
   // DORMANT until the sample is large enough to distinguish edge from luck
   ledger.model = {
@@ -1795,6 +1881,8 @@ async function main() {
     medianChangePct,
     breadth: breadthPct,
     regime,
+    mktType,
+    marketSQN,
     signals: signals.map((s) => ({
       asset: s.asset,
       cls: s.cls,
@@ -1945,6 +2033,7 @@ async function main() {
         strategy: s.strategy,
         ver: s.ver ?? run.ver ?? ENGINE_VERSION,
         regime: run.regime ?? null,
+        mktType: run.mktType ?? null,
         rsi: s.rsi ?? null,
         volRatio: s.volRatio ?? null,
         momScore: s.momScore ?? null,
@@ -2115,6 +2204,7 @@ async function main() {
     r.score >= 90 ? '90+' : r.score >= 80 ? '80-89' : '<80'
   );
   evStats.byRegime = group((r) => r.regime ?? 'unknown');
+  evStats.byMktType = group((r) => r.mktType ?? 'unknown');
   // hot file: pending (incomplete) + most recent completes for the UI
   const incomplete = [...evalMap.values()].filter((r) => !r.complete);
   const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
