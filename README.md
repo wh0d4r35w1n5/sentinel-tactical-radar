@@ -52,6 +52,11 @@ The journal models a **10×-isolated USDT-M perpetual paper account**
   dormant until ≥100 closed signals overall and ≥20 per strategy —
   small-sample "learning" is curve-fitting to noise. The dashboard shows
   gate status; weights sit at 0 until the sample justifies them.
+- **Two records, strictly separated.** `signal-archive.json` +
+  `api/history/archive-YYYY-MM.json` are the immutable prospective record —
+  every emitted board, traded or not. `signal-ledger.json` is the mutable
+  position book where P&L is measured. The ledger reports
+  `stats.signalsArchived`/`archiveRuns` so the record's depth is visible.
 - **Full stats.** Win rate, profit factor, max drawdown, avg winner/loser,
   per-trade Sharpe/SQN/R, by-direction/strategy/grade/version breakdowns,
   and alpha vs market — all net of modeled fees and funding, computed from
@@ -67,7 +72,8 @@ Runs every 10 minutes + on demand:
 | `api/pulse-history.json` | Rolling breadth index (~24h of points) accumulated each run. |
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
 | `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/breakeven/trailed/reversed/expired/liquidated with P&L and alpha. Entries carry engine version, board rank, spread, slippage estimate, universe size and pool depth at signal time. |
-| `api/signal-archive.json` | **Append-only prospective record** — every run appends the full emitted board (all signals, traded or not) with parameters and universe context. Never rewritten; the cap trims whole oldest runs only. This is the out-of-sample evidence set. |
+| `api/signal-archive.json` | **Append-only prospective record** — every run appends the full emitted board (all signals, traded or not) with parameters and universe context. |
+| `api/history/archive-YYYY-MM.json` | **Permanent record** — every emitted run is also written to its monthly archive file. The hot `signal-archive.json` may trim old runs; these monthly files are the unbounded, never-rewritten evidence set. |
 | `api/bitget-symbols.json` | The Bitget-listed contract universe used for filtering. |
 | `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |

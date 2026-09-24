@@ -1,10 +1,4 @@
-# telegram credentials/session — never commit
-scripts/tg-config.json
-scripts/tg.session
-scripts/*.session-journal
-# derived vip feed — only committed via explicit publish flag (git add -f)
-api/ext-alpha.json
-# third-party data keys (CoinGlass / LunarCrush) — never commit
+# third-party data keys (CoinGlass / LunarCrush / CryptoPanic / CMC / CoinMarketCal) — never commit
 scripts/api-keys.json
 node_modules/
 __pycache__/

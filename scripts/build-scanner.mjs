@@ -1515,8 +1515,46 @@ async function main() {
       boardRank: s.boardRank,
     })),
   });
+  // permanent record: every run also lands in its monthly history file
+  // (api/history/archive-YYYY-MM.json) — trimming the hot window below can
+  // never lose a signal. Dedup by timestamp keeps re-runs idempotent.
+  const histDir = path.join(API, 'history');
+  fs.mkdirSync(histDir, { recursive: true });
+  const byMonth = new Map();
+  for (const r of archive.runs) {
+    const m = new Date(r.ts).toISOString().slice(0, 7);
+    if (!byMonth.has(m)) byMonth.set(m, []);
+    byMonth.get(m).push(r);
+  }
+  let histRuns = 0;
+  let histSignals = 0;
+  for (const [m, rs] of byMonth) {
+    const hf = path.join(histDir, `archive-${m}.json`);
+    let h = { runs: [] };
+    try {
+      h = JSON.parse(fs.readFileSync(hf, 'utf8'));
+    } catch {}
+    h.runs ??= [];
+    const seen = new Set(h.runs.map((x) => x.ts));
+    for (const r of rs) if (!seen.has(r.ts)) h.runs.push(r);
+    h.runs.sort((a, b) => a.ts - b.ts);
+    fs.writeFileSync(hf, JSON.stringify(h));
+  }
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const r of h.runs || []) {
+        histRuns++;
+        histSignals += (r.signals || []).length;
+      }
+    } catch {}
+  }
   archive.runs = archive.runs.slice(-ARCHIVE_MAX_RUNS);
   fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive));
+  // surface the permanent record's depth on the ledger itself
+  ledger.stats.archiveRuns = histRuns;
+  ledger.stats.signalsArchived = histSignals;
 
   // ---- vault: a fixed share of every realized gain compounds into a
   // hold-forever BTC/ETH/SOL basket, marked to live prices ----
@@ -1577,6 +1615,10 @@ async function main() {
       })
     );
   }
+
+  // final unconditional ledger write — archive-depth stats and vault
+  // `vaulted` flags set after the first write must still persist
+  if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
 
   // pipeline health for the landing footer — only keys this pipeline owns;
   // the retired Jupiter/Solana snapshot used to leave a stale 'snapshot' key
