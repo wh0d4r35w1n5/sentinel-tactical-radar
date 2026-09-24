@@ -1397,6 +1397,9 @@ async function main() {
     }
     return ((peak - eq) / peak) * 100;
   })();
+  // live-execution plan — emitted every build regardless of executor state.
+  // orders = gate-passed entries this run; closes/trails filled post-settle.
+  const livePlan = { orders: [], closes: [], trails: [] };
   // portfolio heat: total equity at risk if every live stop fired right
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
@@ -1531,6 +1534,26 @@ async function main() {
         exitPrice: null,
         exitTs: null,
         pnlPct: null,
+      });
+      // live-exec intent: the scanner is the ONLY decision engine — the
+      // executor (bitget-exec.mjs) routes exactly this, scaled to the real
+      // account equity it reads from the exchange
+      livePlan.orders.push({
+        symbol: s.asset + 'USDT',
+        asset: s.asset,
+        direction: s.direction,
+        notionalUsd: notional,
+        leverage: lev,
+        refEntry: fillPx,
+        targetPct: s.targetPct,
+        stopPct,
+        tps: [
+          { at: 0.4, frac: 0.3 },
+          { at: 0.7, frac: 0.3 },
+          { at: 1.0, frac: 0.25 },
+        ],
+        runner: 0.15,
+        ver: s.ver ?? ENGINE_VERSION,
       });
     }
   }
@@ -1754,6 +1777,22 @@ async function main() {
     }
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
+  // finish the live plan now that settlement has run: closes = open entries
+  // whose asset flipped to a tradeable opposite signal; trails = current
+  // ratcheted stop levels the executor should amend on the exchange
+  for (const e of ledger.entries) {
+    if (e.status !== 'open') continue;
+    const fd = freshDir.get(e.asset);
+    if (fd && fd !== e.direction)
+      livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
+    if (e.stopAt != null && e.stopAt !== -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
+      livePlan.trails.push({
+        symbol: e.asset + 'USDT',
+        direction: e.direction,
+        stopPctFromEntry: e.stopAt,
+        entry: e.entry,
+      });
+  }
   const closed = ledger.entries.filter((e) => e.status !== 'open');
   // money truth: a profitable exit is a win regardless of which rule closed it
   const wins = closed.filter((e) => (e.pnlPct ?? 0) > 0).length;
@@ -2639,6 +2678,24 @@ async function main() {
       })
     );
   }
+
+  // ---- live-execution intent → api/live-plan.json ----
+  // The scanner decides; bitget-exec.mjs routes. A plan older than the TTL
+  // is stale intent — the executor refuses it rather than trade old prices.
+  try {
+    fs.writeFileSync(
+      path.join(API, 'live-plan.json'),
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        ts: now,
+        ttlMs: 15 * 60e3,
+        engine: ENGINE_VERSION,
+        killSwitch: ddNow >= ddKillPct,
+        ddPct: pct(ddNow),
+        ...livePlan,
+      })
+    );
+  } catch {}
 
   // ---- boring benchmark (review ask #3): does the intelligence add value
   // beyond doing something trivial? Track BTC buy&hold, an equal-weight

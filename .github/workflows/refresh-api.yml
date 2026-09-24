@@ -32,6 +32,22 @@ jobs:
           COINMARKETCAL_CLIENT_ID: ${{ secrets.COINMARKETCAL_CLIENT_ID }}
           COINMARKETCAL_CLIENT_SECRET: ${{ secrets.COINMARKETCAL_CLIENT_SECRET }}
 
+      # Executor runs AFTER the scanner so live-plan.json is fresh.
+      # SENTINEL_EXEC=shadow (repo var) writes intended orders only — no keys
+      # needed. demo/live require the BITGET_* secrets + the live arming pair.
+      - name: Route live plan (shadow/demo/live per config)
+        run: node scripts/bitget-exec.mjs
+        env:
+          SENTINEL_EXEC: ${{ vars.SENTINEL_EXEC || 'shadow' }}
+          BITGET_API_KEY: ${{ secrets.BITGET_API_KEY }}
+          BITGET_API_SECRET: ${{ secrets.BITGET_API_SECRET }}
+          BITGET_PASSPHRASE: ${{ secrets.BITGET_PASSPHRASE }}
+          SENTINEL_LIVE: ${{ vars.SENTINEL_LIVE }}
+          CONFIRM_LIVE: ${{ vars.CONFIRM_LIVE }}
+          LIVE_MAX_NOTIONAL_USD: ${{ vars.LIVE_MAX_NOTIONAL_USD }}
+          LIVE_MAX_POSITIONS: ${{ vars.LIVE_MAX_POSITIONS }}
+        continue-on-error: true # an exec failure must never block the snapshot commit
+
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"

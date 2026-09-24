@@ -1,4 +1,8 @@
 # third-party data keys (CoinGlass / LunarCrush / CryptoPanic / CMC / CoinMarketCal) — never commit
 scripts/api-keys.json
+# Bitget live-trading credentials — local executor reads .env; CI reads secrets
+.env
+.env.*
+!.env.example
 node_modules/
 __pycache__/
