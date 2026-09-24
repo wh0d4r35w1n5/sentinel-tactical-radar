@@ -735,6 +735,13 @@ async function main() {
               quality: r.k.harmonic.quality,
               ratios: r.k.harmonic.ratios,
               dPrice: r.k.harmonic.dPrice,
+              // the validated XABCD geometry itself — the journal chart draws
+              // this exact pattern rather than re-detecting a lookalike
+              pts: (r.k.harmonic.points || []).map((p) => ({
+                t: p.t,
+                p: p.p,
+                ty: p.type,
+              })),
             }
           : null,
         lowPrice: r.lowPrice,

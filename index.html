@@ -531,8 +531,8 @@ async function render(){
       <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
       +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11">
-      <div class="chwrap"><div><div class="chlab">Before · <b>setup window</b> — 48h into entry + fib/drawing overlays</div><div class="cht" data-chb></div></div>
-      <div><div class="chlab">After · <b>outcome window</b> — entry to ${e.status==='open'?'now':'exit'}</div><div class="cht" data-cha></div></div></div>
+      <div class="chwrap"><div><div class="chlab">Before · <b>setup tape</b> — 48h into entry · dealing range/EQ · fib on last impulse leg${e.harmonic?' · '+e.harmonic.type+' XABCD':''}</div><div class="cht" data-chb></div></div>
+      <div><div class="chlab">After · <b>outcome tape</b> — entry → ${e.status==='open'?'now':'exit'} · ladder fills marked</div><div class="cht" data-cha></div></div></div>
       <div class="syn">${synopsis(e)}</div></td></tr>`;
     }).join('')||'<tr><td colspan="11" class="err">no tracked signals yet</td></tr>';
     JOPEN.forEach(k=>{CHARTED.delete(k);mountJournalCharts(k)});
@@ -678,11 +678,11 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
 });
 const JOPEN=new Set();
 const CHARTED=new Set();
-async function candlesFor(asset,fromMs,toMs){
-  const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=1H&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
+async function candlesFor(asset,fromMs,toMs,gran){
+  const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
   const j=await r.json();
   const seen=new Set();
-  return (j.data||[]).map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4]}))
+  return (j.data||[]).map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4],v:+c[5]}))
     .sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
 }
 function drawChart(el,e,cs,after){
@@ -691,34 +691,93 @@ function drawChart(el,e,cs,after){
     grid:{vertLines:{color:'rgba(61,255,115,.05)'},horzLines:{color:'rgba(61,255,115,.05)'}},
     timeScale:{timeVisible:true,borderColor:'rgba(61,255,115,.2)',secondsVisible:false},
     rightPriceScale:{borderColor:'rgba(61,255,115,.2)'},
-    crosshair:{mode:0},width:el.clientWidth||520,height:210});
+    crosshair:{mode:0},width:el.clientWidth||520,height:230});
   const s=chart.addCandlestickSeries({upColor:'#3dff73',downColor:'#ff5d5d',wickUpColor:'#3dff73',wickDownColor:'#ff5d5d',borderVisible:false});
   s.setData(cs.map(c=>({time:c.t/1000,open:c.o,high:c.h,low:c.l,close:c.c})));
+  // volume strip — the pane a pro never turns off
+  if(cs.some(c=>c.v>0)){
+    const vs=chart.addHistogramSeries({priceScaleId:'vol',priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false});
+    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.84,bottom:0},visible:false});
+    vs.setData(cs.map(c=>({time:c.t/1000,value:c.v,color:c.c>=c.o?'rgba(61,255,115,.32)':'rgba(255,93,93,.32)'})));
+  }
+  const sgn=e.direction==='LONG'?1:-1;
+  const pxAt=p=>e.entry*(1+sgn*p/100);
   const snap=t=>cs.reduce((b,c)=>Math.abs(c.t-t)<Math.abs(b.t-t)?c:b).t/1000;
   const ls=(price,color,style,title)=>s.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
+  // ---- trade framework (both panes): entry, designed invalidation,
+  // split ladder, full target — the levels the risk model actually uses
   ls(e.entry,'#e6f2ff',2,'ENTRY');
-  if(e.targetPrice)ls(e.targetPrice,'#3dff73',0,`TGT ${e.direction==='LONG'?'+':'−'}${e.targetPct}%`);
-  const stopAt=e.stopAt??-(e.stopPct??Math.max(4,e.targetPct));
-  const stopPx=e.direction==='LONG'?e.entry*(1+stopAt/100):e.entry*(1-stopAt/100);
-  ls(stopPx,stopAt>0?'#ffd750':'#ff5d5d',2,stopAt>0?`STOP +${stopAt}% (locked)`:'STOP');
+  const stop0=-(e.stopPct??Math.max(4,e.targetPct));
+  ls(pxAt(stop0),'#ff5d5d',2,'SL −'+Math.abs(stop0)+'%');
+  if(e.tps)e.tps.forEach((tp,i)=>{
+    if(tp.at>=1)return; // final rung shares the TGT line
+    const at=tp.at*e.targetPct;
+    ls(pxAt(at),tp.hit?'#3dff73':'rgba(61,255,115,.5)',tp.hit?0:1,`TP${i+1} +${(+at).toFixed(1)}%${tp.hit?' ✓':''}`);
+  });
+  else if(e.targetPct)ls(pxAt(e.targetPct/2),'rgba(255,215,80,.55)',1,'LOCK-50');
+  if(e.targetPrice){
+    const fin=e.tps&&e.tps.find(t=>t.at>=1);
+    ls(e.targetPrice,'#3dff73',0,`TGT ${sgn>0?'+':'−'}${e.targetPct}%${fin&&fin.hit?' ✓':''}`);
+  }
+  // outcome pane also shows where the dynamic stop ended up
+  if(after&&e.tps&&e.stopAt!=null&&e.stopAt>stop0)
+    ls(pxAt(e.stopAt),'#ffd750',2,e.stopAt>0?`STOP +${e.stopAt}% locked`:'STOP → BE');
+  const marks=[{time:snap(e.ts),position:sgn>0?'belowBar':'aboveBar',color:'#e6f2ff',shape:sgn>0?'arrowUp':'arrowDown',text:'ENTRY '+e.direction}];
+  if(after){
+    (e.tps||[]).forEach((tp,i)=>{if(tp.hit&&tp.ts)
+      marks.push({time:snap(tp.ts),position:sgn>0?'belowBar':'aboveBar',color:'#3dff73',shape:'circle',text:'TP'+(i+1)})});
+    if(e.exitTs&&e.exitPrice!=null)
+      marks.push({time:snap(e.exitTs),position:e.pnlPct>=0?'belowBar':'aboveBar',color:e.pnlPct>=0?'#3dff73':'#ff5d5d',shape:'circle',text:(e.status||'').toUpperCase()+' '+(e.pnlPct>=0?'+':'')+e.pnlPct+'%'});
+  }
   if(!after){
-    // fib retracement grid over the setup window's swing range
-    const hi=Math.max(...cs.map(c=>c.h)),lo=Math.min(...cs.map(c=>c.l));
-    [0.236,0.382,0.5,0.618,0.786].forEach(f=>{
-      s.createPriceLine({price:hi-(hi-lo)*f,color:'rgba(159,232,179,.3)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:(f*100).toFixed(1)+'%'});
+    // ---- setup markup: the chart the engine actually read
+    const piv=(window.Harmonics?Harmonics.zigzag(cs,0.012):[]);
+    // zigzag skeleton — swing structure at a glance
+    if(piv.length>2){
+      const zz=chart.addLineSeries({color:'rgba(230,242,255,.4)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false});
+      zz.setData(piv.slice(-14).map(p=>({time:p.t/1000,value:p.p})));
+    }
+    // dealing range + EQ midline (same 60-bar window the quartile read uses)
+    const win=cs.slice(-60);
+    const dLo=Math.min(...win.map(c=>c.l)),dHi=Math.max(...win.map(c=>c.h));
+    ls(dHi,'rgba(159,232,179,.4)',3,'RANGE HI');
+    ls(dLo,'rgba(159,232,179,.4)',3,'RANGE LO');
+    ls((dHi+dLo)/2,'rgba(255,215,80,.4)',3,'EQ 50%');
+    // fib retracement anchored to the last completed impulse leg in the
+    // traded direction — how a pro actually anchors, not raw window hi/lo
+    const cp=piv.slice(0,-1); // trailing pivot is still forming
+    let leg=null;
+    for(let i=cp.length-1;i>0;i--){
+      if(sgn>0&&cp[i].type==='H'&&cp[i-1].type==='L'){leg=[cp[i-1].p,cp[i].p];break}
+      if(sgn<0&&cp[i].type==='L'&&cp[i-1].type==='H'){leg=[cp[i-1].p,cp[i].p];break}
+    }
+    const fHi=leg?Math.max(leg[0],leg[1]):dHi,fLo=leg?Math.min(leg[0],leg[1]):dLo,rng=fHi-fLo;
+    if(rng>0)[0.382,0.5,0.618,0.786].forEach(f=>{
+      s.createPriceLine({price:sgn>0?fHi-rng*f:fLo+rng*f,color:'rgba(110,231,255,.32)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'fib '+f});
     });
+    // SFP swept liquidity level when the doctrine flagged one
+    if(e.ta&&e.ta.sfp&&e.ta.sfp.level)
+      ls(e.ta.sfp.level,'#ffb454',2,'SFP '+(e.ta.sfp.type||'').toUpperCase());
+    // harmonic — the actual XABCD validated at signal time, with labeled
+    // points and the PRZ line; legacy entries fall back to re-detection
+    const hp=e.harmonic;
+    let pts=(hp&&hp.pts&&hp.pts.length===5)?hp.pts:null;
+    if(!pts&&hp){
+      const pats=(window.Harmonics&&Harmonics.detect(cs))||[];
+      const pat=pats.find(p=>p.type===hp.type)||pats[0];
+      if(pat)pts=pat.points.map(p=>({t:p.t,p:p.p,ty:p.type}));
+    }
+    if(pts){
+      const legs=chart.addLineSeries({color:'#6ee7ff',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false});
+      legs.setData(pts.map(p=>({time:p.t/1000,value:p.p})));
+      'XABCD'.split('').forEach((nm,i)=>{
+        const p=pts[i];
+        marks.push({time:snap(p.t),position:p.ty==='H'?'aboveBar':'belowBar',color:'#6ee7ff',shape:'circle',text:nm});
+      });
+      if(hp.dPrice)ls(hp.dPrice,'#6ee7ff',2,'PRZ '+hp.type);
+    }
   }
-  // expert TA: overlay best-validated harmonic (gartley/bat/butterfly/crab)
-  const pats=(window.Harmonics&&Harmonics.detect(cs))||[];
-  const pat=(e.harmonic&&pats.find(p=>p.type===e.harmonic.type))||pats[0];
-  if(pat){
-    const ls2=chart.addLineSeries({color:'#6ee7ff',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false});
-    ls2.setData(pat.points.map(p=>({time:p.t/1000,value:p.p})));
-  }
-  const marks=[{time:snap(e.ts),position:e.direction==='LONG'?'belowBar':'aboveBar',color:'#e6f2ff',shape:e.direction==='LONG'?'arrowUp':'arrowDown',text:'ENTRY '+e.direction[0]}];
-  if(after&&e.exitTs&&e.exitPrice!=null)
-    marks.push({time:snap(e.exitTs),position:e.pnlPct>=0?'belowBar':'aboveBar',color:e.pnlPct>=0?'#3dff73':'#ff5d5d',shape:'circle',text:(e.status||'').toUpperCase()+' '+(e.pnlPct>=0?'+':'')+e.pnlPct+'%'});
-  s.setMarkers(marks);
+  s.setMarkers(marks.sort((a,b)=>a.time-b.time));
   chart.timeScale().fitContent();
 }
 async function mountJournalCharts(key){
@@ -727,12 +786,21 @@ async function mountJournalCharts(key){
   const e=(LAST.ledger&&LAST.ledger.entries||[]).find(x=>x.asset+':'+x.ts===key);
   if(!row||row.hidden||!e)return;
   CHARTED.add(key);
-  const pad=6*3600e3;
+  // before: the 48h setup tape the engine read, ending at the entry candle —
+  // no post-entry leakage into the "what it saw" view
+  const afterEnd=e.exitTs||Date.now();
+  const span=afterEnd-e.ts;
+  // after: granularity follows hold time so a 90-minute trade shows the
+  // actual path, not two fat hourly candles
+  const aGran=span<=10*3600e3?'5m':span<=72*3600e3?'15m':'1H';
+  const granMs=aGran==='5m'?300e3:aGran==='15m'?900e3:3600e3;
+  const aPad=Math.max(3*granMs,span*0.08);
   const [csB,csA]=await Promise.all([
-    candlesFor(e.asset,e.ts-48*3600e3,e.ts+pad).catch(()=>[]),
-    candlesFor(e.asset,e.ts-pad,(e.exitTs||Date.now())+pad).catch(()=>[])]);
+    candlesFor(e.asset,e.ts-48*3600e3,e.ts+2*3600e3,'1H').catch(()=>[]),
+    candlesFor(e.asset,e.ts-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
   const eb=row.querySelector('[data-chb]'),ea=row.querySelector('[data-cha]');
-  if(eb)drawChart(eb,e,csB,false);
+  // drop bars starting after entry — the setup tape ends at the entry print
+  if(eb)drawChart(eb,e,csB.filter(c=>c.t<=e.ts+6e4),false);
   if(ea)drawChart(ea,e,csA,true);
 }
 document.getElementById('journal').addEventListener('click',e=>{
