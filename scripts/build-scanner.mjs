@@ -50,7 +50,10 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // retracement trail + six market types; v1.4 = Tharp doctrine ENFORCED —
 // market-type gating (bear tape blocks momentum longs, bull tape blocks
 // momentum shorts, chop raises the floor), volatile-regime heat haircut.
-const ENGINE_VERSION = 'v1.4';
+// v1.5 = drawdown kill-switch (Tharp: stop trading when the system is
+// broken — ≥8% realized equity drawdown stands the book down) + funding
+// carry penalty at entry (paying >0.05%/8h to hold is a structural drag).
+const ENGINE_VERSION = 'v1.5';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -1307,6 +1310,13 @@ async function main() {
   };
   const volHaircut = mktType.endsWith('volatile') ? 0.75 : 1;
   const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
+  // funding drag penalty: paying >0.05%/8h to hold is a structural cost the
+  // raw confluence score doesn't see. The archive keeps the raw score (the
+  // eval engine grades that); the ENTRY decision is what pays the carry,
+  // so the trade score is what adjusts. Shared by the gate + freshDir.
+  const carryPenaltyOf = (s) =>
+    s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
+  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
@@ -1372,6 +1382,21 @@ async function main() {
     ledger.entries
       .filter((e) => e.status === 'open')
       .reduce((a, e) => a + (e.notional ?? NOTIONAL) * remFracOf(e), 0);
+  // Tharp kill-switch: a system in a deep realized drawdown is more likely
+  // broken than unlucky — stand down at ≥8% equity DD instead of feeding
+  // fresh risk into a tape that has already disproven the current regime
+  // read. Recovery re-arms automatically when the equity path heals.
+  const ddKillPct = 8;
+  const ddNow = (() => {
+    let eq = 1, peak = 1;
+    for (const e of [...ledger.entries]
+      .filter((x) => x.status !== 'open')
+      .sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0))) {
+      eq *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY);
+      peak = Math.max(peak, eq);
+    }
+    return ((peak - eq) / peak) * 100;
+  })();
   // portfolio heat: total equity at risk if every live stop fired right
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
@@ -1414,7 +1439,8 @@ async function main() {
       Math.max(1, Math.round(liqPct * 0.8 * 10) / 10)
     );
     const stopFrac = stopPct / 100;
-    const conv = s.score >= 85 ? 1 : s.score >= 70 ? 0.75 : 0.5;
+    const tradeScore = tradeScoreOf(s);
+    const conv = tradeScore >= 85 ? 1 : tradeScore >= 70 ? 0.75 : 0.5;
     // strategy circuit-breaker — a doctrine that has already bled on ≥3
     // closed trades gets half-size until its record clears. Risk control,
     // not learning: the adaptation gate stays dormant.
@@ -1427,7 +1453,8 @@ async function main() {
     );
     const newHeatPct = (stopFrac * notional) / EQUITY * 100;
     if (
-      s.score >= entryFloor &&
+      tradeScore >= entryFloor &&
+      ddNow < ddKillPct &&
       mktAllows(s) &&
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
@@ -1512,7 +1539,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => s.score >= entryFloor && mktAllows(s))
+      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s))
       .map((s) => [s.asset, s.direction])
   );
 
@@ -1736,6 +1763,7 @@ async function main() {
   ledger.stats = {
     open: ledger.entries.filter((e) => e.status === 'open').length,
     openRiskPct: pct(openRiskPct()), // portfolio heat — equity at risk if every stop fires
+    ddKill: { thresholdPct: ddKillPct, currentPct: pct(ddNow), active: ddNow >= ddKillPct },
     closed: closed.length,
     wins,
     losses,
@@ -1897,6 +1925,58 @@ async function main() {
   ledger.stats.maxR = Rs.length ? round(Math.max(...Rs), 2) : null;
   ledger.stats.minR = Rs.length ? round(Math.min(...Rs), 2) : null;
   ledger.stats.expectancyCI = meanCI(Rs.map((r) => round(r, 4)));
+  // cost decomposition — what the frictions actually ate. pnlPct is net of
+  // fees+funding, so gross = net + fees − funding carry. If fees consume
+  // the edge, the "strategy" is just churn dressed as signal.
+  const feeSum = closed.reduce((a, e) => a + (e.feesPaid ?? e.feePct ?? FEE_PCT), 0);
+  const fundSum = closed.reduce((a, e) => a + (e.fundingPnl ?? 0), 0);
+  const netSum = closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0);
+  ledger.stats.costDrag = {
+    grossPct: pct(netSum + feeSum - fundSum),
+    feesPct: pct(feeSum),
+    fundingPct: pct(fundSum),
+    netPct: pct(netSum),
+    n: closed.length,
+  };
+  // Kelly fraction — the sizing ceiling implied by the realized record.
+  // Read-only sanity check: if Kelly says ≤0, the book has no edge to size.
+  const kW = closed.length ? wins / closed.length : null;
+  const kB =
+    ledger.stats.avgWinPct && ledger.stats.avgLossPct
+      ? ledger.stats.avgWinPct / Math.abs(ledger.stats.avgLossPct)
+      : null;
+  ledger.stats.kellyPct = kW != null && kB ? round(Math.max(-1, kW - (1 - kW) / kB) * 100, 1) : null;
+  // Monte-Carlo bootstrap — resample the realized per-trade equity deltas
+  // (with replacement, same n) to get the DISTRIBUTION of outcomes this
+  // record could have produced: P(final<0), median DD, worst decile.
+  // This is the honest answer to "was the P&L skill or sequence luck?"
+  ledger.stats.monteCarlo = (() => {
+    const deltas = closed.map((e) => (((e.pnlPct ?? 0) / 100) * (e.notional ?? NOTIONAL)) / EQUITY);
+    const n = deltas.length;
+    if (n < 10) return null;
+    const SIMS = 500;
+    const finals = [], mdds = [];
+    for (let s = 0; s < SIMS; s++) {
+      let eq = 1, peak = 1, mdd = 0;
+      for (let i = 0; i < n; i++) {
+        eq *= 1 + deltas[(Math.random() * n) | 0];
+        peak = Math.max(peak, eq);
+        mdd = Math.max(mdd, (peak - eq) / peak);
+      }
+      finals.push(eq - 1);
+      mdds.push(mdd);
+    }
+    finals.sort((a, b) => a - b);
+    mdds.sort((a, b) => a - b);
+    const q = (xs, p) => pct(xs[Math.min(xs.length - 1, Math.floor(p * xs.length))] * 100);
+    return {
+      sims: SIMS, n,
+      p5: q(finals, 0.05), p50: q(finals, 0.5), p95: q(finals, 0.95),
+      pLoss: pct((finals.filter((f) => f < 0).length / SIMS) * 100),
+      dd50: q(mdds, 0.5), dd95: q(mdds, 0.95),
+      pDdOver10: pct((mdds.filter((d) => d > 0.1).length / SIMS) * 100),
+    };
+  })();
   // capture efficiency: how much of each trade's favorable excursion was
   // actually banked — the forensic leak metric (was 16%)
   const cap = closed.filter((e) => e.peakPnl != null && e.peakPnl > 0);
@@ -2361,6 +2441,19 @@ async function main() {
   );
   evStats.byRegime = group((r) => r.regime ?? 'unknown');
   evStats.byMktType = group((r) => r.mktType ?? 'unknown');
+  // calibration: does the score ORDER predict? Monotone hit rate across
+  // deciles = a ranking that means something; flat/inverted = decoration.
+  evStats.calibration = group((r) =>
+    r.score >= 90 ? '90-100' : r.score >= 80 ? '80-89' : r.score >= 70 ? '70-79'
+      : r.score >= 60 ? '60-69' : r.score >= 50 ? '50-59' : '<50'
+  );
+  // hour-of-day: does the board read better at some UTC sessions? Edge
+  // concentrated in dead hours would say the score chases illiquid moves
+  evStats.byUtcHour = group((r) => {
+    const h = new Date(r.runTs).getUTCHours();
+    return h < 4 ? '00-04' : h < 8 ? '04-08' : h < 12 ? '08-12'
+      : h < 16 ? '12-16' : h < 20 ? '16-20' : '20-24';
+  });
   // hot file: pending (incomplete) + most recent completes for the UI
   const incomplete = [...evalMap.values()].filter((r) => !r.complete);
   const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
@@ -2556,6 +2649,11 @@ async function main() {
     let bench = { startedAt: null, series: [] };
     try { bench = JSON.parse(fs.readFileSync(BENCH_FILE, 'utf8')); } catch {}
     bench.series ??= [];
+    // sentinel equity first so the sample point can carry it — the chart
+    // wants engine-vs-benchmark curves on one axis, not two stories
+    let eqUsd = EQUITY;
+    for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0)))
+      eqUsd *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY) * (e.pnlPct > 0 ? 0.8 : 1);
     const lastB = bench.series.length ? bench.series[bench.series.length - 1].ts : 0;
     if (now - lastB >= 4 * 60e3) {
       bench.series.push({
@@ -2563,6 +2661,7 @@ async function main() {
         btc: priceByAsset.get('BTC') ?? null,
         eth: priceByAsset.get('ETH') ?? null,
         sol: priceByAsset.get('SOL') ?? null,
+        sent: pct(((eqUsd - EQUITY) / EQUITY) * 100),
       });
       bench.series = bench.series.slice(-3000);
     }
@@ -2594,11 +2693,6 @@ async function main() {
     }
     bench.naiveBoardPct = pct((naiveEq - 1) * 100);
     bench.naiveRuns = naiveN;
-    // sentinel lines replicate the wallet math exactly: wins retain 80%
-    // (20% sweeps to the vault), compounding on the $10k model equity
-    let eqUsd = EQUITY;
-    for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0)))
-      eqUsd *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY) * (e.pnlPct > 0 ? 0.8 : 1);
     bench.sentinelPct = pct(((eqUsd - EQUITY) / EQUITY) * 100);
     bench.combinedPct = pct(((eqUsd + valueUsd - EQUITY) / EQUITY) * 100);
     bench.note =

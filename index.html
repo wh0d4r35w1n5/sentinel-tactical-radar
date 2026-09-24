@@ -231,6 +231,7 @@ footer a{color:var(--grn-dim)}
     <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— discipline scorecard measured on our own ledger, held to <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
     <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="ptitle" style="margin-top:14px;font-size:10px">vs boring benchmarks <span class="sub" id="benchSince">— does the intelligence add value beyond doing something trivial?</span></div>
+    <div id="benchSvgWrap" style="display:none;margin:6px 0 2px"><svg id="benchSvg" viewBox="0 0 560 80" width="100%" height="70" preserveAspectRatio="none"></svg><div class="sub" style="font-size:9px"><span style="color:var(--grn)">— sentinel</span> vs <span style="color:var(--mut)">- - BTC hold</span> · % since clock start</div></div>
     <div id="benchVs" class="stats" style="grid-template-columns:repeat(5,1fr)"></div>
     <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable ledger, R-multiples, or SQN. This engine's entire record is public, committed to git, and independently verifiable against Bitget candles. Built to a higher standard of verifiability: every signal is timestamped, archived and independently checkable — the performance benchmark gets earned by the ledger.</div>
   </div>
@@ -480,7 +481,7 @@ async function render(){
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
     <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)} USD</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
-    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · board produced no qualifying setup · holding cash is a position</td></tr>';
+    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
@@ -537,6 +538,10 @@ async function render(){
       ...(st.capturePct!=null?[['Capture ratio',st.capturePct+'%','of peak favorable excursion banked · forensic leak metric']]:[]),
       ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
       ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
+      ...(st.costDrag?[['Cost decomposition',`gross ${st.costDrag.grossPct>=0?'+':''}${st.costDrag.grossPct}% → net ${st.costDrag.netPct>=0?'+':''}${st.costDrag.netPct}%`,`fees ate ${st.costDrag.feesPct}% · funding ${st.costDrag.fundingPct>=0?'+':''}${st.costDrag.fundingPct}% over ${st.costDrag.n} trades`]]:[]),
+      ...(st.kellyPct!=null?[['Kelly ceiling',st.kellyPct+'% of equity','theoretical max bet the realized record supports · we risk 1%']]:[]),
+      ...(st.monteCarlo?[['Monte-Carlo',`P5 ${st.monteCarlo.p5>=0?'+':''}${st.monteCarlo.p5}% · med ${st.monteCarlo.p50>=0?'+':''}${st.monteCarlo.p50}% · P95 ${st.monteCarlo.p95>=0?'+':''}${st.monteCarlo.p95}%`,`${st.monteCarlo.sims} resamples · P(lose)=${st.monteCarlo.pLoss}% · P(DD>10%)=${st.monteCarlo.pDdOver10}%`]]:[]),
+      ...(st.ddKill?[['Kill-switch',st.ddKill.active?'STANDING DOWN':'armed · DD '+st.ddKill.currentPct+'%','entries halt at ≥'+st.ddKill.thresholdPct+'% realized equity drawdown']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // ---- evidence/validation panel: prospective record of the CURRENT
     // frozen ruleset only — v0.x legacy results deliberately excluded ----
@@ -573,7 +578,13 @@ async function render(){
         (()=>{const rg=st.byRegime||{},mt=st.byMktType||{};
           const fmt=o=>Object.entries(o).map(([k,v])=>`<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 7px;border-radius:3px;border:1px solid var(--bd);font-size:9px"><b>${k}</b> ${v.winRate}% · ${v.pnl>=0?'+':''}${v.pnl}% <span class="sub">(${v.n})</span></span>`).join('');
           return (Object.keys(rg).length?`<div style="margin-top:6px"><span class="sub">BY REGIME → </span>${fmt(rg)}</div>`:'')+
-                 (Object.keys(mt).length?`<div style="margin-top:4px"><span class="sub">BY MARKET TYPE → </span>${fmt(mt)}</div>`:'');})();
+                 (Object.keys(mt).length?`<div style="margin-top:4px"><span class="sub">BY MARKET TYPE → </span>${fmt(mt)}</div>`:'');})()+
+        // calibration + session chips — does score order predict, and does
+        // the edge live in particular UTC sessions
+        (()=>{const es2=(evals&&evals.stats)||{};const cal=es2.calibration||{},hr=es2.byUtcHour||{};
+          const fmt2=o=>Object.entries(o).map(([k,v])=>`<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 7px;border-radius:3px;border:1px solid var(--bd);font-size:9px"><b>${k}</b> ${v.hitRate!=null?v.hitRate+'%':'—'} <span class="sub">(${v.n})</span></span>`).join('');
+          return (Object.keys(cal).length?`<div style="margin-top:6px"><span class="sub">CALIBRATION (TP-rate by score) → </span>${fmt2(cal)}</div>`:'')+
+                 (Object.keys(hr).length?`<div style="margin-top:4px"><span class="sub">TP-RATE BY UTC SESSION → </span>${fmt2(hr)}</div>`:'');})();
     }
     // ---- review ask #1: evidence maturity banner — first thing on the page
     {
@@ -598,16 +609,35 @@ async function render(){
         ['Naive top-3 board',bench.naiveBoardPct,`mechanical 1h holds · ${bench.naiveRuns||0} runs`],
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num ${cls(v)}">${f(v)}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
       $('benchSince').textContent=bench.startedAt?`benchmark clock started ${bench.startedAt.slice(0,10)} · ${bench.series?bench.series.length:0} samples`:'';
+      // equity curves on one axis — engine vs passive, same clock
+      const bs=(bench.series||[]).filter(s=>s.btc!=null);
+      if(bs.length>1){
+        const b0=bs[0].btc;
+        const two=(key)=>bs.map(s=>key==='sent'?(s.sent??0):((s.btc/b0-1)*100));
+        const W=560,H=80,all=[...two('sent'),...two('btc')],mn=Math.min(0,...all),mx=Math.max(0,...all),rg=mx-mn||1;
+        const line=vs=>vs.map((v,i)=>[(i/(vs.length-1))*W,H-8-((v-mn)/rg)*(H-16)]).map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+        $('benchSvg').innerHTML=`<line x1="0" x2="${W}" y1="${H-8-((0-mn)/rg)*(H-16)}" y2="${H-8-((0-mn)/rg)*(H-16)}" stroke="rgba(159,232,179,.25)" stroke-dasharray="3 3"/>
+          <path d="${line(two('btc'))}" fill="none" stroke="var(--mut)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <path d="${line(two('sent'))}" fill="none" stroke="var(--grn)" stroke-width="1.6"/>`;
+        $('benchSvgWrap').style.display='block';
+      }
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};
     $('hypoBody').innerHTML=((hypo&&hypo.claims)||[]).map(h=>{
       const col=stCol2[h.status]||'var(--mut)';
       const delta=h.prev&&h.prev.value!=null&&h.value!=null?` <span class="sub">(was ${h.prev.value})</span>`:'';
-      return `<div class="ledger-row"><span style="flex:1"><b style="font-size:11px">${h.claim}</b><br><span class="sub">${h.metric}${delta} · n=${h.n}</span></span><b class="num" style="color:${col};font-size:9px;letter-spacing:.1em">${h.status}</b></div>`;
+      const hist=(h.history||[]).map(x=>x.value).filter(v=>v!=null);
+      return `<div class="ledger-row"><span style="flex:1"><b style="font-size:11px">${h.claim}</b><br><span class="sub">${h.metric}${delta} · n=${h.n}</span></span>${hist.length>2?`<span style="align-self:center">${sparkSVG(hist,70,20)}</span>`:''}<b class="num" style="color:${col};font-size:9px;letter-spacing:.1em">${h.status}</b></div>`;
     }).join('')||'<div class="sub">no claims registered yet — hypotheses land with the next build</div>';
-    // ---- intelligence wire: asset-tagged headlines ----
-    $('wireBody').innerHTML=((newsWire&&newsWire.items)||[]).map(i=>{
+    // ---- intelligence wire: asset-tagged headlines, near-dup deduped ----
+    const seenH=new Set();
+    const wireItems=((newsWire&&newsWire.items)||[]).filter(i=>{
+      // same story syndicated across feeds ≈ one headline — normalize
+      const k=(i.title||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,42);
+      if(seenH.has(k))return false;seenH.add(k);return true;
+    });
+    $('wireBody').innerHTML=wireItems.map(i=>{
       const tag=(i.tags||[]).map(t=>`<span class="mbadge" style="margin-right:3px;font-size:8px">${t}</span>`).join('');
       const tc=i.tone==='bull'?'var(--grn)':i.tone==='bear'?'var(--red)':'var(--mut)';
       return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a href="${i.link}" target="_blank" rel="noopener" style="color:var(--tx);text-decoration:none">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
