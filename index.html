@@ -44,6 +44,21 @@ body::before{content:"";position:fixed;inset:0;z-index:3;background:repeating-li
 @keyframes twinkle{0%,100%{opacity:.15;transform:scale(.7)}50%{opacity:1;transform:scale(1.25)}}
 @keyframes sheen{to{background-position:300% 0}}
 @keyframes spin{to{--ang:360deg}}
+/* orchestrated entrance — every panel rises in sequence on load */
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+.wrap .panel,.tape{animation:rise .55s cubic-bezier(.2,.9,.25,1) backwards}
+.wrap>.panel:nth-of-type(2),.hero{animation-delay:.05s}
+.wrap .grid .panel{animation-delay:.12s}
+.wrap>.panel:nth-of-type(n+4),.wrap>.duo{animation-delay:.18s}
+.wrap>.panel:nth-of-type(n+7){animation-delay:.24s}
+/* the pulse breathes — the number feels alive, not printed */
+@keyframes breathe{0%,100%{filter:drop-shadow(0 0 14px rgba(140,120,255,.3))}50%{filter:drop-shadow(0 0 26px rgba(255,46,196,.5))}}
+/* the overseer's presence in the header — a quiet all-seeing eye */
+.godchip{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.14em;color:var(--mut)}
+.godchip .eye{width:9px;height:9px;border-radius:50%;background:var(--gc,var(--mut));box-shadow:0 0 10px var(--gc,var(--mut)),0 0 20px var(--gc,var(--mut));animation:pu 3.2s ease-in-out infinite}
+.godchip b{color:var(--gc,var(--mut));font-weight:700}
+#godPanel{box-shadow:inset 0 0 34px rgba(138,91,255,.06),0 0 34px -8px var(--godc,rgba(138,91,255,.2))}
+#godVerdict b{text-shadow:0 0 18px currentColor}
 header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:rgba(7,5,15,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .logo{font-weight:800;letter-spacing:.14em;font-size:15px;background:var(--rainbow);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 7s linear infinite;filter:drop-shadow(0 0 14px rgba(138,91,255,.45))}
 .live{display:flex;align-items:center;gap:7px;color:var(--grn-dim);font-size:11px;letter-spacing:.08em}
@@ -68,7 +83,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px
 .neon{border-color:transparent;isolation:isolate}
 .neon::before{content:"";position:absolute;inset:-1px;border-radius:13px;z-index:-1;background:conic-gradient(from var(--ang),transparent 0 38%,var(--cyan) 47%,var(--mag) 55%,transparent 64% 100%);animation:spin 4.5s linear infinite;filter:drop-shadow(0 0 10px rgba(138,91,255,.5))}
 .ptitle{font-size:10px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-bottom:10px;text-shadow:0 0 14px rgba(138,91,255,.3)}
-.big{font-size:38px;font-weight:800;letter-spacing:.02em;background:var(--rainbow);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 6s linear infinite;filter:drop-shadow(0 0 18px rgba(140,120,255,.35))}
+.big{font-size:38px;font-weight:800;letter-spacing:.02em;background:var(--rainbow);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 6s linear infinite,breathe 4.5s ease-in-out infinite}
 .sub{color:var(--mut);font-size:11px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .stat{background:linear-gradient(160deg,rgba(138,91,255,.09),rgba(34,229,255,.03));border:1px solid var(--line);border-radius:9px;padding:10px 12px;transition:transform .2s,border-color .25s,box-shadow .3s}
@@ -176,7 +191,7 @@ footer a{color:var(--cyan)}
 /* SIMPLE = normie view: internals hidden, everything stacks one column */
 body.simple .pro{display:none!important}
 body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
-@media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before{animation:none}}
+@media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before,.godchip .eye,.wrap .panel,.tape{animation:none}}
 </style>
 </head>
 <body>
@@ -185,6 +200,7 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
 <header>
   <span class="logo">◈ SENTINEL TACTICAL RADAR</span>
   <span class="live" id="liveChip"><span class="dot"></span><span id="liveTxt">CONNECTING…</span></span>
+  <span class="godchip" id="godChip" style="display:none"><span class="eye"></span><b id="godChipTxt">—</b></span>
   <span class="chips" id="chips"></span>
   <span class="spacer"></span>
   <span class="vtog" title="SIMPLE hides the internals · PRO shows everything"><a id="vSimple">SIMPLE</a><a id="vPro">PRO</a></span>
@@ -707,6 +723,9 @@ async function render(){
       $('godPanel').style.display='block';
       const vc={PERFECT:'var(--grn)',ATTENTION:'var(--warn,#ffd166)',BROKEN:'var(--red)'}[god.verdict]||'var(--mut)';
       $('godVerdict').innerHTML=`<b style="color:${vc};letter-spacing:.15em;font-size:12px">${god.verdict}</b> <span class="sub">${god.pass}/${god.checks.length} held</span>`;
+      $('godPanel').style.setProperty('--godc',vc);
+      const gc=$('godChip');gc.style.display='flex';gc.style.setProperty('--gc',vc);
+      $('godChipTxt').textContent=god.verdict;
       const dc={PASS:'var(--grn)',WARN:'var(--warn,#ffd166)',FAIL:'var(--red)'};
       // failures and warnings first — what needs eyes rises to the top
       const ord={FAIL:0,WARN:1,PASS:2};
