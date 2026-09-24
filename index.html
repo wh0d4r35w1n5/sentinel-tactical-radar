@@ -413,8 +413,8 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,prices,health,vault,funding,sent]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json')]);
+  const [scan,detail,ledger,prices,health,vault,funding,sent,evals]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -499,6 +499,13 @@ async function render(){
       ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%':'—','excess over universe drift'],
       ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
       ['Prospective archive',st.signalsArchived!=null?`${st.signalsArchived} signals · ${st.archiveRuns} runs`:'—','append-only · never rewritten'],
+      ...(evals&&evals.stats&&evals.stats.n?[
+        ['Signal hit rate',evals.stats.hitRate24h+'%','TP-before-SL within 24h · all '+evals.stats.n+' evaluated'],
+        ['Signal alpha 24h',evals.stats.avgAlpha24h!=null?(evals.stats.avgAlpha24h>=0?'+':'')+evals.stats.avgAlpha24h+'%':'—','vs BTC/ETH/SOL median · whole board'],
+        ['Score→alpha IC',evals.stats.ic24h!=null?''+evals.stats.ic24h:'—','Pearson · >0.05 starts meaning something'],
+        ['Signal expectancy',evals.stats.expectancyPct!=null?(evals.stats.expectancyPct>=0?'+':'')+evals.stats.expectancyPct+'%':'—','per emitted signal, untraded incl.'],
+        ['Hit rate by score band',Object.entries(evals.stats.byScoreBand||{}).map(([k,v])=>`${k}: ${v.hitRate}% (${v.n})`).join(' · '),'does score rank predict?'],
+      ]:[]),
       ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
       ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');

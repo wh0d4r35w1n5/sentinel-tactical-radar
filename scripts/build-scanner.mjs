@@ -191,6 +191,31 @@ async function fetchEntryCandles(e) {
   return out;
 }
 
+// 5m candles over an arbitrary closed range — used by the forward-outcome
+// evaluator. Paginates to cover multi-day windows; unclosed tail dropped.
+async function fetch5mRange(asset, fromMs, toMs) {
+  const out = [];
+  let start = fromMs;
+  for (let page = 0; page < 8; page++) {
+    const res = await fetch(
+      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${toMs}&limit=200`
+    );
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || !data.length) break;
+    const rows = data
+      .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    for (const c of rows)
+      if (!out.length || c.t > out[out.length - 1].t) out.push(c);
+    const last = out[out.length - 1];
+    if (data.length < 200 || !last || last.t >= toMs - 300e3) break;
+    start = last.t + 300e3;
+  }
+  if (out.length && out[out.length - 1].t + 300e3 > Date.now()) out.pop();
+  return out;
+}
+
 async function main() {
   const now = Date.now();
   const [symbolsRes, tickersRes] = await Promise.all([
@@ -1555,6 +1580,237 @@ async function main() {
   // surface the permanent record's depth on the ledger itself
   ledger.stats.archiveRuns = histRuns;
   ledger.stats.signalsArchived = histSignals;
+
+  // ---- forward-outcome evaluation: EVERY emitted signal gets measured ----
+  // The position ledger only ever samples the ~1-2 signals that became
+  // trades. This evaluator scores the whole board: for each archived
+  // signal, the 5m tape after emission determines forward returns at
+  // +1h/+4h/+24h, whether TP touched before SL inside 24h (adverse-first,
+  // same pessimism as settlement), and alpha vs a BTC/ETH/SOL median
+  // benchmark over the identical window. Complete records are sealed into
+  // monthly eval files (api/eval-YYYY-MM.json) — the predictive-power
+  // dataset accumulates ~10x faster than the traded ledger can.
+  const EVAL_FILE = path.join(API, 'signal-eval.json');
+  let evalBook = { records: [] };
+  try {
+    evalBook = JSON.parse(fs.readFileSync(EVAL_FILE, 'utf8'));
+  } catch {}
+  evalBook.records ??= [];
+  const evalMap = new Map(evalBook.records.map((r) => [r.key, r]));
+  const HORIZONS = [3600e3, 4 * 3600e3, 24 * 3600e3];
+  // keys already sealed into monthly eval files — never re-evaluate
+  const sealedKeys = new Set();
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^eval-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const eh = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const r of eh.records || []) sealedKeys.add(r.key);
+    } catch {}
+  }
+  const pending = [];
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const run of h.runs || [])
+        for (const s of run.signals || []) {
+          const key = `${run.ts}|${s.asset}|${s.direction}`;
+          if (sealedKeys.has(key)) continue;
+          const rec = evalMap.get(key);
+          if (rec && rec.complete) continue;
+          pending.push({ key, run, s, rec });
+        }
+    } catch {}
+  }
+  // bound API spend: evaluate at most 24 signals per build; backlog clears
+  // within a few builds and steady-state is ~12 new signals per run anyway
+  const toEval = pending
+    .filter((p) => now - p.run.ts >= HORIZONS[0])
+    .slice(0, 24);
+  if (toEval.length) {
+    const minTs = Math.min(...toEval.map((p) => p.run.ts));
+    // shared market benchmark tape — BTC/ETH/SOL median same-window return
+    const mktSeries = {};
+    await Promise.all(
+      ['BTC', 'ETH', 'SOL'].map(async (a) => {
+        mktSeries[a] = await fetch5mRange(a, minTs, now).catch(() => null);
+      })
+    );
+    const mktAt = (t0, t1) => {
+      const rets = [];
+      for (const a of ['BTC', 'ETH', 'SOL']) {
+        const cs = mktSeries[a];
+        if (!cs || !cs.length) continue;
+        const c0 = cs.find((c) => c.t >= t0);
+        let c1 = null;
+        for (const c of cs) if (c.t <= t1) c1 = c;
+        if (c0 && c1 && c1.t > c0.t) rets.push((c1.c - c0.c) / c0.c);
+      }
+      if (!rets.length) return null;
+      rets.sort((a, b) => a - b);
+      return rets[Math.floor(rets.length / 2)] * 100;
+    };
+    for (const p of toEval) {
+      const { key, run, s } = p;
+      const sgn = s.direction === 'LONG' ? 1 : -1;
+      const end = Math.min(run.ts + HORIZONS[2], now);
+      const cs = await fetch5mRange(s.asset, run.ts, end).catch(() => null);
+      if (!cs || !cs.length) continue;
+      // entry fill: emission mark plus adverse half-spread (worst case)
+      const half = (s.spreadPct ?? 0) / 200;
+      const entry = s.entry * (1 + sgn * half);
+      const r = p.rec ?? {
+        key,
+        runTs: run.ts,
+        asset: s.asset,
+        cls: s.cls,
+        direction: s.direction,
+        score: s.score,
+        grade: s.grade,
+        strategy: s.strategy,
+        ver: s.ver ?? run.ver ?? ENGINE_VERSION,
+        entry,
+      };
+      const closeAt = (T) => {
+        let c1 = null;
+        for (const c of cs) if (c.t <= T) c1 = c;
+        return c1 && c1.t >= run.ts ? c1.c : null;
+      };
+      for (let i = 0; i < 3; i++) {
+        const H = HORIZONS[i];
+        if (end < run.ts + H) continue;
+        const c = closeAt(run.ts + H);
+        if (c == null) continue;
+        const fwd = sgn * ((c - entry) / entry) * 100;
+        const mkt = mktAt(run.ts, run.ts + H);
+        r['fwd' + H / 3600e3 + 'h'] = pct(fwd);
+        if (mkt != null) r['mkt' + H / 3600e3 + 'h'] = pct(mkt);
+        if (mkt != null) r['alpha' + H / 3600e3 + 'h'] = pct(fwd - mkt);
+      }
+      // tp-before-sl inside the 24h window — adverse-first within a bar,
+      // identical pessimism to position settlement
+      if (!r.outcome) {
+        const tgt = s.targetPct ?? 8;
+        const stp = s.stopPct ?? Math.max(4, tgt);
+        const tPx = entry * (1 + (sgn * tgt) / 100);
+        const sPx = entry * (1 - (sgn * stp) / 100);
+        for (const c of cs) {
+          const advPx = sgn > 0 ? c.l : c.h;
+          if (sgn > 0 ? advPx <= sPx : advPx >= sPx) {
+            r.outcome = 'sl';
+            r.outcomePct = pct(-stp);
+            break;
+          }
+          const favPx = sgn > 0 ? c.h : c.l;
+          if (sgn > 0 ? favPx >= tPx : favPx <= tPx) {
+            r.outcome = 'tp';
+            r.outcomePct = pct(tgt);
+            break;
+          }
+        }
+        if (!r.outcome && end >= run.ts + HORIZONS[2] - 300e3) {
+          r.outcome = 'timeout';
+          const lastC = cs[cs.length - 1].c;
+          r.outcomePct = pct(sgn * ((lastC - entry) / entry) * 100);
+        }
+      }
+      r.complete = end >= run.ts + HORIZONS[2] - 300e3;
+      r.evaluatedAt = now;
+      evalMap.set(key, r);
+    }
+  }
+  // seal complete records into monthly eval files keyed by signal month
+  const evalByMonth = new Map();
+  for (const r of evalMap.values()) {
+    if (!r.complete) continue;
+    const m = new Date(r.runTs).toISOString().slice(0, 7);
+    if (!evalByMonth.has(m)) evalByMonth.set(m, []);
+    evalByMonth.get(m).push(r);
+  }
+  const allComplete = [];
+  for (const [m, rs] of evalByMonth) {
+    const ef = path.join(histDir, `eval-${m}.json`);
+    let eh = { records: [] };
+    try {
+      eh = JSON.parse(fs.readFileSync(ef, 'utf8'));
+    } catch {}
+    eh.records ??= [];
+    const seen = new Set(eh.records.map((x) => x.key));
+    for (const r of rs) if (!seen.has(r.key)) eh.records.push(r);
+    fs.writeFileSync(ef, JSON.stringify(eh));
+  }
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^eval-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const eh = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const r of eh.records || []) allComplete.push(r);
+    } catch {}
+  }
+  // predictive-power stats across every completed evaluation
+  const evStats = { n: allComplete.length };
+  const evAvg = (xs) => (xs.length ? pct(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  const fld = (k) => allComplete.map((r) => r[k]).filter((v) => v != null);
+  evStats.hitRate24h = allComplete.length
+    ? pct((allComplete.filter((r) => r.outcome === 'tp').length / allComplete.length) * 100)
+    : null;
+  evStats.avgFwd1h = evAvg(fld('fwd1h'));
+  evStats.avgFwd4h = evAvg(fld('fwd4h'));
+  evStats.avgFwd24h = evAvg(fld('fwd24h'));
+  evStats.avgAlpha1h = evAvg(fld('alpha1h'));
+  evStats.avgAlpha4h = evAvg(fld('alpha4h'));
+  evStats.avgAlpha24h = evAvg(fld('alpha24h'));
+  evStats.expectancyPct = evAvg(fld('outcomePct'));
+  // information coefficient: Pearson corr of score vs 24h alpha — THE
+  // quant answer to "does the score predict anything"
+  const icPairs = allComplete.filter((r) => r.score != null && r.alpha24h != null);
+  if (icPairs.length >= 10) {
+    const mx = icPairs.reduce((a, r) => a + r.score, 0) / icPairs.length;
+    const my = icPairs.reduce((a, r) => a + r.alpha24h, 0) / icPairs.length;
+    let num = 0, dx = 0, dy = 0;
+    for (const r of icPairs) {
+      num += (r.score - mx) * (r.alpha24h - my);
+      dx += (r.score - mx) ** 2;
+      dy += (r.alpha24h - my) ** 2;
+    }
+    evStats.ic24h = dx > 0 && dy > 0 ? round(num / Math.sqrt(dx * dy), 3) : null;
+  } else evStats.ic24h = null;
+  const group = (kf) => {
+    const g = {};
+    for (const r of allComplete) {
+      const k = kf(r);
+      (g[k] ??= { n: 0, tp: 0, alpha: [], fwd: [] }).n++;
+      if (r.outcome === 'tp') g[k].tp++;
+      if (r.alpha24h != null) g[k].alpha.push(r.alpha24h);
+      if (r.fwd24h != null) g[k].fwd.push(r.fwd24h);
+    }
+    for (const k in g) {
+      g[k].hitRate = pct((g[k].tp / g[k].n) * 100);
+      g[k].avgAlpha24h = evAvg(g[k].alpha);
+      g[k].avgFwd24h = evAvg(g[k].fwd);
+      delete g[k].alpha; delete g[k].fwd; delete g[k].tp;
+    }
+    return g;
+  };
+  evStats.byGrade = group((r) => r.grade ?? '?');
+  evStats.byDirection = group((r) => r.direction ?? '?');
+  evStats.byStrategy = group((r) => r.strategy ?? '?');
+  evStats.byScoreBand = group((r) =>
+    r.score >= 90 ? '90+' : r.score >= 80 ? '80-89' : '<80'
+  );
+  // hot file: pending (incomplete) + most recent completes for the UI
+  const incomplete = [...evalMap.values()].filter((r) => !r.complete);
+  const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
+  fs.writeFileSync(
+    EVAL_FILE,
+    JSON.stringify({
+      refreshedAt: snap.refreshedAt,
+      note: 'forward-outcome labels for EVERY emitted signal — monthly eval-YYYY-MM.json files hold the complete permanent set',
+      stats: evStats,
+      pending: incomplete.length,
+      records: [...incomplete, ...recent],
+    })
+  );
+
 
   // ---- vault: a fixed share of every realized gain compounds into a
   // hold-forever BTC/ETH/SOL basket, marked to live prices ----
