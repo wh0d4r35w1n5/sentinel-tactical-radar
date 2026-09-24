@@ -490,6 +490,7 @@ async function render(){
     const byG=(st.byGrade&&Object.entries(st.byGrade))||[];
     $('bench').innerHTML=[
       ['Risk per trade',d.avgRiskPctAcct!=null?d.avgRiskPctAcct+'% of equity':'—','target ≤1–2%'],
+      ['Book heat',st.openRiskPct!=null?st.openRiskPct+'%':'—','equity at risk if all stops fire · cap 4%'],
       ['Avg R:R',d.avgRR!=null?'1 : '+d.avgRR:'—','target ≥1 : 2'],
       ['Profit factor',st.profitFactor!=null?''+st.profitFactor:'—','gross W ÷ gross L'],
       ['Max drawdown',st.maxDrawdownPct!=null?'−'+st.maxDrawdownPct+'% of equity':'—','realized equity path'],

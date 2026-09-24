@@ -773,6 +773,10 @@ async function main() {
         rangePct: pct(r.rangePct),
         strategy,
         changePct: pct(r.changePct),
+        // raw features for per-component IC evaluation
+        rsi: hasK ? round(r.k.rsi14, 1) : null,
+        volRatio: hasK ? round(r.k.volRatio, 2) : null,
+        momScore: r.momentumScore != null ? round(r.momentumScore, 1) : null,
         direction,
         highPrice: r.highPrice,
         lastPrice: r.lastPrice,
@@ -1032,6 +1036,7 @@ async function main() {
   const EQUITY = 10000; // paper account, USD model
   const NOTIONAL = 1000; // legacy fallback notional (pre-leverage entries)
   const MAX_DEPLOYED = EQUITY * 4; // notional exposure cap — 400% of equity = 40% margin at 10x
+  const MAX_HEAT_PCT = 4; // portfolio heat cap — total equity at risk across all live stops
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
@@ -1092,6 +1097,23 @@ async function main() {
     ledger.entries
       .filter((e) => e.status === 'open')
       .reduce((a, e) => a + (e.notional ?? NOTIONAL) * remFracOf(e), 0);
+  // portfolio heat: total equity at risk if every live stop fired right
+  // now — positions with locked-profit stops contribute zero. Tharp's
+  // heat rule caps the whole book, not just each trade.
+  const openRiskPct = () =>
+    (ledger.entries
+      .filter((e) => e.status === 'open')
+      .reduce((a, e) => {
+        const stopPnl = e.tps
+          ? (e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
+          : -(e.stopPct ?? Math.max(4, e.targetPct ?? 8));
+        return (
+          a +
+          (Math.max(0, -stopPnl) / 100) * remFracOf(e) * (e.notional ?? NOTIONAL)
+        );
+      }, 0) /
+      EQUITY) *
+    100;
   for (const s of signals) {
     // contract leverage cap — most RWA perps max at 20x, some at 5x;
     // paper lev is min(10x target, contract max), liq band scales with it
@@ -1112,7 +1134,8 @@ async function main() {
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
-      deployed() + notional <= MAX_DEPLOYED
+      deployed() + notional <= MAX_DEPLOYED &&
+      openRiskPct() + (stopFrac * notional) / EQUITY * 100 <= MAX_HEAT_PCT
     ) {
       ledger.entries.unshift({
         asset: s.asset,
@@ -1340,6 +1363,7 @@ async function main() {
   closed.forEach((e) => (byStatus[e.status] = (byStatus[e.status] || 0) + 1));
   ledger.stats = {
     open: ledger.entries.filter((e) => e.status === 'open').length,
+    openRiskPct: pct(openRiskPct()), // portfolio heat — equity at risk if every stop fires
     closed: closed.length,
     wins,
     losses,
@@ -1520,12 +1544,24 @@ async function main() {
     archive = JSON.parse(fs.readFileSync(ARCHIVE_FILE, 'utf8'));
   } catch {}
   archive.runs ??= [];
+  const breadth = rows.length
+    ? pct((rows.filter((r) => r.changePct > 0).length / rows.length) * 100)
+    : null;
   archive.runs.push({
     ts: now,
     ver: ENGINE_VERSION,
     universeSize: rows.length,
     poolN: candidates.length,
     medianChangePct,
+    breadth,
+    regime:
+      breadth == null
+        ? 'unknown'
+        : medianChangePct > 0.5 && breadth > 55
+          ? 'risk-on'
+          : medianChangePct < -0.5 && breadth < 45
+            ? 'risk-off'
+            : 'mixed',
     signals: signals.map((s) => ({
       asset: s.asset,
       cls: s.cls,
@@ -1538,6 +1574,12 @@ async function main() {
       stopPct: s.stopPct,
       spreadPct: s.spreadPct,
       boardRank: s.boardRank,
+      // raw feature values — the evaluator correlates each against forward
+      // returns to measure WHICH component carries predictive power
+      rsi: s.rsi ?? null,
+      volRatio: s.volRatio ?? null,
+      momScore: s.momScore ?? null,
+      changePct: s.changePct ?? null,
     })),
   });
   // permanent record: every run also lands in its monthly history file
@@ -1669,6 +1711,11 @@ async function main() {
         grade: s.grade,
         strategy: s.strategy,
         ver: s.ver ?? run.ver ?? ENGINE_VERSION,
+        regime: run.regime ?? null,
+        rsi: s.rsi ?? null,
+        volRatio: s.volRatio ?? null,
+        momScore: s.momScore ?? null,
+        boardRank: s.boardRank ?? null,
         entry,
       };
       const closeAt = (T) => {
@@ -1760,20 +1807,34 @@ async function main() {
   evStats.avgAlpha4h = evAvg(fld('alpha4h'));
   evStats.avgAlpha24h = evAvg(fld('alpha24h'));
   evStats.expectancyPct = evAvg(fld('outcomePct'));
-  // information coefficient: Pearson corr of score vs 24h alpha — THE
-  // quant answer to "does the score predict anything"
-  const icPairs = allComplete.filter((r) => r.score != null && r.alpha24h != null);
-  if (icPairs.length >= 10) {
-    const mx = icPairs.reduce((a, r) => a + r.score, 0) / icPairs.length;
-    const my = icPairs.reduce((a, r) => a + r.alpha24h, 0) / icPairs.length;
+  // information coefficients: Pearson corr of each feature vs 24h alpha —
+  // THE quant answer to "which component actually predicts". Score IC is
+  // the headline; feature ICs say where the signal lives.
+  const pearson = (pairs) => {
+    if (pairs.length < 10) return null;
+    const mx = pairs.reduce((a, p) => a + p[0], 0) / pairs.length;
+    const my = pairs.reduce((a, p) => a + p[1], 0) / pairs.length;
     let num = 0, dx = 0, dy = 0;
-    for (const r of icPairs) {
-      num += (r.score - mx) * (r.alpha24h - my);
-      dx += (r.score - mx) ** 2;
-      dy += (r.alpha24h - my) ** 2;
+    for (const [x, y] of pairs) {
+      num += (x - mx) * (y - my);
+      dx += (x - mx) ** 2;
+      dy += (y - my) ** 2;
     }
-    evStats.ic24h = dx > 0 && dy > 0 ? round(num / Math.sqrt(dx * dy), 3) : null;
-  } else evStats.ic24h = null;
+    return dx > 0 && dy > 0 ? round(num / Math.sqrt(dx * dy), 3) : null;
+  };
+  const pairUp = (k) =>
+    allComplete
+      .filter((r) => r[k] != null && r.alpha24h != null)
+      .map((r) => [r[k], r.alpha24h]);
+  evStats.ic24h = pearson(pairUp('score'));
+  evStats.icRsi = pearson(pairUp('rsi'));
+  evStats.icVol = pearson(pairUp('volRatio'));
+  evStats.icMom = pearson(pairUp('momScore'));
+  evStats.icRank = pearson(
+    allComplete
+      .filter((r) => r.boardRank != null && r.alpha24h != null)
+      .map((r) => [-r.boardRank, r.alpha24h])
+  );
   const group = (kf) => {
     const g = {};
     for (const r of allComplete) {
@@ -1797,6 +1858,7 @@ async function main() {
   evStats.byScoreBand = group((r) =>
     r.score >= 90 ? '90+' : r.score >= 80 ? '80-89' : '<80'
   );
+  evStats.byRegime = group((r) => r.regime ?? 'unknown');
   // hot file: pending (incomplete) + most recent completes for the UI
   const incomplete = [...evalMap.values()].filter((r) => !r.complete);
   const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
