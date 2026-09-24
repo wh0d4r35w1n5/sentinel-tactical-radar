@@ -142,6 +142,11 @@ footer a{color:var(--grn-dim)}
   <a class="btn" href="/sentinel-tactical-radar/radar/">OPEN TERMINAL →</a>
 </header>
 <div class="wrap">
+  <!-- review ask #1: evidence maturity, stated before anything else — the
+       first thing a sophisticated visitor sees is where the record stands -->
+  <div class="panel" id="maturityBox" style="margin-bottom:16px;border-color:rgba(61,220,255,.5);text-align:center;display:none">
+    <b id="maturityLine" style="letter-spacing:.08em;font-size:12px"></b>
+  </div>
   <div class="hero">
     <div class="panel">
       <div class="ptitle">Composite market pulse · 24h breadth index</div>
@@ -225,7 +230,9 @@ footer a{color:var(--grn-dim)}
   <div class="panel" style="margin-top:16px">
     <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— discipline scorecard measured on our own ledger, held to <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
     <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
-    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable ledger, R-multiples, or SQN. This engine's entire record is public, committed to git, and independently verifiable against Bitget candles. Until a competitor publishes the same, the transparency benchmark is ours by default — the performance benchmark gets earned by the ledger.</div>
+    <div class="ptitle" style="margin-top:14px;font-size:10px">vs boring benchmarks <span class="sub" id="benchSince">— does the intelligence add value beyond doing something trivial?</span></div>
+    <div id="benchVs" class="stats" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable ledger, R-multiples, or SQN. This engine's entire record is public, committed to git, and independently verifiable against Bitget candles. Built to a higher standard of verifiability: every signal is timestamped, archived and independently checkable — the performance benchmark gets earned by the ledger.</div>
   </div>
 </div>
 <footer>
@@ -429,8 +436,8 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json')]);
+  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr,bench]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -478,8 +485,8 @@ async function render(){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
-      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
-      <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L${st.sqn!=null?` · SQN ${st.sqn} <span class="sub">${st.sqnBand||''}</span>`:''}${st.avgR!=null?` · ${st.avgR}R avg`:''}</div></div></div>`+
+      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`+(st.winRateCI?` <span class="sub">CI ${st.winRateCI.lo}–${st.winRateCI.hi}</span>`:''):''}</div></div>
+      <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L${st.sqn!=null?` · SQN ${st.sqn} <span class="sub">${st.sqnBand||''}</span>`:''}${st.avgR!=null?` · ${st.avgR}R avg`+(st.expectancyCI?` <span class="sub">CI ${st.expectancyCI.lo}..${st.expectancyCI.hi}R</span>`:''):''}</div></div></div>`+
       (()=>{const L=ledger.model||{};const g=L.learning;
         if(g&&g.active)return `<div class="sub" style="margin-top:4px">adaptive weights ACTIVE (${g.closedN} closed ≥ ${g.gate.total}): ${Object.entries(L.stratAdj||{}).map(([k,v])=>`${k} ${v>0?'+':''}${v}`).join(' · ')}</div>`;
         return `<div class="sub" style="margin-top:4px">adaptive weights DORMANT — ${g?g.closedN:0} closed signals (needs ${g?g.gate.total:100}+, ${g?g.gate.perStrategy:20}/strategy) · engine won't learn from luck-sized samples</div>`})();
@@ -513,7 +520,7 @@ async function render(){
       ['Avg winner / loser',st.avgWinPct!=null?`+${st.avgWinPct}% / ${st.avgLossPct}%`:'—','net expectancy after costs'],
       ['Max consec. losses',d.maxConsecLosses??'—','drawdown control'],
       ['Sharpe (per-trade)',st.sharpeR!=null?''+st.sharpeR:'—','SQN = Sharpe × √N'],
-      ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%':'—','excess over universe drift'],
+      ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%'+(st.avgAlphaCI?` <span class="sub" style="font-size:9px">CI ${st.avgAlphaCI.lo}..${st.avgAlphaCI.hi}</span>`:''):'—','excess over universe drift · 95% CI'],
       ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
       ['Prospective archive',st.signalsArchived!=null?`${st.signalsArchived} signals · ${st.archiveRuns} runs`:'—','append-only · never rewritten'],
       ...(evals&&evals.stats&&evals.stats.n?[
@@ -560,7 +567,37 @@ async function render(){
       // objectives scorecard — Tharp: objectives come before the system
       const obj=st.objectives||{};
       const chips=Object.values(obj).map(x=>`<span style="display:inline-block;margin-right:6px;padding:1px 7px;border-radius:3px;border:1px solid ${x.ok?'var(--grn)':'var(--bd)'};color:${x.ok?'var(--grn)':'var(--mut)'};font-size:9px">${x.ok?'✓':'○'} ${x.target} <b>${x.cur!=null?x.cur:'—'}</b></span>`).join('');
-      $('evNote').innerHTML=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not.<div style="margin-top:6px">${chips}</div>`;
+      $('evNote').innerHTML=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not.<div style="margin-top:6px">${chips}</div>`+
+        // review ask #4: results BY REGIME — overall stats can hide a
+        // one-environment edge; publish the splits so a reader can check
+        (()=>{const rg=st.byRegime||{},mt=st.byMktType||{};
+          const fmt=o=>Object.entries(o).map(([k,v])=>`<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 7px;border-radius:3px;border:1px solid var(--bd);font-size:9px"><b>${k}</b> ${v.winRate}% · ${v.pnl>=0?'+':''}${v.pnl}% <span class="sub">(${v.n})</span></span>`).join('');
+          return (Object.keys(rg).length?`<div style="margin-top:6px"><span class="sub">BY REGIME → </span>${fmt(rg)}</div>`:'')+
+                 (Object.keys(mt).length?`<div style="margin-top:4px"><span class="sub">BY MARKET TYPE → </span>${fmt(mt)}</div>`:'');})();
+    }
+    // ---- review ask #1: evidence maturity banner — first thing on the page
+    {
+      const m=st.maturity||{};
+      const evN=((evals&&evals.records)||[]).length+((evals&&evals.pending)||0);
+      const mb=$('maturityBox');
+      if(m.closedTrades!=null){
+        mb.style.display='block';
+        $('maturityLine').innerHTML=`SENTINEL ${m.ver||''} · <span style="color:var(--warn,#ffd166)">PROSPECTIVE VALIDATION IN PROGRESS</span> · ${evN} signals evaluated · ${m.closedTrades} trades closed · ${m.daysLive}d live · <span class="sub">no backfilled results</span>`;
+      }
+    }
+    // ---- review ask #3: boring benchmarks — does the intelligence add
+    // value beyond doing something trivial?
+    if(bench){
+      const f=v=>v==null?'—':(v>=0?'+':'')+v+'%';
+      const cls=v=>v==null?'':v>=0?'up':'dn';
+      $('benchVs').innerHTML=[
+        ['Sentinel engine',bench.sentinelPct,'trading ledger equity · vault sweeps retained separately'],
+        ['System combined',bench.combinedPct,'trading + vault basket'],
+        ['BTC buy & hold',bench.btcHoldPct,'the benchmark to beat'],
+        ['BTC/ETH/SOL basket',bench.basketHoldPct,'equal-weight passive'],
+        ['Naive top-3 board',bench.naiveBoardPct,`mechanical 1h holds · ${bench.naiveRuns||0} runs`],
+      ].map(([k,v,s2])=>`<div class="stat"><div class="v num ${cls(v)}">${f(v)}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
+      $('benchSince').textContent=bench.startedAt?`benchmark clock started ${bench.startedAt.slice(0,10)} · ${bench.series?bench.series.length:0} samples`:'';
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};

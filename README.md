@@ -101,6 +101,8 @@ Runs every 10 minutes + on demand:
 | `api/news.json` | Intelligence wire — public RSS headlines (CoinDesk/Cointelegraph) tagged to universe assets with a keyword tone estimate. Context only — deliberately never a score input. |
 | `api/correlation.json` | Measured market structure — 48h pairwise correlation of 1h returns across candidates, BTC/ETH beta per asset, board coupling mean. The risk governor treats realized corr ≥0.6 as "the same bet" (static asset-class clusters are the fallback when klines are missing). |
 | `api/hypotheses.json` | Hypothesis engine — registered falsifiable claims (score IC, grade ordering, direction asymmetry, regime alignment, factor edges, entry-floor validity) scored prospectively from eval labels. Status escalates strictly with n: UNTESTED→EARLY→SUGGESTIVE→SUPPORTED/REFUTED. |
+| `api/benchmark.json` | **Boring-benchmark comparison** — BTC buy & hold, an equal-weight BTC/ETH/SOL basket, and a mechanical "top-3 board score held 1h" baseline chained from the same eval labels, all on the same clock as the ledger. The honest question: does the intelligence add value beyond doing something trivial? |
+| `PITCH.md` | The short downloadable pitch — "Don't trust the signal. Verify it." |
 
 The dashboard also carries an **Evidence / Validation panel** — prospective
 results for the *current frozen ruleset only* (v0.x excluded): signals

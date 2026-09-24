@@ -1800,6 +1800,64 @@ async function main() {
       for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
       return g;
     })(),
+    // review ask #4: results BY REGIME — an edge that only exists in one
+    // market type isn't an edge, it's a regime bet. Entries carry both the
+    // breadth regime and the Tharp six-type tag from entry time.
+    byRegime: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.regime ?? 'unknown';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+    byMktType: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.mktType ?? 'unknown';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+  };
+  // review ask #2: uncertainty is a first-class output — a 70% win rate at
+  // n=20 and n=2000 are different statements. Wilson 95% interval for the
+  // win rate; mean ± 1.96·SE for expectancy and alpha.
+  const Z = 1.96;
+  const wilson = (w, n) => {
+    if (!n) return null;
+    const p = w / n, z2 = Z * Z;
+    const c = (p + z2 / (2 * n)) / (1 + z2 / n);
+    const h = (Z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+    return { lo: pct(Math.max(0, c - h) * 100), hi: pct(Math.min(1, c + h) * 100) };
+  };
+  const meanCI = (xs) => {
+    const n = xs.length;
+    if (n < 2) return null;
+    const m = xs.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+    const h = (Z * sd) / Math.sqrt(n);
+    return { lo: round(m - h, 2), hi: round(m + h, 2), n };
+  };
+  ledger.stats.winRateCI = wilson(wins, closed.length);
+  ledger.stats.avgAlphaCI = meanCI(closed.filter((e) => e.alphaPct != null).map((e) => e.alphaPct));
+  // evidence maturity — the review's headline box: where the prospective
+  // record actually stands
+  const firstTs = ledger.entries.length
+    ? Math.min(...ledger.entries.map((e) => e.ts))
+    : now;
+  ledger.stats.maturity = {
+    ver: ENGINE_VERSION,
+    daysLive: round(Math.max(0, (now - firstTs) / 86400e3), 1),
+    closedTrades: closed.length,
+    openTrades: ledger.entries.filter((e) => e.status === 'open').length,
+    note: 'prospective validation in progress — no backfilled results',
   };
   // Van Tharp: R-multiples + SQN — the actual holy grail metric
   const Rs = closed
@@ -1838,6 +1896,7 @@ async function main() {
   ledger.stats.rDist = rHist;
   ledger.stats.maxR = Rs.length ? round(Math.max(...Rs), 2) : null;
   ledger.stats.minR = Rs.length ? round(Math.min(...Rs), 2) : null;
+  ledger.stats.expectancyCI = meanCI(Rs.map((r) => round(r, 4)));
   // capture efficiency: how much of each trade's favorable excursion was
   // actually banked — the forensic leak metric (was 16%)
   const cap = closed.filter((e) => e.peakPnl != null && e.peakPnl > 0);
@@ -2487,6 +2546,65 @@ async function main() {
       })
     );
   }
+
+  // ---- boring benchmark (review ask #3): does the intelligence add value
+  // beyond doing something trivial? Track BTC buy&hold, an equal-weight
+  // BTC/ETH/SOL basket, and a mechanical "buy the top-3 board scores, hold
+  // 1h" baseline chained from the eval labels — all against the same clock.
+  try {
+    const BENCH_FILE = path.join(API, 'benchmark.json');
+    let bench = { startedAt: null, series: [] };
+    try { bench = JSON.parse(fs.readFileSync(BENCH_FILE, 'utf8')); } catch {}
+    bench.series ??= [];
+    const lastB = bench.series.length ? bench.series[bench.series.length - 1].ts : 0;
+    if (now - lastB >= 4 * 60e3) {
+      bench.series.push({
+        ts: now,
+        btc: priceByAsset.get('BTC') ?? null,
+        eth: priceByAsset.get('ETH') ?? null,
+        sol: priceByAsset.get('SOL') ?? null,
+      });
+      bench.series = bench.series.slice(-3000);
+    }
+    const s0 = bench.series.find((s) => s.btc && s.eth && s.sol);
+    const sN = bench.series.length ? bench.series[bench.series.length - 1] : null;
+    bench.startedAt ??= s0 ? new Date(s0.ts).toISOString() : null;
+    const holdPct = (a, b) => (a && b ? pct(((b - a) / a) * 100) : null);
+    bench.btcHoldPct = s0 && sN ? holdPct(s0.btc, sN.btc) : null;
+    bench.basketHoldPct =
+      s0 && sN
+        ? pct(
+            (((sN.btc / s0.btc - 1) + (sN.eth / s0.eth - 1) + (sN.sol / s0.sol - 1)) / 3) * 100
+          )
+        : null;
+    // mechanical momentum baseline: every run, buy the 3 highest-scored
+    // signals, hold exactly 1h, repeat — same labels the eval engine grades,
+    // zero discretion, zero risk engine. This is the bar to beat.
+    const byRun = new Map();
+    for (const r of evalMap.values()) {
+      if (r.fwd1h == null) continue;
+      (byRun.get(r.runTs) ?? byRun.set(r.runTs, []).get(r.runTs)).push(r);
+    }
+    let naiveEq = 1, naiveN = 0;
+    for (const ts of [...byRun.keys()].sort((a, b) => a - b)) {
+      const top3 = byRun.get(ts).sort((a, b) => b.score - a.score).slice(0, 3);
+      const mean = top3.reduce((a, r) => a + r.fwd1h, 0) / top3.length;
+      naiveEq *= 1 + mean / 100;
+      naiveN++;
+    }
+    bench.naiveBoardPct = pct((naiveEq - 1) * 100);
+    bench.naiveRuns = naiveN;
+    // sentinel lines replicate the wallet math exactly: wins retain 80%
+    // (20% sweeps to the vault), compounding on the $10k model equity
+    let eqUsd = EQUITY;
+    for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0)))
+      eqUsd *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY) * (e.pnlPct > 0 ? 0.8 : 1);
+    bench.sentinelPct = pct(((eqUsd - EQUITY) / EQUITY) * 100);
+    bench.combinedPct = pct(((eqUsd + valueUsd - EQUITY) / EQUITY) * 100);
+    bench.note =
+      'BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = trading ledger equity; combined adds the vault basket.';
+    fs.writeFileSync(BENCH_FILE, JSON.stringify({ refreshedAt: snap.refreshedAt, ...bench }));
+  } catch {}
 
   // final unconditional ledger write — archive-depth stats and vault
   // `vaulted` flags set after the first write must still persist
