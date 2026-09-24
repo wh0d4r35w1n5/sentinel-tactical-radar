@@ -1386,10 +1386,18 @@ async function main() {
         untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
     }
   } catch {}
+  // exchange position set (demo|live modes) — used below to void sim entries
+  // whose plan was never executed; an open ledger entry that never reached
+  // the exchange is a ghost, not a position
+  const exchangeOpen = new Set();
+  let execMode = null;
   try {
     const el = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+    execMode = el.mode;
     for (const s of el.untradeable || [])
       untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
+    for (const p of el.positionsAfter || [])
+      exchangeOpen.add(String(p.symbol).toUpperCase());
   } catch {}
   // re-tag asset classes from the live contract list — the taxonomy has
   // grown (index/commodity/metal/fx were once all 'stock'), and a stale
@@ -1690,6 +1698,19 @@ async function main() {
     if (e.status !== 'open' || !untradeable.has(e.asset.toUpperCase())) continue;
     e.untradable = true;
   }
+  // unrouted ghosts: the ledger admitted the entry but the exchange never
+  // filled it (stale plan, skipped order, executor down that cycle). If the
+  // symbol is routable, the position has no exchange counterpart, and the
+  // entry is older than a full pipeline cycle — it will never fill. Void it
+  // rather than letting the sim book pretend the position exists.
+  const UNROUTED_AGE_MS = 25 * 60e3;
+  if (execMode === 'demo' || execMode === 'live')
+    for (const e of ledger.entries) {
+      if (e.status !== 'open' || e.untradable) continue;
+      if (now - e.ts < UNROUTED_AGE_MS) continue;
+      const sym = `${e.asset}USDT`.toUpperCase();
+      if (!exchangeOpen.has(sym)) e.unrouted = true;
+    }
 
   for (const e of ledger.entries) {
     if (e.status !== 'open') continue;
@@ -1882,6 +1903,9 @@ async function main() {
         settle('clustered', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
       else if (e.untradable)
         settle('untradeable', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      // unrouted entries void at entry — the position never existed on the
+      // exchange, so flat at cost, not a real mark-to-market outcome
+      else if (e.unrouted) settle('unrouted', e.entry, 0);
       else if (reversed) settle('reversed', px, pnl);
       else if (expired)
         // e.pnlPct is already blended — feeding it back through blended()
