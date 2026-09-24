@@ -101,7 +101,10 @@ const getEquity = async () => {
 const getPlans = (symbol) =>
   api('GET', '/api/v2/mix/order/orders-plan-pending', {
     qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}&planType=profit_loss`,
-  }).then((d) => d?.entrustedList || d?.orders || d || []);
+  }).then((d) => {
+    const l = d?.entrustedList || d?.orders || d;
+    return Array.isArray(l) ? l : []; // never hand callers a non-array
+  });
 // position mode is account-wide per product type: one_way_mode needs
 // reduceOnly closes; hedge_mode needs tradeSide. Passing the wrong
 // convention errors (40774) — or worse, silently opens a reverse position
@@ -183,10 +186,17 @@ const cancelLossPlans = (symbol) =>
 
 // ---------- contracts: size rounding + minimums ----------
 async function contractMap() {
+  // the demo environment lists a SUBSET of the live catalog (45 vs 805
+  // symbols) — fetching the live list unsigned would size orders for
+  // symbols this environment can't route (40805/40034 on every attempt)
   const res = await fetch(
-    `${HOST}/api/v2/mix/market/contracts?productType=${PRODUCT}`
+    `${HOST}/api/v2/mix/market/contracts?productType=${PRODUCT}`,
+    { headers: MODE === 'demo' ? { paptrading: '1' } : {} }
   );
+  if (!res.ok) throw new Error(`contracts fetch -> HTTP ${res.status}`);
   const j = await res.json();
+  if (!Array.isArray(j.data) || !j.data.length)
+    throw new Error(`contracts map empty (${j.code || res.status}) — refusing to size blind`);
   const m = {};
   for (const c of j.data || [])
     m[c.symbol] = {
@@ -212,6 +222,15 @@ async function main() {
   const planPath = path.join(API_DIR, 'live-plan.json');
   const outPath = path.join(API_DIR, 'live-ledger.json');
   const state = { mode: MODE, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
+  // untradeable symbols persist across runs — the scanner blocks entries on
+  // them, so the executor never re-attempts and never re-fails. Without the
+  // merge the block would flap off every other cycle.
+  try {
+    const prior = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    // mode-scoped: a symbol unlisted on demo may be fine on live
+    if (prior.mode === MODE && prior.untradeable?.length)
+      state.untradeable = [...prior.untradeable];
+  } catch {}
   if (MODE === 'off') {
     log('mode=off — set SENTINEL_EXEC=shadow|demo|live');
     return;
@@ -271,7 +290,9 @@ async function main() {
   }
 
   const cm = await contractMap();
-  const probeSym = (plan.orders[0] && plan.orders[0].symbol) || (plan.closes[0] && plan.closes[0].symbol) || 'BTCUSDT';
+  // probe posMode on a symbol guaranteed to exist — a bad first plan symbol
+  // would otherwise fail the probe and refuse the entire run
+  const probeSym = 'BTCUSDT';
   const [positions, equityUsd] = await Promise.all([
     getPos().catch((e) => (state.errors.push('positions: ' + e.message), [])),
     getEquity().catch(() => 0),
@@ -318,7 +339,12 @@ async function main() {
       state.actions.push(`closed ${c.symbol} ${pos.side} ${pos.size}`);
       posBySym.delete(c.symbol);
     } catch (e) {
-      state.errors.push(`close ${c.symbol}: ${e.message}`);
+      // already flat / position gone — the sim's own exit path (stop, TP,
+      // expiry) fired first; a close for a missing position is convergence
+      // confirmed, not an error
+      if (/22002|no position|not exist|40034/i.test(e.message))
+        state.actions.push(`close ${c.symbol}: already flat`);
+      else state.errors.push(`close ${c.symbol}: ${e.message}`);
     }
   }
 
@@ -326,7 +352,10 @@ async function main() {
   for (const t of plan.trails) {
     const pos = posBySym.get(t.symbol);
     if (!pos || !Number.isFinite(t.entry) || !Number.isFinite(t.stopPctFromEntry)) continue;
-    const px = t.entry * (1 + (t.direction === 'LONG' ? 1 : -1) * (t.stopPctFromEntry / 100));
+    // anchor the stop % to the exchange's actual fill, not the sim's entry —
+    // a stop computed off a stale sim reference sits at the wrong price
+    const anchor = pos.entry > 0 ? pos.entry : t.entry;
+    const px = anchor * (1 + (t.direction === 'LONG' ? 1 : -1) * (t.stopPctFromEntry / 100));
     try {
       await cancelLossPlans(t.symbol); // loss plans only — the TP ladder stays
       // verify the old stops actually died — cancel returns 00000 even on a
@@ -335,7 +364,12 @@ async function main() {
       const leftover = (await getPlans(t.symbol))
         .filter((p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'));
       if (leftover.length) throw new Error(`${leftover.length} stale loss plan(s) survived cancel — refusing to stack another`);
-      await planOrder(t.symbol, 'loss_plan', round(px, cm[t.symbol]?.pricePlace ?? 6), pos.size, pos.side);
+      // position total can carry more decimals than the contract accepts —
+      // floor to volume precision or the replacement stop errors out and
+      // the position sits at its old stop while we believe it trailed
+      const tp2 = Math.pow(10, cm[t.symbol]?.sizePlace ?? 4);
+      const trailSize = Math.floor(pos.size * tp2) / tp2;
+      await planOrder(t.symbol, 'loss_plan', round(px, cm[t.symbol]?.pricePlace ?? 6), trailSize, pos.side);
       state.actions.push(`trailed ${t.symbol} stop -> ${round(px, 6)}`);
     } catch (e) {
       state.errors.push(`trail ${t.symbol}: ${e.message}`);
@@ -348,7 +382,9 @@ async function main() {
   } else {
     let opened = 0;
     for (const o of plan.orders) {
-      if (posBySym.has(o.symbol) || opened + state.positions.length >= MAX_POSITIONS) continue;
+      // ambiguous symbols are excluded from posBySym — a .has() check would
+      // pass and stack a third order on a symbol already holding both sides
+      if (posBySym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
           !Number.isFinite(o.stopPct) || !Number.isFinite(o.targetPct) ||
           !Number.isFinite(o.leverage) || (o.direction !== 'LONG' && o.direction !== 'SHORT')) {
@@ -356,6 +392,13 @@ async function main() {
         continue;
       }
       const notional = Math.min(o.notionalUsd * scale, MAX_NOTIONAL);
+      // not in this environment's catalog = unroutable here — record it so
+      // the scanner stops emitting entries the executor can never fill
+      if (!cm[o.symbol]) {
+        state.untradeable = [...new Set([...(state.untradeable || []), o.symbol])];
+        state.errors.push(`${o.symbol}: absent from ${MODE} contract catalog — unroutable`);
+        continue;
+      }
       const size = sizeFor(cm, o.symbol, notional, o.refEntry);
       if (!size) { state.errors.push(`${o.symbol}: size below contract minimum`); continue; }
       const sgn = o.direction === 'LONG' ? 1 : -1;
@@ -378,9 +421,16 @@ async function main() {
         // contract precision — a rung too small to exist merges into the SL.
         const cp = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
         const pp = cm[o.symbol]?.pricePlace ?? 6;
+        // rungs below the contract minimum get rejected by the exchange —
+        // which would trigger the emergency close on a good position.
+        // A sub-minimum rung merges into the SL instead of erroring.
+        const minQty = Math.max(
+          cm[o.symbol]?.minTradeNum ?? 0,
+          (cm[o.symbol]?.minTradeUSDT ?? 0) / fill
+        );
         const tpPlans = (o.tps || []).map((tp) => {
           const rung = Math.floor(size * tp.frac * cp) / cp;
-          return rung > 0
+          return rung >= minQty && rung > 0
             ? planOrder(o.symbol, 'profit_plan', round(fill * (1 + sgn * tp.at * (o.targetPct / 100)), pp), rung, holdSide)
             : null;
         }).filter(Boolean);
@@ -393,6 +443,13 @@ async function main() {
         state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${o.leverage}x notional $${round(notional, 2)}`);
         opened++;
       } catch (e) {
+        // unroutable symbols get recorded so the scanner stops emitting
+        // entries the exchange can't hold: 40805 'Unsupported operation'
+        // (RWA perps listed but not orderable) and 40034 'does not exist'
+        // (sim priced an asset that has no futures contract — PAXGUSDT)
+        if (/40805|40034|unsupported|does not exist/i.test(e.message)) {
+          state.untradeable = [...new Set([...(state.untradeable || []), o.symbol])];
+        }
         // entry filled but protection failed -> close immediately, never naked
         state.errors.push(`open ${o.symbol}: ${e.message} — attempting emergency close`);
         try {

@@ -1360,6 +1360,16 @@ async function main() {
     ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
   }
   ledger.entries ??= [];
+  // executor feedback: symbols the exchange refused to order (RWA perps
+  // return 40805 despite listing in contracts). The sim must not hold
+  // positions the executor can't route — entries are blocked below and
+  // existing open entries settle as 'untradeable' at their live mark.
+  const untradeable = new Set();
+  try {
+    const el = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+    for (const s of el.untradeable || [])
+      untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
+  } catch {}
   // re-tag asset classes from the live contract list — the taxonomy has
   // grown (index/commodity/metal/fx were once all 'stock'), and a stale
   // label on an open entry is a data bug, not entry-time evidence
@@ -1502,10 +1512,13 @@ async function main() {
     const newHeatPct = (stopFrac * notional) / EQUITY * 100;
     if (
       tradeScore >= entryFloor &&
+      Number.isFinite(s.entryPrice) &&
+      s.entryPrice > 0 &&
       ddNow < ddKillPct &&
       mktAllows(s) &&
       !openFor(s.asset, s.direction) &&
       !proxyBlocked(s) &&
+      !untradeable.has(s.asset.toUpperCase()) &&
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
@@ -1646,11 +1659,15 @@ async function main() {
     for (const members of byProxy.values()) {
       if (members.length < 2) continue;
       members.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.ts ?? 0) - (a.ts ?? 0));
-      for (const e of members.slice(1)) {
-        e.dedup = true;
-        livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction, reason: 'proxy-dedup' });
-      }
+      for (const e of members.slice(1)) e.dedup = true;
     }
+  }
+  // untradeable symbols: the exchange can't hold them, so the sim must not
+  // either — the flag settles them at the live mark, and settle() emits
+  // the exchange close itself (harmless no-op if none was ever opened)
+  for (const e of ledger.entries) {
+    if (e.status !== 'open' || !untradeable.has(e.asset.toUpperCase())) continue;
+    e.untradable = true;
   }
 
   for (const e of ledger.entries) {
@@ -1696,6 +1713,12 @@ async function main() {
         const drift = medianChangePct - e.mkt0;
         e.alphaPct = pct(e.pnlPct - (e.direction === 'LONG' ? drift : -drift));
       }
+      // every sim settle means the exchange must be flat on this symbol —
+      // emitted here so NO exit path can leave a real position orphaned:
+      // expiry/breakeven/timeouts have no exchange counterpart, and a
+      // settled-here entry never reaches the plan-emission loop. Executor
+      // treats 'already flat' closes as benign no-ops.
+      livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction, reason: status });
     };
     const stopLevel = () =>
       e.tps
@@ -1836,13 +1859,9 @@ async function main() {
       const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
       if (e.dedup)
         settle('clustered', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
-      else if (reversed) {
-        settle('reversed', px, pnl);
-        // the settle marks the entry closed BEFORE the plan-emission loop —
-        // which skips non-open entries — so the exchange close must be
-        // emitted here or the real position outlives the sim's decision
-        livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
-      }
+      else if (e.untradable)
+        settle('untradeable', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      else if (reversed) settle('reversed', px, pnl);
       else if (expired)
         // e.pnlPct is already blended — feeding it back through blended()
         // double-counts banked rungs and re-charges fees; rawPnl is the raw

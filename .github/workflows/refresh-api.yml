@@ -60,5 +60,7 @@ jobs:
             echo "no changes"
           else
             git commit -m "chore: refresh api snapshots"
-            git push
+            # a queued run can land its commit while another was pushing —
+            # rebase onto whatever the remote gained, then push once more
+            git pull --rebase && git push
           fi
