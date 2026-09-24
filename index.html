@@ -130,15 +130,23 @@ footer a{color:var(--grn-dim)}
 .spark{display:block}
 .num{font-variant-numeric:tabular-nums}
 .err{color:var(--amb);padding:20px;text-align:center}
+.vtog{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:10px;letter-spacing:.1em}
+.vtog a{padding:7px 12px;color:var(--mut);cursor:pointer;user-select:none}
+.vtog a.on{background:var(--grn);color:#06130a;font-weight:700}
+/* SIMPLE = normie view: internals hidden, everything stacks one column */
+body.simple .pro{display:none!important}
+body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
 @media(prefers-reduced-motion:reduce){.tape-inner,.dot{animation:none}}
 </style>
 </head>
 <body>
+<script>try{document.body.classList.add((new URLSearchParams(location.search).get('view')||localStorage.view||'simple')==='pro'?'pro':'simple')}catch(e){document.body.classList.add('simple')}</script>
 <header>
   <span class="logo">◈ SENTINEL TACTICAL RADAR</span>
   <span class="live" id="liveChip"><span class="dot"></span><span id="liveTxt">CONNECTING…</span></span>
   <span class="chips" id="chips"></span>
   <span class="spacer"></span>
+  <span class="vtog" title="SIMPLE hides the internals · PRO shows everything"><a id="vSimple">SIMPLE</a><a id="vPro">PRO</a></span>
   <a class="btn" href="/sentinel-tactical-radar/radar/">OPEN TERMINAL →</a>
 </header>
 <div class="wrap">
@@ -160,19 +168,19 @@ footer a{color:var(--grn-dim)}
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
-  <div class="panel" style="margin-bottom:16px">
+  <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Signal pressure · how close the engine is to firing</div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
     <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
     <div id="pressList"></div>
   </div>
-  <div class="panel" style="margin-bottom:16px;border-color:rgba(61,220,255,.45)">
+  <div class="panel pro" style="margin-bottom:16px;border-color:rgba(61,220,255,.45)">
     <div class="ptitle">Evidence / validation · prospective results only <span class="sub">— emitted signals are measured forward, traded or not · the number that matters is whether predictions precede outcomes</span><span id="evStatus" style="float:right"></span></div>
     <div class="stats" id="evStats" style="grid-template-columns:repeat(6,1fr)"></div>
     <div id="evNote" class="sub" style="margin-top:8px;font-size:10px"></div>
   </div>
   <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px">
-    <div class="panel" style="margin-bottom:0">
+    <div class="panel pro" style="margin-bottom:0">
       <div class="ptitle">Hypothesis engine · what the evidence currently supports <span class="sub">— claims escalate with sample: UNTESTED &lt;10 · EARLY &lt;30 · SUGGESTIVE &lt;100 · then SUPPORTED/REFUTED</span></div>
       <div id="hypoBody"></div>
     </div>
@@ -191,8 +199,8 @@ footer a{color:var(--grn-dim)}
         <div class="ptitle">Signal track record</div>
         <div id="ledgerStats" style="margin-bottom:12px"></div>
         <svg id="pnlSvg" viewBox="0 0 300 64" width="100%" height="56" preserveAspectRatio="none" style="margin-bottom:8px"></svg>
-        <div id="byStrat" style="margin-bottom:10px"></div>
-        <div id="ledger"></div>
+        <div id="byStrat" class="pro" style="margin-bottom:10px"></div>
+        <div id="ledger" class="pro"></div>
       </div>
       <div class="panel">
         <div class="ptitle">Top movers / laggards · 24h</div>
@@ -215,11 +223,11 @@ footer a{color:var(--grn-dim)}
   </div>
   <div class="panel" id="godPanel" style="margin-top:16px;display:none">
     <div class="ptitle">GOD · the overseer <span class="sub">— audits every system invariant each cycle · pure read, never mutates, cannot hide</span><span id="godVerdict" style="float:right"></span></div>
-    <div id="godChecks"></div>
+    <div id="godChecks" class="pro"></div>
     <div class="sub" id="godAt" style="margin-top:6px;font-size:9px"></div>
   </div>
   <div class="panel" style="margin-top:16px">
-    <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
+    <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span class="pro" style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
   </div>
   <div class="duo">
@@ -228,12 +236,12 @@ footer a{color:var(--grn-dim)}
       <div class="stats" id="vaultStats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px"></div>
       <div id="vaultRows"></div>
     </div>
-    <div class="panel">
+    <div class="panel pro">
       <div class="ptitle">Logic drivers · book-weighted strategy influence</div>
       <div id="drivers"></div>
     </div>
   </div>
-  <div class="panel" style="margin-top:16px">
+  <div class="panel pro" style="margin-top:16px">
     <div class="ptitle">Funding radar · Bitget perp funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
     <div id="carryStats" class="sub" style="margin-bottom:8px"></div>
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Funding 8h</th><th>Annualized</th><th>Basis</th><th>Arb play</th><th>Breakeven</th></tr></thead><tbody id="fundRows"></tbody></table></div>
@@ -1013,6 +1021,12 @@ document.getElementById('journal').addEventListener('click',e=>{
   if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden);
     d.hidden?JOPEN.delete(tr.dataset.j):(JOPEN.add(tr.dataset.j),mountJournalCharts(tr.dataset.j))}
 });
+// simple/pro view toggle — simple is the default for visitors; pro is the
+// full instrument panel. Choice persists via localStorage, ?view=pro forces.
+const setView=v=>{const pro=v==='pro';document.body.classList.toggle('simple',!pro);document.body.classList.toggle('pro',pro);localStorage.view=pro?'pro':'simple';$('vSimple').classList.toggle('on',!pro);$('vPro').classList.toggle('on',pro)};
+$('vSimple').onclick=()=>setView('simple');
+$('vPro').onclick=()=>setView('pro');
+setView(document.body.classList.contains('pro')?'pro':'simple');
 render();
 if(window.__live)__live.onTick(livePaint);
 setInterval(render,30000);
