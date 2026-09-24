@@ -1,6 +1,6 @@
 // Live data shim for the Sentinel Tactical Radar terminal.
 // Patches window.fetch so the app's /api calls are served fresh:
-//  - GET market-scanner.json -> built live from Bitget public spot data
+//  - GET market-scanner.json -> built live from Bitget public futures data
 //  - POST config/bot-state/trades -> persisted to localStorage (static host
 //    has no backend; makes the dry-run controls functional per-browser)
 //  - GET config/bot-state/trades -> static snapshot merged with local state
@@ -9,7 +9,7 @@
   if (typeof fetch !== 'function' || typeof Response !== 'function') return;
   var orig = fetch.bind(window);
   var BASE = '/sentinel-tactical-radar/api/';
-  var SYM_KEY = 'str-bitget-syms';
+  var SYM_KEY = 'str-bitget-futsyms-v2';
   var PULSE_KEY = 'str-live-pulse';
   var POST_KEY = 'str-post-state';
   var MIN_QV = 250000;
@@ -131,22 +131,37 @@
     return tickersCache.data;
   }
 
+  // asset-class labels — mirrors the server classifier so RWA badges render
+  // on the client-built board too (index/metal/fx known bases, else isRwa=stock)
+  var IDX_SET = {}, METAL_SET = {}, COMMODITY_SET = {}, FX_SET = {};
+  'SPX SPY QQQ VOO IWM SP500 NDX100 NDX NAS100 US500 US30 DJT DJI DAX FTSE NI225 JP225 HSI KR200 TQQQ SQQQ QLD SPXU UDOW SDOW TNA TZA UVXY SOXL SOXS SOXX SMH XLE XLU XLK XLV XBI GDX URNM BOTZ KWEB EWJ EWY EWT INDA EWH EWZ TLT TMF TBT JEPQ SGOV BITO IBIT AGPU BITU ETHU SOLX'.split(' ').forEach(function (s) { IDX_SET[s] = 1; });
+  'XAU XAG XPT XPD HG COPPER COP PAXG XAUT'.split(' ').forEach(function (s) { METAL_SET[s] = 1; });
+  'CL BZ NATGAS OIL UKOIL USOIL WTI BRENT CORN WHEAT SOY SUGAR COFFEE COCOA'.split(' ').forEach(function (s) { COMMODITY_SET[s] = 1; });
+  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH USDBRL'.split(' ').forEach(function (s) { FX_SET[s] = 1; });
+  function assetClass(base, isRwa) {
+    return IDX_SET[base] ? 'index' : METAL_SET[base] ? 'metal' : COMMODITY_SET[base] ? 'commodity' : FX_SET[base] ? 'fx' : isRwa ? 'stock' : 'crypto';
+  }
+
   async function buildScanner() {
     var syms = await getSymbols();
     var tks = await getTickers();
-    var pairs = {};
+    var pairs = {}, rwaMap = {};
     syms.forEach(function (s) {
       if (s.symbolStatus === 'normal' &&
-          s.quoteCoin === 'USDT' && !STABLE[(s.baseCoin || '').toUpperCase()])
+          s.quoteCoin === 'USDT' && !STABLE[(s.baseCoin || '').toUpperCase()]) {
         pairs[s.symbol.toUpperCase()] = 1;
+        rwaMap[s.symbol.toUpperCase()] = s.isRwa === 'YES';
+      }
     });
     maybeStream(pairs);
     var rows = withLive(tks)
       .filter(function (t) { return pairs[t.symbol.toUpperCase()]; })
       .map(function (t) {
         var last = +t.lastPr, hi = +t.high24h, lo = +t.low24h, bid = +t.bidPr, ask = +t.askPr;
+        var base = t.symbol.replace(/USDT$/i, '').toUpperCase();
         return {
           asset: t.symbol.replace(/USDT$/i, ''),
+          cls: assetClass(base, rwaMap[t.symbol.toUpperCase()]),
           lastPrice: last,
           changePct: +t.changeUtc24h * 100,
           quoteVolume: +t.quoteVolume,
@@ -160,7 +175,10 @@
       .sort(function (a, b) { return b.quoteVolume - a.quoteVolume; });
     if (!rows.length) throw new Error('empty universe');
 
-    var chgs = rows.map(function (r) { return r.changePct; }).sort(function (a, b) { return a - b; });
+    // momentum is scored in the TRADED direction — a dump that we short is
+    // strong momentum, so rank the signed move, not raw change (the old rank
+    // made shorts score near zero on red days and never surface)
+    var dirChgs = rows.map(function (r) { return Math.abs(r.changePct); }).sort(function (a, b) { return a - b; });
     var vols = rows.map(function (r) { return r.quoteVolume; }).sort(function (a, b) { return a - b; });
     var sps = rows.map(function (r) { return r.spreadPct; }).sort(function (a, b) { return a - b; });
     function rank(a, v) { return a.filter(function (x) { return x <= v; }).length / a.length; }
@@ -172,7 +190,7 @@
 
     var signals = rows
       .map(function (r) {
-        var ms = Math.round(rank(chgs, r.changePct) * 100);
+        var ms = Math.round(rank(dirChgs, Math.abs(r.changePct)) * 100);
         var vs = Math.round(rank(vols, r.quoteVolume) * 100);
         var ls = Math.round((1 - rank(sps, r.spreadPct)) * 100);
         var score = Math.round(ms * 0.5 + vs * 0.3 + ls * 0.2);
@@ -186,6 +204,7 @@
         ];
         return {
           asset: r.asset,
+          cls: r.cls,
           grade: score >= 85 ? 'A' : score >= 75 ? 'BBB' : score >= 65 ? 'BB' : 'B',
           score: score, social: null, symbol: r.asset + 'USD',
           thesis: stg + ' on ' + r.asset + ' | Confluence ' + score + '/100 | ' + drv[0] + ' | ' + drv[1],
@@ -255,7 +274,7 @@
       },
       refreshedAt: new Date().toISOString(),
       scanWindowSeconds: 10, error: null,
-      source: 'bitget-live', universeFilter: 'bitget-spot',
+      source: 'bitget-live', universeFilter: 'bitget-usdtm-perps',
     };
   }
 

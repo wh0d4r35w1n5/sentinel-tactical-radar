@@ -53,24 +53,34 @@ const STABLE_FIAT = new Set([
   'GBP', 'BRL', 'TRY', 'AUD', 'USDG', 'CUSD', 'XUSD', 'USDS', 'SUSDE',
 ]);
 
-// asset-class labels for RWA perps (contracts API flags isRwa but not the kind)
+// asset-class labels for RWA perps (contracts API flags isRwa but not the
+// kind). Index set covers broad indexes + index/sector/country/bond/vol and
+// leveraged-ETF perps; metal covers bullion + gold tokens; commodity is
+// energy/agri; fx is fiat pairs; remaining isRwa bases are equity perps.
 const IDX_SET = new Set(
-  'SPX SPY QQQ VOO TQQQ SQQQ HSI DJI NAS100 US500 US30 NDX DAX FTSE NI225'.split(' ')
+  'SPX SPY QQQ VOO IWM SP500 NDX100 NDX NAS100 US500 US30 DJT DJI DAX FTSE NI225 JP225 HSI KR200 TQQQ SQQQ QLD SPXU UDOW SDOW TNA TZA UVXY SOXL SOXS SOXX SMH XLE XLU XLK XLV XBI GDX URNM BOTZ KWEB EWJ EWY EWT INDA EWH EWZ TLT TMF TBT JEPQ SGOV BITO IBIT AGPU BITU ETHU SOLX'.split(' ')
 );
-const METAL_SET = new Set('XAU XAG XPT XPD HG COPPER'.split(' '));
+const METAL_SET = new Set(
+  'XAU XAG XPT XPD HG COPPER COP PAXG XAUT'.split(' ')
+);
+const COMMODITY_SET = new Set(
+  'CL BZ NATGAS OIL UKOIL USOIL WTI BRENT CORN WHEAT SOY SUGAR COFFEE COCOA'.split(' ')
+);
 const FX_SET = new Set(
-  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH'.split(' ')
+  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH USDBRL'.split(' ')
 );
 const assetClass = (base, isRwa) =>
   IDX_SET.has(base)
     ? 'index'
     : METAL_SET.has(base)
       ? 'metal'
-      : FX_SET.has(base)
-        ? 'fx'
-        : isRwa
-          ? 'stock'
-          : 'crypto';
+      : COMMODITY_SET.has(base)
+        ? 'commodity'
+        : FX_SET.has(base)
+          ? 'fx'
+          : isRwa
+            ? 'stock'
+            : 'crypto';
 
 // Wilder RSI over the full series — average the first `period` deltas, then
 // smooth forward to the last close. (The old version only read the first 15
@@ -366,10 +376,16 @@ async function main() {
       );
     }
 
+    // market-cap / news / calendar intel is crypto-only — a stock perp
+    // symbol colliding with a crypto token name would attach wrong data
+    const isCrypto = new Set(
+      rows.filter((r) => r.cls === 'crypto').map((r) => r.asset.toUpperCase())
+    );
+    const cryptoOf = (syms) => syms.filter((s) => isCrypto.has(s.replace('USDT', '')));
     // CoinGecko (keyless): market-cap intelligence — rank, float unlocked %,
     // ATH distance, volume/mcap turnover. The CMC-equivalent quality layer.
     try {
-      const syms = fundSyms.map((s) => s.replace('USDT', '').toLowerCase()).join(',');
+      const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).join(',');
       const cg = await fetch(
         `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${encodeURIComponent(syms)}&price_change_percentage=24h`
       );
@@ -395,7 +411,7 @@ async function main() {
     // 24h volume change, tags. Cheap batch quotes call.
     if (CMC_KEY) {
       try {
-        const syms = fundSyms.map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
         const r = await fetch(
           `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(syms)}`,
           { headers: { 'X-CMC_PRO_API_KEY': CMC_KEY } }
@@ -424,7 +440,7 @@ async function main() {
         );
         if (tk.ok) {
           const tok = (await tk.json()).access_token;
-          const coins = fundSyms.map((s) => s.replace('USDT', '').toLowerCase()).slice(0, 20).join(',');
+          const coins = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).slice(0, 20).join(',');
           const ev = await fetch(
             `https://api.coinmarketcal.com/v1/events?max=30&coins=${encodeURIComponent(coins)}&dateRangeStart=${new Date().toISOString().slice(0, 10)}`,
             { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' } }
@@ -438,6 +454,7 @@ async function main() {
               if (days == null || days > 7) continue;
               for (const c of p.coins || []) {
                 const a = (c.symbol || '').toUpperCase();
+                if (!isCrypto.has(a)) continue;
                 const n = (events[a] ??= { n: 0, unlocks: 0, catalysts: 0, next: [] });
                 n.n++; if (isUnlock) n.unlocks++; if (isCatalyst) n.catalysts++;
                 if (n.next.length < 2) n.next.push(`${p.title?.en?.slice(0, 60)} (${days}d)`);
@@ -455,7 +472,7 @@ async function main() {
     // needle, and the total influence is capped hard in the score.
     if (CP_KEY) {
       try {
-        const curList = fundSyms.map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const curList = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
         const cp = await fetch(
           `https://cryptopanic.com/api/${CP_PLAN}/v2/posts/?auth_token=${CP_KEY}&kind=news&filter=important&currencies=${encodeURIComponent(curList)}`
         );
@@ -474,7 +491,7 @@ async function main() {
             const weight = recency * (1 + imp * 0.5) * (hype ? 0.15 : 1); // hype posts ~zeroed
             for (const c of p.currencies || []) {
               const a = (c.code || '').toUpperCase();
-              if (!a) continue;
+              if (!a || !isCrypto.has(a)) continue;
               const n = (news[a] ??= { n: 0, pos: 0, neg: 0, imp: 0, hype: 0, heads: [] });
               n.n++;
               n.pos += pos * weight; n.neg += neg * weight; n.imp += imp; n.hype += hype;
@@ -500,7 +517,8 @@ async function main() {
     globalThis.__mcaps = mcaps; globalThis.__events = events;
   } catch {}
 
-  const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
+  const rank = (arr, v) =>
+    arr.length ? arr.filter((x) => x <= v).length / arr.length : 0.5;
   // ranks are computed INSIDE the candidate pool — the old version ranked
   // the top-48-by-volume against all ~515 pairs, so every candidate scored
   // ~95th percentile on volume for free and everything graded "A"
@@ -652,7 +670,6 @@ async function main() {
         maxLever: r.maxLever,
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
-        social: null,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
         assetId: r.asset.toLowerCase(),
@@ -857,7 +874,7 @@ async function main() {
     scanWindowSeconds: 600,
     error: null,
     source: 'bitget-direct',
-    universeFilter: 'bitget-spot',
+    universeFilter: 'bitget-usdt-m-futures',
   };
 
   fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
@@ -944,6 +961,13 @@ async function main() {
     ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
   }
   ledger.entries ??= [];
+  // re-tag asset classes from the live contract list — the taxonomy has
+  // grown (index/commodity/metal/fx were once all 'stock'), and a stale
+  // label on an open entry is a data bug, not entry-time evidence
+  for (const e of ledger.entries) {
+    const c = contractBySymbol.get(`${e.asset}USDT`.toUpperCase());
+    if (c) e.cls = assetClass(e.asset.toUpperCase(), c.isRwa === 'YES');
+  }
   const openFor = (a, d) =>
     ledger.entries.some(
       (e) => e.asset === a && e.direction === d && e.status === 'open'
@@ -964,8 +988,9 @@ async function main() {
         e.status === 'reversed' &&
         now - (e.exitTs ?? 0) < 3600e3
     );
-  // portfolio cap: open notional can't exceed 60% of equity — signals are
-  // already score-sorted so the best setups get slots first.
+  // portfolio cap: total open notional can't exceed 400% of equity (= 40%
+  // margin posted at 10x) — signals are score-sorted so the best setups get
+  // slots first.
   // Tharp risk-based sizing: target 1% of equity AT RISK per trade, i.e.
   // notional = 1% / stop distance — tighter stops carry bigger notional for
   // the same dollar risk. 10x isolated: margin = notional/10, so a 30%
@@ -973,20 +998,34 @@ async function main() {
   // (A=full, B=half); notional capped at 30% of equity — concentration is
   // still concentration regardless of how little margin it posts.
   const RISK_PCT = 0.01, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
+  // remaining open fraction after partial banks — banked rungs freed the
+  // capital, so the exposure cap counts only what's still working
+  const remFracOf = (e) =>
+    e.tps
+      ? e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0)
+      : e.lockPnl != null
+        ? 0.5
+        : 1;
   const deployed = () =>
     ledger.entries
       .filter((e) => e.status === 'open')
-      .reduce((a, e) => a + (e.notional ?? NOTIONAL), 0);
+      .reduce((a, e) => a + (e.notional ?? NOTIONAL) * remFracOf(e), 0);
   for (const s of signals) {
-    const stopFrac = (s.stopPct ?? Math.max(4, s.targetPct || 4)) / 100;
-    const conv = s.score >= 85 ? 1 : s.score >= 70 ? 0.75 : 0.5;
-    const notional = Math.round(
-      clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
-    );
     // contract leverage cap — most RWA perps max at 20x, some at 5x;
     // paper lev is min(10x target, contract max), liq band scales with it
     const lev = Math.min(LEVERAGE, s.maxLever ?? LEVERAGE);
     const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
+    // the stop must fire INSIDE the liquidation band — a stop wider than
+    // ~80% of the band is fiction (liq executes first), so clamp it there
+    const stopPct = Math.min(
+      s.stopPct ?? Math.max(4, s.targetPct || 4),
+      Math.max(1, Math.round(liqPct * 0.8 * 10) / 10)
+    );
+    const stopFrac = stopPct / 100;
+    const conv = s.score >= 85 ? 1 : s.score >= 70 ? 0.75 : 0.5;
+    const notional = Math.round(
+      clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
+    );
     if (
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
@@ -1016,7 +1055,7 @@ async function main() {
         // designed invalidation, moves to breakeven (zero-risk) once a safe
         // buffer prints, ratchets up behind profit, and only trails the
         // runner once price is past full target
-        stopAt: -s.stopPct,
+        stopAt: -stopPct,
         targetPct: s.targetPct,
         targetPrice: s.targetPrice,
         score: s.score,
@@ -1027,7 +1066,7 @@ async function main() {
         mkt0: medianChangePct, // universe median 24h change at entry — benchmark for alpha
         funding: s.funding ?? null,
         carry: s.carry ?? null,
-        stopPct: s.stopPct ?? Math.max(4, s.targetPct),
+        stopPct,
         ts: now,
         status: 'open',
         exitPrice: null,
@@ -1051,12 +1090,15 @@ async function main() {
       e.lastPrice = px;
       e.rawPnl = pnl;
       e.peakPnl = Math.max(e.peakPnl ?? -Infinity, pnl);
-      // ---- multi-split take-profit: fill each rung as price covers its
-      // fraction of the target; banked portions are realized forever ----
+      e.troughPnl = Math.min(e.troughPnl ?? Infinity, pnl);
+      // ---- multi-split take-profit: a rung fills when the PEAK touched its
+      // level — a resting limit order banks at the rung price even if the
+      // mark has since retraced (the old instant-pnl check missed wicks
+      // between builds and banked at whatever price was showing) ----
       if (e.tps) {
         for (const tp of e.tps)
-          if (!tp.hit && pnl >= tp.at * e.targetPct) {
-            tp.hit = true; tp.pnl = pnl; tp.ts = now;
+          if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
+            tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = now;
           }
         // ---- dynamic stop intelligence ----
         // zero-risk: once price covers 40% of target (TP1 territory), the
@@ -1085,11 +1127,12 @@ async function main() {
       return banked + rem * livePnl;
     };
     const fee = e.feePct ?? FEE_PCT;
-    // funding carry hits leveraged P&L directly: ratePct per 8h × elapsed
-    // funding periods, paid or earned per the entry's carry direction
+    // funding accrues on the fraction still open — banked rungs stopped
+    // earning/paying when they closed
+    const remFrac = remFracOf(e);
     const fundPnl =
       e.funding && e.carry && e.carry !== 'flat'
-        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1)
+        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFrac
         : 0;
     const settle = (status, exitPx, rawPnl) => {
       e.status = status;
@@ -1105,20 +1148,40 @@ async function main() {
         e.alphaPct = pct(e.pnlPct - (e.direction === 'LONG' ? drift : -drift));
       }
     };
-    const hit = px && pnl >= e.targetPct; // full target = final rung fills
-    const beStopped = px && !e.tps && e.beStop && pnl <= 0;
-    const stopLevel = e.tps ? e.stopAt : -(e.stopPct ?? Math.max(4, e.targetPct));
-    const stopped = px && pnl <= stopLevel;
+    // touch-based exits: a wick through a level counts even if the mark has
+    // since retraced — peak catches targets, trough catches stops/wickouts
+    const peak = Math.max(e.peakPnl ?? -Infinity, pnl ?? -Infinity);
+    const trough = Math.min(e.troughPnl ?? Infinity, pnl ?? Infinity);
+    const hit = px && peak >= e.targetPct; // full target = final rung fills
+    const beStopped = px && !e.tps && e.beStop && trough <= 0;
+    const stopLevel = e.tps
+      ? e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct))
+      : -(e.stopPct ?? Math.max(4, e.targetPct));
+    const stopped = px && stopLevel != null && trough <= stopLevel;
     const trailed = stopped && stopLevel > 0; // stop was above entry → profit-lock exit
     // liquidation outranks everything: a wick through the band kills it
-    const liquidated = px && (e.lev || 0) > 1 && pnl <= -(e.liqPct ?? LIQ_PCT);
+    const liquidated =
+      px && (e.lev || 0) > 1 && trough <= -(e.liqPct ?? LIQ_PCT);
     const reversed =
       px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
     const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
-    if (liquidated) settle('liquidated', px, -100 / (e.lev || LEVERAGE));
-    else if (hit) settle('won', px, pnl);
+    const sgn = e.direction === 'LONG' ? 1 : -1;
+    // exits record the price the order actually filled at, not the mark we
+    // happened to sample — limit TP fills AT target, stops fill AT the stop
+    // (or worse on a gap), liquidation fires at the band
+    const stopPx = e.entry * (1 + (sgn * stopLevel) / 100);
+    const liqPx = e.entry * (1 - (sgn * (e.liqPct ?? LIQ_PCT)) / 100);
+    if (liquidated) settle('liquidated', liqPx, -100 / (e.lev || LEVERAGE));
+    // when a single window covers both target and stop the order is unknown —
+    // resolve pessimistically (stop first) so the ledger never flatters itself
     else if (beStopped) settle('breakeven', e.entry, 0);
-    else if (stopped) settle(trailed ? 'trailed' : 'stopped', px, pnl);
+    else if (stopped)
+      settle(
+        trailed ? 'trailed' : stopLevel === 0 && e.tps ? 'breakeven' : 'stopped',
+        pnl < stopLevel ? px : stopPx,
+        Math.min(pnl, stopLevel)
+      );
+    else if (hit) settle('won', e.targetPrice ?? px, e.targetPct); // limit fill at target
     else if (reversed) settle('reversed', px, pnl);
     else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? e.pnlPct ?? 0);
     else e.pnlPct = pct(blended(pnl) - fee + fundPnl); // live mark = banked + remainder
@@ -1309,11 +1372,13 @@ async function main() {
     );
   }
 
-  // pipeline health for the landing footer
+  // pipeline health for the landing footer — only keys this pipeline owns;
+  // the retired Jupiter/Solana snapshot used to leave a stale 'snapshot' key
   let health = {};
   try {
     health = JSON.parse(fs.readFileSync(path.join(API, 'health.json'), 'utf8'));
   } catch {}
+  delete health.snapshot;
   health.scanner = {
     ok: true,
     at: snap.refreshedAt,

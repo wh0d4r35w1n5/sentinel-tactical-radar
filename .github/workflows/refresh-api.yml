@@ -22,20 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pull upstream state snapshots
-        run: |
-          set -u
-          origin="https://sentinel-tactical-radar-staging.netlify.app/api"
-          for ep in config hud-status trades bot-state recovered-notes; do
-            if curl -sf --retry 2 --retry-delay 3 --max-time 30 "$origin/$ep" -o "api/$ep.json.new"; then
-              mv "api/$ep.json.new" "api/$ep.json"
-              echo "updated $ep"
-            else
-              rm -f "api/$ep.json.new"
-              echo "skipped $ep (origin unreachable)"
-            fi
-          done
-
       - name: Build scanner snapshot from Bitget
         run: node scripts/build-scanner.mjs
         env:
@@ -45,9 +31,6 @@ jobs:
           CMC_API_KEY: ${{ secrets.CMC_API_KEY }}
           COINMARKETCAL_CLIENT_ID: ${{ secrets.COINMARKETCAL_CLIENT_ID }}
           COINMARKETCAL_CLIENT_SECRET: ${{ secrets.COINMARKETCAL_CLIENT_SECRET }}
-
-      - name: Build market snapshot (Jupiter + Solana + Bitget)
-        run: node scripts/build-snapshot.mjs
 
       - name: Commit if changed
         run: |

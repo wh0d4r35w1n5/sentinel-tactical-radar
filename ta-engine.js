@@ -522,7 +522,12 @@
   function linSlope(v, n) {
     var s = v.slice(-n); if (s.length < 4) return 0;
     var x0 = s[0], x1 = s[s.length - 1];
-    return x0 ? (x1 - x0) / Math.abs(x0) : 0;
+    // normalize by the mean |value| of the window, not |x0| — cumulative
+    // series like OBV can sit near zero where |x0| sends the slope to ±huge
+    // and 'flat' becomes impossible; for prices mean≈x0 so nothing changes
+    var scale = s.reduce(function (a, x) { return a + Math.abs(x); }, 0) / s.length;
+    var den = Math.max(Math.abs(x0), scale * 0.1);
+    return den ? (x1 - x0) / den : 0;
   }
   function obvSeries(cs) {
     var o = [0];
@@ -674,7 +679,7 @@
       if (mc && mc.inOB && (mc.inOB.dir === 'bullish') === L) confluence++;
       if (mc && ((mc.zone === 'discount') === L) && mc.zone !== 'equilibrium') confluence++;
       if (eq && eq.lean === bias) confluence++;
-      if (eq && ((eq.rangeQ === 'Q1-discount') === L)) confluence++;
+      if (eq && (L ? eq.rangeQ === 'Q1-discount' : eq.rangeQ === 'Q4-premium')) confluence++;
       if (ig && ig.dir === bias) confluence++;
       if (vw && vw.fade === bias) confluence++;
       if (st.trend === (L ? 'up' : 'down')) confluence++;

@@ -3,18 +3,41 @@
 Live: **https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/**
 
 - `/` — landing dashboard: pulse chart, breadth stats, ticker tape, ranked
-  signals with sparklines, signal track record (vanilla JS, no build).
+  signals with sparklines, transparent trade journal with Before/After
+  charts (vanilla JS, no build).
 - `/radar/` — the mirrored full terminal.
 
-Static mirror of the Sentinel Tactical Radar Next.js build, served by GitHub
-Pages with a self-contained data layer (no Netlify dependency for market data).
+Vanilla-JS static app served by GitHub Pages with a self-contained data
+layer — `live-feed.js` shims `/api/*` calls to static `api/*.json` snapshots
+and a live Bitget futures websocket overlay.
 
 ## How it works
 
-- The app shell is a mirrored Next.js static export under `_next/` with asset
-  paths rewritten to this repo's base path (`/sentinel-tactical-radar/`).
-- `.nojekyll` keeps GitHub Pages serving the `_next/` directory.
-- The frontend's `/api/*` calls were patched to `api/*.json` static snapshots.
+- Everything runs client-side; the only backend is the refresh workflow that
+  regenerates `api/*.json` every ~10 minutes.
+- `.nojekyll` keeps GitHub Pages serving all assets.
+- `live-feed.js` subscribes `wss://ws.bitget.com/v2/ws/public`
+  (`USDT-FUTURES` tickers) for tick-level repaints between snapshots.
+
+## The paper book
+
+The journal models a **10×-isolated USDT-M perpetual paper account**
+(real Bitget mechanics, simulated fills — no orders ever leave the browser/CI):
+
+- Risk-based sizing: `notional = equity × 1% ÷ stop distance`, conviction-scaled,
+  capped at 30% notional per position and 400% total deployed notional.
+- Per-contract leverage `min(10, contract maxLever)` — RWA caps run 5–20×.
+- Perp taker fees (0.12% round trip), funding carry on the open fraction,
+  and an isolated liquidation band (~`100/lev − 0.8`% adverse) that outranks
+  target and stop.
+- Take-profit ladder: 33%/33%/34% banks at 40%/70%/100% of target.
+- Dynamic stop: designed invalidation → breakeven at 40% of target →
+  +40%/+65% locks → trailing only past full target.
+- Touch-based exits: peak/trough extremes trigger rungs, stops and
+  liquidation — a wick through a level between snapshots counts.
+- Exits record fill-level prices (target, stop, liquidation), and each
+  settle logs `alphaPct` — P&L minus signed universe drift — so the ledger
+  measures edge, not just beta.
 
 ## Data pipeline (`.github/workflows/refresh-api.yml`)
 
@@ -23,18 +46,19 @@ Runs every 10 minutes + on demand:
 | File | Source |
 |---|---|
 | `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from Bitget public futures data (USDT-M contracts + tickers + closed 1h/5m klines for top candidates). Universe = every tradable USDT-M perpetual — crypto plus RWA stock/index/metal/FX perps — excluding fiat-stable bases, ≥ $250k 24h volume. Signals score direction-aware momentum (Wilder RSI-14, signed 24h change ranked within the candidate pool), volume surge, spread tightness, and bounded TA/derivatives/news confluence. |
-| `api/market-snapshot.json` | **Built natively** by `scripts/build-snapshot.mjs`: live Jupiter quotes (`lite-api.jup.ag`), Solana RPC slot, Bitget SOLUSDT stats. |
 | `api/pulse-history.json` | Rolling breadth index (~24h of points) accumulated each run. |
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
-| `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/expired with P&L. |
-| `api/bitget-symbols.json` | The Bitget-listed coin universe used for filtering. |
+| `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/breakeven/trailed/reversed/expired/liquidated with P&L and alpha. |
+| `api/bitget-symbols.json` | The Bitget-listed contract universe used for filtering. |
 | `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
-| `api/{config,hud-status,trades,bot-state,recovered-notes}.json` | Pulled from the upstream Netlify backend; last-good kept on failure. |
+| `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
+| `api/health.json` | Pipeline health: last build timestamp, pair count, kline coverage. |
+| `api/vault.json` | VaultKit paper vault — 20% of realized gains swept into a BTC/ETH/SOL hold basket. |
 
 ### Optional intelligence feeds (keys → richer signals)
 
-The scanner auto-activates two key-gated feeds; without keys they honestly
+The scanner auto-activates key-gated feeds; without keys they honestly
 report `no-key` and are skipped:
 
 | Feed | Key source | Adds |
@@ -46,9 +70,8 @@ report `no-key` and are skipped:
 | CoinMarketCap | `CMC_API_KEY` env or `scripts/api-keys.json` `{"cmc":"..."}` (Basic tier free) | CMC rank + 24h volume change — cross-verification overlay on CoinGecko |
 | CoinMarketCal | `COINMARKETCAL_CLIENT_ID` + `COINMARKETCAL_CLIENT_SECRET` env or `api-keys.json` `coinmarketcalId`/`coinmarketcalSecret` | Scheduled events ≤7d: token **unlocks flagged as supply-dump risk** (longs penalized −3), listings/upgrades as catalysts — flags, never triggers |
 
-`scripts/api-keys.json` is gitignored. For CI, add both as GitHub repo
+`scripts/api-keys.json` is gitignored. For CI, add them as GitHub repo
 secrets named identically — the workflow passes env through.
 
-In-browser, Jupiter quote/swap requests go straight to `lite-api.jup.ag`
-(CORS-enabled). POST mutations (save config, toggle bot, record trade) are
-server-only features and intentionally fail on static hosting.
+All trading is paper/dry-run: nothing routes orders, posts mutations, or
+touches a real account.
