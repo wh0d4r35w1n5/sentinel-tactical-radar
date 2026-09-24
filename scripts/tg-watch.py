@@ -27,15 +27,26 @@ SIDE_RE = {
     "long": re.compile(r"\b(long|buy|bull(?:ish)?)\b", re.I),
     "short": re.compile(r"\b(short|sell|bear(?:ish)?)\b", re.I),
 }
-ENTRY_RE = re.compile(r"\b(?:entry|enter|buy\s*at|range)\b[:\s]*([0-9]*\.?[0-9]+)", re.I)
-TP_RE = re.compile(r"\b(?:tp|target|take\s*profit)\s*\d*\b[:\s]*([0-9]*\.?[0-9]+)", re.I)
-SL_RE = re.compile(r"\b(?:sl|stop(?:loss|\s*loss)?)\b[:\s]*([0-9]*\.?[0-9]+)", re.I)
+ENTRY_KW = re.compile(r"\b(?:entry|enter|buy\s*at|entry\s*zone|entry\s*between|range)\b", re.I)
+TP_KW = re.compile(r"\b(?:tps?|targets?|take\s*profit)\b", re.I)
+SL_KW = re.compile(r"\b(?:sl|stop(?:loss|\s*loss)?)\b", re.I)
+# numbers NOT preceded by a word char (skips TP2/X50) and NOT followed by
+# ")" (skips "1)" enumeration ordinals) — catches real prices only
+NUM_RE = re.compile(r"(?<![\w.])([0-9]*\.?[0-9]+)(?!\s*[\)%])")
+TAGGED_RE = re.compile(r"(?:\$|#)([A-Z]{2,15}?)(?:\s*/\s*(?:USDT|USDC|PERP|USD))?(?![A-Za-z])", re.I)
+PAIR_RE = re.compile(r"\b([A-Z]{2,12})\s*/\s*(?:USDT|USDC|PERP|USD)\b", re.I)
 # words that look like symbols but aren't tradable assets
 STOPWORDS = {
     "LONG", "SHORT", "BUY", "SELL", "ENTRY", "TP", "SL", "TARGET", "VIP", "SIGNAL",
     "NEW", "UPDATE", "ALERT", "SETUP", "TRADE", "STOP", "PROFIT", "LEVERAGE", "LEV",
-    "RISK", "SPOT", "FUTURES", "PERP", "THE", "AND", "FOR", "ALL", "NOW", "UTC",
+    "RISK", "SPOT", "FUTURES", "PERP", "THE", "AND", "FOR", "ALL", "NOW", "UTC", "CMP",
+    "PRICE", "ACTION", "STRATEGY", "COIN", "DIRECTION", "MARKET", "ANALYSIS", "ZONE",
 }
+
+
+def nums_after(kw_rx, text, span=140):
+    m = kw_rx.search(text)
+    return NUM_RE.findall(text[m.end():m.end() + span]) if m else []
 
 
 def parse_signal(text: str, ts_ms: int):
@@ -44,16 +55,27 @@ def parse_signal(text: str, ts_ms: int):
     if not side:
         return None
     asset = None
-    for m in SYM_RE.finditer(text):
-        tok = m.group(1).upper()
-        if 2 <= len(tok) <= 12 and tok not in STOPWORDS:
-            asset = tok
+    # prefer $/#-tagged or BASE/QUOTE pair tokens — they disambiguate real
+    # symbols from look-alike words like "Price"/"Coin"
+    for tok in TAGGED_RE.findall(text) + PAIR_RE.findall(text):
+        t = tok.upper()
+        if t not in STOPWORDS:
+            asset = t
             break
     if not asset:
+        for m in SYM_RE.finditer(text):
+            tok = m.group(1).upper()
+            if 2 <= len(tok) <= 12 and tok not in STOPWORDS:
+                asset = tok
+                break
+    if not asset:
         return None
-    entry = m.group(1) if (m := ENTRY_RE.search(text)) else None
-    tps = [m.group(1) for m in TP_RE.finditer(text)][:4]
-    sl = m.group(1) if (m := SL_RE.search(text)) else None
+    asset = re.sub(r"(?:USDT|USDC|PERP|USD)$", "", asset)  # BTCUSDT -> BTC
+    en = nums_after(ENTRY_KW, text)
+    entry = en[0] if en else None
+    tps = nums_after(TP_KW, text)[:6]
+    sn = nums_after(SL_KW, text)
+    sl = sn[0] if sn else None
     return {
         "asset": asset, "side": side, "ts": ts_ms,
         "entry": entry, "tps": tps, "sl": sl,
