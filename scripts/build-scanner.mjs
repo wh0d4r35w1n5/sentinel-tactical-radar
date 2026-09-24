@@ -1234,13 +1234,23 @@ async function main() {
     const items = [];
     for (const f of FEEDS) {
       try {
+        // strip RSS tracking junk (utm_*, fbclid, gclid, mc_*, ref...) —
+        // wire links should land on the article, not feed analytics
+        const cleanUrl = (u) => {
+          try {
+            const x = new URL((u || '').trim());
+            for (const k of [...x.searchParams.keys()])
+              if (/^(utm_|fbclid|gclid|mc_|_ga|ref_|ref$|spm|igshid)/i.test(k)) x.searchParams.delete(k);
+            return x.toString();
+          } catch { return (u || '').trim(); }
+        };
         const res = await fetch(f.url, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) continue;
         const xml = await res.text();
         for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
           const b = m[1];
           const title = (b.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || b.match(/<title>(.*?)<\/title>/) || [])[1];
-          const link = (b.match(/<link>(.*?)<\/link>/) || [])[1];
+          const link = (b.match(/<link><!\[CDATA\[(.*?)\]\]><\/link>/) || b.match(/<link>(.*?)<\/link>/) || [])[1];
           const pub = (b.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1];
           if (!title) continue;
           const t = title.trim();
@@ -1251,7 +1261,7 @@ async function main() {
           for (const r of rows.slice(0, KLINE_CANDIDATES))
             if (new RegExp(`\\b${r.asset}\\b`, 'i').test(t) && !tags.includes(r.asset)) tags.push(r.asset);
           const tone = BULL.test(t) ? 'bull' : BEAR.test(t) ? 'bear' : 'neutral';
-          items.push({ ts, src: f.src, title: t.slice(0, 140), link: (link || '').trim(), tags: tags.slice(0, 6), tone });
+          items.push({ ts, src: f.src, title: t.slice(0, 140), link: cleanUrl(link), tags: tags.slice(0, 6), tone });
         }
       } catch {}
     }
