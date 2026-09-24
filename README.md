@@ -36,6 +36,13 @@ The journal models a **10×-isolated USDT-M perpetual paper account**
 - **Portfolio heat cap** — total equity at risk across all live stops is
   regime-scaled too: 6% aligned, 4% mixed, 2.5% counter-trend. Positions
   whose stops have ratcheted to profit contribute zero heat.
+- **Correlation governor** — heat is also capped per asset cluster
+  (crypto majors / crypto alts / each RWA class) at 2.5% of equity, because
+  BTC+ETH+SOL+alt longs are the same bet during a shock, not independent
+  risks.
+- **No-trade floor** — positions only open at score ≥70 (BBB). Weaker
+  signals still emit, archive and get forward-graded, but standing down is
+  a legitimate output; an empty board reads "NO EDGE — STAND DOWN".
 - Perp taker fees (0.12% round trip), funding carry on the open fraction,
   and an isolated liquidation band (~`100/lev − 0.8`% adverse) that outranks
   target and stop.
@@ -53,7 +60,8 @@ The journal models a **10×-isolated USDT-M perpetual paper account**
 ### Sentinel v1.0 — versioning, learning gate, honest stats
 
 - **Frozen ruleset.** Signals, entries and stats carry an engine version
-  (`v1.0`; pre-versioning entries show `v0.x`). Rule changes bump the
+  (`v1.1` — regime-scaled leverage + cluster governor + entry floor;
+  `v1.0` was static-10x; pre-versioning entries show `v0.x`). Rule changes bump the
   version so results are only ever compared within a ruleset — no blending
   of different engines' track records, and legacy bot records stay separate
   experiments entirely.
@@ -89,7 +97,14 @@ Runs every 10 minutes + on demand:
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
 | `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
 | `api/health.json` | Pipeline health: last build timestamp, pair count, kline coverage. |
-| `api/vault.json` | VaultKit paper vault — 20% of realized gains swept into a BTC/ETH/SOL hold basket. |
+| `api/vault.json` | VaultKit paper vault — 20% of realized gains swept into a BTC/ETH/SOL hold basket. Kept **separately identifiable** from trading performance (a rising BTC/ETH/SOL market can't fake strategy edge), and deducted from trading equity so the wallet's **System total = trading acct + vault** never double-counts sweeps. |
+
+The dashboard also carries an **Evidence / Validation panel** — prospective
+results for the *current frozen ruleset only* (v0.x excluded): signals
+observed, closed trades, +1h/+4h/+24h directional accuracy, TP-before-SL,
+median alpha vs the market basket, and per-version PF/SQN — with an explicit
+evidence status (`INSUFFICIENT SAMPLE` below 30 closed trades, so the system
+can't claim an edge the data hasn't earned).
 
 ### Optional intelligence feeds (keys → richer signals)
 

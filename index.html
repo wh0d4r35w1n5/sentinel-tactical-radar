@@ -161,9 +161,14 @@ footer a{color:var(--grn-dim)}
     <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
     <div id="pressList"></div>
   </div>
+  <div class="panel" style="margin-bottom:16px;border-color:rgba(61,220,255,.45)">
+    <div class="ptitle">Evidence / validation · prospective results only <span class="sub">— emitted signals are measured forward, traded or not · the number that matters is whether predictions precede outcomes</span><span id="evStatus" style="float:right"></span></div>
+    <div class="stats" id="evStats" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div id="evNote" class="sub" style="margin-top:8px;font-size:10px"></div>
+  </div>
   <div class="grid">
     <div class="panel">
-      <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail</span></div>
+      <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail · positions open only at score ≥70, lower signals are observed but not traded</span></div>
       <div style="overflow-x:auto"><table><thead><tr><th>Asset</th><th>Side</th><th>Grade</th><th>Score</th><th>24h</th><th>RSI 1h</th><th>Price</th><th>Target</th><th>48h</th></tr></thead><tbody id="sigBody"></tbody></table></div>
     </div>
     <div class="col">
@@ -184,8 +189,8 @@ footer a{color:var(--grn-dim)}
     </div>
   </div>
   <div class="panel" style="margin-top:16px;border-style:dashed;border-color:rgba(255,209,102,.4)">
-    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0 AUD · <b>dynamic 3–20x isolated USDT-M perp</b> model · wallet figures AUD, market prices USD</span></div>
-    <div class="stats" id="walletStats" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0 AUD · <b>dynamic 3–20x isolated USDT-M perp</b> model · vault sweeps deducted from trading equity · wallet figures AUD, market prices USD</span></div>
+    <div class="stats" id="walletStats" style="grid-template-columns:repeat(6,1fr)"></div>
   </div>
   <div class="panel" style="margin-top:16px">
     <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
@@ -457,7 +462,7 @@ async function render(){
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
     <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)} USD</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
-    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err">no signals</td></tr>';
+    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · board produced no qualifying setup · holding cash is a position</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
     $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
@@ -510,6 +515,34 @@ async function render(){
       ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
       ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
+    // ---- evidence/validation panel: prospective record of the CURRENT
+    // frozen ruleset only — v0.x legacy results deliberately excluded ----
+    {
+      const vers=Object.keys(st.byVersion||{}).filter(v=>v!=='v0.x').sort();
+      const curVer=vers[vers.length-1]||'v1.x';
+      const ce=(ledger.entries||[]).filter(e=>e.status!=='open'&&e.ver===curVer);
+      const gp=ce.filter(e=>e.pnlPct>0).reduce((a,e)=>a+e.pnlPct,0);
+      const gl=Math.abs(ce.filter(e=>e.pnlPct<0).reduce((a,e)=>a+e.pnlPct,0));
+      const pf=gl>0?+(gp/gl).toFixed(2):(gp>0?null:null);
+      const rs=ce.map(e=>e.pnlPct||0);
+      const rm=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;
+      const rsd=rs.length>1?Math.sqrt(rs.reduce((a,b)=>a+(b-rm)**2,0)/(rs.length-1)):null;
+      const sqn=(rsd>0)?+(rm/rsd*Math.sqrt(rs.length)).toFixed(2):null;
+      const es=(evals&&evals.stats)||{};
+      const acc=k=>es[k]!=null?es[k]+'%':'—';
+      const status=ce.length<30?'INSUFFICIENT SAMPLE':ce.length<100?'DEVELOPING — preliminary':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'EDGE EVIDENCE EMERGING':'SAMPLE MATURE — NO EDGE EVIDENCE YET';
+      const stCol=ce.length<30?'var(--warn,#ffd166)':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'var(--grn)':'var(--txt)';
+      $('evStatus').innerHTML=`<b style="color:${stCol};letter-spacing:.14em;font-size:11px">${status}</b>`;
+      $('evStats').innerHTML=[
+        ['Signals observed',st.signalsArchived!=null?st.signalsArchived:'—','archived boards · append-only'],
+        [`${curVer} closed trades`,ce.length,'frozen-ruleset record only'],
+        ['1h / 4h / 24h accuracy',`${acc('dirAcc1h')} / ${acc('dirAcc4h')} / ${acc('dirAcc24h')}`,'direction correct vs forward move'],
+        ['TP before SL',es.hitRate24h!=null?es.hitRate24h+'%':'—','24h window · all signals'],
+        ['Median alpha',es.medAlpha24h!=null?(es.medAlpha24h>=0?'+':'')+es.medAlpha24h+'%':'—','vs market basket · 24h'],
+        [`${curVer} PF / SQN`,`${pf??'—'} / ${sqn??'—'}`,'strategy edge, this ruleset'],
+      ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
+      $('evNote').textContent=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not, so selection bias cannot hide in this panel.`;
+    }
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
     // account-scale mode: render $ P&L at the user's real size (10% notional/trade)
@@ -566,7 +599,10 @@ async function render(){
   const acct=(acctN2>0)?acctN2:1000;
   const closedW=(ledger?ledger.entries||[]:[]).filter(e=>e.status!=='open');
   let eqR=acct;
-  closedW.forEach(e=>{eqR*=1+((e.pnlPct??0)/100)*((e.notional??1000)/10000)});
+  // vault sweep = 20% of realised wins moves OFF the trading table — trading
+  // equity compounds only the retained 80%, so trading+vault never
+  // double-counts the swept portion. Losses are borne fully by trading.
+  closedW.forEach(e=>{const p=e.pnlPct??0;eqR*=1+(p/100)*((e.notional??1000)/10000)*(p>0?0.8:1)});
   OPENPOS.length=0;
   ((ledger&&ledger.entries)||[]).forEach(e=>{if(e.status==='open')OPENPOS.push({sym:e.asset+'USDT',entry:e.entry,dir:e.direction,not:e.notional??1000,margin:e.margin??(e.lev?e.notional/e.lev:e.notional??1000),lock:e.lockPnl??null,pnl:e.pnlPct,
     banked:e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0),
@@ -579,9 +615,10 @@ async function render(){
   $('walletStats').innerHTML=[
     ['Equity',`<b class="num" data-weq>$${(eqR+openMark).toFixed(2)} AUD</b>`,'start $'+acct.toLocaleString()+' AUD · PAPER'],
     ['Cash available',`<span class="num" data-wcash>$${Math.max(0,eqR+openMark-depD).toFixed(2)} AUD</span>`,'margin posted $'+depD.toFixed(0)+' AUD'],
-    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)} AUD</span>`,closedW.length+' closed'],
+    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)} AUD</span>`,closedW.length+' closed · net of 20% vault sweeps'],
     ['Open marks',`<span class="num ${openMark>=0?'up':'dn'}" data-wopen>${openMark>=0?'+':'−'}$${Math.abs(openMark).toFixed(2)} AUD</span>`,OPENPOS.length+' positions live'],
     ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)} AUD</span>`,'started $0 AUD · 20% of wins'],
+    ['System total',`<b class="num" data-wsys>$${(eqR+openMark+vUsd).toFixed(2)} AUD</b>`,'trading acct + vault combined'],
   ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
   const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical'};

@@ -45,7 +45,11 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // frozen-rule versioning: entries carry the ruleset that created them so
 // results stay comparable across engine edits (audit requirement — keep
 // v1.0 untouched results separate from whatever follows)
-const ENGINE_VERSION = 'v1.0';
+// frozen-rule versioning: v1.0 = static 10x ruleset; v1.1 = regime-scaled
+// dynamic leverage + directional heat caps + cluster governor. The audit's
+// "freeze and let it run" rule means every ruleset change MUST bump this —
+// v1.0's record stays intact and comparable forever.
+const ENGINE_VERSION = 'v1.1';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -1056,6 +1060,30 @@ async function main() {
       (dir === 'SHORT' && regime === 'risk-on');
     return aligned ? 6 : counter ? 2.5 : 4;
   };
+  // correlation governor: BTC+ETH+SOL+alts aren't independent bets — during
+  // a shock they're the same crypto risk. Cap heat per asset cluster so the
+  // book can't stack 15 disguised copies of one bet.
+  const CRYPTO_MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'LTC', 'BCH', 'LINK', 'AVAX', 'TRX']);
+  const clusterOf = (e) =>
+    e.cls === 'crypto'
+      ? CRYPTO_MAJORS.has(e.asset) ? 'crypto-major' : 'crypto-alt'
+      : e.cls ?? 'crypto';
+  const CLUSTER_HEAT_CAP = 2.5; // % of equity at risk per correlated cluster
+  const openRiskByCluster = (cluster) =>
+    (ledger.entries
+      .filter((e) => e.status === 'open' && clusterOf(e) === cluster)
+      .reduce((a, e) => {
+        const stopPnl = e.tps
+          ? (e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
+          : -(e.stopPct ?? Math.max(4, e.targetPct ?? 8));
+        return (
+          a + (Math.max(0, -stopPnl) / 100) * remFracOf(e) * (e.notional ?? NOTIONAL)
+        );
+      }, 0) / EQUITY) * 100;
+  // no-trade floor: below BBB the board is noise — signals still emit and
+  // archive (the eval engine grades them) but no position opens. Standing
+  // down is a legitimate output.
+  const MIN_ENTRY_SCORE = 70;
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
@@ -1162,12 +1190,15 @@ async function main() {
     const notional = Math.round(
       clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
     );
+    const newHeatPct = (stopFrac * notional) / EQUITY * 100;
     if (
+      s.score >= MIN_ENTRY_SCORE &&
       !openFor(s.asset, s.direction) &&
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
-      openRiskPct() + (stopFrac * notional) / EQUITY * 100 <= heatCapFor(s.direction)
+      openRiskPct() + newHeatPct <= heatCapFor(s.direction) &&
+      openRiskByCluster(clusterOf(s)) + newHeatPct <= CLUSTER_HEAT_CAP
     ) {
       ledger.entries.unshift({
         asset: s.asset,
@@ -1816,10 +1847,15 @@ async function main() {
       for (const r of eh.records || []) allComplete.push(r);
     } catch {}
   }
-  // predictive-power stats across every completed evaluation
-  const evStats = { n: allComplete.length };
+  // predictive-power stats. Per-horizon metrics (dirAcc, avgFwd, alpha)
+  // use every record that has that field — a signal labeled at +1h counts
+  // for 1h accuracy immediately instead of waiting 24h. Outcome-dependent
+  // stats (hit rate, expectancy, IC) stay on complete records only.
+  const labeled = [...allComplete];
+  for (const r of evalBook.records) if (r.hit24h == null) labeled.push(r);
+  const evStats = { n: allComplete.length, labeled: labeled.length };
   const evAvg = (xs) => (xs.length ? pct(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
-  const fld = (k) => allComplete.map((r) => r[k]).filter((v) => v != null);
+  const fld = (k) => labeled.map((r) => r[k]).filter((v) => v != null);
   evStats.hitRate24h = allComplete.length
     ? pct((allComplete.filter((r) => r.outcome === 'tp').length / allComplete.length) * 100)
     : null;
@@ -1830,6 +1866,24 @@ async function main() {
   evStats.avgAlpha4h = evAvg(fld('alpha4h'));
   evStats.avgAlpha24h = evAvg(fld('alpha24h'));
   evStats.expectancyPct = evAvg(fld('outcomePct'));
+  // directional accuracy — % of evaluated signals whose forward return
+  // was positive in the traded direction at each horizon
+  const dirAcc = (k) => {
+    const xs = fld(k);
+    return xs.length ? pct((xs.filter((v) => v > 0).length / xs.length) * 100) : null;
+  };
+  evStats.dirAcc1h = dirAcc('fwd1h');
+  evStats.dirAcc4h = dirAcc('fwd4h');
+  evStats.dirAcc24h = dirAcc('fwd24h');
+  // median alpha — the outlier-robust centre, not just the mean
+  const med = (xs) =>
+    xs.length
+      ? (xs.sort((a, b) => a - b), xs.length % 2
+          ? xs[(xs.length - 1) / 2]
+          : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2)
+      : null;
+  evStats.medAlpha24h = med(fld('alpha24h').slice());
+  evStats.medFwd24h = med(fld('fwd24h').slice());
   // information coefficients: Pearson corr of each feature vs 24h alpha —
   // THE quant answer to "which component actually predicts". Score IC is
   // the headline; feature ICs say where the signal lives.
