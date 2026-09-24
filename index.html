@@ -149,7 +149,7 @@ footer a{color:var(--grn-dim)}
       <div class="sub" id="pulseSub"></div>
     </div>
     <div class="panel">
-      <div class="ptitle">Market breadth · Bitget spot USDT</div>
+      <div class="ptitle">Market breadth · Bitget USDT-M perps</div>
       <div class="stats" id="stats"></div>
       <div class="rail" id="rail" hidden></div>
     </div>
@@ -286,7 +286,7 @@ const BOOKS={
  'PA Quartile':{t:'Smart Money Concepts',a:'LuxAlgo methodology',u:'https://www.luxalgo.com/',d:'EQ-level price action — candle quartiles (25/50/75%) gate who controls the auction and where the mean sits'},
  'Momentum Ignition':{t:'Think and Grow Rich',a:'Napoleon Hill',u:'https://en.wikipedia.org/wiki/Think_and_Grow_Rich',d:'consecutive-body expansion after compression — the decisive first thrust, committed to without hesitation'},
  'VWAP Reversion':{t:'Lepus Proprietary Trading',a:'Peter Jackson methodology',u:'https://www.lepusproprietarytrading.com.au/trader-coaching',d:'price is tethered to VWAP — extreme deviations revert; mechanical, repeatable process over prediction'},
- 'External VIP':{t:'External signal confluence',a:'cryptopasta_vip_bot',u:'https://t.me/cryptopasta_vip_bot',d:'independent desk signal aligned with engine confluence — treated as one more factor, never a sole trigger'},
+
 };
 const SUPPORT=[
  {t:'Super Trader',a:'Van K. Tharp',u:'https://www.vantharp.com',d:'position sizing and stop discipline govern every entry'},
@@ -336,7 +336,6 @@ function confList(e){
     add(x.dir?v(x.dir==='bull'):'inf',`${({rsi:'RSI eng',macd:'MACD eng',obv:'OBV eng',dow:'Dow eng',minor:'Minor',major:'Major',macro:'Macro',superMacro:'Super-macro',rev:'Reversal eng',mtf:'MTF eng'})[k]} — ${x.label}`)});}
   if(T.vwap)add(v(T.vwap.fade==='LONG'),`5-min VWAP ${T.vwap.devPct>0?'+':''}${T.vwap.devPct}% (z ${T.vwap.z}) → ${T.vwap.fade} fade doctrine`);
   if(e.harmonic)add(v(e.harmonic.dir==='bullish'),`${e.harmonic.dir} ${e.harmonic.type} validated · q${e.harmonic.quality}/100 · D @ $${fmtP(e.harmonic.dPrice)} USD`);
-  if(e.ext)add(e.ext.dir===e.direction?'sup':'con',`external desk signal: ${e.ext.dir} (${e.ext.ageMin!=null?e.ext.ageMin+'m ago':'recent'})`);
   if(e.deriv)add(e.deriv.dir?v(e.deriv.dir==='bull'):'inf',`derivatives: ${e.deriv.oiUsd?'OI $'+(e.deriv.oiUsd/1e6).toFixed(1)+'M USD · ':''}funding ${e.deriv.fundingTrend||'—'} · ${e.deriv.crowding||'—'}${e.deriv.longShortRatio?' · L/S '+e.deriv.longShortRatio:''}${e.deriv.liqLongUsd!=null?` · liq 24h $${((e.deriv.liqLongUsd+(e.deriv.liqShortUsd||0))/1e6).toFixed(1)}M USD`:''}`);
   if(e.social)add(e.social.dir?v(e.social.dir==='bull'):'inf',`LunarCrush: galaxy ${e.social.galaxy??'—'} · altRank ${e.social.altRank??'—'} · sentiment ${e.social.sentiment??'—'} · social vol ${e.social.socialVol??'—'}`);
   if(e.news)add(e.news.dir?v(e.news.dir==='bull'):e.news.fud?(L?'con':'sup'):'inf',`CryptoPanic: ${e.news.n} posts · sentiment ${e.news.sentiment??'—'}${e.news.imp?` · ${e.news.imp} important`:''}${e.news.hype?` · ${e.news.hype} hype-filtered`:''}${e.news.fud?' · FUD cluster':''}${e.news.heads&&e.news.heads[0]?` · "${e.news.heads[0]}"`:''}`);
@@ -351,7 +350,6 @@ function confList(e){
   return items;
 }
 function synopsis(e){
-  const dir=e.direction==='LONG'?'long':'short';
   const sym=e.asset+'/USDT';
   const B=BOOKS[e.strategy]||BOOKS['Momentum Confluence'];
   const when=new Date(e.ts).toUTCString().slice(17,22);
@@ -360,9 +358,9 @@ function synopsis(e){
   const heldStr=held<1?Math.round(held*60)+' minutes':held.toFixed(1)+' hours';
   const mk=e.exitPrice??e.lastPrice;
   const pnl=e.pnlPct;
-  const lockTxt=e.lockPnl!=null?`At +${e.lockPnl}% the LOCK-50 protocol fired: half the notional was banked and the protective stop on the remainder was advanced to the entry price, converting the position into a risk-free runner. `:'';
+  const tpTxt=e.tps?`TP ladder: ${e.tps.filter(t=>t.hit).length}/3 rungs banked at ${e.tps.map(t=>`${t.at*100}%T`).join('/')}${e.stopAt!=null?` — live stop ${e.stopAt>=0?'+':''}${e.stopAt}% from entry${e.stopAt>=0?' (profit locked)':e.stopAt===0?' (breakeven)':''}`:''}. `:(e.lockPnl!=null?`Legacy LOCK-50 fired at +${e.lockPnl}% — half banked, stop to breakeven. `:'');
   const outcome={
-    open:`The position remains open and under continuous mark-to-market surveillance — the mark in this journal repaints on every Bitget WebSocket tick rather than waiting for the next settlement pass. Live P&L stands at ${pnl!=null?(pnl>=0?'+':'')+pnl+'%':'unpriced'} as of the latest tick. Resolution paths remain: target contact at $${fmtP(e.targetPrice)} USD, a hard stop at −${(e.stopPct??Math.max(4,e.targetPct))}% adverse excursion, a fresh opposite-direction signal on the same asset (reversal close), or the 24-hour expiry horizon — whichever condition the tape reaches first decides the outcome, and no other outcome is permitted.`,
+    open:`Open and marked live on every Bitget futures tick — P&L ${pnl!=null?(pnl>=0?'+':'')+pnl+'%':'unpriced'}${e.fundingPnl!=null?`, funding carry ${e.fundingPnl>=0?'+':''}${e.fundingPnl}%`:''}. ${tpTxt}Resolution paths: TP ladder rungs → full target at $${fmtP(e.targetPrice)} USD, dynamic stop currently ${e.stopAt!=null?(e.stopAt>=0?'+':'')+e.stopAt+'%':'−'+(e.stopPct??Math.max(4,e.targetPct))+'%'} from entry, opposite-signal reversal, or 24h expiry.`,
     won:`The ${e.direction==='LONG'?'upside':'downside'} target at $${fmtP(e.targetPrice)} USD was reached at ${end} UTC — ${heldStr} after entry. Final blended P&L printed ${pnl>=0?'+':''}${pnl}%.`,
     stopped:`Price moved adversely through the −${(e.stopPct??Math.max(4,e.targetPct))}% invalidation band. The stop executed at $${fmtP(e.exitPrice)} USD at ${end} UTC, ${heldStr} after entry, closing the idea at ${pnl}% — a controlled loss inside designed parameters.`,
     reversed:`The engine emitted a fresh ${e.direction==='LONG'?'SHORT':'LONG'} signal on the same asset while this position was open — a thesis contradiction. Per reversal doctrine the position was closed at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC rather than riding into a flipped signal set.`,
@@ -372,8 +370,8 @@ function synopsis(e){
     trailed:`The trailing stop locked the trade out at $${fmtP(e.exitPrice)} USD at ${end} UTC — profit-protection, not failure. The take-profit ladder had already banked${e.tps?' '+e.tps.filter(t=>t.hit).length+' rung(s)':''} along the way, and the dynamic stop finished +${Math.abs(e.stopAt??0)}% above entry, so the exit prints ${pnl}% — a win closed by the trail, which is exactly what the trail is for.`,
   }[e.status]||'';
   const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
-    ?`Because the trade closed profitable, the VaultKit sweep engaged: 20% of the realized gain ($1,000 USD notional × ${pnl}% × 20%) was converted into the hold-forever BTC/ETH/SOL basket, in equal thirds at prevailing prices. This is the Clason/Kiyosaki loop executed mechanically — the market paid, and a fixed share became permanent holdings rather than dry powder for the next punt.`
-    :`No vault sweep was triggered by this entry — sweeps fire only on realized profits, so capital is never diverted out of losing outcomes.`;
+    ?`VaultKit sweep: 20% of the realized gain ($${(e.notional??1000).toLocaleString()} USD notional × ${pnl}% × 20%) converted into the BTC/ETH/SOL hold basket at prevailing prices.`
+    :`No vault sweep — sweeps fire only on realized profits.`;
   const T=e.ta||null;
   const taTxt=T?`
 <h4>Engine TA evidence — multi-doctrine read</h4>
@@ -399,31 +397,18 @@ return `<h4>Confluence map — ${sup} supporting · ${con} conflicting · ${inf}
 <ul class="conf">${cl.map(([s,l])=>`<li class="${s}">${s==='sup'?'✓':s==='con'?'✗':'·'} ${l}</li>`).join('')}</ul>
 <p class="sub" style="margin-top:-4px">Only factors actually measured at entry are listed — a null field is omitted, never assumed. Conflicting evidence is shown, not hidden.</p>`})()}
 <h4>Signal genesis</h4>
-<p>The engine scans the Bitget spot USDT universe — tokenized-stock (RWA) instruments and fiat/stable bases excluded — for pairs clearing a $250K USD daily quote-volume floor, then enriches the top candidates with hourly klines. ${sym} ranked inside the emitted set because its composite confluence score of ${e.score}/100 placed it among the strongest ${e.score>=85?'A-tier':'graded'} setups on the board. Direction was assigned ${e.ta&&e.ta.bias?`by the TA engine's composite bias (${e.ta.bias}) — doctrine evidence overrode the raw momentum sign where they disagreed`:`from the sign of 24-hour momentum: ${e.direction==='LONG'?'positive tape → LONG':'negative tape → SHORT'}`}.</p>
-${e.ext?`<h4>External desk confluence</h4><p>The private desk feed flagged <b>${e.asset}</b>${e.ext.dir?` with a <b>${e.ext.dir}</b> lean`:''} ${e.ext.ageMin} minutes before this snapshot — treated as one bounded confluence factor (±a few points), never a sole trigger. Only derived metadata (asset/direction/timestamp) is used; the source feed's content is not republished.</p>`:''}
-<h4>Confluence breakdown</h4>
-<p>Four weighted factors produced the grade: 24h momentum rank (40%), quote-volume rank (25%), order-book liquidity via inverse spread rank (20%), and hourly volume-surge rank (15%). The profit target was derived mechanically as 35% of the prevailing 24h range, clamped to a 3–15% band — yielding a +/−${e.targetPct}% objective at $${fmtP(e.targetPrice)} USD. Stop distance was set at max(4%, target) adverse excursion, so invalidation always sits outside ordinary noise.</p>
-<h4>Primary doctrine — ${B.a}</h4>
-<p>This signal was generated under the "${e.strategy}" driver, which the NEPTUNE registry maps to <a href="${B.u}" target="_blank" rel="noopener"><i>${B.t}</i> — ${B.a}</a>. The governing rule: ${B.d}. In this instance the doctrine resolved to a ${dir} expression because ${e.direction==='LONG'?'momentum and range position aligned upward':'downside momentum dominated the confluence stack'}. The engine does not improvise on the book's logic — it parameterizes it: the book supplies the <i>shape</i> of a valid trade, the market supplies the trigger.</p>
-<h4>Risk frame — Tharp</h4>
-<p>Position risk was framed per <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a> and <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener">Michael Sloggett's risk framework</a>: risk-targeted notional of $${((e.notional??1000)).toLocaleString()} USD on a $10,000 USD paper equity (${(((e.notional??1000)/10000)*100).toFixed(1)}% notional = ${(((e.notional??1000)*(e.stopPct??Math.max(4,e.targetPct||4))/10000)).toFixed(2)}% of equity at risk)${e.lev>1?`, traded as a ${e.lev}× isolated USDT-M perpetual — $${(e.margin??Math.round((e.notional??1000)/e.lev)).toLocaleString()} USD margin posted, estimated liquidation −${e.liqPct??9.2}% adverse`:''}, a predefined invalidation at −${e.stopPct??(e.stopPct??Math.max(4,e.targetPct))}%, and a target of +${e.targetPct}% — a designed reward:risk of 1 : ${(e.targetPct/(e.stopPct??(e.stopPct??Math.max(4,e.targetPct)))).toFixed(1)}. A ${e.feePct??0.12}% round-trip fee is modeled on every close (Bitget perp taker both sides), funding carry is credited or debited per elapsed 8h window, and total notional exposure is capped at 400% of equity — the book cannot overcommit. R-multiples, not predictions, compound equity; every ledger entry enforces it by construction rather than by discretion.</p>
-<h4>Trade management protocol</h4>
-<p>${lockTxt}The standing rules each evaluation tick are: (1) target contact → settle <i>won</i>; (2) adverse excursion beyond −${(e.stopPct??Math.max(4,e.targetPct))}% → settle <i>stopped</i>; (3) a fresh opposite-direction signal on ${e.asset} → settle <i>reversed</i>; (4) 24h without resolution → settle <i>expired</i>; (5) half-target contact → LOCK-50, banking half and moving the stop to breakeven. ${e.beStop?'The breakeven stop was armed on this entry.':'The breakeven stop had not armed on this entry at the time of writing.'}</p>
+<p>The engine scans the Bitget USDT-M futures universe — crypto plus stock, index, metal and FX perpetuals, fiat-stable bases excluded — for contracts clearing a $250K USD daily quote-volume floor, then enriches the top ${48} candidates with closed hourly klines (the live, unclosed candle is excluded — patterns that evaporate on settlement are not evidence). ${sym} ranked inside the emitted set because its composite score of ${e.score}/100 placed it among the strongest setups on the board, scored directionally — momentum is ranked in the traded direction, so a high score on a ${e.direction} means the ${e.direction==='LONG'?'upside':'downside'} move itself was strong, not just that the coin moved.</p>
+<h4>Risk frame</h4>
+<p>Notional $${((e.notional??1000)).toLocaleString()} USD = ${(((e.notional??1000)*(e.stopPct??Math.max(4,e.targetPct||4)))/100).toFixed(0)} USD max risk at the designed −${e.stopPct??Math.max(4,e.targetPct)}% invalidation (≈1% equity target)${e.lev>1?`, ${e.lev}× isolated USDT-M perp — $${(e.margin??Math.round((e.notional??1000)/e.lev)).toLocaleString()} USD margin, liquidation ≈−${e.liqPct??9.2}% adverse`:''}. Target +${e.targetPct}% at $${fmtP(e.targetPrice)} USD — designed R:R 1:${(e.targetPct/(e.stopPct??Math.max(4,e.targetPct))).toFixed(1)}. Fees ${e.feePct??0.12}% round-trip and funding carry are modeled on every close; book exposure is capped at 400% of equity.</p>
+<h4>Trade management</h4>
+<p>${tpTxt}Each settlement tick: TP rungs bank fractions on the way up; once price covers 40% of target the stop ratchets to breakeven (zero-risk), then locks +40%/+65% of target behind further progress; past full target a trailing stop guards the runner. Stopped, reversed, expired and liquidated are first-class outcomes — a stopped trade is the design working, not a malfunction.</p>
 ${harmTxt}${taTxt}
-${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} perpetual funding was <b>${e.funding.ratePct>0?'+':''}${e.funding.ratePct}%</b> per 8h (${e.funding.annualPct}% annualized${e.funding.basisPct!=null?`, spot/perp basis ${e.funding.basisPct>=0?'+':''}${e.funding.basisPct}%`:''}). This position is on the <b>${e.carry==='earn'?'receiving':e.carry==='pay'?'paying':'neutral'}</b> side of carry — ${e.carry==='earn'?'if held as a perp, funding would pay this position while it runs':'if held as a perp, funding would cost this position while it runs'} — a real edge/cost input the journal now tracks per trade.</p>`:''}
-<h4>Outcome accounting</h4>
-<p>${outcome} Open positions are excluded from win-rate math — only decisive outcomes (won, stopped, reversed) count, and the headline rate stays hidden until at least five decisive closes exist.</p>
-<h4>Invalidation &amp; counterfactual</h4>
-<p>Every entry also carries the failure map: had ${sym} moved ${e.direction==='LONG'?'down':'up'} through −${(e.stopPct??Math.max(4,e.targetPct))}% from $${fmtP(e.entry)} USD — roughly $${fmtP(e.direction==='LONG'?e.entry*(1-(e.stopPct??Math.max(4,e.targetPct))/100):e.entry*(1+(e.stopPct??Math.max(4,e.targetPct))/100))} USD — the thesis would have been declared wrong and the position cut without negotiation. Likewise, any fresh ${e.direction==='LONG'?'SHORT':'LONG'} emission on ${e.asset} would have constituted a doctrinal contradiction and forced an immediate reversal close. The engine treats these paths as equally first-class outcomes: a stopped trade is not a malfunction, it is the design working. What the system refuses to do is hold a dead thesis — the 24-hour expiry exists because time-in-market is itself a risk factor that must be budgeted, a principle drawn from the same risk literature that governs the stop distance.</p>
-<h4>Psychology &amp; discipline</h4>
-<p>The registry assigns <a href="https://en.wikipedia.org/wiki/Think_and_Grow_Rich" target="_blank" rel="noopener"><i>Think and Grow Rich</i> — Napoleon Hill</a> the role of confidence amplifier: once confluence is established, the engine commits fully rather than half-sizing into doubt — the ${e.score}/100 score either cleared the emission bar or the trade would not exist. The counterweight is <a href="https://www.vantharp.com" target="_blank" rel="noopener"><i>Super Trader</i> — Van K. Tharp</a>: discipline is enforced at the exits, where no narrative is permitted to override the stop, the reversal rule, or the clock. Between those poles the engine has no psychology to defend — it cannot hope, cannot freeze, and cannot average down. That is the entire point of encoding the doctrine: the books supply judgment, the code removes hesitation.</p>
-<h4>Audit trail</h4>
-<p>This record is reproducible: the ledger is committed to the repository at <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar" target="_blank" rel="noopener">github.com/wh0d4r35w1n5/sentinel-tactical-radar</a> by automated workflow runs, so the entry timestamp, entry price, status transitions and exit price all carry git-level provenance — the entry cannot be quietly rewritten without a visible diff. Raw state is inspectable at <a href="/sentinel-tactical-radar/api/signal-ledger.json">api/signal-ledger.json</a>, and the entry/exit prints are independently checkable against Bitget's public candle history for ${e.asset}USDT around ${when} UTC. That is the entire claim: real market data, deterministic rules, immutable commit history — nothing more is asserted.</p>
-<h4>Wealth loop — Clason, Kiyosaki &amp; Pape</h4>
-<p>${vaultTxt} See <a href="https://en.wikipedia.org/wiki/The_Richest_Man_in_Babylon" target="_blank" rel="noopener"><i>The Richest Man in Babylon</i></a>, <a href="https://www.richdad.com" target="_blank" rel="noopener"><i>Rich Dad Poor Dad</i></a>, and <a href="https://barefootinvestor.com" target="_blank" rel="noopener"><i>The Barefoot Investor</i></a> for the doctrinal basis.</p>
-<h4>Epistemic notes</h4>
-<p>This is a dry-run ledger: prices are real Bitget prints, but no order was ever routed, so fills, fees, funding and slippage are absent by design. A single entry is one observation — the track record's meaning accrues only across the full population of closed trades, not from any individual outcome.</p>
-<div class="srcs">SOURCES — NEPTUNE books registry: <a href="${B.u}" target="_blank" rel="noopener">${B.t} (${B.a})</a> · ${SUPPORT.map(s=>`<a href="${s.u}" target="_blank" rel="noopener">${s.t} (${s.a})</a>`).join(' · ')} — doctrine mappings per SYSTEM MANIFEST v2.0</div>`;
+${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>${e.funding.ratePct>0?'+':''}${e.funding.ratePct}%</b> per 8h (${e.funding.annualPct}% annualized${e.funding.basisPct!=null?`, perp/index basis ${e.funding.basisPct>=0?'+':''}${e.funding.basisPct}%`:''}). Position is on the <b>${e.carry==='earn'?'receiving':e.carry==='pay'?'paying':'neutral'}</b> side of carry.</p>`:''}
+<h4>Outcome</h4>
+<p>${outcome} ${vaultTxt}${e.alphaPct!=null?` Alpha vs universe drift: <b>${e.alphaPct>=0?'+':''}${e.alphaPct}%</b> — ${e.alphaPct>=0?'the signal beat riding the market median':'the market median would have done better'}.`:''}</p>
+<h4>Audit</h4>
+<p>Ledger committed to <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar" target="_blank" rel="noopener">github.com/wh0d4r35w1n5/sentinel-tactical-radar</a> by automated workflow — entry timestamp, price, and status transitions carry git-level provenance. Prints are checkable against Bitget public candle history for ${e.asset}USDT around ${when} UTC. Dry-run only: no order was ever routed; fees, funding and liquidation are modeled, not charged.</p>
+<div class="srcs">DOCTRINE — ${B.t} (${B.a}) · ${SUPPORT.map(s=>`${s.t} (${s.a})`).join(' · ')}</div>`;
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
@@ -469,7 +454,7 @@ async function render(){
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''}${s.ext?' <span class="mbadge" title="flagged by external desk feed">DESK</span>':''} <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''} <span class="sub">${s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
@@ -507,6 +492,7 @@ async function render(){
       ['Avg R:R',d.avgRR!=null?'1 : '+d.avgRR:'—','target ≥1 : 2'],
       ['Max consec. losses',d.maxConsecLosses??'—','drawdown control'],
       ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
+      ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%':'—','excess over universe drift'],
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
@@ -578,7 +564,7 @@ async function render(){
     ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)} AUD</span>`,'started $0 AUD · 20% of wins'],
   ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
-  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical','External VIP':'cryptopasta · External Desk'};
+  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical'};
   const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
   const stratStats=(ledger&&ledger.stats&&ledger.stats.byStrategy)||{};
   const allStrat=[...new Set([...Object.keys(sigN),...Object.keys(stratStats)])];

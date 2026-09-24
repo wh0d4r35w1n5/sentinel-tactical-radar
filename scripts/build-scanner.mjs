@@ -1,8 +1,9 @@
-// Builds api/market-scanner.json directly from Bitget public spot data.
-// Universe: Bitget spot USDT pairs (excludes the RWA tokenized-stock zone and
-// fiat/stable bases). Signals score real momentum (RSI on 1h klines, 24h
-// change, volume surge, spread tightness). Never wipes a good snapshot —
-// upstream failures keep the previous file.
+// Builds api/market-scanner.json directly from Bitget public futures data.
+// Universe: Bitget USDT-M perpetual futures — crypto + RWA (stocks/indexes/
+// metals/FX), fiat-stable bases excluded. Signals score direction-aware
+// momentum (Wilder RSI on closed 1h klines, signed 24h change), volume and
+// liquidity ranked within the candidate pool, plus bounded TA/derivatives/
+// news confluence. Never wipes a good snapshot — failures keep the previous.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +28,6 @@ const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
-const EXT_FILE = path.join(API, 'ext-alpha.json');
 const PERP_TICKERS_URL =
   'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
 const FUND_URL = 'https://api.bitget.com/api/v2/mix/market/current-fund-rate';
@@ -72,6 +72,9 @@ const assetClass = (base, isRwa) =>
           ? 'stock'
           : 'crypto';
 
+// Wilder RSI over the full series — average the first `period` deltas, then
+// smooth forward to the last close. (The old version only read the first 15
+// elements of a 48-close window: it reported RSI from ~34h ago.)
 function rsi(closes, period = 14) {
   if (closes.length < period + 1) return 50;
   let gain = 0, loss = 0;
@@ -79,8 +82,14 @@ function rsi(closes, period = 14) {
     const d = closes[i] - closes[i - 1];
     if (d > 0) gain += d; else loss -= d;
   }
-  if (loss === 0) return 100;
-  const rs = gain / loss;
+  let avgG = gain / period, avgL = loss / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgG = (avgG * (period - 1) + Math.max(d, 0)) / period;
+    avgL = (avgL * (period - 1) + Math.max(-d, 0)) / period;
+  }
+  if (avgL === 0) return 100;
+  const rs = avgG / avgL;
   return 100 - 100 / (1 + rs);
 }
 
@@ -100,6 +109,9 @@ async function fetchKlines(symbol) {
       qv: Number(c[6]),
     }))
     .sort((a, b) => a.t - b.t); // oldest first
+  // drop the still-forming candle — TA on an unclosed bar paints patterns
+  // that evaporate when the hour settles
+  if (rows.length && rows[rows.length - 1].t + 3600e3 > Date.now()) rows.pop();
   const closes = rows.map((r) => r.c);
   const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
   const prior = rows.slice(0, -6);
@@ -115,11 +127,12 @@ async function fetchKlines(symbol) {
       if (Array.isArray(d5.data))
         candles5m = d5.data
           .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
-          .sort((a, b) => a.t - b.t);
+          .sort((a, b) => a.t - b.t)
+          .filter((c) => c.t + 300e3 <= Date.now());
     }
   } catch {}
   return {
-    rsi14: rsi(closes.slice(-48)),
+    rsi14: rsi(closes),
     volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
     closes: closes.slice(-48), // sparkline stays 48h
     candles,
@@ -488,10 +501,22 @@ async function main() {
   } catch {}
 
   const rank = (arr, v) => arr.filter((x) => x <= v).length / arr.length;
-  const chgs = rows.map((r) => r.changePct).sort((a, b) => a - b);
-  const vols = rows.map((r) => r.quoteVolume).sort((a, b) => a - b);
-  const spreads = rows.map((r) => r.spreadPct).sort((a, b) => a - b);
+  // ranks are computed INSIDE the candidate pool — the old version ranked
+  // the top-48-by-volume against all ~515 pairs, so every candidate scored
+  // ~95th percentile on volume for free and everything graded "A"
+  const cands = rows.slice(0, KLINE_CANDIDATES);
+  const vols = cands.map((r) => r.quoteVolume).sort((a, b) => a - b);
+  const spreads = cands.map((r) => r.spreadPct).sort((a, b) => a - b);
   const surges = [...enriched.values()].map((k) => k.volRatio).sort((a, b) => a - b);
+  // direction-aware momentum: a candidate is scored on the strength of the
+  // move in ITS traded direction — a −8% dump traded SHORT is strong
+  // downside momentum, not a high score riding the wrong side
+  const dirOf = (r, k) =>
+    (k && k.ta && k.ta.bias) || (r.changePct >= 0 ? 'LONG' : 'SHORT');
+  const dirMove = (r, k) => (dirOf(r, k) === 'LONG' ? r.changePct : -r.changePct);
+  const dirMoves = cands
+    .map((r) => dirMove(r, enriched.get(r.asset)))
+    .sort((a, b) => a - b);
 
   // ---- self-improvement: adapt doctrine weights to realized ledger R ----
   let priorEntries = [];
@@ -506,25 +531,17 @@ async function main() {
       e.pnlPct / (e.stopPct ?? Math.max(4, e.targetPct || 4))
     );
   }
+  // Bayesian-shrunk adjustments: a 3-trade sample cannot move doctrine
+  // weights. Shrinkage n/(n+10) means 5 trades reach ~1/3 strength, 30
+  // trades ~full — and the cap tightened from ±8 to ±4
   const stratAdj = Object.fromEntries(
     Object.entries(stratR).map(([k, v]) => {
-      const avg = v.reduce((a, b) => a + b, 0) / v.length;
-      return [k, Math.round(clamp(avg * 4, -8, 8) * 10) / 10];
+      const n = v.length;
+      const avg = v.reduce((a, b) => a + b, 0) / n;
+      const shrunk = avg * (n / (n + 10));
+      return [k, Math.round(clamp(shrunk * 4, -4, 4) * 10) / 10];
     })
   );
-
-  // ---- external desk feed (telegram vip) — derived asset/dir/ts only ----
-  let extSignals = [];
-  try {
-    const ex = JSON.parse(fs.readFileSync(EXT_FILE, 'utf8'));
-    extSignals = (ex.signals || []).filter(
-      (s) => s.asset && now - s.ts < 6 * 3600e3
-    );
-  } catch {}
-  const extFor = (asset) => {
-    const s = extSignals.find((x) => x.asset === asset);
-    return s ? { dir: s.dir, ts: s.ts, ageMin: Math.round((now - s.ts) / 6e4) } : null;
-  };
 
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
@@ -563,21 +580,21 @@ async function main() {
     .slice(0, KLINE_CANDIDATES)
     .map((r) => {
       const k = enriched.get(r.asset) ?? neutral;
-      const momentumRank = rank(chgs, r.changePct);
-      const rsiTilt = clamp((k.rsi14 - 30) / 40, 0, 1); // 30→0, 70→1
+      const dir0 = dirOf(r, k);
+      // score the move in the direction we would trade it — the old rank
+      // paid upside momentum to every coin including the ones we shorted
+      const momentumRank = rank(dirMoves, dirMove(r, k));
+      // RSI tilt toward the traded side: for a LONG, hot RSI reads strength;
+      // for a SHORT, cold RSI reads weakness — both momentum, one axis
+      const rsiTilt =
+        dir0 === 'LONG'
+          ? clamp((k.rsi14 - 30) / 40, 0, 1)
+          : clamp((70 - k.rsi14) / 40, 0, 1);
       const momentumScore = Math.round(momentumRank * 60 + rsiTilt * 40);
       const volumeScore = Math.round(rank(vols, r.quoteVolume) * 100);
       const liquidityScore = Math.round((1 - rank(spreads, r.spreadPct)) * 100);
       const surgeScore = Math.round(rank(surges, k.volRatio) * 100);
       const strategy = stratName(r, k);
-      const ext = extFor(r.asset);
-      const dir0 =
-        (k.ta && k.ta.bias) || (r.changePct >= 0 ? 'LONG' : 'SHORT');
-      const extBoost = ext
-        ? ext.dir
-          ? (dir0 === (ext.dir === 'long' ? 'LONG' : 'SHORT') ? 6 : -4)
-          : 3
-        : 0; // agreement boosts, contradiction costs
       // positioning pressure: crowded side is squeeze fuel — riding WITH
       // the crowd's unwind direction boosts, joining the crowd costs
       const dp = (globalThis.__deriv || {})[r.asset];
@@ -604,7 +621,6 @@ async function main() {
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
-            extBoost +
             derivBoost +
             newsBoost +
             mcapBoost,
@@ -612,15 +628,14 @@ async function main() {
           100
         )
       );
-      return { ...r, k, strategy, ext, momentumScore, volumeScore, liquidityScore, surgeScore, score };
+      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score };
     })
     .sort((a, b) => b.score - a.score);
   const signals = ranked
     .slice(0, MAX_SIGNALS)
     .map((r) => {
       const ta = r.k.ta ?? null;
-      const direction =
-        ta && ta.bias ? ta.bias : r.changePct >= 0 ? 'LONG' : 'SHORT';
+      const direction = r.dir;
       const strategy = r.strategy;
       const targetPct = pct(clamp(r.rangePct * 0.35, 3, 15));
       const hasK = enriched.has(r.asset);
@@ -631,10 +646,6 @@ async function main() {
           : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
         `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
       ];
-      if (r.ext)
-        drivers.push(
-          `desk feed flagged ${r.ext.asset ?? r.asset} ${r.ext.dir ?? ''} ${r.ext.ageMin}m ago`
-        );
       return {
         asset: r.asset,
         cls: r.cls,
@@ -677,7 +688,6 @@ async function main() {
             ? r.lastPrice * (1 + targetPct / 100)
             : r.lastPrice * (1 - targetPct / 100),
         signalFamily: 'momentum',
-        ext: r.ext ?? null,
         // carry: perp funding context — shorts collect when rate>0, longs pay
         funding: funding[r.asset] ?? null,
         carry:
@@ -1014,7 +1024,7 @@ async function main() {
         strategy: s.strategy,
         harmonic: s.harmonic ?? null,
         ta: s.ta ?? null,
-        ext: s.ext ?? null,
+        mkt0: medianChangePct, // universe median 24h change at entry — benchmark for alpha
         funding: s.funding ?? null,
         carry: s.carry ?? null,
         stopPct: s.stopPct ?? Math.max(4, s.targetPct),
@@ -1087,6 +1097,13 @@ async function main() {
       e.exitTs = now;
       e.fundingPnl = pct(fundPnl);
       e.pnlPct = pct(blended(rawPnl) - fee + fundPnl);
+      // alpha vs market drift: did the signal beat just riding the universe?
+      // drift = change in the universe median 24h-move between entry and
+      // exit, signed for our direction (a falling tape helps shorts)
+      if (e.mkt0 != null) {
+        const drift = medianChangePct - e.mkt0;
+        e.alphaPct = pct(e.pnlPct - (e.direction === 'LONG' ? drift : -drift));
+      }
     };
     const hit = px && pnl >= e.targetPct; // full target = final rung fills
     const beStopped = px && !e.tps && e.beStop && pnl <= 0;
@@ -1124,6 +1141,14 @@ async function main() {
     avgPnlPct: closed.length
       ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
       : null,
+    // did signals beat the market? avg excess return over universe-median
+    // drift — the honest answer to "does this predict anything"
+    avgAlphaPct: (() => {
+      const a = closed.filter((e) => e.alphaPct != null);
+      return a.length
+        ? pct(a.reduce((s, e) => s + e.alphaPct, 0) / a.length)
+        : null;
+    })(),
   };
   // Van Tharp: R-multiples + SQN — the actual holy grail metric
   const Rs = closed

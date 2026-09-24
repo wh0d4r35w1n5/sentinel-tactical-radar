@@ -22,7 +22,7 @@ Runs every 10 minutes + on demand:
 
 | File | Source |
 |---|---|
-| `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from Bitget public spot data (symbols + all tickers + 1h klines for top pairs). Universe = online USDT pairs, excluding the RWA tokenized-stock zone (`areaSymbol`) and fiat/stable bases, ≥ $250k 24h volume. Signals score momentum (RSI-14, 24h change), volume surge, and spread tightness. |
+| `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from Bitget public futures data (USDT-M contracts + tickers + closed 1h/5m klines for top candidates). Universe = every tradable USDT-M perpetual — crypto plus RWA stock/index/metal/FX perps — excluding fiat-stable bases, ≥ $250k 24h volume. Signals score direction-aware momentum (Wilder RSI-14, signed 24h change ranked within the candidate pool), volume surge, spread tightness, and bounded TA/derivatives/news confluence. |
 | `api/market-snapshot.json` | **Built natively** by `scripts/build-snapshot.mjs`: live Jupiter quotes (`lite-api.jup.ag`), Solana RPC slot, Bitget SOLUSDT stats. |
 | `api/pulse-history.json` | Rolling breadth index (~24h of points) accumulated each run. |
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
