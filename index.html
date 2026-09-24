@@ -213,6 +213,11 @@ footer a{color:var(--grn-dim)}
     <div id="liveRows"></div>
     <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px"></div>
   </div>
+  <div class="panel" id="godPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">GOD · the overseer <span class="sub">— audits every system invariant each cycle · pure read, never mutates, cannot hide</span><span id="godVerdict" style="float:right"></span></div>
+    <div id="godChecks"></div>
+    <div class="sub" id="godAt" style="margin-top:6px;font-size:9px"></div>
+  </div>
   <div class="panel" style="margin-top:16px">
     <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
@@ -443,8 +448,8 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,liveShadow]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'live-shadow.json')]);
+  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,liveShadow,god]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'live-shadow.json'),j(API+'god.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -647,6 +652,19 @@ async function render(){
           ||(isSim?((src.plan&&src.plan.orders||[]).map(o=>`<div class="ledger-row"><span class="sub">would open <b>${o.symbol}</b> ${o.direction} ~$${o.notionalUsd} @ ${o.leverage}x · TP×3 + trail stop</span></div>`).join('')||'<div class="sub">shadow plan: no qualifying orders this run</div>'):'');
         $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
       }
+    }
+    // ---- GOD overseer — every invariant, audited each cycle ----
+    if(god&&god.checks){
+      $('godPanel').style.display='block';
+      const vc={PERFECT:'var(--grn)',ATTENTION:'var(--warn,#ffd166)',BROKEN:'var(--red)'}[god.verdict]||'var(--mut)';
+      $('godVerdict').innerHTML=`<b style="color:${vc};letter-spacing:.15em;font-size:12px">${god.verdict}</b> <span class="sub">${god.pass}/${god.checks.length} held</span>`;
+      const dc={PASS:'var(--grn)',WARN:'var(--warn,#ffd166)',FAIL:'var(--red)'};
+      // failures and warnings first — what needs eyes rises to the top
+      const ord={FAIL:0,WARN:1,PASS:2};
+      $('godChecks').innerHTML=[...god.checks].sort((a,b)=>(ord[a.status]??3)-(ord[b.status]??3)).map(c=>
+        `<div class="ledger-row"><span><span style="color:${dc[c.status]||'var(--mut)'}">●</span> <b style="font-size:10px;letter-spacing:.06em">${c.name}</b> <span class="sub">${c.detail}</span></span><b class="num" style="color:${dc[c.status]||'var(--mut)'};font-size:9px">${c.status}</b></div>`
+      ).join('');
+      $('godAt').textContent='audit '+ago(Date.parse(god.at))+' ago · '+god.checks.length+' invariants watched';
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};

@@ -224,12 +224,16 @@ async function main() {
   const state = { mode: MODE, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
   // untradeable symbols persist across runs — the scanner blocks entries on
   // them, so the executor never re-attempts and never re-fails. Without the
-  // merge the block would flap off every other cycle.
+  // merge the block would flap off every other cycle. Authoritative store is
+  // exec-catalog.json (survives ledger rewrites); live-ledger kept in sync
+  // for the dashboard.
+  const catPath = path.join(API_DIR, 'exec-catalog.json');
   try {
-    const prior = JSON.parse(fs.readFileSync(outPath, 'utf8'));
-    // mode-scoped: a symbol unlisted on demo may be fine on live
-    if (prior.mode === MODE && prior.untradeable?.length)
-      state.untradeable = [...prior.untradeable];
+    for (const f of [outPath, catPath]) {
+      const prior = JSON.parse(fs.readFileSync(f, 'utf8'));
+      if (prior.mode === MODE && prior.untradeable?.length)
+        state.untradeable = [...new Set([...(state.untradeable || []), ...prior.untradeable])];
+    }
   } catch {}
   if (MODE === 'off') {
     log('mode=off — set SENTINEL_EXEC=shadow|demo|live');
@@ -290,6 +294,16 @@ async function main() {
   }
 
   const cm = await contractMap();
+  // persist the environment catalog + runtime rejections as a sidecar — the
+  // scanner gates entries on this so it never simulates positions the active
+  // environment can never hold (demo lists ~45 symbols vs live's ~800)
+  try {
+    fs.writeFileSync(catPath, JSON.stringify({
+      mode: MODE, at: new Date().toISOString(),
+      symbols: Object.keys(cm),
+      untradeable: state.untradeable || [],
+    }));
+  } catch {}
   // probe posMode on a symbol guaranteed to exist — a bad first plan symbol
   // would otherwise fail the probe and refuse the entire run
   const probeSym = 'BTCUSDT';
@@ -472,6 +486,15 @@ async function main() {
     state.positionsAfter = (pos2 || [])
       .filter((p) => +p.total > 0)
       .map((p) => ({ symbol: p.symbol, side: p.holdSide, size: +p.total, upl: +p.unrealizedPL }));
+  } catch {}
+  // dump pending protection plans per open symbol — the god.mjs overseer
+  // audits these to prove no position is ever naked on the exchange
+  try {
+    state.plans = {};
+    for (const p of state.positionsAfter || []) {
+      state.plans[p.symbol] = (await getPlans(p.symbol).catch(() => []))
+        .map((x) => ({ planType: x.planType, triggerPrice: +x.triggerPrice, size: +x.size, holdSide: x.holdSide }));
+    }
   } catch {}
   fs.writeFileSync(outPath, JSON.stringify(state));
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);

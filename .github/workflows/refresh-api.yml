@@ -51,6 +51,12 @@ jobs:
           LIVE_MAX_POSITIONS: ${{ vars.LIVE_MAX_POSITIONS }}
         continue-on-error: true # an exec failure must never block the snapshot commit
 
+      # Overseer: audits every invariant after exec — writes api/god.json.
+      # Pure read of artifacts; always exits 0 so a red verdict still commits.
+      - name: God audit
+        run: node scripts/god.mjs
+        continue-on-error: true
+
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"

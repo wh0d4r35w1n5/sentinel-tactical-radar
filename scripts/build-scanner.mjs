@@ -1370,11 +1370,22 @@ async function main() {
     ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
   }
   ledger.entries ??= [];
-  // executor feedback: symbols the exchange refused to order (RWA perps
-  // return 40805 despite listing in contracts). The sim must not hold
-  // positions the executor can't route — entries are blocked below and
+  // executor feedback: symbols the active environment cannot hold. Two
+  // sources — exec-catalog.json (authoritative: the environment's contract
+  // list + persisted runtime rejections, survives ledger rewrites) and
+  // live-ledger.json (same-run rejections). Entries are blocked below and
   // existing open entries settle as 'untradeable' at their live mark.
   const untradeable = new Set();
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live') {
+      const catalog = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+      if (catalog.size)
+        for (const r of rows) if (!catalog.has(r.asset.toUpperCase())) untradeable.add(r.asset.toUpperCase());
+      for (const s of cat.untradeable || [])
+        untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
+    }
+  } catch {}
   try {
     const el = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
     for (const s of el.untradeable || [])
