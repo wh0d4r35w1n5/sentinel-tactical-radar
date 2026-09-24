@@ -36,9 +36,18 @@ const PRODUCT = 'USDT-FUTURES';
 const MARGIN_COIN = 'USDT';
 
 const MODE = (process.env.SENTINEL_EXEC || 'off').toLowerCase();
-const KEY = process.env.BITGET_API_KEY || '';
-const SECRET = process.env.BITGET_API_SECRET || '';
-const PASS = process.env.BITGET_PASSPHRASE || '';
+// Bitget demo trading requires a SEPARATE key created inside demo mode —
+// a live key + paptrading header gets 40099 "environment incorrect".
+// Demo mode reads BITGET_DEMO_*; falls back to the main set if absent.
+const KEY = MODE === 'demo'
+  ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
+  : (process.env.BITGET_API_KEY || '');
+const SECRET = MODE === 'demo'
+  ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
+  : (process.env.BITGET_API_SECRET || '');
+const PASS = MODE === 'demo'
+  ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
+  : (process.env.BITGET_PASSPHRASE || '');
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
 const MAX_NOTIONAL = +(process.env.LIVE_MAX_NOTIONAL_USD || 50);
@@ -87,9 +96,11 @@ const getEquity = async () => {
   const acc = (rows || []).find((a) => a.marginCoin === MARGIN_COIN) || {};
   return +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0);
 };
+// pending-plan query REQUIRES planType — 'profit_loss' is the umbrella that
+// covers profit_plan/loss_plan/moving_plan/pos_profit/pos_loss
 const getPlans = (symbol) =>
   api('GET', '/api/v2/mix/order/orders-plan-pending', {
-    qs: `symbol=${symbol}&productType=${PRODUCT}`,
+    qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}&planType=profit_loss`,
   }).then((d) => d?.entrustedList || d?.orders || d || []);
 // position mode is account-wide per product type: one_way_mode needs
 // reduceOnly closes; hedge_mode needs tradeSide. Passing the wrong
@@ -125,34 +136,50 @@ const marketOrder = (symbol, side, size, intent, extra = {}) =>
       ...extra,
     },
   });
+// TP/SL plans go through place-tpsl-order — profit_plan/loss_plan are
+// illegal on place-plan-order (that endpoint is for trigger/moving orders).
+// holdSide identifies the protected side; no side/orderType needed.
 const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
-  api('POST', '/api/v2/mix/order/place-plan-order', {
+  api('POST', '/api/v2/mix/order/place-tpsl-order', {
     body: {
       symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
       planType, triggerPrice: String(triggerPrice), executePrice: '0',
-      triggerType: 'mark_price', size: String(size),
-      side: holdSide === 'long' ? 'sell' : 'buy',
-      holdSide,
-      ...(POS_MODE === 'hedge' ? { tradeSide: 'close' } : {}),
+      triggerType: 'mark_price', size: String(size), holdSide,
     },
   });
-const cancelPlans = (symbol, orderIds = null) =>
+// full-position close — dedicated endpoint, works in both position modes
+// (place-order close got 22002 on hedge mode even with holdSide)
+const closePosition = (symbol, holdSide) =>
+  api('POST', '/api/v2/mix/order/close-positions', {
+    body: { symbol, productType: PRODUCT, holdSide },
+  });
+// cancel-plan-order requires the SPECIFIC planType (loss_plan, profit_plan,
+// pos_profit...) — 'profit_loss' is a query-only umbrella; sending it makes
+// the cancel silently no-op (returns 00000, cancels nothing).
+const cancelPlanOrders = (symbol, planType, orderIds) =>
   api('POST', '/api/v2/mix/order/cancel-plan-order', {
-    body: orderIds
-      ? { symbol, productType: PRODUCT, orderIdList: orderIds.map((id) => ({ orderId: id })) }
-      : { symbol, productType: PRODUCT },
-  }).catch(() => {});
+    body: {
+      symbol, productType: PRODUCT, marginCoin: MARGIN_COIN,
+      planType, orderIdList: orderIds.map((id) => ({ orderId: id })),
+    },
+  });
+const cancelByType = async (symbol, pred) => {
+  const plans = await getPlans(symbol).catch(() => []);
+  const byType = {};
+  for (const p of plans || [])
+    if (p.orderId && p.planType && pred(p)) (byType[p.planType] ??= []).push(p.orderId);
+  let n = 0;
+  for (const [pt, ids] of Object.entries(byType)) {
+    await cancelPlanOrders(symbol, pt, ids).catch(() => {});
+    n += ids.length;
+  }
+  return n;
+};
+const cancelPlans = (symbol) => cancelByType(symbol, () => true);
 // cancel ONLY loss plans — a blanket cancel was wiping the TP ladder off
 // the exchange every time a trail ratcheted
-const cancelLossPlans = async (symbol) => {
-  const plans = await getPlans(symbol).catch(() => []);
-  const ids = (plans || [])
-    .filter((p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'))
-    .map((p) => p.orderId)
-    .filter(Boolean);
-  if (ids.length) await cancelPlans(symbol, ids);
-  return ids.length;
-};
+const cancelLossPlans = (symbol) =>
+  cancelByType(symbol, (p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'));
 
 // ---------- contracts: size rounding + minimums ----------
 async function contractMap() {
@@ -163,7 +190,8 @@ async function contractMap() {
   const m = {};
   for (const c of j.data || [])
     m[c.symbol] = {
-      sizePlace: +c.sizePlace || 0,
+      sizePlace: +c.volumePlace || 0, // volume rounding — field is volumePlace, NOT sizePlace
+      pricePlace: +c.pricePlace ?? 6, // trigger/execute price precision (XRP=4, BTC=1, ...)
       minTradeNum: +c.minTradeNum || 0,
       minTradeUSDT: +c.minTradeUSDT || 0,
     };
@@ -286,7 +314,7 @@ async function main() {
     if (!pos) continue;
     try {
       await cancelPlans(c.symbol);
-      await marketOrder(c.symbol, pos.side === 'long' ? 'sell' : 'buy', pos.size, 'close');
+      await closePosition(c.symbol, pos.side);
       state.actions.push(`closed ${c.symbol} ${pos.side} ${pos.size}`);
       posBySym.delete(c.symbol);
     } catch (e) {
@@ -301,7 +329,13 @@ async function main() {
     const px = t.entry * (1 + (t.direction === 'LONG' ? 1 : -1) * (t.stopPctFromEntry / 100));
     try {
       await cancelLossPlans(t.symbol); // loss plans only — the TP ladder stays
-      await planOrder(t.symbol, 'loss_plan', round(px, 6), pos.size, pos.side);
+      // verify the old stops actually died — cancel returns 00000 even on a
+      // silent no-op, and a leftover stop means a double-stopped position.
+      // no .catch here: if we can't verify, we don't stack a new stop on top
+      const leftover = (await getPlans(t.symbol))
+        .filter((p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'));
+      if (leftover.length) throw new Error(`${leftover.length} stale loss plan(s) survived cancel — refusing to stack another`);
+      await planOrder(t.symbol, 'loss_plan', round(px, cm[t.symbol]?.pricePlace ?? 6), pos.size, pos.side);
       state.actions.push(`trailed ${t.symbol} stop -> ${round(px, 6)}`);
     } catch (e) {
       state.errors.push(`trail ${t.symbol}: ${e.message}`);
@@ -343,15 +377,16 @@ async function main() {
         // FULL size (Bitget nets it as rungs fill). Rungs round DOWN to
         // contract precision — a rung too small to exist merges into the SL.
         const cp = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
+        const pp = cm[o.symbol]?.pricePlace ?? 6;
         const tpPlans = (o.tps || []).map((tp) => {
           const rung = Math.floor(size * tp.frac * cp) / cp;
           return rung > 0
-            ? planOrder(o.symbol, 'profit_plan', round(fill * (1 + sgn * tp.at * (o.targetPct / 100)), 6), rung, holdSide)
+            ? planOrder(o.symbol, 'profit_plan', round(fill * (1 + sgn * tp.at * (o.targetPct / 100)), pp), rung, holdSide)
             : null;
         }).filter(Boolean);
         const slPlan = planOrder(
           o.symbol, 'loss_plan',
-          round(fill * (1 - sgn * (o.stopPct / 100)), 6),
+          round(fill * (1 - sgn * (o.stopPct / 100)), pp),
           size, holdSide
         );
         await Promise.all([...tpPlans, slPlan]);
@@ -364,7 +399,7 @@ async function main() {
           const p = posBySym.get(o.symbol) || (await getPos()).find((x) => x.symbol === o.symbol && +x.total > 0);
           if (p) {
             await cancelPlans(o.symbol);
-            await marketOrder(o.symbol, (p.holdSide || p.side) === 'long' ? 'sell' : 'buy', +(p.total || p.size), 'close');
+            await closePosition(o.symbol, p.holdSide || p.side);
             state.actions.push(`emergency-closed ${o.symbol} (protection failed)`);
           }
         } catch (e2) {

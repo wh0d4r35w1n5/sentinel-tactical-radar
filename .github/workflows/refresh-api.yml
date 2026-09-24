@@ -42,6 +42,9 @@ jobs:
           BITGET_API_KEY: ${{ secrets.BITGET_API_KEY }}
           BITGET_API_SECRET: ${{ secrets.BITGET_API_SECRET }}
           BITGET_PASSPHRASE: ${{ secrets.BITGET_PASSPHRASE }}
+          BITGET_DEMO_API_KEY: ${{ secrets.BITGET_DEMO_API_KEY }}
+          BITGET_DEMO_API_SECRET: ${{ secrets.BITGET_DEMO_API_SECRET }}
+          BITGET_DEMO_PASSPHRASE: ${{ secrets.BITGET_DEMO_PASSPHRASE }}
           SENTINEL_LIVE: ${{ vars.SENTINEL_LIVE }}
           CONFIRM_LIVE: ${{ vars.CONFIRM_LIVE }}
           LIVE_MAX_NOTIONAL_USD: ${{ vars.LIVE_MAX_NOTIONAL_USD }}
