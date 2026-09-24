@@ -188,6 +188,8 @@ footer a{color:var(--cyan)}
 .vtog a{padding:7px 12px;color:var(--mut);cursor:pointer;user-select:none;transition:all .2s}
 .vtog a:hover{color:var(--txt)}
 .vtog a.on{background:linear-gradient(135deg,var(--cyan),var(--vio));color:#fff;font-weight:800;box-shadow:0 0 14px rgba(138,91,255,.45)}
+.al{color:inherit;text-decoration:none;border-bottom:1px dotted transparent;transition:color .2s,border-color .2s,text-shadow .2s}
+.al:hover{color:var(--cyan);border-bottom-color:rgba(34,229,255,.55);text-shadow:0 0 10px rgba(34,229,255,.5)}
 /* SIMPLE = normie view: internals hidden, everything stacks one column */
 body.simple .pro{display:none!important}
 body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
@@ -313,8 +315,8 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
   </div>
 </div>
 <footer>
-  <span>Data: Bitget USDT-M futures (live WS stream) · snapshots via Actions</span>
-  <span>Snapshots rebuilt every ~10 min via GitHub Actions · browser overlay is tick-level</span>
+  <span>Data: <a href="https://www.bitget.com/futures/usdt" target="_blank" rel="noopener">Bitget USDT-M futures</a> (live WS stream) · snapshots via <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar/actions" target="_blank" rel="noopener">Actions</a></span>
+  <span>Snapshots rebuilt every ~10 min via <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar/actions" target="_blank" rel="noopener">GitHub Actions</a> · browser overlay is tick-level</span>
   <span><a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar">source repo</a> · mirrored frontend, self-hosted data layer</span>
   <span id="health"></span>
 </footer>
@@ -322,6 +324,10 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
 <script>
 const API='/sentinel-tactical-radar/api/';
 const $=id=>document.getElementById(id);
+// link helpers — every symbol/strategy/headline resolves somewhere real
+const SYM=x=>/USDT$/i.test(x||'')?x:(x||'')+'USDT';
+const BG=x=>'https://www.bitget.com/futures/usdt/'+SYM(x);
+const LK=(h,t)=>`<a class="al" href="${h}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t}</a>`;
 const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
 const ago=t=>{const s=(Date.now()-t)/1e3;return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 const j=u=>fetch(u,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
@@ -354,6 +360,13 @@ function sigDetail(s,i){
   const c=(LAST.detail&&LAST.detail.coins||{})[s.asset]||{};
   const e=ledgerEntryFor(s.asset);
   const drv=(s.drivers||[]).map(d=>`<li>${d}</li>`).join('');
+  // doctrine strip — the registry mapping for this strategy + its live
+  // prospective record, so every signal shows which doctrine fires it and
+  // whether that doctrine has actually been paying
+  const B=BOOKS[s.strategy]||null;
+  const bs=((ledger&&ledger.stats&&ledger.stats.byStrategy)||{})[s.strategy];
+  const doc=B?`<div class="dmeta" style="margin-top:4px;border-top:1px solid var(--line);padding-top:6px"><span>doctrine · ${LK(B.u,'<b>'+B.t+'</b>')} <span class="sub">${B.a}</span></span></div>
+    <div class="sub" style="margin:2px 0 4px;font-size:11px;font-style:italic">“${B.d}”${bs?` <span class="sub" style="font-style:normal">— registry record: <b class="num ${bs.winRate>=50?'up':'dn'}">${bs.winRate}% WR</b> · ${bs.avgPnlPct>=0?'+':''}${bs.avgPnlPct}% avg · n=${bs.n}</span>`:''}</div>`:'';
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
     <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
     <ul class="ddrv">${drv}</ul>
@@ -366,7 +379,8 @@ function sigDetail(s,i){
       <span>risk <b>${s.riskPct}%</b></span>
       ${s.betaBtc!=null?`<span>β <b>${s.betaBtc}</b> BTC <span class="sub">· corr ${s.corrBtc??'—'}</span></span>`:''}
       ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
-    </div></td></tr>`;
+      <span>${LK(BG(s.symbol||s.asset),'Bitget '+SYM(s.symbol||s.asset)+' →')}</span>
+    </div>${doc}</td></tr>`;
 }
 const BOOKS={
  'Breakout Continuation':{t:'Technical Analysis of the Financial Markets',a:'John J. Murphy',u:'https://en.wikipedia.org/wiki/John_J._Murphy_(technical_analyst)',d:'trade in the direction of the established trend when price confirms at range extremes — the continuation doctrine'},
@@ -509,7 +523,7 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>
 <p>${outcome} ${vaultTxt}${e.alphaPct!=null?` Alpha vs universe drift: <b>${e.alphaPct>=0?'+':''}${e.alphaPct}%</b> — ${e.alphaPct>=0?'the signal beat riding the market median':'the market median would have done better'}.`:''}</p>
 <h4>Audit</h4>
 <p>Ledger committed to <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar" target="_blank" rel="noopener">github.com/wh0d4r35w1n5/sentinel-tactical-radar</a> by automated workflow — entry timestamp, price, and status transitions carry git-level provenance. Prints are checkable against Bitget public candle history for ${e.asset}USDT around ${when} UTC. Dry-run only: no order was ever routed; fees, funding and liquidation are modeled, not charged.</p>
-<div class="srcs">DOCTRINE — ${B.t} (${B.a}) · ${SUPPORT.map(s=>`${s.t} (${s.a})`).join(' · ')}</div>`;
+<div class="srcs">DOCTRINE — ${LK(B.u,B.t)} (${B.a}) · ${SUPPORT.map(s=>`${LK(s.u,s.t)} (${s.a})`).join(' · ')}</div>`;
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
@@ -538,20 +552,20 @@ async function render(){
     return p?`<span><b>${s}</b> <span class="num" data-px="${s}USDT">$${fmtP(p.price)} USD</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
   }).join('');
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
-  const tapeHtml=tick.map(m=>`<span>${m.symbol} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
+  const tapeHtml=tick.map(m=>`<span>${LK(BG(m.symbol),m.symbol)} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
   const pr=scan.pressure||{};
   if(pr.candidates&&pr.candidates.length){
     $('pressPct').textContent='engine pressure '+pr.pct+'%';
     $('pressFill').style.width=pr.pct+'%';
     $('pressList').innerHTML=pr.candidates.map(c=>
-      `<div class="pressrow"><span><b>${c.asset}</b> <span class="tag ${c.lean==='LONG'?'long':'short'}">${c.lean[0]}</span></span>
+      `<div class="pressrow"><span>${LK(BG(c.asset),'<b>'+c.asset+'</b>')} <span class="tag ${c.lean==='LONG'?'long':'short'}">${c.lean[0]}</span></span>
       <span class="sub">score ${c.score} · −${c.gap} to cutoff · blocked by <b>${c.blocker}</b></span></div>`).join('');
   }
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td><b>${s.asset}</b>${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''} <span class="sub">${s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td>${LK(BG(s.symbol||s.asset),'<b>'+s.asset+'</b>')}${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''} <span class="sub">${(BOOKS[s.strategy]&&BOOKS[s.strategy].u)?LK(BOOKS[s.strategy].u,s.strategy):s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
@@ -570,7 +584,7 @@ async function render(){
     $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
       const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
-      return `<div class="ledger-row"><span><b>${e.asset}</b> <span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction[0]}</span> <span class="sub">${ago(e.ts)} ago</span></span><span class="num ${cls}">${lbl}</span></div>`}).join('')||'<div class="sub">no tracked signals yet</div>';
+      return `<div class="ledger-row"><span>${LK(BG(e.asset),'<b>'+e.asset+'</b>')} <span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction[0]}</span> <span class="sub">${ago(e.ts)} ago</span></span><span class="num ${cls}">${lbl}</span></div>`}).join('')||'<div class="sub">no tracked signals yet</div>';
     // cumulative P&L curve over closed entries
     const closed=(ledger.entries||[]).filter(e=>e.status!=='open').sort((a,b)=>a.exitTs-b.exitTs);
     if(closed.length>1){
@@ -713,7 +727,7 @@ async function render(){
           ['Actions',(src.actions||[]).length,'this execution run'],
           ['Errors',(src.errors||[]).length,'any failure is listed, not hidden'],
         ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
-        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span><b>${p.symbol}</b> <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('')
+        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('')
           ||(isSim?((src.plan&&src.plan.orders||[]).map(o=>`<div class="ledger-row"><span class="sub">would open <b>${o.symbol}</b> ${o.direction} ~$${o.notionalUsd} @ ${o.leverage}x · TP×3 + trail stop</span></div>`).join('')||'<div class="sub">shadow plan: no qualifying orders this run</div>'):'');
         $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
       }
@@ -750,9 +764,9 @@ async function render(){
       if(seenH.has(k))return false;seenH.add(k);return true;
     });
     $('wireBody').innerHTML=wireItems.map(i=>{
-      const tag=(i.tags||[]).map(t=>`<span class="mbadge" style="margin-right:3px;font-size:8px">${t}</span>`).join('');
+      const tag=(i.tags||[]).map(t=>`<a class="mbadge al" href="${BG(t)}" target="_blank" rel="noopener" style="margin-right:3px;font-size:8px">${t}</a>`).join('');
       const tc=i.tone==='bull'?'var(--grn)':i.tone==='bear'?'var(--red)':'var(--mut)';
-      return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a href="${i.link}" target="_blank" rel="noopener" style="color:var(--tx);text-decoration:none">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
+      return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a class="al" href="${i.link}" target="_blank" rel="noopener">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
     }).join('')||'<div class="sub">wire quiet — no fresh headlines in the last 24h</div>';
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
@@ -775,9 +789,10 @@ async function render(){
       const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
       const live=e.status==='open'?1:0;
       const key=e.asset+':'+e.ts;
-      return `<tr class="jrow" data-j="${key}" tabindex="0"><td><b>${e.asset}</b>${e.cls&&e.cls!=='crypto'?` <span class="mbadge cls-${e.cls}" title="USDT-M ${e.cls} perpetual">${e.cls.toUpperCase()}</span>`:''}</td>
+      const bk=BOOKS[e.strategy];
+      return `<tr class="jrow" data-j="${key}" tabindex="0"><td>${LK(BG(e.asset),'<b>'+e.asset+'</b>')}${e.cls&&e.cls!=='crypto'?` <span class="mbadge cls-${e.cls}" title="USDT-M ${e.cls} perpetual">${e.cls.toUpperCase()}</span>`:''}</td>
       <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
-      <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
+      <td class="grade">${e.grade||'—'}</td><td class="sub">${bk&&bk.u?LK(bk.u,e.strategy):e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
       <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
       <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' USD <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
       <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-banked="${e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0)}" data-rem="${e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0)+(e.runner||0):(e.lockPnl!=null?0.5:1)}" data-fee="${e.feesPaid!=null?e.feesPaid+0.06:(e.feePct??0.12)}" data-fr="${e.funding?e.funding.ratePct:''}" data-fc="${e.carry??''}" data-ts="${e.ts}" data-not="${e.notional??1000}" data-tgt="${e.targetPct}" data-stop="${e.tps?(e.stopAt??-(e.stopPct??Math.max(4,e.targetPct))):-(e.stopPct??Math.max(4,e.targetPct))}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
@@ -799,9 +814,9 @@ async function render(){
       ['Basket value',`<span data-vtotal>$${((vault.valueUsd??0)*vScale).toFixed(2)} ${vCur}</span>${vSfx}`],['Deposited','$'+((vault.depositedUsd??0)*vScale).toFixed(2)+' '+vCur],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+((vault.pnlUsd??0)*vScale).toFixed(2)+' '+vCur]
     ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
     const rows=Object.entries(h).map(([s,x])=>
-      `<div class="ledger-row"><span><b>${s}</b> <span class="sub">${x.units} units · $${fmtP(x.price)} USD</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${(x.valueUsd*vScale).toFixed(2)} ${vCur}</span></div>`).join('');
+      `<div class="ledger-row"><span>${LK(BG(s),'<b>'+s+'</b>')} <span class="sub">${x.units} units · $${fmtP(x.price)} USD</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${(x.valueUsd*vScale).toFixed(2)} ${vCur}</span></div>`).join('');
     const fills=(vault.fills||[]).slice(0,5).map(f=>
-      `<div class="ledger-row"><span class="sub">+ $${(f.usd*vScale).toFixed(2)} ${vCur} from ${f.asset} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
+      `<div class="ledger-row"><span class="sub">+ $${(f.usd*vScale).toFixed(2)} ${vCur} from ${LK(BG(f.asset),f.asset)} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
     $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
     if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
   }
@@ -832,7 +847,7 @@ async function render(){
     ['System total',`<b class="num" data-wsys>$${(eqR+openMark+vUsd).toFixed(2)} AUD</b>`,'trading acct + vault combined'],
   ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
-  const BOOKS={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical'};
+  const BOOKLBL={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical'};
   const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
   const stratStats=(ledger&&ledger.stats&&ledger.stats.byStrategy)||{};
   const allStrat=[...new Set([...Object.keys(sigN),...Object.keys(stratStats)])];
@@ -840,7 +855,7 @@ async function render(){
   $('drivers').innerHTML=allStrat.map(k=>{
     const w=Math.round(((sigN[k]||0)+(stratStats[k]||{}).n||0)/tot*100);
     const perf=stratStats[k];
-    return `<div class="drvr"><div class="nm"><span>${k} <span class="bk">${BOOKS[k]||''}</span></span><span class="num">${w}%${perf?` · ${perf.winRate}% wr`:' live'}</span></div>
+    return `<div class="drvr"><div class="nm"><span>${(BOOKS[k]&&BOOKS[k].u)?LK(BOOKS[k].u,k):k} <span class="bk">${BOOKLBL[k]||''}</span></span><span class="num">${w}%${perf?` · ${perf.winRate}% wr`:' live'}</span></div>
     <div class="bar"><i style="width:${w}%"></i></div></div>`}).join('')||'<div class="sub">no driver data yet</div>';
   // funding radar — arb candidates + open-trade carry exposure
   if(funding&&funding.best){
@@ -851,14 +866,14 @@ async function render(){
     const crowdStr=crowded.length?' · '+crowded.slice(0,6).map(([a,x])=>`<b class="${x.crowding==='longs-crowded'?'dn':'up'}">${a}</b> ${x.crowding==='longs-crowded'?'longs crowded':'shorts crowded'}${x.oiUsd?' · OI $'+(x.oiUsd/1e6).toFixed(0)+'M':''}`).join(' · '):'';
     $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago · ${feedStr}${crowdStr}`;
     $('fundRows').innerHTML=funding.best.map(f=>
-      `<tr><td><b>${f.asset}</b></td>
+      `<tr><td>${LK(BG(f.asset),'<b>'+f.asset+'</b>')}</td>
       <td class="num ${f.ratePct>=0?'dn':'up'}">${f.ratePct>=0?'+':''}${f.ratePct}%</td>
       <td class="num">${f.annualPct}%</td>
       <td class="num">${f.basisPct!=null?(f.basisPct>=0?'+':'')+f.basisPct+'%':'—'}</td>
       <td class="sub">${f.arb==='LONG_SPOT_SHORT_PERP'?'long spot + short perp':'short spot + long perp'}</td>
       <td class="num">${f.breakevenH!=null?f.breakevenH+'h':'—'}</td></tr>`).join('')||'<tr><td colspan="6" class="err">no funding data</td></tr>';
   }
-  const mini=a=>(a||[]).map(m=>`<div class="r"><span>${m.symbol}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
+  const mini=a=>(a||[]).map(m=>`<div class="r"><span>${LK(BG(m.symbol),m.symbol)}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
   if(health&&health.scanner){
     const h=health.scanner;
