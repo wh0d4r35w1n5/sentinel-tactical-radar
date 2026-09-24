@@ -1273,6 +1273,10 @@ async function main() {
     (ledger.entries
       .filter((e) => {
         if (e.status !== 'open') return false;
+        // same-direction only: a +0.9-correlated SHORT against an open LONG
+        // is a hedge, not a stacked bet — counting it as heat double-charges
+        // the cluster for risk that nets out
+        if (e.direction !== candidate.direction) return false;
         const c = corrTo(candidate.asset, e.asset);
         return c != null ? c >= SAME_BET_CORR : clusterOf(e) === clusterOf(candidate);
       })
@@ -1321,9 +1325,12 @@ async function main() {
     const c = contractBySymbol.get(`${e.asset}USDT`.toUpperCase());
     if (c) e.cls = assetClass(e.asset.toUpperCase(), c.isRwa === 'YES');
   }
+  // any open position on the asset blocks a new entry — a LONG+SHORT on the
+  // same symbol isn't a hedge, it's two fees and a flat book pretending to
+  // trade. Direction flips settle via the reversal path before re-entry.
   const openFor = (a, d) =>
     ledger.entries.some(
-      (e) => e.asset === a && e.direction === d && e.status === 'open'
+      (e) => e.asset === a && e.status === 'open'
     );
   const recentClosed = (a, d) =>
     ledger.entries.some(
@@ -1355,7 +1362,9 @@ async function main() {
   // capital, so the exposure cap counts only what's still working
   const remFracOf = (e) =>
     e.tps
-      ? e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0)
+      ? // unhit rungs PLUS the runner residual — a fully-runged trade still
+        // has its trailing 15% live, it is not flat
+        e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (e.runner ?? 0)
       : e.lockPnl != null
         ? 0.5
         : 1;
@@ -1427,15 +1436,26 @@ async function main() {
       openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut &&
       openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut
     ) {
+      const fillPx =
+        s.spreadPct != null
+          ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200))
+          : s.entryPrice;
       ledger.entries.unshift({
         asset: s.asset,
         cls: s.cls ?? 'crypto',
         direction: s.direction,
-        entry: s.entryPrice,
+        // fill model: entry at the mark + adverse half-spread — the eval
+        // engine already prices signals this way; the ledger was taking
+        // idealized mid fills, a systematic flatterer on every entry
+        entry: fillPx,
         notional,
         margin: Math.round(notional / lev),
         lev,
         liqPct,
+        // fees accrue per FILL, not per position — a taker entry plus N
+        // ladder fills costs 0.06×(1+N); the flat 0.12 round-trip was
+        // undercharging ladder trades ~0.18% (4 fills = 0.30%)
+        feesPaid: FEE_PCT / 2,
         feePct: FEE_PCT,
         // take-profit ladder + RUNNER: bank 30%/30%/25% at 40%/70%/100% of
         // target, and leave a 15% runner that never has a limit — it trails
@@ -1454,7 +1474,12 @@ async function main() {
         // runner once price is past full target
         stopAt: -stopPct,
         targetPct: s.targetPct,
-        targetPrice: s.targetPrice,
+        // target quoted off the FILL, not the mid — a long paying the ask
+        // reaches its %-target at a higher print than the raw-mark target
+        targetPrice:
+          s.targetPct != null
+            ? fillPx * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.targetPct / 100))
+            : s.targetPrice,
         score: s.score,
         grade: s.grade,
         strategy: s.strategy,
@@ -1482,7 +1507,14 @@ async function main() {
       });
     }
   }
-  const freshDir = new Map(signals.map((s) => [s.asset, s.direction]));
+  // reversal triggers only from signals that would actually trade — a
+  // sub-floor or market-type-gated opposite signal was force-closing open
+  // positions the engine itself would never enter on
+  const freshDir = new Map(
+    signals
+      .filter((s) => s.score >= entryFloor && mktAllows(s))
+      .map((s) => [s.asset, s.direction])
+  );
 
   // ---- intraperiod settlement: prefetch 5m candles for every open entry ----
   // The audit's sharpest question: can a 10-minute sampling cadence award
@@ -1514,24 +1546,31 @@ async function main() {
     const blended = (livePnl) => {
       if (!e.tps) return e.lockPnl != null ? (e.lockPnl + livePnl) / 2 : livePnl;
       const banked = e.tps.filter((t) => t.hit).reduce((a, t) => a + t.frac * t.pnl, 0);
-      const rem = e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0);
+      // runner residual marks at the live print like any unhit rung —
+      // dropping it zeroed the trailing 15% out of every settle
+      const rem =
+        e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (e.runner ?? 0);
       return banked + rem * livePnl;
     };
     const fee = e.feePct ?? FEE_PCT;
     // funding accrues on the fraction still open — banked rungs stopped
     // earning/paying when they closed; computed lazily so mid-replay settles
     // charge the fraction actually open at that moment
-    const fundPnlNow = () =>
+    // funding accrues to the SETTLE timestamp, not now — a candle-replay
+    // settle at hour-3 was being charged funding for the full position age
+    const fundPnlNow = (tsC) =>
       e.funding && e.carry && e.carry !== 'flat'
-        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
+        ? (e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
         : 0;
     const settle = (status, exitPx, rawPnl, tsC) => {
       e.status = status;
       e.exitPrice = exitPx;
       e.exitTs = tsC ?? now;
-      const fp = fundPnlNow();
+      // the closing print is one more taker fill on the residual fraction
+      e.feesPaid = (e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2;
+      const fp = fundPnlNow(tsC);
       e.fundingPnl = pct(fp);
-      e.pnlPct = pct(blended(rawPnl) - fee + fp);
+      e.pnlPct = pct(blended(rawPnl) - e.feesPaid + fp);
       // alpha vs market drift: did the signal beat just riding the universe?
       if (e.mkt0 != null) {
         const drift = medianChangePct - e.mkt0;
@@ -1550,6 +1589,7 @@ async function main() {
         for (const tp of e.tps)
           if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
             tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = tsC ?? now;
+            e.feesPaid = (e.feesPaid ?? FEE_PCT / 2) + FEE_PCT / 2; // each rung is its own taker fill
           }
         // retracement trail (Tharp: give back at most half the excursion):
         // past 40% of target the stop floors at breakeven AND trails at
@@ -1635,6 +1675,7 @@ async function main() {
       if (e.tps) {
         for (const tp of e.tps) { tp.hit = false; tp.pnl = null; tp.ts = null; }
         e.stopAt = -(e.stopPct ?? Math.max(4, e.targetPct));
+        e.feesPaid = FEE_PCT / 2; // replay re-derives exit fills deterministically
       } else {
         e.lockPnl = null; e.beStop = false;
       }
@@ -1659,7 +1700,11 @@ async function main() {
       e.lastPrice = px;
       e.rawPnl = pnl;
       timeStop(now, pnl);
-      if (!checkAdverse(Math.min(e.troughPnl ?? Infinity, pnl), px))
+      // adverse test uses THIS tick's print only — cumulative troughPnl
+      // predates the ratcheted stop and was phantom-stopping trades on dips
+      // that happened before the trail existed. Chronological ordering is
+      // the candle replay's job; the live tick sees the mark as it is now.
+      if (!checkAdverse(pnl, px))
         checkFavorable(Math.max(e.peakPnl ?? -Infinity, pnl), px);
     }
     // still open: reversal / expiry / live mark. NOTE the unpriced path keeps
@@ -1671,9 +1716,14 @@ async function main() {
       const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
       if (reversed) settle('reversed', px, pnl);
       else if (expired)
-        settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? e.pnlPct ?? 0);
-      else if (px) e.pnlPct = pct(blended(pnl) - fee + fundPnlNow());
-      else if (e.rawPnl != null) e.pnlPct = pct(blended(e.rawPnl) - fee + fundPnlNow());
+        // e.pnlPct is already blended — feeding it back through blended()
+        // double-counts banked rungs and re-charges fees; rawPnl is the raw
+        // directional mark blended() expects
+        settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      else if (px)
+        e.pnlPct = pct(blended(pnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2) + fundPnlNow());
+      else if (e.rawPnl != null)
+        e.pnlPct = pct(blended(e.rawPnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2) + fundPnlNow());
     }
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
@@ -1889,7 +1939,13 @@ async function main() {
     archive = JSON.parse(fs.readFileSync(ARCHIVE_FILE, 'utf8'));
   } catch {}
   archive.runs ??= [];
-  archive.runs.push({
+  // dedup guard: a manual rebuild inside the same cadence window would push
+  // a near-identical board — and the eval engine would count its signals
+  // twice (keys differ by run.ts). One board per cadence only.
+  const lastRunTs = archive.runs.length ? archive.runs[archive.runs.length - 1].ts : 0;
+  const skipArchive = now - lastRunTs < 4 * 60e3;
+  if (!skipArchive)
+    archive.runs.push({
     ts: now,
     ver: ENGINE_VERSION,
     universeSize: rows.length,
@@ -2092,7 +2148,10 @@ async function main() {
         const mkt = mktAt(run.ts, run.ts + H);
         r['fwd' + H / 3600e3 + 'h'] = pct(fwd);
         if (mkt != null) r['mkt' + H / 3600e3 + 'h'] = pct(mkt);
-        if (mkt != null) r['alpha' + H / 3600e3 + 'h'] = pct(fwd - mkt);
+        // alpha vs a SAME-DIRECTION basket — a short signal's benchmark is
+        // shorting the basket (−mkt), not holding it; raw fwd−mkt was paying
+        // shorts 2× the market move (ledger uses the signed convention too)
+        if (mkt != null) r['alpha' + H / 3600e3 + 'h'] = pct(fwd - sgn * mkt);
       }
       // tp-before-sl inside the 24h window — adverse-first within a bar,
       // identical pessimism to position settlement
@@ -2329,12 +2388,20 @@ async function main() {
       {
         id: 'entry-floor-valid',
         claim: 'Signals ≥80 score outperform <80 (entry floor is real)',
-        metric: `80+ hitRate ${bb['80-89']?.hitRate ?? bb['90+']?.hitRate ?? '—'}% vs <80 ${bb['<80']?.hitRate ?? '—'}%`,
-        value: (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) != null && bb['<80']?.hitRate != null
-          ? pct((bb['80-89']?.hitRate ?? bb['90+']?.hitRate) - bb['<80'].hitRate) : null,
-        n: Math.min((bb['80-89']?.n ?? 0) + (bb['90+']?.n ?? 0), bb['<80']?.n ?? 0),
-        pass: (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) != null && bb['<80']?.hitRate != null
-          ? (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) > bb['<80'].hitRate : null,
+        // pool both ≥80 buckets — the old metric compared only 80-89 while
+        // n summed 80-89+90+, so the stat and its sample never matched
+        ...(() => {
+          const hi = ['80-89', '90+'].map((k) => bb[k]).filter(Boolean);
+          const hiN = hi.reduce((a, b) => a + b.n, 0);
+          const hiHit = hiN ? hi.reduce((a, b) => a + b.hitRate * b.n, 0) / hiN : null;
+          const lo = bb['<80'];
+          return {
+            metric: `80+ hitRate ${hiHit != null ? pct(hiHit) : '—'}% vs <80 ${lo?.hitRate ?? '—'}%`,
+            value: hiHit != null && lo?.hitRate != null ? pct(hiHit - lo.hitRate) : null,
+            n: Math.min(hiN, lo?.n ?? 0),
+            pass: hiHit != null && lo?.hitRate != null ? hiHit > lo.hitRate : null,
+          };
+        })(),
       },
     ];
     const claims = tests.map((t) => {
@@ -2387,8 +2454,11 @@ async function main() {
       h.units += usd / VAULT_ASSETS.length / p;
       h.costUsd = round(h.costUsd + usd / VAULT_ASSETS.length, 2);
     }
+    // DON'T write the ledger here — if the process died between this write
+    // and the vault write below, the sweep was marked done but never
+    // deposited, permanently lost. The final ledger write (post-vault)
+    // persists the flag atomically relative to the vault file.
     e.vaulted = true;
-    if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
   }
   let valueUsd = 0;
   const holdings = {};

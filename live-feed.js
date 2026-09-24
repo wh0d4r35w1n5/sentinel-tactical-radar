@@ -231,6 +231,10 @@
       .map(function (r) { return { price: r.lastPrice, symbol: r.asset, changePct: pct(r.changePct) }; });
     var adv = rows.filter(function (r) { return r.changePct > 0; }).length;
     var dec = rows.filter(function (r) { return r.changePct < 0; }).length;
+    // `chgs` was never defined — the ReferenceError killed every client-side
+    // build and silently fell back to the static snapshot. The live engine
+    // has been dead since it shipped; this is the variable it always meant.
+    var chgs = rows.map(function (r) { return r.changePct; }).sort(function (a, b) { return a - b; });
     var med = chgs.length ? pct(chgs[chgs.length >> 1]) : 0;
     var breadth = rows.length ? pct((adv / rows.length) * 100) : 0;
 

@@ -601,7 +601,7 @@ async function render(){
       <td class="grade">${e.grade||'—'}</td><td class="sub">${e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
       <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
       <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' USD <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
-      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-banked="${e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0)}" data-rem="${e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0):(e.lockPnl!=null?0.5:1)}" data-fee="${e.feePct??0.12}" data-fr="${e.funding?e.funding.ratePct:''}" data-fc="${e.carry??''}" data-ts="${e.ts}" data-not="${e.notional??1000}" data-tgt="${e.targetPct}" data-stop="${e.tps?(e.stopAt??-(e.stopPct??Math.max(4,e.targetPct))):-(e.stopPct??Math.max(4,e.targetPct))}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
+      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-banked="${e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0)}" data-rem="${e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0)+(e.runner||0):(e.lockPnl!=null?0.5:1)}" data-fee="${e.feesPaid!=null?e.feesPaid+0.06:(e.feePct??0.12)}" data-fr="${e.funding?e.funding.ratePct:''}" data-fc="${e.carry??''}" data-ts="${e.ts}" data-not="${e.notional??1000}" data-tgt="${e.targetPct}" data-stop="${e.tps?(e.stopAt??-(e.stopPct??Math.max(4,e.targetPct))):-(e.stopPct??Math.max(4,e.targetPct))}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
       <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
       <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
       +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11">
@@ -638,8 +638,8 @@ async function render(){
   OPENPOS.length=0;
   ((ledger&&ledger.entries)||[]).forEach(e=>{if(e.status==='open')OPENPOS.push({sym:e.asset+'USDT',entry:e.entry,dir:e.direction,not:e.notional??1000,margin:e.margin??(e.lev?e.notional/e.lev:e.notional??1000),lock:e.lockPnl??null,pnl:e.pnlPct,
     banked:e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0),
-    rem:e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0):(e.lockPnl!=null?0.5:1),
-    fee:e.feePct??0.12,fr:e.funding?e.funding.ratePct:0,fc:e.carry,ts:e.ts})});
+    rem:e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0)+(e.runner||0):(e.lockPnl!=null?0.5:1),
+    fee:e.feesPaid!=null?e.feesPaid+0.06:(e.feePct??0.12),fr:e.funding?e.funding.ratePct:0,fc:e.carry,ts:e.ts})});
   const openMark=OPENPOS.reduce((a,o)=>a+(o.pnl??0)/100*o.not*(acct/10000),0);
   const depD=OPENPOS.reduce((a,o)=>a+(o.margin??o.not)*(acct/10000),0); // margin posted, not notional
   const vUsd=((vault&&vault.valueUsd)||0)*(acct/10000);
@@ -742,6 +742,8 @@ function livePaint(){
     const wo=document.querySelector('[data-wopen]');if(wo){wo.textContent=(om>=0?'+':'−')+'$'+Math.abs(om).toFixed(2)+' AUD';wo.className='num '+(om>=0?'up':'dn')}
     const wc=document.querySelector('[data-wcash]');if(wc)wc.textContent='$'+Math.max(0,W.realized+om-W.dep).toFixed(2)+' AUD';
     const wv=document.querySelector('[data-wvault]');if(wv&&vRaw)wv.textContent='$'+(vRaw*W.acct/10000).toFixed(2)+' AUD';
+    // system total must repaint too — it was the only wallet cell left stale
+    const ws=document.querySelector('[data-wsys]');if(ws)ws.textContent='$'+(W.realized+om+(vRaw?vRaw*W.acct/10000:W.vault)).toFixed(2)+' AUD';
   }
 }
 document.getElementById('acctIn').addEventListener('change',e=>{
@@ -757,11 +759,23 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
 const JOPEN=new Set();
 const CHARTED=new Set();
 async function candlesFor(asset,fromMs,toMs,gran){
-  const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${Math.round(fromMs)}&endTime=${Math.round(toMs)}&limit=200`);
-  const j=await r.json();
-  const seen=new Set();
-  return (j.data||[]).map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4],v:+c[5]}))
-    .sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
+  // paginate — a single 200-bar page truncated 15m charts on 50h+ trades,
+  // silently cutting the exit end of the trade off the replay chart
+  const granMs=gran==='5m'?300e3:gran==='15m'?900e3:3600e3;
+  const out=[],seen=new Set();
+  let cur=Math.round(fromMs);
+  for(let page=0;page<5&&cur<toMs;page++){
+    const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${cur}&endTime=${Math.round(toMs)}&limit=200`);
+    const j=await r.json();
+    const raw=j.data||[];
+    const rows=raw.map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4],v:+c[5]}))
+      .sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
+    if(!rows.length)break;
+    out.push(...rows);
+    if(raw.length<200)break; // short page = window exhausted (test raw, not deduped)
+    cur=rows[rows.length-1].t+granMs;
+  }
+  return out;
 }
 function drawChart(el,e,cs,after){
   if(!cs.length)return;
@@ -877,8 +891,9 @@ async function mountJournalCharts(key){
     candlesFor(e.asset,e.ts-48*3600e3,e.ts+2*3600e3,'1H').catch(()=>[]),
     candlesFor(e.asset,e.ts-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
   const eb=row.querySelector('[data-chb]'),ea=row.querySelector('[data-cha]');
-  // drop bars starting after entry — the setup tape ends at the entry print
-  if(eb)drawChart(eb,e,csB.filter(c=>c.t<=e.ts+6e4),false);
+  // setup tape = bars fully CLOSED at entry — the 1h bar containing the
+  // entry print leaks up to 59min of post-entry price into "what it saw"
+  if(eb)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);
   if(ea)drawChart(ea,e,csA,true);
 }
 document.getElementById('journal').addEventListener('click',e=>{
