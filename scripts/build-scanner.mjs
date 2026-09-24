@@ -99,6 +99,14 @@ const assetClass = (base, isRwa) =>
             ? 'stock'
             : 'crypto';
 
+// correlation governor's static fallback clusters — crypto majors vs alts
+// vs each RWA class. Used when realized correlation data is missing.
+const CRYPTO_MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'LTC', 'BCH', 'LINK', 'AVAX', 'TRX']);
+const clusterOf = (e) =>
+  e.cls === 'crypto'
+    ? CRYPTO_MAJORS.has(e.asset) ? 'crypto-major' : 'crypto-alt'
+    : e.cls ?? 'crypto';
+
 // Wilder RSI over the full series — average the first `period` deltas, then
 // smooth forward to the last close. (The old version only read the first 15
 // elements of a 48-close window: it reported RSI from ~34h ago.)
@@ -595,6 +603,45 @@ async function main() {
   const vols = cands.map((r) => r.quoteVolume).sort((a, b) => a - b);
   const spreads = cands.map((r) => r.spreadPct).sort((a, b) => a - b);
   const surges = [...enriched.values()].map((k) => k.volRatio).sort((a, b) => a - b);
+  // ---- measured correlation structure ----
+  // Static asset clusters are a prior; the real question is whether two
+  // books move together NOW. Compute 48h of 1h simple returns per enriched
+  // asset and pairwise Pearson — this drives BTC-beta per signal and the
+  // correlation governor's same-bet test (avg corr ≥0.6 = same trade).
+  const rets = new Map();
+  for (const [asset, k] of enriched) {
+    const cs = (k.candles || []).slice(-49).map((x) => x.c);
+    if (cs.length >= 30)
+      rets.set(asset, cs.slice(1).map((v, i) => ((v - cs[i]) / cs[i]) * 100));
+  }
+  const corrPair = (x, y) => {
+    const n = Math.min(x.length, y.length);
+    if (n < 20) return null;
+    const xs = x.slice(-n), ys = y.slice(-n);
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0, sx2 = 0, sy2 = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = xs[i] - mx, dy = ys[i] - my;
+      sxy += dx * dy; sx2 += dx * dx; sy2 += dy * dy;
+    }
+    return sx2 > 0 && sy2 > 0 ? sxy / Math.sqrt(sx2 * sy2) : null;
+  };
+  const corrTo = (a, b) =>
+    a === b ? 1 : rets.has(a) && rets.has(b) ? corrPair(rets.get(a), rets.get(b)) : null;
+  const betaTo = (a, b) => {
+    if (a === b) return 1;
+    if (!rets.has(a) || !rets.has(b)) return null;
+    const x = rets.get(a), y = rets.get(b);
+    const n = Math.min(x.length, y.length);
+    if (n < 20) return null;
+    const xs = x.slice(-n), ys = y.slice(-n);
+    const mx = xs.reduce((s, v) => s + v, 0) / n;
+    const my = ys.reduce((s, v) => s + v, 0) / n;
+    let sxy = 0, sy2 = 0;
+    for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sy2 += (ys[i] - my) ** 2; }
+    return sy2 > 0 ? round(sxy / sy2, 2) : null;
+  };
   // direction-aware momentum: a candidate is scored on the strength of the
   // move in ITS traded direction — a −8% dump traded SHORT is strong
   // downside momentum, not a high score riding the wrong side
@@ -781,6 +828,10 @@ async function main() {
         rsi: hasK ? round(r.k.rsi14, 1) : null,
         volRatio: hasK ? round(r.k.volRatio, 2) : null,
         momScore: r.momentumScore != null ? round(r.momentumScore, 1) : null,
+        // measured market structure — beta + realized correlation to BTC
+        // over the last 48h of 1h returns (null when klines are missing)
+        betaBtc: betaTo(r.asset, 'BTC'),
+        corrBtc: corrTo(r.asset, 'BTC') != null ? round(corrTo(r.asset, 'BTC'), 2) : null,
         direction,
         highPrice: r.highPrice,
         lastPrice: r.lastPrice,
@@ -966,6 +1017,7 @@ async function main() {
       shortSignals: signals.filter((s) => s.direction === 'SHORT').length,
       socialCoverage: 0,
       medianChangePct,
+      regime,
       averageSpreadPct: pct(rows.reduce((a, r) => a + r.spreadPct, 0) / (rows.length || 1)),
     },
     refreshedAt: new Date().toISOString(),
@@ -996,6 +1048,39 @@ async function main() {
     path.join(API, 'coin-detail.json'),
     JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
   );
+
+  // ---- measured correlation structure → api/correlation.json ----
+  try {
+    const board = signals.map((s) => s.asset);
+    const matrix = board.map((a) =>
+      board.map((b) => (corrTo(a, b) != null ? round(corrTo(a, b), 2) : null))
+    );
+    const corrList = [...rets.keys()].map((a) => ({
+      asset: a,
+      corrBtc: corrTo(a, 'BTC') != null ? round(corrTo(a, 'BTC'), 2) : null,
+      corrEth: corrTo(a, 'ETH') != null ? round(corrTo(a, 'ETH'), 2) : null,
+      betaBtc: betaTo(a, 'BTC'),
+      cluster: clusterOf({ asset: a, cls: (rows.find((r) => r.asset === a) || {}).cls }),
+    }));
+    // universe coupling: mean pairwise corr across the board — high coupling
+    // means diversification is an illusion right now
+    const pairs = [];
+    for (let i = 0; i < board.length; i++)
+      for (let j = i + 1; j < board.length; j++)
+        if (matrix[i][j] != null) pairs.push(matrix[i][j]);
+    fs.writeFileSync(
+      path.join(API, 'correlation.json'),
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        note: 'realized 48h pairwise correlation of 1h returns, Bitget USDT-M candidates. The risk governor treats corr>=0.6 as the same bet.',
+        windowHours: 48,
+        boardAssets: board,
+        boardMatrix: matrix,
+        meanBoardCorr: pairs.length ? round(pairs.reduce((a, b) => a + b, 0) / pairs.length, 2) : null,
+        assets: corrList,
+      })
+    );
+  } catch {}
 
   // ---- funding intelligence: write api/funding.json ----
   try {
@@ -1033,6 +1118,62 @@ async function main() {
     );
   } catch {}
 
+  // ---- intelligence wire: RSS headlines, asset-tagged → api/news.json ----
+  // Key-free public feeds. Headlines are tagged to universe assets and a
+  // keyword tone estimate — display context, deliberately NOT a score input
+  // (headline sentiment is noise until the eval engine proves otherwise).
+  try {
+    const FEEDS = [
+      { src: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
+      { src: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
+    ];
+    const NAME_MAP = {
+      BTC: /\bbitcoin\b|\bbtc\b/i, ETH: /\bethereum\b|\bether\b|\beth\b/i,
+      SOL: /\bsolana\b|\bsol\b/i, XRP: /\bxrp\b|\bripple\b/i,
+      DOGE: /\bdoge\b|\bdogecoin\b/i, BNB: /\bbnb\b|\bbinance\b/i,
+      ADA: /\bcardano\b|\bada\b/i, LINK: /\bchainlink\b/i,
+      XAU: /\bgold\b|\bbullion\b/i, XAG: /\bsilver\b/i,
+      CL: /\boil\b|\bcrude\b|\bwti\b/i, SPX: /\bs&p\b|\bspx\b/i,
+      NDX100: /\bnasdaq\b/i, DXY: /\bdollar index\b|\bdxy\b/i,
+    };
+    const BULL = /surge|soar|rally|record|all-time high|\bath\b|etf inflow|adoption|approve|breakout|rebound|accumulat|bullish|pump/i;
+    const BEAR = /crash|plunge|hack|exploit|ban|lawsuit|selloff|sell-off|dump|bearish|liquidat|fraud|collapse|outflow|fear|recession|tariff/i;
+    const items = [];
+    for (const f of FEEDS) {
+      try {
+        const res = await fetch(f.url, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) continue;
+        const xml = await res.text();
+        for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+          const b = m[1];
+          const title = (b.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || b.match(/<title>(.*?)<\/title>/) || [])[1];
+          const link = (b.match(/<link>(.*?)<\/link>/) || [])[1];
+          const pub = (b.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1];
+          if (!title) continue;
+          const t = title.trim();
+          const ts = Date.parse(pub || 0) || now;
+          const tags = [];
+          for (const [a, re] of Object.entries(NAME_MAP)) if (re.test(t)) tags.push(a);
+          // also tag any universe symbol explicitly named in the headline
+          for (const r of rows.slice(0, KLINE_CANDIDATES))
+            if (new RegExp(`\\b${r.asset}\\b`, 'i').test(t) && !tags.includes(r.asset)) tags.push(r.asset);
+          const tone = BULL.test(t) ? 'bull' : BEAR.test(t) ? 'bear' : 'neutral';
+          items.push({ ts, src: f.src, title: t.slice(0, 140), link: (link || '').trim(), tags: tags.slice(0, 6), tone });
+        }
+      } catch {}
+    }
+    items.sort((a, b) => b.ts - a.ts);
+    const fresh = items.filter((i) => now - i.ts < 24 * 3600e3);
+    fs.writeFileSync(
+      path.join(API, 'news.json'),
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        note: 'public RSS wire — headlines tagged to universe assets; tone is a keyword estimate, context only, never a score input',
+        items: fresh.slice(0, 40),
+      })
+    );
+  } catch {}
+
   // headline prices for the landing header chips
   const majors = {};
   for (const sym of ['BTC', 'ETH', 'SOL']) {
@@ -1061,17 +1202,22 @@ async function main() {
     return aligned ? 6 : counter ? 2.5 : 4;
   };
   // correlation governor: BTC+ETH+SOL+alts aren't independent bets — during
-  // a shock they're the same crypto risk. Cap heat per asset cluster so the
-  // book can't stack 15 disguised copies of one bet.
-  const CRYPTO_MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'LTC', 'BCH', 'LINK', 'AVAX', 'TRX']);
-  const clusterOf = (e) =>
-    e.cls === 'crypto'
-      ? CRYPTO_MAJORS.has(e.asset) ? 'crypto-major' : 'crypto-alt'
-      : e.cls ?? 'crypto';
+  // a shock they're the same crypto risk. Cap heat per correlated cluster
+  // so the book can't stack 15 disguised copies of one bet.
   const CLUSTER_HEAT_CAP = 2.5; // % of equity at risk per correlated cluster
-  const openRiskByCluster = (cluster) =>
+  // measured-corr heat: an open position counts against the candidate's
+  // cluster when their realized 48h correlation is ≥0.6 — the "same bet"
+  // test. Falls back to the static asset-class cluster when either side
+  // lacks kline data. This is the governor Will described: fifteen crypto
+  // longs stop being fifteen risks the moment the tape says they're one.
+  const SAME_BET_CORR = 0.6;
+  const openRiskByCluster = (candidate) =>
     (ledger.entries
-      .filter((e) => e.status === 'open' && clusterOf(e) === cluster)
+      .filter((e) => {
+        if (e.status !== 'open') return false;
+        const c = corrTo(candidate.asset, e.asset);
+        return c != null ? c >= SAME_BET_CORR : clusterOf(e) === clusterOf(candidate);
+      })
       .reduce((a, e) => {
         const stopPnl = e.tps
           ? (e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
@@ -1198,7 +1344,7 @@ async function main() {
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
       openRiskPct() + newHeatPct <= heatCapFor(s.direction) &&
-      openRiskByCluster(clusterOf(s)) + newHeatPct <= CLUSTER_HEAT_CAP
+      openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP
     ) {
       ledger.entries.unshift({
         asset: s.asset,
@@ -1949,6 +2095,106 @@ async function main() {
       records: [...incomplete, ...recent],
     })
   );
+
+  // ---- hypothesis engine → api/hypotheses.json ----
+  // The self-improvement layer, done honestly: registered falsifiable claims
+  // scored prospectively from the eval labels + ledger. Status escalates
+  // with evidence n — UNTESTED <10, EARLY <30, SUGGESTIVE <100, then
+  // SUPPORTED/REFUTED at 100+. The system states what it believes AND how
+  // much evidence that belief rests on — no claim outruns its sample.
+  try {
+    const HYPO_FILE = path.join(API, 'hypotheses.json');
+    let hypoBook = { claims: [] };
+    try { hypoBook = JSON.parse(fs.readFileSync(HYPO_FILE, 'utf8')); } catch {}
+    const prior = new Map((hypoBook.claims || []).map((h) => [h.id, h]));
+    const statusFor = (n, pass) =>
+      n < 10 ? 'UNTESTED'
+        : n < 30 ? 'EARLY SIGNAL'
+        : n < 100 ? (pass == null ? 'MIXED' : pass ? 'SUGGESTIVE' : 'WEAKENING')
+        : pass == null ? 'MIXED' : pass ? 'SUPPORTED' : 'REFUTED';
+    const bg = evStats.byGrade || {}, bd = evStats.byDirection || {}, bb = evStats.byScoreBand || {};
+    // regime alignment needs direction×regime — compute from labeled records
+    const al = labeled.filter((r) => r.alpha24h != null &&
+      ((r.direction === 'LONG' && r.regime === 'risk-on') || (r.direction === 'SHORT' && r.regime === 'risk-off')));
+    const ct = labeled.filter((r) => r.alpha24h != null &&
+      ((r.direction === 'LONG' && r.regime === 'risk-off') || (r.direction === 'SHORT' && r.regime === 'risk-on')));
+    const meanOf = (xs) => xs.length ? xs.reduce((a, r) => a + r.alpha24h, 0) / xs.length : null;
+    const tests = [
+      {
+        id: 'score-ranks-alpha',
+        claim: 'Higher scores predict higher 24h alpha',
+        metric: `score→alpha IC = ${evStats.ic24h ?? '—'}`,
+        value: evStats.ic24h, n: evStats.n,
+        pass: evStats.ic24h == null ? null : evStats.ic24h > 0.05 ? true : evStats.ic24h <= 0 ? false : null,
+      },
+      {
+        id: 'grade-orders',
+        claim: 'Grade A signals beat lower grades',
+        metric: `A hitRate ${bg.A?.hitRate ?? '—'}% vs B ${bg.B?.hitRate ?? '—'}%`,
+        value: bg.A?.hitRate != null && bg.B?.hitRate != null ? pct(bg.A.hitRate - bg.B.hitRate) : null,
+        n: Math.min(bg.A?.n ?? 0, bg.B?.n ?? 0),
+        pass: bg.A?.hitRate != null && bg.B?.hitRate != null ? bg.A.hitRate >= bg.B.hitRate : null,
+      },
+      {
+        id: 'short-edge',
+        claim: 'SHORT signals carry more edge than LONGs',
+        metric: `SHORT α ${bd.SHORT?.avgAlpha24h ?? '—'}% vs LONG α ${bd.LONG?.avgAlpha24h ?? '—'}%`,
+        value: bd.SHORT?.avgAlpha24h != null && bd.LONG?.avgAlpha24h != null ? pct(bd.SHORT.avgAlpha24h - bd.LONG.avgAlpha24h) : null,
+        n: Math.min(bd.SHORT?.n ?? 0, bd.LONG?.n ?? 0),
+        pass: bd.SHORT?.avgAlpha24h != null && bd.LONG?.avgAlpha24h != null ? bd.SHORT.avgAlpha24h > bd.LONG.avgAlpha24h : null,
+      },
+      {
+        id: 'regime-align',
+        claim: 'Regime-aligned signals beat counter-trend ones',
+        metric: `aligned α ${al.length ? pct(meanOf(al)) : '—'}% vs counter α ${ct.length ? pct(meanOf(ct)) : '—'}%`,
+        value: al.length && ct.length ? pct(meanOf(al) - meanOf(ct)) : null,
+        n: Math.min(al.length, ct.length),
+        pass: al.length && ct.length ? meanOf(al) > meanOf(ct) : null,
+      },
+      {
+        id: 'vol-edge',
+        claim: 'Volume ratio predicts forward alpha',
+        metric: `volRatio IC = ${evStats.icVol ?? '—'}`,
+        value: evStats.icVol, n: evStats.n,
+        pass: evStats.icVol == null ? null : evStats.icVol > 0.05,
+      },
+      {
+        id: 'rsi-edge',
+        claim: 'RSI(1h) carries predictive information',
+        metric: `rsi IC = ${evStats.icRsi ?? '—'}`,
+        value: evStats.icRsi, n: evStats.n,
+        pass: evStats.icRsi == null ? null : Math.abs(evStats.icRsi) > 0.05,
+      },
+      {
+        id: 'entry-floor-valid',
+        claim: 'Signals ≥80 score outperform <80 (entry floor is real)',
+        metric: `80+ hitRate ${bb['80-89']?.hitRate ?? bb['90+']?.hitRate ?? '—'}% vs <80 ${bb['<80']?.hitRate ?? '—'}%`,
+        value: (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) != null && bb['<80']?.hitRate != null
+          ? pct((bb['80-89']?.hitRate ?? bb['90+']?.hitRate) - bb['<80'].hitRate) : null,
+        n: Math.min((bb['80-89']?.n ?? 0) + (bb['90+']?.n ?? 0), bb['<80']?.n ?? 0),
+        pass: (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) != null && bb['<80']?.hitRate != null
+          ? (bb['80-89']?.hitRate ?? bb['90+']?.hitRate) > bb['<80'].hitRate : null,
+      },
+    ];
+    const claims = tests.map((t) => {
+      const p = prior.get(t.id);
+      const hist = [...(p?.history || []), { ts: now, value: t.value, n: t.n }].slice(-300);
+      return {
+        id: t.id, claim: t.claim, metric: t.metric, value: t.value, n: t.n,
+        status: statusFor(t.n, t.pass),
+        prev: p ? { value: p.value, n: p.n } : null,
+        history: hist,
+      };
+    });
+    fs.writeFileSync(
+      HYPO_FILE,
+      JSON.stringify({
+        refreshedAt: snap.refreshedAt,
+        note: 'registered falsifiable claims scored prospectively from eval labels + ledger. Status: UNTESTED<10, EARLY<30, SUGGESTIVE<100, then SUPPORTED/REFUTED. The engine only gets to believe what the sample has earned.',
+        claims,
+      })
+    );
+  } catch {}
 
 
   // ---- vault: a fixed share of every realized gain compounds into a

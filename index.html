@@ -166,6 +166,16 @@ footer a{color:var(--grn-dim)}
     <div class="stats" id="evStats" style="grid-template-columns:repeat(6,1fr)"></div>
     <div id="evNote" class="sub" style="margin-top:8px;font-size:10px"></div>
   </div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px">
+    <div class="panel" style="margin-bottom:0">
+      <div class="ptitle">Hypothesis engine · what the evidence currently supports <span class="sub">— claims escalate with sample: UNTESTED &lt;10 · EARLY &lt;30 · SUGGESTIVE &lt;100 · then SUPPORTED/REFUTED</span></div>
+      <div id="hypoBody"></div>
+    </div>
+    <div class="panel" style="margin-bottom:0">
+      <div class="ptitle">Intelligence wire · live headlines <span class="sub">— public RSS, asset-tagged · context only, never a score input</span></div>
+      <div id="wireBody" style="max-height:220px;overflow-y:auto"></div>
+    </div>
+  </div>
   <div class="grid">
     <div class="panel">
       <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail · positions open only at score ≥70, lower signals are observed but not traded</span></div>
@@ -270,6 +280,7 @@ function sigDetail(s,i){
       <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)} USD–${fmtP(s.highPrice)} USD)</span>
       <span>spread <b>${s.spreadPct}%</b></span>
       <span>risk <b>${s.riskPct}%</b></span>
+      ${s.betaBtc!=null?`<span>β <b>${s.betaBtc}</b> BTC <span class="sub">· corr ${s.corrBtc??'—'}</span></span>`:''}
       ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
     </div></td></tr>`;
 }
@@ -418,8 +429,8 @@ ${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>
 }
 async function render(){
   const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,prices,health,vault,funding,sent,evals]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json')]);
+  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -511,7 +522,10 @@ async function render(){
         ['Score→alpha IC',evals.stats.ic24h!=null?''+evals.stats.ic24h:'—','Pearson · >0.05 starts meaning something'],
         ['Signal expectancy',evals.stats.expectancyPct!=null?(evals.stats.expectancyPct>=0?'+':'')+evals.stats.expectancyPct+'%':'—','per emitted signal, untraded incl.'],
         ['Hit rate by score band',Object.entries(evals.stats.byScoreBand||{}).map(([k,v])=>`${k}: ${v.hitRate}% (${v.n})`).join(' · '),'does score rank predict?'],
+        ['Factor ICs → 24h α',[['RSI',evals.stats.icRsi],['VOL',evals.stats.icVol],['MOM',evals.stats.icMom],['RANK',evals.stats.icRank]].map(([k,v])=>`${k} ${v!=null?v:'—'}`).join(' · '),'which component actually predicts'],
       ]:[]),
+      ...(corr&&corr.meanBoardCorr!=null?[['Board coupling',corr.meanBoardCorr,'mean pairwise corr · high = diversification is an illusion']]:[]),
+      ...(o.regime?[['Tape regime',o.regime,'measured breadth + median move · drives leverage + heat budget']]:[]),
       ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
       ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
@@ -543,6 +557,19 @@ async function render(){
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
       $('evNote').textContent=`Numbers populate as the archive matures — v0.x legacy trades are excluded on purpose. Every emitted signal is forward-graded at +1h/+4h/+24h whether traded or not, so selection bias cannot hide in this panel.`;
     }
+    // ---- hypothesis engine: falsifiable claims, evidence-scored ----
+    const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};
+    $('hypoBody').innerHTML=((hypo&&hypo.claims)||[]).map(h=>{
+      const col=stCol2[h.status]||'var(--mut)';
+      const delta=h.prev&&h.prev.value!=null&&h.value!=null?` <span class="sub">(was ${h.prev.value})</span>`:'';
+      return `<div class="ledger-row"><span style="flex:1"><b style="font-size:11px">${h.claim}</b><br><span class="sub">${h.metric}${delta} · n=${h.n}</span></span><b class="num" style="color:${col};font-size:9px;letter-spacing:.1em">${h.status}</b></div>`;
+    }).join('')||'<div class="sub">no claims registered yet — hypotheses land with the next build</div>';
+    // ---- intelligence wire: asset-tagged headlines ----
+    $('wireBody').innerHTML=((newsWire&&newsWire.items)||[]).map(i=>{
+      const tag=(i.tags||[]).map(t=>`<span class="mbadge" style="margin-right:3px;font-size:8px">${t}</span>`).join('');
+      const tc=i.tone==='bull'?'var(--grn)':i.tone==='bear'?'var(--red)':'var(--mut)';
+      return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a href="${i.link}" target="_blank" rel="noopener" style="color:var(--tx);text-decoration:none">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
+    }).join('')||'<div class="sub">wire quiet — no fresh headlines in the last 24h</div>';
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
     // account-scale mode: render $ P&L at the user's real size (10% notional/trade)

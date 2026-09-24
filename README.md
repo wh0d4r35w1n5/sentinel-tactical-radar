@@ -98,6 +98,9 @@ Runs every 10 minutes + on demand:
 | `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
 | `api/health.json` | Pipeline health: last build timestamp, pair count, kline coverage. |
 | `api/vault.json` | VaultKit paper vault — 20% of realized gains swept into a BTC/ETH/SOL hold basket. Kept **separately identifiable** from trading performance (a rising BTC/ETH/SOL market can't fake strategy edge), and deducted from trading equity so the wallet's **System total = trading acct + vault** never double-counts sweeps. |
+| `api/news.json` | Intelligence wire — public RSS headlines (CoinDesk/Cointelegraph) tagged to universe assets with a keyword tone estimate. Context only — deliberately never a score input. |
+| `api/correlation.json` | Measured market structure — 48h pairwise correlation of 1h returns across candidates, BTC/ETH beta per asset, board coupling mean. The risk governor treats realized corr ≥0.6 as "the same bet" (static asset-class clusters are the fallback when klines are missing). |
+| `api/hypotheses.json` | Hypothesis engine — registered falsifiable claims (score IC, grade ordering, direction asymmetry, regime alignment, factor edges, entry-floor validity) scored prospectively from eval labels. Status escalates strictly with n: UNTESTED→EARLY→SUGGESTIVE→SUPPORTED/REFUTED. |
 
 The dashboard also carries an **Evidence / Validation panel** — prospective
 results for the *current frozen ruleset only* (v0.x excluded): signals
