@@ -45,11 +45,11 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // frozen-rule versioning: entries carry the ruleset that created them so
 // results stay comparable across engine edits (audit requirement — keep
 // v1.0 untouched results separate from whatever follows)
-// frozen-rule versioning: v1.0 = static 10x ruleset; v1.1 = regime-scaled
-// dynamic leverage + directional heat caps + cluster governor. The audit's
-// "freeze and let it run" rule means every ruleset change MUST bump this —
-// v1.0's record stays intact and comparable forever.
-const ENGINE_VERSION = 'v1.1';
+// frozen-rule versioning: v1.0 = static 10x; v1.1 = dynamic leverage +
+// cluster governor; v1.2 = forensic overhaul — realistic targets (≤8%),
+// tight designed stops (≤4%), 6h dead-zone time-stop, climax-entry penalty,
+// strategy circuit-breaker. Every ruleset change MUST bump this.
+const ENGINE_VERSION = 'v1.2';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -757,6 +757,14 @@ async function main() {
       const mcapBoost = (mc && mc.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === mc.dir ? 2 : -1) : 0)
         + (ev2 && ev2.unlocks > 0 && dir0 === 'LONG' ? -3 : 0)
         + (ev2 && ev2.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === ev2.dir ? 1 : 0) : 0);
+      // climax-entry penalty: the ledger's forensic finding — the highest
+      // scores fired on overextended moves and entered late (85+ bucket
+      // avg +0.03% vs <75 bucket +0.72%). A LONG at RSI>75 or already +8%
+      // is buying the top; score pays for the entry, not the move.
+      const climax =
+        dir0 === 'LONG'
+          ? k.rsi14 > 75 || r.changePct > 8
+          : k.rsi14 < 25 || r.changePct < -8;
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -765,7 +773,8 @@ async function main() {
             (stratAdj[strategy] || 0) +
             derivBoost +
             newsBoost +
-            mcapBoost,
+            mcapBoost +
+            (climax ? -10 : 0),
           0,
           100
         )
@@ -779,7 +788,11 @@ async function main() {
       const ta = r.k.ta ?? null;
       const direction = r.dir;
       const strategy = r.strategy;
-      const targetPct = pct(clamp(r.rangePct * 0.35, 3, 15));
+      // forensic finding: 15% targets almost never fill (won=9%) while the
+      // paired 7–9% stops fill constantly — asymmetric suicide. Targets cap
+      // at 8% (moves that actually complete in <24h) and stops at half that
+      // (≤4%) so a stop-out costs ~-2R not -9R.
+      const targetPct = pct(clamp(r.rangePct * 0.35, 3, 8));
       const hasK = enriched.has(r.asset);
       const drivers = [
         `24h momentum ${r.changePct >= 0 ? '+' : ''}${pct(r.changePct)}%`,
@@ -861,7 +874,7 @@ async function main() {
         news: (globalThis.__news || {})[r.asset] ?? null,
         mcap: (globalThis.__mcaps || {})[r.asset] ?? null,
         events: (globalThis.__events || {})[r.asset] ?? null,
-        stopPct: pct(clamp(targetPct / 2, 2, 8)),
+        stopPct: pct(clamp(targetPct / 2, 1.5, 4)),
         ta: ta
           ? {
               bias: ta.bias,
@@ -1333,8 +1346,15 @@ async function main() {
     );
     const stopFrac = stopPct / 100;
     const conv = s.score >= 85 ? 1 : s.score >= 70 ? 0.75 : 0.5;
+    // strategy circuit-breaker — a doctrine that has already bled on ≥3
+    // closed trades gets half-size until its record clears. Risk control,
+    // not learning: the adaptation gate stays dormant.
+    let stratN = 0, stratPnl = 0;
+    for (const e of ledger.entries)
+      if (e.status !== 'open' && e.strategy === s.strategy) { stratN++; stratPnl += e.pnlPct || 0; }
+    const stratMul = stratN >= 3 && stratPnl < 0 ? 0.5 : 1;
     const notional = Math.round(
-      clamp((EQUITY * RISK_PCT * conv) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
+      clamp((EQUITY * RISK_PCT * conv * stratMul) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
     );
     const newHeatPct = (stopFrac * notional) / EQUITY * 100;
     if (
@@ -1511,6 +1531,17 @@ async function main() {
       }
       return false;
     };
+    // dead-zone time-stop: >6h old, no rung banked, mark under +0.3% —
+    // the thesis didn't work, so the stop tightens to a −0.3% scratch line.
+    // Forensic: the 6–12h bucket held every catastrophic stop-out (−7.6%
+    // total); trades that go nowhere get scratched early instead of riding
+    // the full designed stop to settlement.
+    const DEAD_MS = 6 * 3600e3;
+    const timeStop = (tsNow, curPnl) => {
+      if (!e.tps) return;
+      if (!e.tps.some((t) => t.hit) && tsNow - e.ts > DEAD_MS && (curPnl ?? -1) < 0.3)
+        e.stopAt = Math.max(e.stopAt ?? -Infinity, -0.3);
+    };
 
     // candle replay: adverse extreme first within each bar — when a single
     // bar covers both levels the order is unknowable, so we resolve the
@@ -1530,6 +1561,7 @@ async function main() {
       }
       for (const c of cs) {
         const advPx = sgn > 0 ? c.l : c.h;
+        timeStop(c.t + 300e3, dirPnl(advPx));
         if (checkAdverse(dirPnl(advPx), advPx, c.t + 300e3)) break;
         const favPx = sgn > 0 ? c.h : c.l;
         if (checkFavorable(dirPnl(favPx), favPx, c.t + 300e3)) break;
@@ -1547,6 +1579,7 @@ async function main() {
       pnl = dirPnl(px);
       e.lastPrice = px;
       e.rawPnl = pnl;
+      timeStop(now, pnl);
       if (!checkAdverse(Math.min(e.troughPnl ?? Infinity, pnl), px))
         checkFavorable(Math.max(e.peakPnl ?? -Infinity, pnl), px);
     }
