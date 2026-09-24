@@ -33,11 +33,29 @@ The journal models a **10×-isolated USDT-M perpetual paper account**
 - Take-profit ladder: 33%/33%/34% banks at 40%/70%/100% of target.
 - Dynamic stop: designed invalidation → breakeven at 40% of target →
   +40%/+65% locks → trailing only past full target.
-- Touch-based exits: peak/trough extremes trigger rungs, stops and
-  liquidation — a wick through a level between snapshots counts.
+- Intraperiod settlement: each build **replays the 5-minute candle tape
+  since entry** (unclosed candles excluded) so wick-level target/stop/
+  liquidation touches between 10-minute snapshots still count; ambiguous
+  same-candle touches resolve pessimistically, adverse first.
 - Exits record fill-level prices (target, stop, liquidation), and each
   settle logs `alphaPct` — P&L minus signed universe drift — so the ledger
   measures edge, not just beta.
+
+### Sentinel v1.0 — versioning, learning gate, honest stats
+
+- **Frozen ruleset.** Signals, entries and stats carry an engine version
+  (`v1.0`; pre-versioning entries show `v0.x`). Rule changes bump the
+  version so results are only ever compared within a ruleset — no blending
+  of different engines' track records, and legacy bot records stay separate
+  experiments entirely.
+- **Self-learning gate.** The strategy-weight adapter (`stratAdj`) is
+  dormant until ≥100 closed signals overall and ≥20 per strategy —
+  small-sample "learning" is curve-fitting to noise. The dashboard shows
+  gate status; weights sit at 0 until the sample justifies them.
+- **Full stats.** Win rate, profit factor, max drawdown, avg winner/loser,
+  per-trade Sharpe/SQN/R, by-direction/strategy/grade/version breakdowns,
+  and alpha vs market — all net of modeled fees and funding, computed from
+  settled records only, and null where the sample can't support the number.
 
 ## Data pipeline (`.github/workflows/refresh-api.yml`)
 
@@ -48,7 +66,8 @@ Runs every 10 minutes + on demand:
 | `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from Bitget public futures data (USDT-M contracts + tickers + closed 1h/5m klines for top candidates). Universe = every tradable USDT-M perpetual — crypto plus RWA stock/index/metal/FX perps — excluding fiat-stable bases, ≥ $250k 24h volume. Signals score direction-aware momentum (Wilder RSI-14, signed 24h change ranked within the candidate pool), volume surge, spread tightness, and bounded TA/derivatives/news confluence. |
 | `api/pulse-history.json` | Rolling breadth index (~24h of points) accumulated each run. |
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
-| `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/breakeven/trailed/reversed/expired/liquidated with P&L and alpha. |
+| `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/breakeven/trailed/reversed/expired/liquidated with P&L and alpha. Entries carry engine version, board rank, spread, slippage estimate, universe size and pool depth at signal time. |
+| `api/signal-archive.json` | **Append-only prospective record** — every run appends the full emitted board (all signals, traded or not) with parameters and universe context. Never rewritten; the cap trims whole oldest runs only. This is the out-of-sample evidence set. |
 | `api/bitget-symbols.json` | The Bitget-listed contract universe used for filtering. |
 | `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |

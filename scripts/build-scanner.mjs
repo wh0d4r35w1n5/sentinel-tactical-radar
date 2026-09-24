@@ -42,6 +42,19 @@ const VAULT_FILE = path.join(API, 'vault.json');
 const VAULT_PCT = 0.2; // share of realized gains swept into the hold basket
 const TRADE_NOTIONAL = 1000; // dry-run $ per signal
 const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
+// frozen-rule versioning: entries carry the ruleset that created them so
+// results stay comparable across engine edits (audit requirement — keep
+// v1.0 untouched results separate from whatever follows)
+const ENGINE_VERSION = 'v1.0';
+// append-only prospective record: every emitted signal, every run, never
+// deleted or rewritten — the out-of-sample dataset the audit asked for
+const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
+const ARCHIVE_MAX_RUNS = 2500; // ~17 days at a 10min cadence
+// self-learning gate: doctrine weights stay DORMANT until the out-of-sample
+// set is big enough that adjustments measure edge, not luck (audit: 22
+// trades is nowhere near enough to start believing)
+const LEARN_MIN_TOTAL = 100;
+const LEARN_MIN_STRAT = 20;
 
 const pct = (x) => Math.round(x * 100) / 100;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -149,6 +162,33 @@ async function fetchKlines(symbol) {
     harmonic: Harmonics.active(candles, 8),
     ta: TAEngine.analyze(candles, candles5m),
   };
+}
+
+// 5m candles from entry open -> now, for intraperiod settlement replay.
+// 600 bars ≈ 50h — comfortably covers the 24h TTL; the still-forming tail
+// candle is dropped (same rule as the TA klines).
+async function fetchEntryCandles(e) {
+  const out = [];
+  let start = e.ts;
+  for (let page = 0; page < 3; page++) {
+    const res = await fetch(
+      `${CANDLES_URL}?symbol=${e.asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${Date.now()}&limit=200`
+    );
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || !data.length) break;
+    const rows = data
+      .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    for (const c of rows)
+      if (!out.length || c.t > out[out.length - 1].t) out.push(c);
+    const last = out[out.length - 1];
+    if (data.length < 200 || !last || last.t + 300e3 >= Date.now() - 300e3) break;
+    start = last.t + 300e3;
+  }
+  // drop the still-forming tail bar
+  if (out.length && out[out.length - 1].t + 300e3 > Date.now()) out.pop();
+  return out;
 }
 
 async function main() {
@@ -549,15 +589,23 @@ async function main() {
       e.pnlPct / (e.stopPct ?? Math.max(4, e.targetPct || 4))
     );
   }
-  // Bayesian-shrunk adjustments: a 3-trade sample cannot move doctrine
-  // weights. Shrinkage n/(n+10) means 5 trades reach ~1/3 strength, 30
-  // trades ~full — and the cap tightened from ±8 to ±4
+  // Bayesian-shrunk adjustments, GATED: the audit is right that ~22 trades
+  // is nowhere near enough for the machine to start believing it found which
+  // strategies work — learning random luck is overfitting. Adjustments stay
+  // dormant until ≥LEARN_MIN_TOTAL closed signals AND ≥LEARN_MIN_STRAT per
+  // strategy; below that the shrinkage math still runs for reporting but
+  // the score input is zeroed.
+  const closedTotal = priorEntries.filter(
+    (e) => e.status !== 'open' && e.pnlPct != null
+  ).length;
+  const learnActive = closedTotal >= LEARN_MIN_TOTAL;
   const stratAdj = Object.fromEntries(
     Object.entries(stratR).map(([k, v]) => {
       const n = v.length;
       const avg = v.reduce((a, b) => a + b, 0) / n;
       const shrunk = avg * (n / (n + 10));
-      return [k, Math.round(clamp(shrunk * 4, -4, 4) * 10) / 10];
+      const adj = Math.round(clamp(shrunk * 4, -4, 4) * 10) / 10;
+      return [k, learnActive && n >= LEARN_MIN_STRAT ? adj : 0];
     })
   );
 
@@ -651,7 +699,7 @@ async function main() {
     .sort((a, b) => b.score - a.score);
   const signals = ranked
     .slice(0, MAX_SIGNALS)
-    .map((r) => {
+    .map((r, boardIdx) => {
       const ta = r.k.ta ?? null;
       const direction = r.dir;
       const strategy = r.strategy;
@@ -668,6 +716,8 @@ async function main() {
         asset: r.asset,
         cls: r.cls,
         maxLever: r.maxLever,
+        ver: ENGINE_VERSION,
+        boardRank: boardIdx + 1, // position on the emitted board this run
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
         symbol: r.symbol,
@@ -1067,6 +1117,14 @@ async function main() {
         funding: s.funding ?? null,
         carry: s.carry ?? null,
         stopPct,
+        // prospective-record fields: what the world looked like at signal
+        // time — spread/slippage estimate, universe + pool size, board slot
+        ver: s.ver ?? ENGINE_VERSION,
+        boardRank: s.boardRank ?? null,
+        spreadPct: s.spreadPct ?? null,
+        slipPct: s.spreadPct != null ? pct(s.spreadPct / 2) : null,
+        universeSize: rows.length,
+        poolN: candidates.length,
         ts: now,
         status: 'open',
         exitPrice: null,
@@ -1076,48 +1134,32 @@ async function main() {
     }
   }
   const freshDir = new Map(signals.map((s) => [s.asset, s.direction]));
+
+  // ---- intraperiod settlement: prefetch 5m candles for every open entry ----
+  // The audit's sharpest question: can a 10-minute sampling cadence award
+  // targets that never filled, or miss stops that triggered between builds?
+  // Tick extremes can't see wicks — candles can. We replay each open
+  // position through the 5m tape chronologically and let levels fire on the
+  // candles that actually traded them.
+  const openEntries = ledger.entries.filter((e) => e.status === 'open');
+  const openCandles = new Map();
+  for (let i = 0; i < openEntries.length; i += 12) {
+    await Promise.all(
+      openEntries.slice(i, i + 12).map(async (e) => {
+        const cs = await fetchEntryCandles(e).catch(() => null);
+        if (cs && cs.length) openCandles.set(e, cs);
+      })
+    );
+  }
+
   for (const e of ledger.entries) {
     if (e.status !== 'open') continue;
     const px = priceByAsset.get(e.asset);
     const age = now - e.ts;
     let pnl = e.pnlPct;
-    if (px) {
-      pnl = pct(
-        e.direction === 'LONG'
-          ? ((px - e.entry) / e.entry) * 100
-          : ((e.entry - px) / e.entry) * 100
-      );
-      e.lastPrice = px;
-      e.rawPnl = pnl;
-      e.peakPnl = Math.max(e.peakPnl ?? -Infinity, pnl);
-      e.troughPnl = Math.min(e.troughPnl ?? Infinity, pnl);
-      // ---- multi-split take-profit: a rung fills when the PEAK touched its
-      // level — a resting limit order banks at the rung price even if the
-      // mark has since retraced (the old instant-pnl check missed wicks
-      // between builds and banked at whatever price was showing) ----
-      if (e.tps) {
-        for (const tp of e.tps)
-          if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
-            tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = now;
-          }
-        // ---- dynamic stop intelligence ----
-        // zero-risk: once price covers 40% of target (TP1 territory), the
-        // stop ratchets to breakeven — the trade can no longer lose
-        if (e.peakPnl >= e.targetPct * 0.4) e.stopAt = Math.max(e.stopAt, 0);
-        // profit ratchet: deeper into target → stop locks profit behind it
-        if (e.peakPnl >= e.targetPct * 0.7) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.4);
-        if (e.peakPnl >= e.targetPct * 0.9) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.65);
-        // trailing stop — CAREFUL mode: only once the runner is past full
-        // target does it trail (40% giveback of the peak), never earlier
-        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.6);
-      }
-      // legacy entries (pre-ladder) keep the lock-50 behavior
-      else if (e.lockPnl == null && pnl >= e.targetPct / 2) {
-        e.lockPnl = pnl;
-        e.lockedAt = now;
-        e.beStop = true;
-      }
-    }
+    const sgn = e.direction === 'LONG' ? 1 : -1;
+    const dirPnl = (price) =>
+      pct((sgn * (price - e.entry)) / e.entry * 100);
     // blended P&L: banked split fractions are locked at their hit prices,
     // the remainder marks live — this is the true realized+open position
     const blended = (livePnl) => {
@@ -1128,63 +1170,134 @@ async function main() {
     };
     const fee = e.feePct ?? FEE_PCT;
     // funding accrues on the fraction still open — banked rungs stopped
-    // earning/paying when they closed
-    const remFrac = remFracOf(e);
-    const fundPnl =
+    // earning/paying when they closed; computed lazily so mid-replay settles
+    // charge the fraction actually open at that moment
+    const fundPnlNow = () =>
       e.funding && e.carry && e.carry !== 'flat'
-        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFrac
+        ? (e.funding.ratePct || 0) * (age / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
         : 0;
-    const settle = (status, exitPx, rawPnl) => {
+    const settle = (status, exitPx, rawPnl, tsC) => {
       e.status = status;
       e.exitPrice = exitPx;
-      e.exitTs = now;
-      e.fundingPnl = pct(fundPnl);
-      e.pnlPct = pct(blended(rawPnl) - fee + fundPnl);
+      e.exitTs = tsC ?? now;
+      const fp = fundPnlNow();
+      e.fundingPnl = pct(fp);
+      e.pnlPct = pct(blended(rawPnl) - fee + fp);
       // alpha vs market drift: did the signal beat just riding the universe?
-      // drift = change in the universe median 24h-move between entry and
-      // exit, signed for our direction (a falling tape helps shorts)
       if (e.mkt0 != null) {
         const drift = medianChangePct - e.mkt0;
         e.alphaPct = pct(e.pnlPct - (e.direction === 'LONG' ? drift : -drift));
       }
     };
-    // touch-based exits: a wick through a level counts even if the mark has
-    // since retraced — peak catches targets, trough catches stops/wickouts
-    const peak = Math.max(e.peakPnl ?? -Infinity, pnl ?? -Infinity);
-    const trough = Math.min(e.troughPnl ?? Infinity, pnl ?? Infinity);
-    const hit = px && peak >= e.targetPct; // full target = final rung fills
-    const beStopped = px && !e.tps && e.beStop && trough <= 0;
-    const stopLevel = e.tps
-      ? e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct))
-      : -(e.stopPct ?? Math.max(4, e.targetPct));
-    const stopped = px && stopLevel != null && trough <= stopLevel;
-    const trailed = stopped && stopLevel > 0; // stop was above entry → profit-lock exit
-    // liquidation outranks everything: a wick through the band kills it
-    const liquidated =
-      px && (e.lev || 0) > 1 && trough <= -(e.liqPct ?? LIQ_PCT);
-    const reversed =
-      px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
-    const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
-    const sgn = e.direction === 'LONG' ? 1 : -1;
-    // exits record the price the order actually filled at, not the mark we
-    // happened to sample — limit TP fills AT target, stops fill AT the stop
-    // (or worse on a gap), liquidation fires at the band
-    const stopPx = e.entry * (1 + (sgn * stopLevel) / 100);
-    const liqPx = e.entry * (1 - (sgn * (e.liqPct ?? LIQ_PCT)) / 100);
-    if (liquidated) settle('liquidated', liqPx, -100 / (e.lev || LEVERAGE));
-    // when a single window covers both target and stop the order is unknown —
-    // resolve pessimistically (stop first) so the ledger never flatters itself
-    else if (beStopped) settle('breakeven', e.entry, 0);
-    else if (stopped)
-      settle(
-        trailed ? 'trailed' : stopLevel === 0 && e.tps ? 'breakeven' : 'stopped',
-        pnl < stopLevel ? px : stopPx,
-        Math.min(pnl, stopLevel)
-      );
-    else if (hit) settle('won', e.targetPrice ?? px, e.targetPct); // limit fill at target
-    else if (reversed) settle('reversed', px, pnl);
-    else if (expired) settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? e.pnlPct ?? 0);
-    else e.pnlPct = pct(blended(pnl) - fee + fundPnl); // live mark = banked + remainder
+    const stopLevel = () =>
+      e.tps
+        ? e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct))
+        : -(e.stopPct ?? Math.max(4, e.targetPct));
+    // favorable excursion: peak, rung banks, stop ratchets — limit orders
+    // fill at their level even when the mark later retraces
+    const applyFavorable = (fav, tsC) => {
+      e.peakPnl = Math.max(e.peakPnl ?? -Infinity, fav);
+      if (e.tps) {
+        for (const tp of e.tps)
+          if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
+            tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = tsC ?? now;
+          }
+        if (e.peakPnl >= e.targetPct * 0.4) e.stopAt = Math.max(e.stopAt, 0);
+        if (e.peakPnl >= e.targetPct * 0.7) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.4);
+        if (e.peakPnl >= e.targetPct * 0.9) e.stopAt = Math.max(e.stopAt, e.targetPct * 0.65);
+        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.6);
+      } else if (e.lockPnl == null && fav >= e.targetPct / 2) {
+        e.lockPnl = fav;
+        e.lockedAt = tsC ?? now;
+        e.beStop = true;
+      }
+    };
+    // adverse check — liquidation first, then stop family; settles at the
+    // level that filled (or the mark if it gapped through). Returns true
+    // when the entry just closed.
+    const checkAdverse = (adv, markPx, tsC) => {
+      e.troughPnl = Math.min(e.troughPnl ?? Infinity, adv);
+      if ((e.lev || 0) > 1 && adv <= -(e.liqPct ?? LIQ_PCT)) {
+        settle('liquidated',
+          e.entry * (1 - (sgn * (e.liqPct ?? LIQ_PCT)) / 100),
+          -100 / (e.lev || LEVERAGE), tsC);
+        return true;
+      }
+      const sl = stopLevel();
+      if (!e.tps && e.beStop && adv <= 0) {
+        settle('breakeven', e.entry, 0, tsC);
+        return true;
+      }
+      if (sl != null && adv <= sl) {
+        settle(
+          sl > 0 ? 'trailed' : sl === 0 && e.tps ? 'breakeven' : 'stopped',
+          adv < sl ? markPx : e.entry * (1 + (sgn * sl) / 100),
+          Math.min(adv, sl), tsC
+        );
+        return true;
+      }
+      return false;
+    };
+    const checkFavorable = (fav, markPx, tsC) => {
+      applyFavorable(fav, tsC);
+      if (e.peakPnl >= e.targetPct) {
+        settle('won', e.targetPrice ?? markPx, e.targetPct, tsC);
+        return true;
+      }
+      return false;
+    };
+
+    // candle replay: adverse extreme first within each bar — when a single
+    // bar covers both levels the order is unknowable, so we resolve the
+    // pessimistic path (the ledger must never flatter itself). The replay
+    // only runs when the tape reaches back to entry: persisted stop/ladder
+    // state has already ratcheted, so old candles must be judged against a
+    // reset entry-time state — all replayed fields are deterministic
+    // functions of the tape and rebuild identically every build.
+    const cs = openCandles.get(e);
+    if (cs && cs.length && cs[0].t <= e.ts + 6e5) {
+      e.peakPnl = e.troughPnl = undefined;
+      if (e.tps) {
+        for (const tp of e.tps) { tp.hit = false; tp.pnl = null; tp.ts = null; }
+        e.stopAt = -(e.stopPct ?? Math.max(4, e.targetPct));
+      } else {
+        e.lockPnl = null; e.beStop = false;
+      }
+      for (const c of cs) {
+        const advPx = sgn > 0 ? c.l : c.h;
+        if (checkAdverse(dirPnl(advPx), advPx, c.t + 300e3)) break;
+        const favPx = sgn > 0 ? c.h : c.l;
+        if (checkFavorable(dirPnl(favPx), favPx, c.t + 300e3)) break;
+      }
+      if (e.status === 'open') {
+        // last closed candle is a better mark than a stale tick when the
+        // symbol momentarily drops off the ticker list
+        e.lastPrice = cs[cs.length - 1].c;
+        e.rawPnl = dirPnl(e.lastPrice);
+      }
+    }
+    // live tick — same touch logic on the freshest mark; cumulative
+    // peak/trough covers the candle-less fallback path too
+    if (e.status === 'open' && px) {
+      pnl = dirPnl(px);
+      e.lastPrice = px;
+      e.rawPnl = pnl;
+      if (!checkAdverse(Math.min(e.troughPnl ?? Infinity, pnl), px))
+        checkFavorable(Math.max(e.peakPnl ?? -Infinity, pnl), px);
+    }
+    // still open: reversal / expiry / live mark. NOTE the unpriced path keeps
+    // the stored mark — re-blending e.pnlPct would compound banked rungs
+    // every tick (that was a real bug for untracked entries)
+    if (e.status === 'open') {
+      const reversed =
+        px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
+      const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
+      if (reversed) settle('reversed', px, pnl);
+      else if (expired)
+        settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? e.pnlPct ?? 0);
+      else if (px) e.pnlPct = pct(blended(pnl) - fee + fundPnlNow());
+      else if (e.rawPnl != null) e.pnlPct = pct(blended(e.rawPnl) - fee + fundPnlNow());
+    }
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
   const closed = ledger.entries.filter((e) => e.status !== 'open');
@@ -1212,6 +1325,53 @@ async function main() {
         ? pct(a.reduce((s, e) => s + e.alphaPct, 0) / a.length)
         : null;
     })(),
+    // full audit reporting: profit factor, max drawdown on the realized
+    // equity path, avg winner/loser — net expectancy after costs is
+    // avgPnlPct above (fees + funding are already inside pnlPct)
+    profitFactor: (() => {
+      const gW = closed.filter((e) => (e.pnlPct ?? 0) > 0).reduce((a, e) => a + e.pnlPct, 0);
+      const gL = Math.abs(closed.filter((e) => (e.pnlPct ?? 0) < 0).reduce((a, e) => a + e.pnlPct, 0));
+      return gL > 0 ? round(gW / gL, 2) : gW > 0 ? Infinity : null;
+    })(),
+    maxDrawdownPct: (() => {
+      let eq = 0, peak = 0, mdd = 0;
+      for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0))) {
+        eq += (e.pnlPct ?? 0) * ((e.notional ?? NOTIONAL) / EQUITY);
+        peak = Math.max(peak, eq);
+        mdd = Math.max(mdd, peak - eq);
+      }
+      return closed.length ? pct(mdd) : null;
+    })(),
+    avgWinPct: (() => {
+      const w = closed.filter((e) => (e.pnlPct ?? 0) > 0);
+      return w.length ? pct(w.reduce((a, e) => a + e.pnlPct, 0) / w.length) : null;
+    })(),
+    avgLossPct: (() => {
+      const l = closed.filter((e) => (e.pnlPct ?? 0) < 0);
+      return l.length ? pct(l.reduce((a, e) => a + e.pnlPct, 0) / l.length) : null;
+    })(),
+    byGrade: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.grade ?? '?';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+    byVersion: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.ver ?? 'v0.x';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
   };
   // Van Tharp: R-multiples + SQN — the actual holy grail metric
   const Rs = closed
@@ -1225,6 +1385,7 @@ async function main() {
   const sqn = stdR ? (avgR / stdR) * Math.sqrt(Rs.length) : null;
   ledger.stats.avgR = avgR != null ? round(avgR, 2) : null;
   ledger.stats.expectancyR = ledger.stats.avgR;
+  ledger.stats.sharpeR = stdR ? round(avgR / stdR, 2) : null; // per-trade Sharpe — SQN is this × √N
   ledger.stats.sqn = sqn != null ? round(sqn, 2) : null;
   ledger.stats.sqnBand =
     sqn == null
@@ -1242,9 +1403,15 @@ async function main() {
                 : sqn >= 1.6
                   ? 'below average'
                   : 'poor';
-  // self-improving: doctrine weights learned from realized performance
+  // self-improving: doctrine weights learned from realized performance —
+  // DORMANT until the sample is large enough to distinguish edge from luck
   ledger.model = {
     stratAdj,
+    learning: {
+      active: learnActive,
+      closedN: closedTotal,
+      gate: { total: LEARN_MIN_TOTAL, perStrategy: LEARN_MIN_STRAT },
+    },
     samples: Object.fromEntries(
       Object.entries(stratR).map(([k, v]) => [k, v.length])
     ),
@@ -1311,6 +1478,38 @@ async function main() {
   ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
   ledger.stats.worst = sortedClosed[0]?.asset ?? null;
   if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+
+  // ---- append-only prospective record: the full emitted board every run,
+  // including signals that never became positions. Nothing is rewritten or
+  // deleted except trimming whole oldest runs at the cap — this is the
+  // unaltered out-of-sample dataset the audit called for.
+  let archive = { runs: [] };
+  try {
+    archive = JSON.parse(fs.readFileSync(ARCHIVE_FILE, 'utf8'));
+  } catch {}
+  archive.runs ??= [];
+  archive.runs.push({
+    ts: now,
+    ver: ENGINE_VERSION,
+    universeSize: rows.length,
+    poolN: candidates.length,
+    medianChangePct,
+    signals: signals.map((s) => ({
+      asset: s.asset,
+      cls: s.cls,
+      direction: s.direction,
+      score: s.score,
+      grade: s.grade,
+      strategy: s.strategy,
+      entry: s.entryPrice,
+      targetPct: s.targetPct,
+      stopPct: s.stopPct,
+      spreadPct: s.spreadPct,
+      boardRank: s.boardRank,
+    })),
+  });
+  archive.runs = archive.runs.slice(-ARCHIVE_MAX_RUNS);
+  fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive));
 
   // ---- vault: a fixed share of every realized gain compounds into a
   // hold-forever BTC/ETH/SOL basket, marked to live prices ----

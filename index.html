@@ -391,7 +391,7 @@ Every factor above is a measurable heuristic on the entry-window candles — non
 <p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)} USD. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
   return `
 <h4>Executive summary</h4>
-<p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}". Entered at $${fmtP(e.entry)} USD (${when} UTC)${mk?`, last marked at $${fmtP(mk)} USD`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
+<p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}", engine <b>${e.ver||'v0.x'}</b>${e.boardRank?`, board slot #${e.boardRank}`:''}. Entered at $${fmtP(e.entry)} USD (${when} UTC)${mk?`, last marked at $${fmtP(mk)} USD`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
 ${(()=>{const cl=confList(e);const sup=cl.filter(c=>c[0]==='sup').length,con=cl.filter(c=>c[0]==='con').length,inf=cl.length-sup-con;
 return `<h4>Confluence map — ${sup} supporting · ${con} conflicting · ${inf} measured</h4>
 <ul class="conf">${cl.map(([s,l])=>`<li class="${s}">${s==='sup'?'✓':s==='con'?'✗':'·'} ${l}</li>`).join('')}</ul>
@@ -399,7 +399,8 @@ return `<h4>Confluence map — ${sup} supporting · ${con} conflicting · ${inf}
 <h4>Signal genesis</h4>
 <p>The engine scans the Bitget USDT-M futures universe — crypto plus stock, index, metal, commodity and FX perpetuals, fiat-stable bases excluded — for contracts clearing a $250K USD daily quote-volume floor, then enriches the top ${48} candidates with closed hourly klines (the live, unclosed candle is excluded — patterns that evaporate on settlement are not evidence). ${sym} ranked inside the emitted set because its composite score of ${e.score}/100 placed it among the strongest setups on the board, scored directionally — momentum is ranked in the traded direction, so a high score on a ${e.direction} means the ${e.direction==='LONG'?'upside':'downside'} move itself was strong, not just that the coin moved.</p>
 <h4>Risk frame</h4>
-<p>Notional $${((e.notional??1000)).toLocaleString()} USD = ${(((e.notional??1000)*(e.stopPct??Math.max(4,e.targetPct||4)))/100).toFixed(0)} USD max risk at the designed −${e.stopPct??Math.max(4,e.targetPct)}% invalidation (≈1% equity target)${e.lev>1?`, ${e.lev}× isolated USDT-M perp — $${(e.margin??Math.round((e.notional??1000)/e.lev)).toLocaleString()} USD margin, liquidation ≈−${e.liqPct??9.2}% adverse`:''}. Target +${e.targetPct}% at $${fmtP(e.targetPrice)} USD — designed R:R 1:${(e.targetPct/(e.stopPct??Math.max(4,e.targetPct))).toFixed(1)}. Fees ${e.feePct??0.12}% round-trip and funding carry are modeled on every close; book exposure is capped at 400% of equity.</p>
+<p>Notional $${((e.notional??1000)).toLocaleString()} USD = ${(((e.notional??1000)*(e.stopPct??Math.max(4,e.targetPct||4)))/100).toFixed(0)} USD max risk at the designed −${e.stopPct??Math.max(4,e.targetPct)}% invalidation (≈1% equity target)${e.lev>1?`, ${e.lev}× isolated USDT-M perp — $${(e.margin??Math.round((e.notional??1000)/e.lev)).toLocaleString()} USD margin, liquidation ≈−${e.liqPct??9.2}% adverse`:''}. Target +${e.targetPct}% at $${fmtP(e.targetPrice)} USD — designed R:R 1:${(e.targetPct/(e.stopPct??Math.max(4,e.targetPct))).toFixed(1)}. Fees ${e.feePct??0.12}% round-trip and funding carry are modeled on every close; book exposure is capped at 400% of equity.${e.spreadPct!=null?` Entry spread measured ${e.spreadPct}% (≈${e.slipPct}% est. slippage), universe ${e.universeSize??'—'} contracts, top-${e.poolN??'—'} kline pool.` : ''}</p>
+<p><b>Prospective record:</b> this signal was archived at emission time with its full parameter set into an append-only log (<code>api/signal-archive.json</code>) — entries are never deleted or rewritten, and settlement replays the 5-minute candle tape so wick-level touches count even between snapshots. That is what makes this a verifiable out-of-sample test rather than a curated highlight reel.</p>
 <h4>Trade management</h4>
 <p>${tpTxt}Each settlement tick: TP rungs bank fractions on the way up; once price covers 40% of target the stop ratchets to breakeven (zero-risk), then locks +40%/+65% of target behind further progress; past full target a trailing stop guards the runner. Stopped, reversed, expired and liquidated are first-class outcomes — a stopped trade is the design working, not a malfunction.</p>
 ${harmTxt}${taTxt}
@@ -463,7 +464,9 @@ async function render(){
       <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
       <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`:''}</div></div>
       <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L${st.sqn!=null?` · SQN ${st.sqn} <span class="sub">${st.sqnBand||''}</span>`:''}${st.avgR!=null?` · ${st.avgR}R avg`:''}</div></div></div>`+
-      (ledger.model&&Object.keys(ledger.model.stratAdj||{}).length?`<div class="sub" style="margin-top:4px">adaptive weights (learned from realized R): ${Object.entries(ledger.model.stratAdj).map(([k,v])=>`${k} ${v>0?'+':''}${v}`).join(' · ')}</div>`:'');
+      (()=>{const L=ledger.model||{};const g=L.learning;
+        if(g&&g.active)return `<div class="sub" style="margin-top:4px">adaptive weights ACTIVE (${g.closedN} closed ≥ ${g.gate.total}): ${Object.entries(L.stratAdj||{}).map(([k,v])=>`${k} ${v>0?'+':''}${v}`).join(' · ')}</div>`;
+        return `<div class="sub" style="margin-top:4px">adaptive weights DORMANT — ${g?g.closedN:0} closed signals (needs ${g?g.gate.total:100}+, ${g?g.gate.perStrategy:20}/strategy) · engine won't learn from luck-sized samples</div>`})();
     $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
       const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
       const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
@@ -483,12 +486,20 @@ async function render(){
       `<div class="ledger-row"><span class="sub">${k}</span><span class="num">${v.winRate}% <span class="sub">(${v.n})</span></span></div>`).join('');
     // discipline scorecard — Sloggett framework adherence, measured on our ledger
     const d=st.discipline||{};
+    const byV=(st.byVersion&&Object.entries(st.byVersion))||[];
+    const byG=(st.byGrade&&Object.entries(st.byGrade))||[];
     $('bench').innerHTML=[
       ['Risk per trade',d.avgRiskPctAcct!=null?d.avgRiskPctAcct+'% of equity':'—','target ≤1–2%'],
       ['Avg R:R',d.avgRR!=null?'1 : '+d.avgRR:'—','target ≥1 : 2'],
+      ['Profit factor',st.profitFactor!=null?''+st.profitFactor:'—','gross W ÷ gross L'],
+      ['Max drawdown',st.maxDrawdownPct!=null?'−'+st.maxDrawdownPct+'% of equity':'—','realized equity path'],
+      ['Avg winner / loser',st.avgWinPct!=null?`+${st.avgWinPct}% / ${st.avgLossPct}%`:'—','net expectancy after costs'],
       ['Max consec. losses',d.maxConsecLosses??'—','drawdown control'],
-      ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
+      ['Sharpe (per-trade)',st.sharpeR!=null?''+st.sharpeR:'—','SQN = Sharpe × √N'],
       ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%':'—','excess over universe drift'],
+      ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
+      ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
+      ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // full trade journal — every entry, all fields
     const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
@@ -503,7 +514,8 @@ async function render(){
     } else $('acctNote').textContent='';
     $('journal').innerHTML=(ledger.entries||[]).map(e=>{
       const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice)+' USD':'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice)+' USD':'—');
-      const flags=(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'')
+      const flags=(e.ver?`<span class="mbadge" title="engine ruleset version">${e.ver}</span>`:'')
+        +(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'')
         +(e.tps?`<span class="mbadge" title="split take-profit ladder">${e.tps.map(t=>t.hit?'TP✓':'TP·').join('')}</span>`:'')
         +(e.stopAt===0?'<span class="mbadge" title="stop moved to entry — trade cannot lose">ZERO-RISK</span>':'')
         +(e.stopAt>0?`<span class="mbadge" title="stop locked in +${e.stopAt}% profit">LOCKED+${e.stopAt}%</span>`:'');
