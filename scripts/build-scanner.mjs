@@ -53,7 +53,11 @@ const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // v1.5 = drawdown kill-switch (Tharp: stop trading when the system is
 // broken — ≥8% realized equity drawdown stands the book down) + funding
 // carry penalty at entry (paying >0.05%/8h to hold is a structural drag).
-const ENGINE_VERSION = 'v1.5';
+// v1.6 = same-underlying proxy discipline: one open position per proxy
+// group (XAU/PAXG/XAUT are one gold thesis in three tickers — the book
+// actually held short XAU + short PAXG + long XAUT, paying three spreads
+// for ~one net exposure). Dupes settle as 'clustered' and route closes.
+const ENGINE_VERSION = 'v1.6';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -110,6 +114,34 @@ const clusterOf = (e) =>
   e.cls === 'crypto'
     ? CRYPTO_MAJORS.has(e.asset) ? 'crypto-major' : 'crypto-alt'
     : e.cls ?? 'crypto';
+
+// Same-underlying proxy groups — different tickers, one price feed. This is
+// NARROWER than clusterOf: SOL+AVAX are correlated but distinct theses;
+// XAU+PAXG+XAUT are literally the same gold thesis thrice. Inside a group
+// the book holds exactly one position: a second same-direction entry is a
+// fee-doubled duplicate, an opposite one a self-hedge paying two spreads.
+const PROXY_GROUPS = [
+  ['XAU', 'PAXG', 'XAUT', 'GOLD', 'XAUUSD', 'GLD'],
+  ['XAG', 'XAGUSD', 'SILVER', 'SLV'],
+  ['XPT', 'XPTUSD', 'PLATINUM'],
+  ['XPD', 'XPDUSD', 'PALLADIUM'],
+  ['HG', 'COPPER', 'COP'],
+  ['CL', 'WTI', 'USOIL', 'USO'],
+  ['BZ', 'BRENT', 'UKOIL'],
+  ['NATGAS', 'NG', 'UNG'],
+  ['BTC', 'XBT', 'WBTC', 'BTCB'],
+  ['ETH', 'WETH'],
+  ['SPX', 'SPY', 'SP500', 'US500', 'SPCX', 'ES'],
+  ['NDX', 'NDX100', 'NAS100', 'QQQ', 'US100', 'UT100', 'NQ'],
+  ['DJI', 'US30', 'DJ30', 'YM'],
+  ['DXY', 'USDIDX', 'USDOLLAR'],
+];
+const proxyOf = (a) => {
+  const u = (a || '').toUpperCase();
+  for (let i = 0; i < PROXY_GROUPS.length; i++)
+    if (PROXY_GROUPS[i].includes(u)) return `proxy${i}`;
+  return null;
+};
 
 // Wilder RSI over the full series — average the first `period` deltas, then
 // smooth forward to the last close. (The old version only read the first 15
@@ -1342,6 +1374,19 @@ async function main() {
     ledger.entries.some(
       (e) => e.asset === a && e.status === 'open'
     );
+  // one position per same-underlying proxy group — XAU short + PAXG short
+  // is the same gold bet paying two fees; XAUT long against them is a
+  // self-hedge paying a third. entries are unshifted into the ledger as
+  // they open, so this also dedupes within the current batch.
+  const proxyBlocked = (s) => {
+    const g = proxyOf(s.asset);
+    return (
+      g != null &&
+      ledger.entries.some(
+        (e) => e.status === 'open' && proxyOf(e.asset) === g
+      )
+    );
+  };
   const recentClosed = (a, d) =>
     ledger.entries.some(
       (e) =>
@@ -1460,6 +1505,7 @@ async function main() {
       ddNow < ddKillPct &&
       mktAllows(s) &&
       !openFor(s.asset, s.direction) &&
+      !proxyBlocked(s) &&
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
@@ -1581,6 +1627,30 @@ async function main() {
         if (cs && cs.length) openCandles.set(e, cs);
       })
     );
+  }
+
+  // proxy-group reconciliation — open duplicates on one underlying are a
+  // bookkeeping error, not positions. Keep the highest-conviction member
+  // (score, then newest); the rest settle through the normal path as
+  // 'clustered' and their exchange positions get real close orders.
+  {
+    const byProxy = new Map();
+    for (const e of ledger.entries) {
+      if (e.status !== 'open') continue;
+      const g = proxyOf(e.asset);
+      if (!g) continue;
+      const arr = byProxy.get(g) || [];
+      arr.push(e);
+      byProxy.set(g, arr);
+    }
+    for (const members of byProxy.values()) {
+      if (members.length < 2) continue;
+      members.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.ts ?? 0) - (a.ts ?? 0));
+      for (const e of members.slice(1)) {
+        e.dedup = true;
+        livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction, reason: 'proxy-dedup' });
+      }
+    }
   }
 
   for (const e of ledger.entries) {
@@ -1764,7 +1834,15 @@ async function main() {
       const reversed =
         px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
       const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
-      if (reversed) settle('reversed', px, pnl);
+      if (e.dedup)
+        settle('clustered', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      else if (reversed) {
+        settle('reversed', px, pnl);
+        // the settle marks the entry closed BEFORE the plan-emission loop —
+        // which skips non-open entries — so the exchange close must be
+        // emitted here or the real position outlives the sim's decision
+        livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
+      }
       else if (expired)
         // e.pnlPct is already blended — feeding it back through blended()
         // double-counts banked rungs and re-charges fees; rawPnl is the raw
