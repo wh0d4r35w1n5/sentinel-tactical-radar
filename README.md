@@ -26,7 +26,16 @@ The journal models a **10×-isolated USDT-M perpetual paper account**
 
 - Risk-based sizing: `notional = equity × 1% ÷ stop distance`, conviction-scaled,
   capped at 30% notional per position and 400% total deployed notional.
-- Per-contract leverage `min(10, contract maxLever)` — RWA caps run 5–20×.
+- **Dynamic leverage** (3–20×, capped by contract `maxLever`): scales with the
+  *measured* tape regime — a run is tagged risk-on/risk-off/mixed from universe
+  breadth + median change; direction-aligned trades earn 15× (20× at grade A),
+  mixed tapes get 10×, counter-trend trades drop to 5×. Hard bound: the
+  liquidation band must hold the designed stop (lev ≤ 80/(stopPct+0.64)) —
+  tight stops earn leverage, wide stops don't. Leverage changes margin
+  efficiency and liquidation distance, not expected P&L per unit risk.
+- **Portfolio heat cap** — total equity at risk across all live stops is
+  regime-scaled too: 6% aligned, 4% mixed, 2.5% counter-trend. Positions
+  whose stops have ratcheted to profit contribute zero heat.
 - Perp taker fees (0.12% round trip), funding carry on the open fraction,
   and an isolated liquidation band (~`100/lev − 0.8`% adverse) that outranks
   target and stop.

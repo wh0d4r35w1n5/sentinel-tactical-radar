@@ -881,6 +881,14 @@ async function main() {
   const sorted = rows.map((r) => r.changePct).sort((a, b) => a - b);
   const medianChangePct = sorted.length ? pct(sorted[Math.floor(sorted.length / 2)]) : 0;
   const breadthPct = rows.length ? pct((advancing / rows.length) * 100) : 0;
+  // measured tape regime — drives dynamic leverage + heat budget AND is
+  // archived per run so eval can grade signals by the tape they called in
+  const regime =
+    medianChangePct > 0.5 && breadthPct > 55
+      ? 'risk-on'
+      : medianChangePct < -0.5 && breadthPct < 45
+        ? 'risk-off'
+        : 'mixed';
 
   let history = [];
   try {
@@ -1036,7 +1044,18 @@ async function main() {
   const EQUITY = 10000; // paper account, USD model
   const NOTIONAL = 1000; // legacy fallback notional (pre-leverage entries)
   const MAX_DEPLOYED = EQUITY * 4; // notional exposure cap — 400% of equity = 40% margin at 10x
-  const MAX_HEAT_PCT = 4; // portfolio heat cap — total equity at risk across all live stops
+  // portfolio heat cap — regime-scaled: the book is allowed to carry more
+  // total risk when the measured tape supports the traded direction, less
+  // for counter-trend trades in a hostile regime
+  const heatCapFor = (dir) => {
+    const aligned =
+      (dir === 'LONG' && regime === 'risk-on') ||
+      (dir === 'SHORT' && regime === 'risk-off');
+    const counter =
+      (dir === 'LONG' && regime === 'risk-off') ||
+      (dir === 'SHORT' && regime === 'risk-on');
+    return aligned ? 6 : counter ? 2.5 : 4;
+  };
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
@@ -1115,14 +1134,27 @@ async function main() {
       EQUITY) *
     100;
   for (const s of signals) {
-    // contract leverage cap — most RWA perps max at 20x, some at 5x;
-    // paper lev is min(10x target, contract max), liq band scales with it
-    const lev = Math.min(LEVERAGE, s.maxLever ?? LEVERAGE);
+    // dynamic leverage — scales with MEASURED regime alignment and
+    // conviction, never with narrative. Under 1%-risk sizing leverage
+    // doesn't multiply profit; it sets margin efficiency and liquidation
+    // distance, so the binding constraint is the liquidation band the
+    // stop must live inside: lev <= 80/(stopPct + 0.64) keeps the
+    // designed stop at <=80% of the band. Tight stops earn leverage,
+    // wide stops don't.
+    const dirUp = s.direction === 'LONG';
+    const aligned =
+      (dirUp && regime === 'risk-on') || (!dirUp && regime === 'risk-off');
+    const counter =
+      (dirUp && regime === 'risk-off') || (!dirUp && regime === 'risk-on');
+    const levTarget = aligned && s.score >= 85 ? 20 : aligned ? 15 : counter ? 5 : 10;
+    const stopWant = s.stopPct ?? Math.max(4, s.targetPct || 4);
+    const levMax = Math.max(3, Math.floor(80 / (stopWant + 0.64)));
+    const lev = Math.max(3, Math.min(levTarget, levMax, s.maxLever ?? 20));
     const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
     // the stop must fire INSIDE the liquidation band — a stop wider than
     // ~80% of the band is fiction (liq executes first), so clamp it there
     const stopPct = Math.min(
-      s.stopPct ?? Math.max(4, s.targetPct || 4),
+      stopWant,
       Math.max(1, Math.round(liqPct * 0.8 * 10) / 10)
     );
     const stopFrac = stopPct / 100;
@@ -1135,7 +1167,7 @@ async function main() {
       !recentClosed(s.asset, s.direction) &&
       !recentReversed(s.asset) &&
       deployed() + notional <= MAX_DEPLOYED &&
-      openRiskPct() + (stopFrac * notional) / EQUITY * 100 <= MAX_HEAT_PCT
+      openRiskPct() + (stopFrac * notional) / EQUITY * 100 <= heatCapFor(s.direction)
     ) {
       ledger.entries.unshift({
         asset: s.asset,
@@ -1169,6 +1201,7 @@ async function main() {
         harmonic: s.harmonic ?? null,
         ta: s.ta ?? null,
         mkt0: medianChangePct, // universe median 24h change at entry — benchmark for alpha
+        regime, // measured tape regime at entry — leverage/heat keyed off this
         funding: s.funding ?? null,
         carry: s.carry ?? null,
         stopPct,
@@ -1544,24 +1577,14 @@ async function main() {
     archive = JSON.parse(fs.readFileSync(ARCHIVE_FILE, 'utf8'));
   } catch {}
   archive.runs ??= [];
-  const breadth = rows.length
-    ? pct((rows.filter((r) => r.changePct > 0).length / rows.length) * 100)
-    : null;
   archive.runs.push({
     ts: now,
     ver: ENGINE_VERSION,
     universeSize: rows.length,
     poolN: candidates.length,
     medianChangePct,
-    breadth,
-    regime:
-      breadth == null
-        ? 'unknown'
-        : medianChangePct > 0.5 && breadth > 55
-          ? 'risk-on'
-          : medianChangePct < -0.5 && breadth < 45
-            ? 'risk-off'
-            : 'mixed',
+    breadth: breadthPct,
+    regime,
     signals: signals.map((s) => ({
       asset: s.asset,
       cls: s.cls,
