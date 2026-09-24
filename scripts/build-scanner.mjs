@@ -331,9 +331,25 @@ async function main() {
     )
     .sort((a, b) => b.quoteVolume - a.quoteVolume);
 
+  // VIP telegram confluence — fresh group signals get pulled into the
+  // candidate pool so the engine evaluates them on its own terms; they
+  // bump the score only when our analysis agrees (provenance via `vip`)
+  const TG_VIP = {};
+  try {
+    const tg = JSON.parse(
+      fs.readFileSync(path.join(API, '..', 'state', 'tg-confluence.json'), 'utf8')
+    );
+    const nowMs = Date.now();
+    for (const s of tg.signals || [])
+      if (nowMs - s.ts < 45 * 60e3 && (!TG_VIP[s.asset] || s.ts > TG_VIP[s.asset].ts))
+        TG_VIP[s.asset] = s;
+  } catch {}
+
   // hourly klines for the top-volume candidates -> real momentum metrics
   const enriched = new Map();
   const candidates = rows.slice(0, KLINE_CANDIDATES);
+  for (const r of rows)
+    if (TG_VIP[r.asset] && !candidates.includes(r)) candidates.push(r);
   for (let i = 0; i < candidates.length; i += 12) {
     const batch = candidates.slice(i, i + 12);
     await Promise.all(
@@ -838,6 +854,12 @@ async function main() {
       const mcapBoost = (mc && mc.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === mc.dir ? 2 : -1) : 0)
         + (ev2 && ev2.unlocks > 0 && dir0 === 'LONG' ? -3 : 0)
         + (ev2 && ev2.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === ev2.dir ? 1 : 0) : 0);
+      // VIP telegram confluence — fresh group call agreeing with our read
+      // earns +6, contradicting it costs −6; bounded, and tagged for audit
+      const vip = TG_VIP[r.asset];
+      const vipBoost = vip
+        ? (dir0 === 'LONG' ? 'long' : 'short') === vip.side ? 6 : -6
+        : 0;
       // climax-entry penalty: the ledger's forensic finding — the highest
       // scores fired on overextended moves and entered late (85+ bucket
       // avg +0.03% vs <75 bucket +0.72%). A LONG at RSI>75 or already +8%
@@ -855,12 +877,14 @@ async function main() {
             derivBoost +
             newsBoost +
             mcapBoost +
+            vipBoost +
             (climax ? -10 : 0),
           0,
           100
         )
       );
-      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score };
+      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score,
+        vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
     .sort((a, b) => b.score - a.score);
   const signals = ranked
@@ -882,6 +906,7 @@ async function main() {
           : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
         `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
       ];
+      if (r.vip) drivers.push(`VIP group ${r.vip.side.toUpperCase()} ${r.vip.ageMin}m ago — engine-evaluated`);
       return {
         asset: r.asset,
         cls: r.cls,
@@ -890,6 +915,7 @@ async function main() {
         boardRank: boardIdx + 1, // position on the emitted board this run
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
+        vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
         assetId: r.asset.toLowerCase(),

@@ -7,6 +7,19 @@
 //   RAPID_MODE=demo node rapid.mjs    # dry-run on Bitget demo
 //   RAPID_MS=15000 node rapid.mjs     # custom cycle (min 5s enforced)
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+
+// VIP telegram watcher runs alongside when configured — group signals land
+// in state/tg-confluence.json and the scanner picks them up next cycle
+const spawnTg = () => {
+  if (!fs.existsSync('scripts/tg-config.json')) return;
+  const tg = spawn('python', ['scripts/tg-watch.py'], { stdio: 'inherit' });
+  tg.on('close', () => {
+    console.log('[rapid] tg-watch exited — restarting in 10s');
+    setTimeout(spawnTg, 10_000);
+  });
+};
+spawnTg();
 
 const MS = Math.max(5_000, +(process.env.RAPID_MS || 30_000));
 const MODE = (process.env.RAPID_MODE || 'live').toLowerCase();
