@@ -50,8 +50,8 @@ const PASS = MODE === 'demo'
   : (process.env.BITGET_PASSPHRASE || '');
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
-const MAX_NOTIONAL = +(process.env.LIVE_MAX_NOTIONAL_USD || 50);
-const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || 3);
+const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || 10);
+const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
 // dust-account mode: when scaled notional lands under the contract minimum,
 // floor up to the exchange minimum instead of skipping — for tiny real
 // accounts proving the pipeline. Requires LIVE_FLOOR_MIN=1; never default.
@@ -93,12 +93,15 @@ const getPos = () =>
   api('GET', '/api/v2/mix/position/all-position', {
     qs: `productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
   });
-const getEquity = async () => {
+const getAccount = async () => {
   const rows = await api('GET', '/api/v2/mix/account/accounts', {
     qs: `productType=${PRODUCT}`,
   });
   const acc = (rows || []).find((a) => a.marginCoin === MARGIN_COIN) || {};
-  return +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0);
+  return {
+    equity: +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0),
+    available: +(acc.available ?? acc.usdtEquity ?? 0),
+  };
 };
 // pending-plan query REQUIRES planType — 'profit_loss' is the umbrella that
 // covers profit_plan/loss_plan/moving_plan/pos_profit/pos_loss
@@ -208,6 +211,7 @@ async function contractMap() {
       pricePlace: +c.pricePlace ?? 6, // trigger/execute price precision (XRP=4, BTC=1, ...)
       minTradeNum: +c.minTradeNum || 0,
       minTradeUSDT: +c.minTradeUSDT || 0,
+      maxLev: +c.maxLever || 0,
     };
   return m;
 }
@@ -311,9 +315,9 @@ async function main() {
   // probe posMode on a symbol guaranteed to exist — a bad first plan symbol
   // would otherwise fail the probe and refuse the entire run
   const probeSym = 'BTCUSDT';
-  const [positions, equityUsd] = await Promise.all([
+  const [positions, acct] = await Promise.all([
     getPos().catch((e) => (state.errors.push('positions: ' + e.message), [])),
-    getEquity().catch(() => 0),
+    getAccount().catch(() => ({ equity: 0, available: 0 })),
     getPosMode(probeSym)
       .then((m) => { POS_MODE = m; })
       .catch((e) => state.errors.push('posMode detect failed — fail-closed: ' + e.message)),
@@ -323,8 +327,11 @@ async function main() {
     log('cannot determine position mode — refusing to guess close semantics');
     return;
   }
+  const equityUsd = acct.equity;
+  let marginFree = acct.available;
   const scale = equityUsd > 0 ? Math.min(1, equityUsd / PAPER_EQUITY) : 0;
   state.equityUsd = round(equityUsd, 2);
+  state.marginFreeUsd = round(marginFree, 2);
   state.posMode = POS_MODE;
   const rawPos = (positions || []).filter((p) => +p.total > 0);
   state.positions = rawPos.map((p) => ({
@@ -366,33 +373,7 @@ async function main() {
     }
   }
 
-  // ---- trail amends: cancel+replace the loss plan at the ratcheted level ----
-  for (const t of plan.trails) {
-    const pos = posBySym.get(t.symbol);
-    if (!pos || !Number.isFinite(t.entry) || !Number.isFinite(t.stopPctFromEntry)) continue;
-    // anchor the stop % to the exchange's actual fill, not the sim's entry —
-    // a stop computed off a stale sim reference sits at the wrong price
-    const anchor = pos.entry > 0 ? pos.entry : t.entry;
-    const px = anchor * (1 + (t.direction === 'LONG' ? 1 : -1) * (t.stopPctFromEntry / 100));
-    try {
-      await cancelLossPlans(t.symbol); // loss plans only — the TP ladder stays
-      // verify the old stops actually died — cancel returns 00000 even on a
-      // silent no-op, and a leftover stop means a double-stopped position.
-      // no .catch here: if we can't verify, we don't stack a new stop on top
-      const leftover = (await getPlans(t.symbol))
-        .filter((p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'));
-      if (leftover.length) throw new Error(`${leftover.length} stale loss plan(s) survived cancel — refusing to stack another`);
-      // position total can carry more decimals than the contract accepts —
-      // floor to volume precision or the replacement stop errors out and
-      // the position sits at its old stop while we believe it trailed
-      const tp2 = Math.pow(10, cm[t.symbol]?.sizePlace ?? 4);
-      const trailSize = Math.floor(pos.size * tp2) / tp2;
-      await planOrder(t.symbol, 'loss_plan', round(px, cm[t.symbol]?.pricePlace ?? 6), trailSize, pos.side);
-      state.actions.push(`trailed ${t.symbol} stop -> ${round(px, 6)}`);
-    } catch (e) {
-      state.errors.push(`trail ${t.symbol}: ${e.message}`);
-    }
-  }
+  // trailing stops removed by mandate — stops stay where the entry set them
 
   // ---- entries: only when the kill-switch is clear and capacity allows ----
   if (plan.killSwitch) {
@@ -409,7 +390,6 @@ async function main() {
         state.errors.push(`${o.symbol || '?'}: malformed order fields — skipped`);
         continue;
       }
-      const notional = Math.min(o.notionalUsd * scale, MAX_NOTIONAL);
       // not in this environment's catalog = unroutable here — record it so
       // the scanner stops emitting entries the executor can never fill
       if (!cm[o.symbol]) {
@@ -417,6 +397,22 @@ async function main() {
         state.errors.push(`${o.symbol}: absent from ${MODE} contract catalog — unroutable`);
         continue;
       }
+      // sizing: deploy ALL free margin evenly across the remaining target
+      // slots (~25% of balance per trade at the 4-slot target); once the
+      // target is met, leftovers spread across any remaining max slots.
+      const openNow = posBySym.size + opened;
+      const slotsLeft = Math.max(0, MAX_POSITIONS - openNow);
+      const targetLeft = Math.max(0, TARGET_POSITIONS - openNow);
+      const denom = Math.max(1, targetLeft > 0 ? targetLeft : slotsLeft);
+      // leverage: contract max, bounded so the designed stop still sits
+      // inside the liquidation band — lev <= 80/(stopPct + 0.64) keeps the
+      // stop at <=80% of the band edge, otherwise liquidation fires first.
+      const lev = Math.max(
+        1,
+        Math.min(cm[o.symbol].maxLev || 125, Math.floor(80 / (o.stopPct + 0.64)))
+      );
+      const marginUsd = marginFree / denom;
+      const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       if (!size && FLOOR_MIN) {
         // floor to the contract minimum — but only if the margin needed
@@ -424,8 +420,8 @@ async function main() {
         const c = cm[o.symbol];
         const minQty = Math.max(c.minTradeNum, c.minTradeUSDT / o.refEntry);
         const minNotional = minQty * o.refEntry;
-        const marginNeeded = minNotional / o.leverage;
-        if (marginNeeded <= equityUsd * 0.8) {
+        const marginNeeded = minNotional / lev;
+        if (marginNeeded <= Math.max(equityUsd * 0.8, marginFree)) {
           const p = Math.pow(10, c.sizePlace);
           size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
           state.actions.push(`${o.symbol}: scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
@@ -437,7 +433,7 @@ async function main() {
       const coid = `s${plan.ts}${o.symbol}`.slice(0, 38);
       try {
         await setIsolated(o.symbol);
-        await setLeverage(o.symbol, o.leverage);
+        await setLeverage(o.symbol, lev);
         await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid });
         // protective levels anchor to the ACTUAL fill, not the plan's ref
         // price — market orders slip, and a stop quoted off an unfilled
@@ -447,31 +443,23 @@ async function main() {
           const pp = (await getPos()).find((x) => x.symbol === o.symbol && +x.total > 0);
           if (pp && +pp.openPriceAvg > 0) fill = +pp.openPriceAvg;
         } catch {}
-        // TP ladder: 30/30/25% at 40/70/100% of target; loss plan covers the
-        // FULL size (Bitget nets it as rungs fill). Rungs round DOWN to
-        // contract precision — a rung too small to exist merges into the SL.
-        const cp = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
+        // ONE take-profit at the plan target covering the full size; ONE
+        // loss plan at the stop covering the full size. No ladder, no trail.
         const pp = cm[o.symbol]?.pricePlace ?? 6;
-        // rungs below the contract minimum get rejected by the exchange —
-        // which would trigger the emergency close on a good position.
-        // A sub-minimum rung merges into the SL instead of erroring.
-        const minQty = Math.max(
-          cm[o.symbol]?.minTradeNum ?? 0,
-          (cm[o.symbol]?.minTradeUSDT ?? 0) / fill
+        const tpPlan = planOrder(
+          o.symbol, 'profit_plan',
+          round(fill * (1 + sgn * (o.targetPct / 100)), pp),
+          size, holdSide
         );
-        const tpPlans = (o.tps || []).map((tp) => {
-          const rung = Math.floor(size * tp.frac * cp) / cp;
-          return rung >= minQty && rung > 0
-            ? planOrder(o.symbol, 'profit_plan', round(fill * (1 + sgn * tp.at * (o.targetPct / 100)), pp), rung, holdSide)
-            : null;
-        }).filter(Boolean);
         const slPlan = planOrder(
           o.symbol, 'loss_plan',
           round(fill * (1 - sgn * (o.stopPct / 100)), pp),
           size, holdSide
         );
-        await Promise.all([...tpPlans, slPlan]);
-        state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${o.leverage}x notional $${round(size * fill, 2)}`);
+        await Promise.all([tpPlan, slPlan]);
+        const usedMargin = (size * fill) / lev;
+        marginFree = Math.max(0, marginFree - usedMargin);
+        state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
         opened++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting

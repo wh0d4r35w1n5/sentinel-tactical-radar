@@ -1961,13 +1961,7 @@ async function main() {
     const fd = freshDir.get(e.asset);
     if (fd && fd !== e.direction)
       livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
-    if (e.stopAt != null && e.stopAt !== -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
-      livePlan.trails.push({
-        symbol: e.asset + 'USDT',
-        direction: e.direction,
-        stopPctFromEntry: e.stopAt,
-        entry: e.entry,
-      });
+    // trails intentionally not emitted — stops stay at the entry-set level
   }
   const closed = ledger.entries.filter((e) => e.status !== 'open');
   // money truth: a profitable exit is a win regardless of which rule closed it
