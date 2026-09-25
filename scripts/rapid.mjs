@@ -12,6 +12,7 @@ import fs from 'node:fs';
 // VIP telegram watcher runs alongside when configured — group signals land
 // in state/tg-confluence.json and the scanner picks them up next cycle
 const spawnTg = () => {
+  if (process.env.SENTINEL_NO_TG === '1') return;
   if (!fs.existsSync('scripts/tg-config.json')) return;
   const tg = spawn('python', ['scripts/tg-watch.py'], { stdio: 'inherit' });
   tg.on('close', () => {

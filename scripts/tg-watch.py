@@ -153,4 +153,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    while True:
+        try:
+            asyncio.run(main())
+            break
+        except (ConnectionError, OSError, asyncio.TimeoutError) as e:
+            print(f"[tg] connection lost ({type(e).__name__}: {e}) — reconnecting in 20s", flush=True)
+            time.sleep(20)
+        except KeyboardInterrupt:
+            break

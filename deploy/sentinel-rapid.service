@@ -7,6 +7,7 @@ Wants=network-online.target
 WorkingDirectory=/opt/sentinel
 ExecStart=/usr/bin/node scripts/rapid.mjs
 Environment=RAPID_MS=15000
+Environment=SENTINEL_NO_TG=1
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/sentinel-rapid.log
