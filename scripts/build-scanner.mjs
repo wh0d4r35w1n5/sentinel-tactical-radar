@@ -989,6 +989,9 @@ async function main() {
         rangePct: pct(r.rangePct),
         strategy,
         changePct: pct(r.changePct),
+        // after-cost edge: gross target minus round-trip taker fees,
+        // half-spread and modeled exit slippage — the number that pays
+        netTargetPct: pct(targetPct - 0.12 - 0.08 - (r.spreadPct ?? 0.2) / 2),
         // raw features for per-component IC evaluation
         rsi: hasK ? round(r.k.rsi14, 1) : null,
         volRatio: hasK ? round(r.k.volRatio, 2) : null,
@@ -1669,6 +1672,11 @@ async function main() {
       tradeScore >= entryFloor &&
       Number.isFinite(s.entryPrice) &&
       s.entryPrice > 0 &&
+      // net-of-cost floor: a setup whose target can't clear round-trip
+      // costs is a donation, not a trade. taker fees (0.12% RT notional) +
+      // half the quoted spread + modeled exit slippage + a 1.2% net-edge
+      // minimum. Funding drag when paying is charged separately above.
+      s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >= 1.2 &&
       ddNow < ddKillPct &&
       mktAllows(s) &&
       !stratBlock.has(s.strategy) &&

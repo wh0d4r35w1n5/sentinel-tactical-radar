@@ -564,7 +564,13 @@ async function main() {
         1,
         Math.min(cm[o.symbol].maxLev || 125, Math.floor(80 / (o.stopPct + 0.64)))
       );
-      const marginUsd = marginFree / denom;
+      // fee headroom: Bitget charges the taker fee on NOTIONAL from free
+      // balance — at 37x the round-trip (open taker + conditional exit)
+      // eats ~4.4% of the margin slice. Sizing to 100% of marginFree was
+      // the source of the 40762 'order amount exceeds the balance'
+      // rejections — the fee landed on top of a fully-deployed balance.
+      const FEE_RT = 0.0012; // 0.06% taker x2 sides of notional
+      const marginUsd = (marginFree / denom) / (1 + lev * FEE_RT);
       const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       if (!size && FLOOR_MIN) {
@@ -574,7 +580,9 @@ async function main() {
         const minQty = Math.max(c.minTradeNum, c.minTradeUSDT / o.refEntry);
         const minNotional = minQty * o.refEntry;
         const marginNeeded = minNotional / lev;
-        if (marginNeeded <= Math.max(equityUsd * 0.8, marginFree)) {
+        // margin must cover size AND the open taker fee on that notional
+        const feeNeeded = minNotional * 0.0006;
+        if (marginNeeded + feeNeeded <= Math.max(equityUsd * 0.8, marginFree)) {
           const p = Math.pow(10, c.sizePlace);
           size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
           state.actions.push(`${o.symbol}: scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
