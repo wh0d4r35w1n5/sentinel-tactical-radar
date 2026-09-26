@@ -61,7 +61,6 @@ const LIVE_ARMED =
 const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || (RISK_MAX ? 12 : 10));
 const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
-const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const DD_KILL = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
 const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6));
 // dust-account mode: when scaled notional lands under the contract minimum,
