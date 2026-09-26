@@ -9,6 +9,7 @@ ExecStart=/usr/bin/node scripts/rapid.mjs
 Environment=RAPID_MS=15000
 Environment=SENTINEL_NO_TG=1
 Environment=RAPID_MODE=live
+Environment=SENTINEL_RISK_PROFILE=max
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/sentinel-rapid.log

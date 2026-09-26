@@ -24,6 +24,10 @@ const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
 const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
 const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: skips third-party intel feeds + RSS
+// max-profit/max-risk profile: relaxed floors, wider heat caps, deeper DD
+// floor. Structural protections (TP/SL, liq-band leverage, fee reserve) are
+// mechanics — they apply in every profile.
+const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const KLINE_CANDIDATES = RAPID ? 16 : 48; // top-volume pairs get 1h momentum metrics
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
@@ -1431,7 +1435,7 @@ async function main() {
   // ---- signal ledger: open entries + settled outcomes ----
   const EQUITY = 10000; // paper account, USD model
   const NOTIONAL = 1000; // legacy fallback notional (pre-leverage entries)
-  const MAX_DEPLOYED = EQUITY * 4; // notional exposure cap — 400% of equity = 40% margin at 10x
+  const MAX_DEPLOYED = EQUITY * (RISK_MAX ? 40 : 4); // notional exposure cap
   // portfolio heat cap — regime-scaled: the book is allowed to carry more
   // total risk when the measured tape supports the traded direction, less
   // for counter-trend trades in a hostile regime
@@ -1442,12 +1446,12 @@ async function main() {
     const counter =
       (dir === 'LONG' && regime === 'risk-off') ||
       (dir === 'SHORT' && regime === 'risk-on');
-    return aligned ? 6 : counter ? 2.5 : 4;
+    return aligned ? (RISK_MAX ? 12 : 6) : counter ? (RISK_MAX ? 8 : 2.5) : (RISK_MAX ? 10 : 4);
   };
   // correlation governor: BTC+ETH+SOL+alts aren't independent bets — during
   // a shock they're the same crypto risk. Cap heat per correlated cluster
   // so the book can't stack 15 disguised copies of one bet.
-  const CLUSTER_HEAT_CAP = 2.5; // % of equity at risk per correlated cluster
+  const CLUSTER_HEAT_CAP = RISK_MAX ? 8 : 2.5; // % of equity at risk per correlated cluster
   // measured-corr heat: an open position counts against the candidate's
   // cluster when their realized 48h correlation is ≥0.6 — the "same bet"
   // test. Falls back to the static asset-class cluster when either side
@@ -1476,7 +1480,7 @@ async function main() {
   // no-trade floor: below BBB the board is noise — signals still emit and
   // archive (the eval engine grades them) but no position opens. Standing
   // down is a legitimate output.
-  const MIN_ENTRY_SCORE = 70;
+  const MIN_ENTRY_SCORE = +(process.env.SENTINEL_MIN_SCORE || (RISK_MAX ? 55 : 70));
   // ---- Tharp's core law enforced: no system works in every market type.
   // bear tape → only reversal-family LONGs trade; bull tape → only
   // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
@@ -1490,7 +1494,7 @@ async function main() {
     if (mktType.startsWith('bull')) return s.direction === 'LONG' || EXH_SHORT.has(s.strategy);
     return s.score >= MIN_ENTRY_SCORE + 8 || MEANREV.has(s.strategy);
   };
-  const volHaircut = mktType.endsWith('volatile') ? 0.75 : 1;
+  const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
   const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
   // funding drag penalty: paying >0.05%/8h to hold is a structural cost the
   // raw confluence score doesn't see. The archive keeps the raw score (the
@@ -1615,7 +1619,7 @@ async function main() {
   // broken than unlucky — stand down at ≥8% equity DD instead of feeding
   // fresh risk into a tape that has already disproven the current regime
   // read. Recovery re-arms automatically when the equity path heals.
-  const ddKillPct = 8;
+  const ddKillPct = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
   const ddNow = (() => {
     // real-account drawdown first — the executor persists the real equity
     // peak each run (state/equity-peak.json); the sim ledger's equity curve

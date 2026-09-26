@@ -57,6 +57,12 @@ const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
 const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || 10);
 const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
+// SENTINEL_RISK_PROFILE=max: maximum aggression — kill-switch at 35% DD and
+// daily halt at 25% (defaults 8/6). Below those floors the book still stands
+// down — a wipeout spiral isn't risk, it's the end of the book.
+const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
+const DD_KILL = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
+const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6));
 // dust-account mode: when scaled notional lands under the contract minimum,
 // floor up to the exchange minimum instead of skipping — for tiny real
 // accounts proving the pipeline. Requires LIVE_FLOOR_MIN=1; never default.
@@ -412,8 +418,8 @@ async function main() {
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
   const entriesBlocked =
-    realDdPct >= 8 ? `kill-switch (real equity dd ${state.ddPct}% >= 8%)`
-    : dd24 >= 6 ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= 6%)`
+    realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
+    : dd24 >= DAILY_HALT ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= ${DAILY_HALT}%)`
     : null;
 
   // published risk rails — the machine-readable answer to "where are the
@@ -423,8 +429,8 @@ async function main() {
     sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each)`,
     maxPositions: MAX_POSITIONS,
     leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
-    killSwitchPct: 8,
-    dailyHaltPct: 6,
+    killSwitchPct: DD_KILL,
+    dailyHaltPct: DAILY_HALT,
     ddPct: state.ddPct,
     dd24Pct: state.dd24Pct,
     protectionRule: 'exactly one TP + one SL per position; orphan positions get protection synthesized; entry emergency-closes if protection placement fails — never naked',
