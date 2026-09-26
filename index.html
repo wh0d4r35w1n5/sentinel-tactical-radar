@@ -345,7 +345,7 @@ function sigDetail(s,i){
   // prospective record, so every signal shows which doctrine fires it and
   // whether that doctrine has actually been paying
   const B=BOOKS[s.strategy]||null;
-  const bs=((ledger&&ledger.stats&&ledger.stats.byStrategy)||{})[s.strategy];
+  const bs=((LAST.ledger&&LAST.ledger.stats&&LAST.ledger.stats.byStrategy)||{})[s.strategy];
   const doc=B?`<div class="dmeta" style="margin-top:4px;border-top:1px solid var(--line);padding-top:6px"><span>doctrine · ${LK(B.u,'<b>'+B.t+'</b>')} <span class="sub">${B.a}</span></span></div>
     <div class="sub" style="margin:2px 0 4px;font-size:11px;font-style:italic">“${B.d}”${bs?` <span class="sub" style="font-style:normal">— registry record: <b class="num ${bs.winRate>=50?'up':'dn'}">${bs.winRate}% WR</b> · ${bs.avgPnlPct>=0?'+':''}${bs.avgPnlPct}% avg · n=${bs.n}</span>`:''}</div>`:'';
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
