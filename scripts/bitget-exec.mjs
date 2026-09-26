@@ -565,7 +565,7 @@ async function main() {
       // upside runs to 1.8x target. Legacy single-TP positions ratchet at
       // ~90% to their only target.
       const profitPlans = existing.filter((x) => /profit/i.test(x.planType || ''));
-      if (lossPlan && profitPlans.length && p.size > 0) {
+      if (lossPlan && p.size > 0) {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
         // nearest profit trigger in the trade direction = next bank level
@@ -577,26 +577,51 @@ async function main() {
         const dist = nearTp ? Math.abs(nearTp - p.entry) : 0;
         const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
         const pp = cm[p.symbol]?.pricePlace ?? 6;
-        // ratchet tiers — the stop locks ~55% of the NEXT bank level once
-        // price is within 10% of it, then keeps climbing: near TP1 the stop
-        // lands at entry+0.30xT (covered by the 0.25% fee floor); near TP2
-        // it locks the TP1 price; near TP3 it locks TP2. The ladder itself
-        // banks the tranches — this keeps the still-open size protected as
-        // a free-and-improving runner. Only ever moves in the trade's favor.
-        const lockPct = Math.max(0.25, 0.55 * ((dist / p.entry) * 100));
-        const bePx = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
-        const slBetter = sgn === 1 ? bePx > slTrig : bePx < slTrig;
-        if (prog >= 0.9 && slTrig > 0 && slBetter) {
+        let wantPx = null, why = null;
+        if (profitPlans.length && prog >= 0.9) {
+          // ratchet tiers — the stop locks ~55% of the NEXT bank level once
+          // price is within 10% of it, then keeps climbing: near TP1 the
+          // stop lands at entry+0.30xT; near TP2 it locks TP1; near TP3 it
+          // locks TP2. Only ever moves in the trade's favor.
+          const lockPct = Math.max(0.25, 0.55 * ((dist / p.entry) * 100));
+          wantPx = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
+          why = `ratchet ${p.symbol}: ${round(prog * 100, 0)}% to next TP — stop locked at +${round(lockPct, 2)}% (${wantPx})`;
+        } else if (!profitPlans.length && sgn * (mark - p.entry) > 0) {
+          // moon-bag trail — all TP tranches banked, the leftover runner has
+          // no target. Trail the stop 1.0% under price every cycle: the last
+          // piece rides until the move actually reverses, never a fixed cap.
+          wantPx = round(mark * (1 - (sgn * 1.0) / 100), pp);
+          why = `trail ${p.symbol}: stop following winner @ ${wantPx}`;
+        }
+        const slBetter =
+          wantPx != null && slTrig > 0 &&
+          (sgn === 1 ? wantPx > slTrig : wantPx < slTrig);
+        if (wantPx != null && slBetter) {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
           if (planId)
             await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
           await planOrder(
-            p.symbol, lossPlan.planType, bePx,
+            p.symbol, lossPlan.planType, wantPx,
             /pos_/.test(lossPlan.planType) ? '0' : String(p.size), p.side
           );
+          state.actions.push(why);
+        }
+        // stall exit — "cut losers quickly": a position past 2h that is
+        // underwater AND hasn't reached 35% of the way to its next target
+        // is bleeding slowly, not trading. Scratch it for ~-0.2R instead of
+        // donating the full stop five hours in.
+        if (
+          p.cTime &&
+          Date.now() - p.cTime > 2 * 3600e3 &&
+          p.upl < 0 &&
+          prog < 0.35
+        ) {
+          await closePosition(p.symbol, p.side);
           state.actions.push(
-            `ratchet ${p.symbol}: ${round(prog * 100, 0)}% to next TP — stop locked at +${round(lockPct, 2)}% (${bePx})`
+            `stall-exit ${p.symbol}: ${round(((p.upl / (p.size * p.entry)) || 0) * 100, 2)}% after ${((Date.now() - p.cTime) / 36e5).toFixed(1)}h — cut before the full stop`
           );
+          posBySym.delete(p.symbol);
+          continue;
         }
       }
       // retrofit: an open position still carrying ONE full-size profit plan
@@ -616,18 +641,16 @@ async function main() {
         if (distPct > 0 && p.size >= 3 * minQty0) {
           const pid = profitPlans[0].orderId || profitPlans[0].planId || profitPlans[0].id;
           if (pid) await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+          // 40/30/15 banks + ~15% moon bag left unplanned for the trail
           const tranches = [
-            { frac: 0.45, mult: 0.55 },
-            { frac: 0.35, mult: 1.0 },
-            { frac: 0.20, mult: 1.8 },
+            { frac: 0.40, mult: 0.55 },
+            { frac: 0.30, mult: 1.0 },
+            { frac: 0.15, mult: 1.8 },
           ];
           let placed = 0;
-          for (let ti = 0; ti < tranches.length; ti++) {
-            const t = tranches[ti];
-            const tsize = ti === 2
-              ? Math.floor((p.size - placed) * sp0) / sp0
-              : Math.floor(p.size * t.frac * sp0) / sp0;
-            if (tsize < minQty0) continue;
+          for (const t of tranches) {
+            const tsize = Math.floor(p.size * t.frac * sp0) / sp0;
+            if (tsize < minQty0 || placed + tsize > p.size) continue;
             placed += tsize;
             await planOrder(
               p.symbol, 'profit_plan',
@@ -636,7 +659,7 @@ async function main() {
             );
           }
           state.actions.push(
-            `laddered ${p.symbol}: single TP split 45/35/20 @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}%`
+            `laddered ${p.symbol}: TP split 40/30/15 @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon-bag trail`
           );
         }
       }
@@ -799,20 +822,18 @@ async function main() {
         const runnerMult = Math.max(1.2, +(o.runnerMult || 1.8));
         const plans = [];
         if (ladder) {
+          // 40/30/15 staggered banks — the leftover ~15% is the moon bag:
+          // deliberately given NO profit plan so it rides the trailing stop
+          // and lets a real winner run past every target
           const tranches = [
-            { frac: 0.45, mult: 0.55 },
-            { frac: 0.35, mult: 1.0 },
-            { frac: 0.20, mult: runnerMult },
+            { frac: 0.40, mult: 0.55 },
+            { frac: 0.30, mult: 1.0 },
+            { frac: 0.15, mult: runnerMult },
           ];
           let placed = 0;
-          for (let ti = 0; ti < tranches.length; ti++) {
-            const t = tranches[ti];
-            // last tranche takes the remainder so rounding never oversells
-            const tsize =
-              ti === tranches.length - 1
-                ? Math.floor((size - placed) * sp) / sp
-                : Math.floor(size * t.frac * sp) / sp;
-            if (tsize < minQty) continue;
+          for (const t of tranches) {
+            const tsize = Math.floor(size * t.frac * sp) / sp;
+            if (tsize < minQty || placed + tsize > size) continue;
             placed += tsize;
             plans.push(
               planOrder(
