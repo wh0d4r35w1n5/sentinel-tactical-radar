@@ -1615,7 +1615,12 @@ async function main() {
   // notional position only locks 3% margin. Conviction scales the risk
   // (A=full, B=half); notional capped at 30% of equity — concentration is
   // still concentration regardless of how little margin it posts.
-  const RISK_PCT = 0.01, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
+  // SENTINEL_RISK_PCT overrides; max profile triples risk-per-trade (3% of
+  // equity at stop distance vs the 1% Van Tharp baseline) and widens the
+  // per-position notional cap so tripled sizes aren't clamped back down.
+  const RISK_PCT = +(process.env.SENTINEL_RISK_PCT || (RISK_MAX ? 0.03 : 0.01));
+  const MAX_POS_PCT = RISK_MAX ? 0.6 : 0.3;
+  const MIN_POS_USD = EQUITY * 0.05;
   // remaining open fraction after partial banks — banked rungs freed the
   // capital, so the exposure cap counts only what's still working
   const deployed = () =>

@@ -427,7 +427,8 @@ async function main() {
   // the dashboard and exported with the ledger.
   state.risk = {
     riskProfile: RISK_MAX ? 'max' : 'default',
-    sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each)`,
+    riskMultiplier: +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)),
+    sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each) × risk multiplier`,
     maxPositions: MAX_POSITIONS,
     leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
     killSwitchPct: DD_KILL,
@@ -564,6 +565,10 @@ async function main() {
       const slotsLeft = Math.max(0, MAX_POSITIONS - openNow);
       const targetLeft = Math.max(0, TARGET_POSITIONS - openNow);
       const denom = Math.max(1, targetLeft > 0 ? targetLeft : slotsLeft);
+      // risk multiplier: max profile (or SENTINEL_RISK_MUL) puts 3x the
+      // per-slot share on each order — same slot logic, triple the slice.
+      // Capped at the full free margin after the fee reserve either way.
+      const riskMul = +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1));
       // leverage: contract max, bounded so the designed stop still sits
       // inside the liquidation band — lev <= 80/(stopPct + 0.64) keeps the
       // stop at <=80% of the band edge, otherwise liquidation fires first.
@@ -577,7 +582,7 @@ async function main() {
       // the source of the 40762 'order amount exceeds the balance'
       // rejections — the fee landed on top of a fully-deployed balance.
       const FEE_RT = 0.0012; // 0.06% taker x2 sides of notional
-      const marginUsd = (marginFree / denom) / (1 + lev * FEE_RT);
+      const marginUsd = (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT);
       const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       let minMarginNeeded = null;
