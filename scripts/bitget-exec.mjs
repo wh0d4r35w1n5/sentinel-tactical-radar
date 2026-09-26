@@ -865,6 +865,13 @@ async function main() {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
       if (posBySym.has(o.symbol) || openedSym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
+      // MANUAL_HOLD is a hands-off claim on the SYMBOL, not just the open
+      // position — an auto-entry on a held symbol would open then go
+      // unmanaged (management exempts itself by design). Entries blocked.
+      if (MANUAL.has(o.symbol)) {
+        state.actions.push(`${o.symbol}: manual-hold symbol — entry skipped (symbol is hands-off)`);
+        continue;
+      }
       if (cooledSym.has(o.symbol)) {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
