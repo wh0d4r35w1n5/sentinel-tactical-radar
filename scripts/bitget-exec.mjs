@@ -580,6 +580,7 @@ async function main() {
       const marginUsd = (marginFree / denom) / (1 + lev * FEE_RT);
       const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
+      let minMarginNeeded = null;
       if (!size && FLOOR_MIN) {
         // floor to the contract minimum — but only if the margin needed
         // (notional/leverage) leaves >20% of equity free afterwards
@@ -587,6 +588,7 @@ async function main() {
         const minQty = Math.max(c.minTradeNum, c.minTradeUSDT / o.refEntry);
         const minNotional = minQty * o.refEntry;
         const marginNeeded = minNotional / lev;
+        minMarginNeeded = marginNeeded + minNotional * 0.0006;
         // margin must cover size AND the open taker fee on that notional —
         // out of FREE margin, not equity: comparing against equity*0.8 while
         // marginFree was ~0 was the recurring 40762 'exceeds the balance'
@@ -601,10 +603,10 @@ async function main() {
         }
       }
       if (!size) {
-        // fully deployed isn't an error — only flag it when there was real
-        // free margin that still couldn't cover the contract minimum
-        const msg = `${o.symbol}: ${marginFree <= 0.01 ? 'no free margin — skipped' : 'size below contract minimum'}`;
-        (marginFree <= 0.01 ? state.actions : state.errors).push(msg);
+        // can't fund even the contract minimum from free margin = fully
+        // deployed, not a fault — log as an action, not an error
+        const msg = `${o.symbol}: insufficient free margin for contract minimum — skipped`;
+        ((minMarginNeeded ?? Infinity) > marginFree ? state.actions : state.errors).push(msg);
         continue;
       }
       const sgn = o.direction === 'LONG' ? 1 : -1;
