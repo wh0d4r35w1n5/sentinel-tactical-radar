@@ -362,7 +362,7 @@ function sigDetail(s,i){
       ${s.ta.liquidity.setup?`<span class="echip ${s.ta.liquidity.setup.dir==='LONG'?'bull':'bear'}"><b>SETUP ${s.ta.liquidity.setup.grade}</b> ${s.ta.liquidity.setup.dir}${s.ta.liquidity.targetPx?` → ${fmtP(s.ta.liquidity.targetPx)}`:''}</span>`:''}
       ${s.ta.liquidity.inducement?`<span class="echip flat" title="minor pool in the trade's path — likely raided before the real target"><b>IND</b> ${fmtP(s.ta.liquidity.inducement.px)}</span>`:''}
     </div>`:''}
-    <div>${sparkSVG(c.spark,520,64)}</div>
+    <div>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}</div>
     <div class="dmeta">
       <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M USD</b></span>
       <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)} USD–${fmtP(s.highPrice)} USD)</span>
@@ -449,7 +449,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
     <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)} USD</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
-    <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
+    <td>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
     // discipline/context scorecard — ledger-trade rows removed with the paper

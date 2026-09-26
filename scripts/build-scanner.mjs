@@ -1224,8 +1224,6 @@ async function main() {
     universeFilter: 'bitget-usdt-m-futures',
   };
 
-  fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
-
   // ---- board enrichment: every ranked signal gets klines too — the board
   // ranks by score, not volume, so top-N volume coverage alone leaves most
   // rows with no sparkline and no RSI. Same pattern as the TG_VIP pass.
@@ -1252,6 +1250,15 @@ async function main() {
     }
     for (const s of boardMissing) if (!enriched.has(s.asset)) klineMiss.push(s.asset);
   }
+  // embed each signal's 48h spark INSIDE the signal row — the scanner file is
+  // authored by two producers (VPS rapid + GH shadow) whose coin-detail files
+  // disagree; a spark living on the signal row renders correctly no matter
+  // which producer's coin-detail the browser pairs it with
+  for (const s of signals) {
+    const k = enriched.get(s.asset);
+    if (k && k.closes && k.closes.length > 1) s.spark = k.closes;
+  }
+  fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
   const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
