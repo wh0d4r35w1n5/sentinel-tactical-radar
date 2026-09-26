@@ -629,20 +629,25 @@ async function main() {
           );
           state.actions.push(why);
         }
-        // stall exit — "cut losers quickly": a position past 2h that is
-        // underwater AND hasn't reached 35% of the way to its next target
-        // is bleeding slowly, not trading. Scratch it for ~-0.2R instead of
-        // donating the full stop five hours in.
-        if (
-          p.cTime &&
-          Date.now() - p.cTime > 2 * 3600e3 &&
-          p.upl < 0 &&
-          prog < 0.35
-        ) {
+        // scalp ladder — verdict deadlines ~50x tighter than the old clock:
+        //   216s  : red at all -> cut (loser dies in ~4min, not 2h)
+        //   15min : <35% of the way to TP1 -> stall, cut
+        //   45min : <65% progress and not meaningfully green -> deadline, cut
+        // Anything that clears all three gates is a live runner the
+        // ladder/moon-bag trail manages. Losers and laggards die in minutes.
+        const uplPct = (p.upl / (p.size * p.entry)) * 100;
+        const ageMs = p.cTime ? Date.now() - p.cTime : 0;
+        const scalpDead =
+          ageMs > 216e3 && uplPct < 0
+            ? `red ${round(uplPct, 2)}% at ${(ageMs / 1e3).toFixed(0)}s`
+            : ageMs > 15 * 60e3 && prog < 0.35
+            ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
+            : ageMs > 45 * 60e3 && prog < 0.65 && uplPct < 0.8
+            ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
+            : null;
+        if (scalpDead) {
           await closePosition(p.symbol, p.side);
-          state.actions.push(
-            `stall-exit ${p.symbol}: ${round(((p.upl / (p.size * p.entry)) || 0) * 100, 2)}% after ${((Date.now() - p.cTime) / 36e5).toFixed(1)}h — cut before the full stop`
-          );
+          state.actions.push(`scalp-timeout ${p.symbol}: ${scalpDead} — margin recycled`);
           posBySym.delete(p.symbol);
           continue;
         }
