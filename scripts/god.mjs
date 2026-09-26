@@ -145,13 +145,22 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
     const sym = `${e.asset}USDT`;
     return !untradeable.has(sym) && catalog.has(sym) && !exPos.some((p) => p.symbol === sym);
   });
+  // orphans are normal now: exchange entries lead the sim book by a cycle,
+  // and the executor's protection-repair synthesizes TP/SL for any position
+  // the ledger never claimed. Only an UNPROTECTED orphan is a real fault.
+  const nakedOrphans = orphans.filter((p) => {
+    const plans = (ll.plans || {})[p.symbol] || [];
+    return !plans.some((x) => /loss|stop/i.test(x.planType || ''));
+  });
   add('convergence',
-    orphans.length ? 'FAIL' : ghosts.length ? 'WARN' : 'PASS',
-    orphans.length
-      ? `exchange holds ${orphans.map((p) => p.symbol).join(',')} with NO ledger authority — manual trade or desync`
-      : ghosts.length
-        ? `sim open but exchange flat: ${ghosts.map((e) => e.asset).join(',')} — routable, never filled`
-        : `sim book and exchange agree (${exPos.length} positions)`);
+    nakedOrphans.length ? 'FAIL' : orphans.length || ghosts.length ? 'WARN' : 'PASS',
+    nakedOrphans.length
+      ? `UNPROTECTED orphan positions: ${nakedOrphans.map((p) => p.symbol).join(',')} — manual trade or desync`
+      : orphans.length
+        ? `orphan positions (protected, pending ledger sync): ${orphans.map((p) => p.symbol).join(',')}`
+        : ghosts.length
+          ? `sim open but exchange flat: ${ghosts.map((e) => e.asset).join(',')} — routable, never filled`
+          : `sim book and exchange agree (${exPos.length} positions)`);
 
   // ---------- 8. never-naked: every open position carries a loss plan ----------
   if (ll.plans && Object.keys(ll.plans).length) {
