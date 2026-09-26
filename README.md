@@ -2,10 +2,9 @@
 
 Live: **https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/**
 
-- `/` — landing dashboard: pulse chart, breadth stats, ticker tape, ranked
-  signals with sparklines, transparent trade journal with Before/After
-  charts (vanilla JS, no build).
-- `/radar/` — the mirrored full terminal.
+- `/` — the dashboard: pulse chart, breadth stats, ticker tape, ranked
+  signals with sparklines, live Bitget execution state and the real fill
+  journal (vanilla JS, no build).
 
 Vanilla-JS static app served by GitHub Pages with a self-contained data
 layer — `live-feed.js` shims `/api/*` calls to static `api/*.json` snapshots
