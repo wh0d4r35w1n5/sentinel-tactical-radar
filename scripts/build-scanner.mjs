@@ -14,6 +14,14 @@ const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
+// atomic artifact writes — a killed process mid-write hands consumers a
+// truncated JSON (executor reads live-plan.json; god audits all of api/).
+// tmp+rename is atomic on POSIX and Windows-over-CIFS alike.
+const writeJson = (file, obj) => {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.renameSync(tmp, file);
+};
 // Universe = Bitget USDT-M perpetual futures: crypto + RWA contracts
 // (stocks, indexes, FX, metals) — everything tradeable from the futures account.
 const CONTRACTS_URL =
@@ -255,7 +263,8 @@ async function fetch5mRange(asset, fromMs, toMs) {
   let start = fromMs;
   for (let page = 0; page < 8; page++) {
     const res = await fetch(
-      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${toMs}&limit=200`
+      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${toMs}&limit=200`,
+      { signal: TF() }
     );
     if (!res.ok) return null;
     const { data } = await res.json();
@@ -383,7 +392,7 @@ async function main() {
   // ---- funding intelligence: perp funding rates + spot/perp basis ----
   const funding = {};
   try {
-    const perpRes = await fetch(PERP_TICKERS_URL);
+    const perpRes = await fetch(PERP_TICKERS_URL, { signal: TF() });
     const perps = perpRes.ok ? (await perpRes.json()).data || [] : [];
     const perpPx = {};
     for (const t of perps)
@@ -395,7 +404,8 @@ async function main() {
         fundSyms.slice(i, i + 12).map(async (sym) => {
           try {
             const r = await fetch(
-              `${FUND_URL}?symbol=${sym}&productType=USDT-FUTURES`
+              `${FUND_URL}?symbol=${sym}&productType=USDT-FUTURES`,
+              { signal: TF() }
             );
             if (!r.ok) return;
             const d = (await r.json()).data;
@@ -456,7 +466,7 @@ async function main() {
           const d = {};
           try {
             // open interest — size of open perp positions (Bitget public)
-            const oi = await fetch(`${OI_URL}?symbol=${sym}&productType=USDT-FUTURES`);
+            const oi = await fetch(`${OI_URL}?symbol=${sym}&productType=USDT-FUTURES`, { signal: TF() });
             if (oi.ok) {
               const od = (await oi.json()).data;
               const sz = +((od && od.openInterestList && od.openInterestList[0]) || {}).size;
@@ -464,7 +474,7 @@ async function main() {
               if (isFinite(sz) && px) { d.oiUsd = Math.round(sz * px); }
             }
             // funding history → trend (rising = longs paying more, crowding)
-            const fh = await fetch(`${FUND_HIST_URL}?symbol=${sym}&productType=USDT-FUTURES&pageSize=8`);
+            const fh = await fetch(`${FUND_HIST_URL}?symbol=${sym}&productType=USDT-FUTURES&pageSize=8`, { signal: TF() });
             if (fh.ok) {
               const hist = (await fh.json()).data || [];
               const rates = hist.map((x) => +x.fundingRate).filter((x) => isFinite(x));
@@ -482,8 +492,8 @@ async function main() {
             try {
               const H = { headers: { 'CG-API-KEY': CG_KEY } };
               const [lq, ls] = await Promise.all([
-                fetch(`https://open-api-v4.coinglass.com/api/futures/liquidation/aggregated-history?symbol=${asset}&interval=1d&limit=1`, H),
-                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=${sym}&interval=1h&limit=1`, H),
+                fetch(`https://open-api-v4.coinglass.com/api/futures/liquidation/aggregated-history?symbol=${asset}&interval=1d&limit=1`, { ...H, signal: TF() }),
+                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=${sym}&interval=1h&limit=1`, { ...H, signal: TF() }),
               ]);
               if (lq.ok) {
                 const dd = (await lq.json()).data || [];
@@ -501,7 +511,7 @@ async function main() {
           // LunarCrush (key-gated): galaxy score, alt rank, sentiment, social volume
           if (LC_KEY) {
             try {
-              const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${asset.toLowerCase()}/v1`, { headers: { Authorization: `Bearer ${LC_KEY}` } });
+              const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${asset.toLowerCase()}/v1`, { headers: { Authorization: `Bearer ${LC_KEY}` }, signal: TF() });
               if (lc.ok) {
                 const ld = (await lc.json()).data;
                 if (ld) social[asset] = {
@@ -529,7 +539,8 @@ async function main() {
     try {
       const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).join(',');
       const cg = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${encodeURIComponent(syms)}&price_change_percentage=24h`
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${encodeURIComponent(syms)}&price_change_percentage=24h`,
+        { signal: TF() }
       );
       if (cg.ok) {
         for (const c of (await cg.json()) || []) {
@@ -556,7 +567,7 @@ async function main() {
         const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
         const r = await fetch(
           `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(syms)}`,
-          { headers: { 'X-CMC_PRO_API_KEY': CMC_KEY } }
+          { headers: { 'X-CMC_PRO_API_KEY': CMC_KEY }, signal: TF() }
         );
         if (r.ok) {
           const dd = (await r.json()).data || {};
@@ -578,14 +589,14 @@ async function main() {
       try {
         const tk = await fetch(
           `https://api.coinmarketcal.com/oauth/v2/token?grant_type=client_credentials&client_id=${CMCAL_ID}&client_secret=${CMCAL_SECRET}`,
-          { method: 'POST' }
+          { method: 'POST', signal: TF() }
         );
         if (tk.ok) {
           const tok = (await tk.json()).access_token;
           const coins = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).slice(0, 20).join(',');
           const ev = await fetch(
             `https://api.coinmarketcal.com/v1/events?max=30&coins=${encodeURIComponent(coins)}&dateRangeStart=${new Date().toISOString().slice(0, 10)}`,
-            { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' } }
+            { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' }, signal: TF() }
           );
           if (ev.ok) {
             for (const p of (await ev.json()).body || []) {
@@ -616,7 +627,8 @@ async function main() {
       try {
         const curList = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
         const cp = await fetch(
-          `https://cryptopanic.com/api/${CP_PLAN}/v2/posts/?auth_token=${CP_KEY}&kind=news&filter=important&currencies=${encodeURIComponent(curList)}`
+          `https://cryptopanic.com/api/${CP_PLAN}/v2/posts/?auth_token=${CP_KEY}&kind=news&filter=important&currencies=${encodeURIComponent(curList)}`,
+            { signal: TF() }
         );
         if (cp.ok) {
           const posts = (await cp.json()).results || [];
@@ -1169,7 +1181,7 @@ async function main() {
 
   let fx = { audPerUsd: 1.5, usdPerAud: 0.667 };
   try {
-    const fxJson = await (await fetch(FX_URL)).json();
+    const fxJson = await (await fetch(FX_URL, { signal: TF() })).json();
     const aud = fxJson?.rates?.AUD;
     if (aud) fx = { audPerUsd: aud, usdPerAud: round(1 / aud, 4) };
   } catch {}
@@ -1291,7 +1303,7 @@ async function main() {
       if (prev && prev.spark && prev.spark.length > 1) s.spark = prev.spark;
     }
   }
-  fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
+  writeJson(path.join(API, 'market-scanner.json'), snap);
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
   const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
@@ -1812,7 +1824,12 @@ async function main() {
     const notional = Math.round(
       clamp((EQUITY * RISK_PCT * conv * stratMul) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
     );
-    const newHeatPct = (stopFrac * notional) / EQUITY * 100;
+    // candidate heat measured against the SAME equity the live book uses.
+    // The executor sizes to min(freeMargin, 85% equity) x lev — the paper
+    // EQUITY=10000 notional understated new-position risk ~5000x at a $2
+    // account, silently unbinding the heat cap whenever a position existed.
+    const execNotional = liveEquityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85) * lev;
+    const newHeatPct = (stopFrac * Math.min(notional, execNotional)) / liveEquityUsd * 100;
     if (
       tradeScore >= entryFloor &&
       Number.isFinite(s.entryPrice) &&
@@ -2003,6 +2020,13 @@ async function main() {
     // charge the fraction actually open at that moment
     // funding accrues to the SETTLE timestamp, not now — a candle-replay
     // settle at hour-3 was being charged funding for the full position age
+    // fraction still open: unhit rungs + runner (non-ladder entries are 1).
+    // Was called below with NO definition — a ReferenceError landmine that
+    // would kill the whole settle loop on the first funded entry.
+    const remFracOf = (x) =>
+      !x.tps
+        ? 1
+        : x.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (x.runner ?? 0);
     const fundPnlNow = (tsC) =>
       e.funding && e.carry && e.carry !== 'flat'
         ? (e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
@@ -2014,8 +2038,9 @@ async function main() {
       e.status = status;
       e.exitPrice = slip ? exitPx * (1 - (sgn * slip) / 100) : exitPx;
       e.exitTs = tsC ?? now;
-      // the closing print is one more taker fill on the residual fraction
-      e.feesPaid = (e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2;
+      // the closing print is one more taker fill — charged on the fraction
+      // still open, not a flat half (a laddered trade was paying 2.5× fees)
+      e.feesPaid = (e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e);
       const fp = fundPnlNow(tsC);
       e.fundingPnl = pct(fp);
       e.pnlPct = pct(blended(rawPnl) - slip - e.feesPaid + fp);
@@ -2043,7 +2068,9 @@ async function main() {
         for (const tp of e.tps)
           if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
             tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = tsC ?? now;
-            e.feesPaid = (e.feesPaid ?? FEE_PCT / 2) + FEE_PCT / 2; // each rung is its own taker fill
+            // each rung pays taker on ITS fraction — a flat half-round-trip
+            // per rung overcharged a full ladder by ~2.5×
+            e.feesPaid = (e.feesPaid ?? FEE_PCT / 2) + (FEE_PCT / 2) * tp.frac;
           }
         // retracement trail (Tharp: give back at most half the excursion):
         // past 40% of target the stop floors at breakeven AND trails at
@@ -2134,6 +2161,13 @@ async function main() {
         e.lockPnl = null; e.beStop = false;
       }
       for (const c of cs) {
+        // the bar CONTAINING the entry mixes pre-entry price action with
+        // post-entry — its extremes may predate the position entirely. Test
+        // triggers only on bars that open after the entry exists.
+        if (c.t < e.ts && e.ts < c.t + 300e3) {
+          e.lastPrice = c.c; e.rawPnl = dirPnl(c.c);
+          continue;
+        }
         const advPx = sgn > 0 ? c.l : c.h;
         timeStop(c.t + 300e3, dirPnl(advPx));
         if (checkAdverse(dirPnl(advPx), advPx, c.t + 300e3)) break;
@@ -2182,9 +2216,9 @@ async function main() {
         // directional mark blended() expects
         settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
       else if (px)
-        e.pnlPct = pct(blended(pnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2) + fundPnlNow());
+        e.pnlPct = pct(blended(pnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e)) + fundPnlNow());
       else if (e.rawPnl != null)
-        e.pnlPct = pct(blended(e.rawPnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2) + fundPnlNow());
+        e.pnlPct = pct(blended(e.rawPnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e)) + fundPnlNow());
     }
   }
   ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
@@ -2560,7 +2594,7 @@ async function main() {
   const sortedClosed = [...closed].sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0));
   ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
   ledger.stats.worst = sortedClosed[0]?.asset ?? null;
-  if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+  if (!ledgerCorrupt) writeJson(LEDGER_FILE, ledger);
 
   // ---- append-only prospective record: the full emitted board every run,
   // including signals that never became positions. Nothing is rewritten or
@@ -3077,9 +3111,7 @@ async function main() {
   // The scanner decides; bitget-exec.mjs routes. A plan older than the TTL
   // is stale intent — the executor refuses it rather than trade old prices.
   try {
-    fs.writeFileSync(
-      path.join(API, 'live-plan.json'),
-      JSON.stringify({
+    writeJson(path.join(API, 'live-plan.json'), {
         refreshedAt: snap.refreshedAt,
         ts: now,
         ttlMs: 15 * 60e3,
@@ -3087,8 +3119,7 @@ async function main() {
         killSwitch: ddNow >= ddKillPct,
         ddPct: pct(ddNow),
         ...livePlan,
-      })
-    );
+      });
   } catch {}
 
   // ---- boring benchmark (review ask #3): does the intelligence add value
@@ -3159,7 +3190,7 @@ async function main() {
 
   // final unconditional ledger write — stats computed after the first
   // write must still persist
-  if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
+  if (!ledgerCorrupt) writeJson(LEDGER_FILE, ledger);
 
   // pipeline health for the landing footer — only keys this pipeline owns;
   // the retired Jupiter/Solana snapshot used to leave a stale 'snapshot' key

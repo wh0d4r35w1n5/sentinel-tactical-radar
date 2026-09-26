@@ -15,7 +15,15 @@ const spawnTg = () => {
   if (process.env.SENTINEL_NO_TG === '1') return;
   if (!fs.existsSync('scripts/tg-config.json')) return;
   const tg = spawn('python', ['scripts/tg-watch.py'], { stdio: 'inherit' });
+  // an unhandled 'error' event THROWS — a missing python would kill the
+  // whole rapid daemon, not just the watcher
+  let spawnFailed = false;
+  tg.on('error', (e) => {
+    spawnFailed = true; // ENOENT loops forever — a missing python is fatal config, not a crash
+    console.log('[rapid] tg-watch spawn failed:', e.message);
+  });
   tg.on('close', () => {
+    if (spawnFailed) return;
     console.log('[rapid] tg-watch exited — restarting in 10s');
     setTimeout(spawnTg, 10_000);
   });
@@ -32,11 +40,19 @@ const env = {
   ...(MODE === 'live' ? { SENTINEL_LIVE: '1', CONFIRM_LIVE: 'YES' } : {}),
 };
 
+// a hung child must not stall the daemon forever — fetch timeouts bound most
+// cases, but anything that escapes them gets a hard kill at 4min so the loop
+// recovers instead of going silent
+const CHILD_TIMEOUT = 240_000;
 const run = (f) =>
   new Promise((res) => {
     const c = spawn(process.execPath, [f], { env, stdio: 'inherit' });
-    c.on('close', res);
-    c.on('error', res);
+    const killer = setTimeout(() => {
+      console.log(`[rapid] ${f} exceeded ${CHILD_TIMEOUT / 1e3}s — killing`);
+      c.kill('SIGKILL');
+    }, CHILD_TIMEOUT);
+    c.on('close', () => { clearTimeout(killer); res(); });
+    c.on('error', () => { clearTimeout(killer); res(); });
   });
 
 console.log(`[rapid] ${MODE.toUpperCase()} fast-loop — scan+exec every ${Math.round(MS / 1e3)}s — ctrl-c to stop`);

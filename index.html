@@ -310,7 +310,7 @@ const SYM=x=>/USDT$/i.test(x||'')?x:(x||'')+'USDT';
 const BG=x=>'https://www.bitget.com/futures/usdt/'+SYM(x);
 const LK=(h,t)=>`<a class="al" href="${h}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t}</a>`;
 const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
-const ago=t=>{const s=(Date.now()-t)/1e3;return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
+const ago=t=>{const s=(Date.now()-t)/1e3;return !Number.isFinite(s)?'—':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 // cache-busting query defeats both browser cache AND the Pages CDN edge
 // (max-age=600 was serving 10-minute-old artifacts after every deploy)
 const j=u=>fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);

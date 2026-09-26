@@ -25,7 +25,12 @@ const readJson = (f) => {
   try { return JSON.parse(fs.readFileSync(path.join(API, f), 'utf8')); }
   catch { return null; }
 };
-const ageMin = (ts) => (NOW - ts) / 6e4;
+// fail-closed: an unparseable/ISO timestamp audits as infinitely stale, never
+// silently fresh — NaN > ttl is false, which would PASS a corrupt plan
+const ageMin = (ts) => {
+  const n = fin(ts) ? ts : Date.parse(ts);
+  return fin(n) ? (NOW - n) / 6e4 : Infinity;
+};
 const fin = (x) => Number.isFinite(x);
 
 // ---------- 1. every artifact parses — strict JSON.parse already rejects
@@ -126,6 +131,18 @@ if (!ledger) {
     const ttl = (plan.ttlMs || 900e3) / 6e4;
     add('plan-fresh', age > ttl ? 'FAIL' : 'PASS',
       `plan ${age.toFixed(1)}min old (ttl ${ttl}min) — ${(plan.orders || []).length} orders / ${(plan.closes || []).length} closes / ${(plan.trails || []).length} trails`);
+
+    // 3:1 net-of-cost mandate — every routed order must carry the stamped
+    // geometry proving (target−costs)/(stop+costs) >= 3. An order without the
+    // fields is unroutable-by-design; audit it as a violation.
+    const badRR = (plan.orders || []).filter((o) =>
+      !(fin(o.netRR) && o.netRR >= 3) &&
+      !(fin(o.targetPct) && fin(o.stopPct) &&
+        (o.targetPct - 0.3) / (o.stopPct + 0.3) >= 3));
+    add('rr-mandate', badRR.length ? 'FAIL' : 'PASS',
+      badRR.length
+        ? `${badRR.length} orders below 3:1 net: ${badRR.map((o) => `${o.symbol}(rr=${o.netRR ?? '?'})`).join(',')}`
+        : `${(plan.orders || []).length} orders, all >=3:1 net-of-cost`);
   }
 }
 
@@ -148,7 +165,9 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
   // invariant left is: every exchange position must carry loss protection.
   const naked = exPos.filter((p) => {
     const plans = (ll.plans || {})[p.symbol] || [];
-    return !plans.some((x) => /loss|stop/i.test(x.planType || ''));
+    // 'moving_plan' is Bitget's trailing stop — it protects the same side a
+    // loss_plan does; the old /loss|stop/ regex audited it as "naked"
+    return !plans.some((x) => /loss|stop|moving/i.test(x.planType || ''));
   });
   const unprofited = exPos.filter((p) => {
     const plans = (ll.plans || {})[p.symbol] || [];
@@ -165,7 +184,7 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
   // ---------- 8. never-naked: every open position carries a loss plan ----------
   if (ll.plans && Object.keys(ll.plans).length) {
     const naked = exPos.filter((p) =>
-      !(ll.plans[p.symbol] || []).some((x) => (x.planType || '').includes('loss') || (x.planType || '').includes('stop')));
+      !(ll.plans[p.symbol] || []).some((x) => /loss|stop|moving/i.test(x.planType || '')));
     add('protection', naked.length ? 'FAIL' : 'PASS',
       naked.length
         ? `NAKED: ${naked.map((p) => p.symbol).join(',')} open with no stop plan`

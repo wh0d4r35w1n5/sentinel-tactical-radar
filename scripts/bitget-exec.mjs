@@ -31,6 +31,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API_DIR = path.join(__dirname, '..', 'api');
+// atomic artifact writes — a mid-write kill must never leave a truncated
+// live-ledger.json (god audits it; the scanner's heat math reads it)
+const writeJson = (file, obj) => {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.renameSync(tmp, file);
+};
 // zero-dep .env loader — values only populate env vars not already set
 try {
   for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split('\n')) {
@@ -240,7 +247,10 @@ async function contractMap() {
   // symbols this environment can't route (40805/40034 on every attempt)
   const res = await fetch(
     `${HOST}/api/v2/mix/market/contracts?productType=${PRODUCT}`,
-    { headers: MODE === 'demo' ? { paptrading: '1' } : {} }
+    {
+      headers: MODE === 'demo' ? { paptrading: '1' } : {},
+      signal: AbortSignal.timeout(15000),
+    }
   );
   if (!res.ok) throw new Error(`contracts fetch -> HTTP ${res.status}`);
   const j = await res.json();
@@ -295,7 +305,7 @@ async function main() {
   } catch (e) {
     if (MODE !== 'off') {
       state.errors.push(`live-plan.json unreadable: ${e.message}`);
-      fs.writeFileSync(outPath, JSON.stringify(state));
+      writeJson(outPath, state);
     }
     log('no readable plan — nothing to route');
     return;
@@ -307,7 +317,7 @@ async function main() {
 
   if (stale) {
     state.errors.push(`plan stale (${Math.round((Date.now() - plan.ts) / 6e4)}min > ${(plan.ttlMs / 6e4)|0}min) — refused`);
-    fs.writeFileSync(outPath, JSON.stringify(state));
+    writeJson(outPath, state);
     log('stale plan — refused to route old prices');
     return;
   }
@@ -326,19 +336,19 @@ async function main() {
   // live-arming gate entirely.
   if (MODE !== 'demo' && MODE !== 'live') {
     state.errors.push(`unknown SENTINEL_EXEC="${MODE}" — refusing (off|shadow|demo|live)`);
-    fs.writeFileSync(outPath, JSON.stringify(state));
+    writeJson(outPath, state);
     log('unknown mode — refusing');
     return;
   }
   if (!KEY || !SECRET || !PASS) {
     state.errors.push('missing BITGET_API_KEY/SECRET/PASSPHRASE');
-    fs.writeFileSync(outPath, JSON.stringify(state));
+    writeJson(outPath, state);
     log('no credentials — set env keys');
     return;
   }
   if (MODE === 'live' && !LIVE_ARMED) {
     state.errors.push('live requires SENTINEL_LIVE=1 AND CONFIRM_LIVE=YES');
-    fs.writeFileSync(outPath, JSON.stringify(state));
+    writeJson(outPath, state);
     log('live mode not armed — refusing');
     return;
   }
@@ -365,7 +375,7 @@ async function main() {
       .catch((e) => state.errors.push('posMode detect failed — fail-closed: ' + e.message)),
   ]);
   if (state.errors.some((e) => e.startsWith('posMode'))) {
-    fs.writeFileSync(outPath, JSON.stringify(state));
+    writeJson(outPath, state);
     log('cannot determine position mode — refusing to guess close semantics');
     return;
   }
@@ -398,6 +408,12 @@ async function main() {
   // ---- closes first: freeing margin and killing contradicted exposure is
   // always the priority ----
   for (const c of plan.closes) {
+    // manual-hold positions are exempt from scanner-driven exits — a paper
+    // ledger expiry/reversal must not kill a deliberately held position
+    if (MANUAL.has(c.symbol)) {
+      state.actions.push(`close ${c.symbol} skipped — manual hold`);
+      continue;
+    }
     const pos = posBySym.get(c.symbol);
     if (!pos) continue;
     try {
@@ -432,7 +448,7 @@ async function main() {
   const nowMs = Date.now();
   eqTrack.samples.push([nowMs, equityUsd]);
   eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
-  try { fs.writeFileSync(peakPath, JSON.stringify({ peak: eqTrack.peak, samples: eqTrack.samples, at: new Date().toISOString() })); } catch {}
+  try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, at: new Date().toISOString() }); } catch {}
   const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - equityUsd) / eqTrack.peak) * 100 : 0;
   const peak24 = Math.max(equityUsd, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
   const dd24 = peak24 > 0 ? ((peak24 - equityUsd) / peak24) * 100 : 0;
@@ -603,7 +619,9 @@ async function main() {
     try {
       const manualHold = MANUAL.has(p.symbol);
       const existing = await getPlans(p.symbol).catch(() => []);
-      const lossPlan = existing.find((x) => /loss|stop/i.test(x.planType || ''));
+      // 'moving_plan' (trailing stop) IS loss protection — without it in the
+      // regex the repair loop would stack a second stop on a trailed position
+      const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
       const hasProfit = !!profitPlan;
       // breakeven ratchet — "no one went broke taking profit": with the TP
@@ -951,12 +969,22 @@ async function main() {
         await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid });
         // protective levels anchor to the ACTUAL fill, not the plan's ref
         // price — market orders slip, and a stop quoted off an unfilled
-        // reference can sit on the wrong side of price
-        let fill = o.refEntry;
-        try {
-          const pp = (await getPos()).find((x) => x.symbol === o.symbol && +x.total > 0);
-          if (pp && +pp.openPriceAvg > 0) fill = +pp.openPriceAvg;
-        } catch {}
+        // reference can sit on the wrong side of price. Same for SIZE: a
+        // partial fill must not leave plans quoting the intended size (they
+        // trigger-reject 43023) — size protection off what actually filled.
+        let fill = o.refEntry, filledSize = size;
+        const pp2 = await getPos().catch(() => [])
+          .then((ps) => ps.find((x) => x.symbol === o.symbol && +x.total > 0));
+        if (pp2) {
+          if (+pp2.openPriceAvg > 0) fill = +pp2.openPriceAvg;
+          filledSize = Math.min(size, +pp2.total);
+          if (filledSize < size)
+            state.actions.push(`partial fill ${o.symbol}: ${filledSize}/${size}`);
+        }
+        // query failed silently (network blip) — proceed on intended size;
+        // a confirmed zero-position is handled below when plans land on
+        // nothing (exchange rejects with no-position errors, caught by the
+        // emergency-close path as benign)
         // staggered TP ladder (reinstated): 45% banks at 0.55x target —
         // first-passage probability of a nearer level is strictly higher,
         // and once it fills the breakeven ratchet makes tranches 2-3 free
@@ -987,7 +1015,7 @@ async function main() {
           const trancheSizes = [];
           for (let i = 0; i < 3; i++) {
             const tsize =
-              (Math.floor(size * cum[i + 1] * sp) - Math.floor(size * cum[i] * sp)) / sp;
+              (Math.floor(filledSize * cum[i + 1] * sp) - Math.floor(filledSize * cum[i] * sp)) / sp;
             if (tsize > 0) trancheSizes.push({ tsize, mult: mults[i] });
           }
           // a single surviving tranche protects only a fraction of the
@@ -1006,7 +1034,7 @@ async function main() {
               planOrder(
                 o.symbol, 'profit_plan',
                 round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-                size, holdSide
+                filledSize, holdSide
               )
             );
           }
@@ -1015,7 +1043,7 @@ async function main() {
             planOrder(
               o.symbol, 'profit_plan',
               round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-              size, holdSide
+              filledSize, holdSide
             )
           );
         }
@@ -1023,13 +1051,13 @@ async function main() {
           planOrder(
             o.symbol, 'loss_plan',
             round(fill * (1 - sgn * (o.stopPct / 100)), pp),
-            size, holdSide
+            filledSize, holdSide
           )
         );
         await Promise.all(plans);
-        const usedMargin = (size * fill) / lev;
+        const usedMargin = (filledSize * fill) / lev;
         marginFree = Math.max(0, marginFree - usedMargin);
-        state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
+        state.actions.push(`opened ${o.symbol} ${o.direction} ${filledSize} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
         opened++;
         openedSym.add(o.symbol);
         entriesToday++;
@@ -1103,8 +1131,12 @@ async function main() {
       added++;
     }
     if (added || repaired) {
+      // newest-first is REQUIRED downstream (cooldown slices [0,2], the
+      // rolling entry window, the journal) — unshift order depends on the
+      // API's return direction, so sort explicitly rather than trust it
+      store.fills.sort((a, b) => (b.ts || 0) - (a.ts || 0));
       store.fills = store.fills.slice(0, 400);
-      fs.writeFileSync(fillsPath, JSON.stringify(store));
+      writeJson(fillsPath, store);
     }
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
@@ -1150,7 +1182,7 @@ async function main() {
         .map((x) => ({ planType: x.planType, triggerPrice: +x.triggerPrice, size: +x.size, holdSide: x.holdSide }));
     }
   } catch {}
-  fs.writeFileSync(outPath, JSON.stringify(state));
+  writeJson(outPath, state);
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);
   if (state.errors.length) console.log(state.errors.join('\n'));
 }
