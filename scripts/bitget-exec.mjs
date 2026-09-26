@@ -417,9 +417,14 @@ async function main() {
   const dd24 = peak24 > 0 ? ((peak24 - equityUsd) / peak24) * 100 : 0;
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
+  const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
   const entriesBlocked =
     realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
     : dd24 >= DAILY_HALT ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= ${DAILY_HALT}%)`
+    // Buffett rule #1 enforced mechanically: below the survival floor the
+    // account can't post margin for even two contract-min positions —
+    // every further entry is just donating fees. Preserve the last chip.
+    : equityUsd < MIN_TRADE_EQUITY ? `equity floor ($${round(equityUsd,2)} < $${MIN_TRADE_EQUITY} — capital preservation, entries halted)`
     : null;
 
   // published risk rails — the machine-readable answer to "where are the
@@ -561,7 +566,9 @@ async function main() {
       if ((f.tradeSide === 'open' || (f.profit || 0) === 0) && f.ts >= +dayStart)
         entriesToday++;
   } catch {}
-  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 12);
+  // fee-burn cap: at this account scale each entry donates ~1.5% of its
+  // notional to fees+spread — volume IS the leak. 4 entries/day max.
+  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 4);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a profit plan. Orphaned/manual positions get synthesized protection —

@@ -813,7 +813,7 @@ async function main() {
     // positions. Prior: Beta(15,15) shrunk toward 50%.
     const shrunkHit =
       v.hitRate == null ? 50 : (v.hitRate * n + 50 * 15) / (n + 15);
-    if (shrunkAlpha < -0.6 || shrunkHit < 40 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
+    if (shrunkAlpha < -0.6 || shrunkHit < 45 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
       stratBlock.add(k);
       stratBoost[k] = 0;
     } else {
@@ -1751,7 +1751,7 @@ async function main() {
       // net-of-cost floor: volatile tapes have wider real costs (spread +
       // slip) — raise the required net edge there, not just the score bar
       s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >=
-        (mktType.endsWith('volatile') ? 1.6 : 1.2) &&
+        (mktType.endsWith('volatile') ? 2.5 : 2.0) &&
       // noise cap: a symbol whose 1h ATR exceeds ~3.5% of price moves
       // faster than a sized position can be protected — clip, don't trade
       (s.ta?.atrPct ?? 0) <= 3.5 &&
