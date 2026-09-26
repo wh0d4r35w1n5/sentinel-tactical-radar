@@ -92,21 +92,29 @@ if (!ledger) {
   if (s.closed !== closed.length) drift.push(`stats.closed=${s.closed} vs actual ${closed.length}`);
   if ((s.wins ?? 0) + (s.losses ?? 0) + (s.flat ?? 0) !== closed.length)
     drift.push(`wins+losses+flat=${(s.wins ?? 0) + (s.losses ?? 0) + (s.flat ?? 0)} vs closed ${closed.length}`);
-  if (!fin(s.winRate) || s.winRate < 0 || s.winRate > 100) drift.push(`winRate=${s.winRate}`);
-  if (!fin(s.expectancyR)) drift.push(`expectancyR=${s.expectancyR}`);
+  // paper book retired — an empty ledger legitimately carries null rate stats;
+  // only enforce them once closed rows actually exist
+  if (closed.length) {
+    if (!fin(s.winRate) || s.winRate < 0 || s.winRate > 100) drift.push(`winRate=${s.winRate}`);
+    if (!fin(s.expectancyR)) drift.push(`expectancyR=${s.expectancyR}`);
+  }
   add('stats-consistent', drift.length ? 'FAIL' : 'PASS',
-    drift.length ? drift.join('; ') : 'derived stats reconcile with the entry list');
+    drift.length ? drift.join('; ') : entries.length ? 'derived stats reconcile with the entry list' : 'ledger empty — signal eval + live fills carry the record');
 
   // ---------- 4. risk rails ----------
-  const ddBad = fin(s.ddKill) && fin(s.maxDrawdownPct) && s.maxDrawdownPct >= s.ddKill;
+  // the real kill rail lives on live-ledger.json (real equity DD); the
+  // ledger-side check only applies if a maxDrawdownPct is still published
+  const ddBad = fin(s.ddKill?.thresholdPct ?? s.ddKill) && fin(s.maxDrawdownPct) && s.maxDrawdownPct >= (s.ddKill?.thresholdPct ?? s.ddKill);
   const riskBad = fin(s.openRiskPct) && s.openRiskPct > 25;
+  const killThresh = s.ddKill?.thresholdPct ?? s.ddKill;
+  const killCur = s.ddKill?.currentPct ?? s.maxDrawdownPct;
   add('risk-rails',
     ddBad || riskBad ? 'FAIL' : 'PASS',
     ddBad
-      ? `drawdown ${s.maxDrawdownPct}% >= kill ${s.ddKill}% — switch should have fired`
+      ? `drawdown ${s.maxDrawdownPct}% >= kill ${killThresh}% — switch should have fired`
       : riskBad
         ? `open risk ${s.openRiskPct}% exceeds 25% cap`
-        : `dd ${s.maxDrawdownPct}%/${s.ddKill}% kill · open risk ${s.openRiskPct}%`);
+        : `dd ${killCur ?? '—'}%/${killThresh ?? '—'}% kill · open risk ${s.openRiskPct ?? 0}%`);
 }
 
 // ---------- 5. plan freshness ----------
@@ -136,31 +144,23 @@ if (ll) {
 // ---------- 7. sim ↔ exchange convergence (demo|live only) ----------
 if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
   const exPos = ll.positionsAfter || [];
-  const openEntries = (ledger?.entries || []).filter((e) => e.status === 'open');
-  const cat = readJson('exec-catalog.json');
-  const catalog = new Set((cat?.mode === ll.mode ? cat.symbols : null) || []);
-  const untradeable = new Set([...(ll.untradeable || []), ...(cat?.untradeable || [])]);
-  const orphans = exPos.filter((p) => !openEntries.some((e) => `${e.asset}USDT` === p.symbol));
-  const ghosts = openEntries.filter((e) => {
-    const sym = `${e.asset}USDT`;
-    return !untradeable.has(sym) && catalog.has(sym) && !exPos.some((p) => p.symbol === sym);
-  });
-  // orphans are normal now: exchange entries lead the sim book by a cycle,
-  // and the executor's protection-repair synthesizes TP/SL for any position
-  // the ledger never claimed. Only an UNPROTECTED orphan is a real fault.
-  const nakedOrphans = orphans.filter((p) => {
+  // paper ledger retired — there is no sim book to converge with. The real
+  // invariant left is: every exchange position must carry loss protection.
+  const naked = exPos.filter((p) => {
     const plans = (ll.plans || {})[p.symbol] || [];
     return !plans.some((x) => /loss|stop/i.test(x.planType || ''));
   });
+  const unprofited = exPos.filter((p) => {
+    const plans = (ll.plans || {})[p.symbol] || [];
+    return !plans.some((x) => /profit/i.test(x.planType || ''));
+  });
   add('convergence',
-    nakedOrphans.length ? 'FAIL' : orphans.length || ghosts.length ? 'WARN' : 'PASS',
-    nakedOrphans.length
-      ? `UNPROTECTED orphan positions: ${nakedOrphans.map((p) => p.symbol).join(',')} — manual trade or desync`
-      : orphans.length
-        ? `orphan positions (protected, pending ledger sync): ${orphans.map((p) => p.symbol).join(',')}`
-        : ghosts.length
-          ? `sim open but exchange flat: ${ghosts.map((e) => e.asset).join(',')} — routable, never filled`
-          : `sim book and exchange agree (${exPos.length} positions)`);
+    naked.length ? 'FAIL' : unprofited.length ? 'WARN' : 'PASS',
+    naked.length
+      ? `UNPROTECTED positions: ${naked.map((p) => p.symbol).join(',')} — no stop plan on the exchange`
+      : unprofited.length
+        ? `positions missing take-profit: ${unprofited.map((p) => p.symbol).join(',')}`
+        : `${exPos.length} exchange positions, all protected (TP+SL)`);
 
   // ---------- 8. never-naked: every open position carries a loss plan ----------
   if (ll.plans && Object.keys(ll.plans).length) {

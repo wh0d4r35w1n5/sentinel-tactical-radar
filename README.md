@@ -19,43 +19,31 @@ and a live Bitget futures websocket overlay.
 - `live-feed.js` subscribes `wss://ws.bitget.com/v2/ws/public`
   (`USDT-FUTURES` tickers) for tick-level repaints between snapshots.
 
-## The paper book
+## The live book
 
-The journal models a **10×-isolated USDT-M perpetual paper account**
-(real Bitget mechanics, simulated fills — no orders ever leave the browser/CI):
+The VPS executor (`scripts/bitget-exec.mjs` under `sentinel-rapid`) trades the
+**real Bitget USDT-M account** — the exchange's own fills and plan records are
+the only trade journal (`api/live-ledger.json` + `state/real-fills.json`):
 
-- Risk-based sizing: `notional = equity × 1% ÷ stop distance`, conviction-scaled,
-  capped at 30% notional per position and 400% total deployed notional.
-- **Dynamic leverage** (3–20×, capped by contract `maxLever`): scales with the
-  *measured* tape regime — a run is tagged risk-on/risk-off/mixed from universe
-  breadth + median change; direction-aligned trades earn 15× (20× at grade A),
-  mixed tapes get 10×, counter-trend trades drop to 5×. Hard bound: the
-  liquidation band must hold the designed stop (lev ≤ 80/(stopPct+0.64)) —
-  tight stops earn leverage, wide stops don't. Leverage changes margin
-  efficiency and liquidation distance, not expected P&L per unit risk.
-- **Portfolio heat cap** — total equity at risk across all live stops is
-  regime-scaled too: 6% aligned, 4% mixed, 2.5% counter-trend. Positions
-  whose stops have ratcheted to profit contribute zero heat.
-- **Correlation governor** — heat is also capped per asset cluster
-  (crypto majors / crypto alts / each RWA class) at 2.5% of equity, because
-  BTC+ETH+SOL+alt longs are the same bet during a shock, not independent
-  risks.
+- **Margin-based sizing** — free margin is split across the target slot count
+  (4 target / 10 max positions); there is no notional cap.
+- **Max leverage bounded by the liquidation band** — the contract's `maxLever`
+  is used, but hard-capped so the designed stop sits inside the band
+  (`lev ≤ 80/(stopPct + 0.64)`): tight stops earn leverage, wide stops don't.
+- **Exactly one TP + one SL per position**, full size, exchange-side
+  (`pos_profit`/`pos_loss` plans) — protection survives a bot or network
+  outage. No trailing stops, no TP ladders.
+- **Risk rails** — real-equity drawdown kill at 8%, rolling-24h loss halt at
+  6%, per-position protection repair, and margin rebalancing toward equal
+  slots. All published in `live-ledger.json` under `risk`.
 - **No-trade floor** — positions only open at score ≥70 (BBB). Weaker
   signals still emit, archive and get forward-graded, but standing down is
   a legitimate output; an empty board reads "NO EDGE — STAND DOWN".
-- Perp taker fees (0.12% round trip), funding carry on the open fraction,
-  and an isolated liquidation band (~`100/lev − 0.8`% adverse) that outranks
-  target and stop.
-- Take-profit ladder: 33%/33%/34% banks at 40%/70%/100% of target.
-- Dynamic stop: designed invalidation → breakeven at 40% of target →
-  +40%/+65% locks → trailing only past full target.
-- Intraperiod settlement: each build **replays the 5-minute candle tape
-  since entry** (unclosed candles excluded) so wick-level target/stop/
-  liquidation touches between 10-minute snapshots still count; ambiguous
-  same-candle touches resolve pessimistically, adverse first.
-- Exits record fill-level prices (target, stop, liquidation), and each
-  settle logs `alphaPct` — P&L minus signed universe drift — so the ledger
-  measures edge, not just beta.
+- **Correlation governor** — cluster-level heat caps treat BTC+ETH+SOL+alt
+  longs as the same bet during a shock, not independent risks.
+- The retired simulation model (taker fees, funding carry, liquidation
+  band, intraperiod settlement replay) still exists in `signal-eval`
+  forward-grading — it grades *predictions*, it does not book fake fills.
 
 ### Sentinel v1.0 — versioning, learning gate, honest stats
 
@@ -97,7 +85,7 @@ Runs every 10 minutes + on demand:
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
 | `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
 | `api/health.json` | Pipeline health: last build timestamp, pair count, kline coverage. |
-| `api/vault.json` | VaultKit paper vault — 20% of realized gains swept into a BTC/ETH/SOL hold basket. Kept **separately identifiable** from trading performance (a rising BTC/ETH/SOL market can't fake strategy edge), and deducted from trading equity so the wallet's **System total = trading acct + vault** never double-counts sweeps. |
+
 | `api/news.json` | Intelligence wire — public RSS headlines (CoinDesk/Cointelegraph) tagged to universe assets with a keyword tone estimate. Context only — deliberately never a score input. |
 | `api/correlation.json` | Measured market structure — 48h pairwise correlation of 1h returns across candidates, BTC/ETH beta per asset, board coupling mean. The risk governor treats realized corr ≥0.6 as "the same bet" (static asset-class clusters are the fallback when klines are missing). |
 | `api/hypotheses.json` | Hypothesis engine — registered falsifiable claims (score IC, grade ordering, direction asymmetry, regime alignment, factor edges, entry-floor validity) scored prospectively from eval labels. Status escalates strictly with n: UNTESTED→EARLY→SUGGESTIVE→SUPPORTED/REFUTED. |
@@ -128,5 +116,7 @@ report `no-key` and are skipped:
 `scripts/api-keys.json` is gitignored. For CI, add them as GitHub repo
 secrets named identically — the workflow passes env through.
 
-All trading is paper/dry-run: nothing routes orders, posts mutations, or
-touches a real account.
+Live execution runs on the VPS (`SENTINEL_EXEC=live`, `CONFIRM_LIVE=YES`)
+with the exchange's isolated-margin TP/SL plans attached to every position —
+orders route to the real Bitget account; nothing simulated is booked or
+displayed.

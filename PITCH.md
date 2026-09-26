@@ -8,8 +8,9 @@ the evidence needed to determine whether those signals actually work.
 
 Every signal is timestamped and archived **before the outcome is known**.
 
-Every simulated trade includes realistic fees, funding, risk limits and
-conservative execution assumptions.
+Every trade is a real Bitget fill — exchange fees, funding, liquidation bands
+and one-stop/one-target protection on every position, pulled straight from the
+exchange each cycle.
 
 Every version of the engine is kept separate, so improving the algorithm
 can't rewrite its past.
@@ -23,16 +24,13 @@ market breadth and contextual intelligence to rank opportunities — while its
 public ledger measures whether those predictions subsequently outperform the
 market.
 
-A separate VaultKit automatically allocates 20% of simulated winning profits
-into a longer-term BTC/ETH/SOL basket.
-
 **Sentinel isn't asking you to believe a backtest.**
 
-It's building a prospective track record in public.
+It's building a prospective track record in public — live, on the exchange.
 
 **Signals are easy to publish. Evidence is harder. Sentinel publishes both.**
 
 ---
 
-*Paper-trading engine. Not financial advice. Live record:*
+*Live trading engine. Not financial advice. Live record:*
 *https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/*

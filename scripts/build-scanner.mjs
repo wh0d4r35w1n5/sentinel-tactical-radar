@@ -39,10 +39,7 @@ const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
 const UNTRACKED_TTL_MS = 3600 * 1000; // asset out of universe -> expire after 1h
-const VAULT_FILE = path.join(API, 'vault.json');
-const VAULT_PCT = 0.2; // share of realized gains swept into the hold basket
 const TRADE_NOTIONAL = 1000; // dry-run $ per signal
-const VAULT_ASSETS = ['BTC', 'ETH', 'SOL'];
 // frozen-rule versioning: entries carry the ruleset that created them so
 // results stay comparable across engine edits (audit requirement — keep
 // v1.0 untouched results separate from whatever follows)
@@ -1238,7 +1235,7 @@ async function main() {
       path.join(API, 'funding.json'),
       JSON.stringify({
         refreshedAt: snap.refreshedAt,
-        note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. paper estimates, Bitget USDT-FUTURES.',
+        note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. indicative estimates, Bitget USDT-FUTURES.',
         best: rows2.slice(0, 10),
         rows: rows2,
       })
@@ -1433,6 +1430,10 @@ async function main() {
     ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
   }
   ledger.entries ??= [];
+  // paper-trade purge: simulated position entries are retired entirely —
+  // only real exchange fills/positions are processed or displayed. Any
+  // legacy sim entries still on disk are dropped here and never rewritten.
+  ledger.entries = [];
   // executor feedback: symbols the active environment cannot hold. Two
   // sources — exec-catalog.json (authoritative: the environment's contract
   // list + persisted runtime rejections, survives ledger rewrites) and
@@ -1472,39 +1473,32 @@ async function main() {
   // any open position on the asset blocks a new entry — a LONG+SHORT on the
   // same symbol isn't a hedge, it's two fees and a flat book pretending to
   // trade. Direction flips settle via the reversal path before re-entry.
+  // dedup keys off the REAL exchange book now — the paper ledger is retired
+  // (only real trading data is processed), so "is this asset already held"
+  // is answered by live-ledger.json positions, not sim entries.
+  const livePosNow = (() => {
+    try {
+      const ll = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      return (ll.positions || ll.positionsAfter || []);
+    } catch { return []; }
+  })();
+  const liveSymOf = (p) => (p.symbol || '').replace(/USDT$/, '');
   const openFor = (a, d) =>
-    ledger.entries.some(
-      (e) => e.asset === a && e.status === 'open'
-    );
+    livePosNow.some((p) => liveSymOf(p) === a);
   // one position per same-underlying proxy group — XAU short + PAXG short
   // is the same gold bet paying two fees; XAUT long against them is a
-  // self-hedge paying a third. entries are unshifted into the ledger as
-  // they open, so this also dedupes within the current batch.
+  // self-hedge paying a third.
   const proxyBlocked = (s) => {
     const g = proxyOf(s.asset);
     return (
       g != null &&
-      ledger.entries.some(
-        (e) => e.status === 'open' && proxyOf(e.asset) === g
-      )
+      livePosNow.some((p) => proxyOf(liveSymOf(p)) === g)
     );
   };
-  const recentClosed = (a, d) =>
-    ledger.entries.some(
-      (e) =>
-        e.asset === a &&
-        e.direction === d &&
-        e.status !== 'open' &&
-        now - (e.exitTs ?? 0) < REENTRY_COOLDOWN_MS
-    );
-  // a reversal close locks the whole asset for an hour — no ping-pong
-  const recentReversed = (a) =>
-    ledger.entries.some(
-      (e) =>
-        e.asset === a &&
-        e.status === 'reversed' &&
-        now - (e.exitTs ?? 0) < 3600e3
-    );
+  // paper-ledger cooldowns are gone with the paper ledger — a still-valid
+  // signal may re-enter a symbol the exchange just stopped out.
+  const recentClosed = () => false;
+  const recentReversed = () => false;
   // portfolio cap: total open notional can't exceed 400% of equity (= 40%
   // margin posted at 10x) — signals are score-sorted so the best setups get
   // slots first.
@@ -1517,18 +1511,9 @@ async function main() {
   const RISK_PCT = 0.01, MAX_POS_PCT = 0.3, MIN_POS_USD = EQUITY * 0.05;
   // remaining open fraction after partial banks — banked rungs freed the
   // capital, so the exposure cap counts only what's still working
-  const remFracOf = (e) =>
-    e.tps
-      ? // unhit rungs PLUS the runner residual — a fully-runged trade still
-        // has its trailing 15% live, it is not flat
-        e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (e.runner ?? 0)
-      : e.lockPnl != null
-        ? 0.5
-        : 1;
   const deployed = () =>
-    ledger.entries
-      .filter((e) => e.status === 'open')
-      .reduce((a, e) => a + (e.notional ?? NOTIONAL) * remFracOf(e), 0);
+    // real exchange exposure: notional = size × entry across held positions
+    livePosNow.reduce((a, p) => a + (Math.abs(+p.size || 0) * (+p.entry || 0)), 0);
   // Tharp kill-switch: a system in a deep realized drawdown is more likely
   // broken than unlucky — stand down at ≥8% equity DD instead of feeding
   // fresh risk into a tape that has already disproven the current regime
@@ -1630,74 +1615,10 @@ async function main() {
         s.spreadPct != null
           ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200 + SLIP_PCT / 100))
           : s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (SLIP_PCT / 100));
-      ledger.entries.unshift({
-        asset: s.asset,
-        cls: s.cls ?? 'crypto',
-        direction: s.direction,
-        // fill model: entry at the mark + adverse half-spread — the eval
-        // engine already prices signals this way; the ledger was taking
-        // idealized mid fills, a systematic flatterer on every entry
-        entry: fillPx,
-        notional,
-        margin: Math.round(notional / lev),
-        lev,
-        liqPct,
-        // fees accrue per FILL, not per position — a taker entry plus N
-        // ladder fills costs 0.06×(1+N); the flat 0.12 round-trip was
-        // undercharging ladder trades ~0.18% (4 fills = 0.30%)
-        feesPaid: FEE_PCT / 2,
-        feePct: FEE_PCT,
-        // take-profit ladder + RUNNER: bank 30%/30%/25% at 40%/70%/100% of
-        // target, and leave a 15% runner that never has a limit — it trails
-        // behind the peak. Forensic: zero trades ever reached +2R because
-        // the ladder closed everything at target. Tharp: the right tail is
-        // where expectancy lives — the runner is how we reach it.
-        tps: [
-          { at: 0.4, frac: 0.3 },
-          { at: 0.7, frac: 0.3 },
-          { at: 1.0, frac: 0.25 },
-        ],
-        runner: 0.15, // residual fraction that trails past target
-        // dynamic stop (% adverse→locked-profit, from entry): starts at the
-        // designed invalidation, moves to breakeven (zero-risk) once a safe
-        // buffer prints, ratchets up behind profit, and only trails the
-        // runner once price is past full target
-        stopAt: -stopPct,
-        targetPct: s.targetPct,
-        // target quoted off the FILL, not the mid — a long paying the ask
-        // reaches its %-target at a higher print than the raw-mark target
-        targetPrice:
-          s.targetPct != null
-            ? fillPx * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.targetPct / 100))
-            : s.targetPrice,
-        score: s.score,
-        grade: s.grade,
-        strategy: s.strategy,
-        harmonic: s.harmonic ?? null,
-        ta: s.ta ?? null,
-        mkt0: medianChangePct, // universe median 24h change at entry — benchmark for alpha
-        regime, // measured tape regime at entry — leverage/heat keyed off this
-        mktType, // Tharp six-type tag: direction × volatility at entry
-        funding: s.funding ?? null,
-        carry: s.carry ?? null,
-        stopPct,
-        // prospective-record fields: what the world looked like at signal
-        // time — spread/slippage estimate, universe + pool size, board slot
-        ver: s.ver ?? ENGINE_VERSION,
-        boardRank: s.boardRank ?? null,
-        spreadPct: s.spreadPct ?? null,
-        slipPct: s.spreadPct != null ? pct(s.spreadPct / 2) : null,
-        universeSize: rows.length,
-        poolN: candidates.length,
-        ts: now,
-        status: 'open',
-        exitPrice: null,
-        exitTs: null,
-        pnlPct: null,
-      });
       // live-exec intent: the scanner is the ONLY decision engine — the
-      // executor (bitget-exec.mjs) routes exactly this, scaled to the real
-      // account equity it reads from the exchange
+      // executor (bitget-exec.mjs) routes exactly this, sized from the real
+      // account equity it reads from the exchange. No paper position is
+      // recorded — the exchange fill IS the position record.
       livePlan.orders.push({
         symbol: s.asset + 'USDT',
         asset: s.asset,
@@ -1707,12 +1628,6 @@ async function main() {
         refEntry: fillPx,
         targetPct: s.targetPct,
         stopPct,
-        tps: [
-          { at: 0.4, frac: 0.3 },
-          { at: 0.7, frac: 0.3 },
-          { at: 1.0, frac: 0.25 },
-        ],
-        runner: 0.15,
         ver: s.ver ?? ENGINE_VERSION,
       });
     }
@@ -2257,7 +2172,8 @@ async function main() {
     ),
     updatedAt: snap.refreshedAt,
   };
-  // ---- Sloggett risk-protocol adherence scorecard (paper equity model) ----
+  // ---- discipline scorecard — ledger is empty post-paper-purge; keep the
+  // shape so consumers don't break, but never echo the old model's equity ----
   const closedAll = closed.filter((e) => e.pnlPct != null);
   const rrList = closedAll.map(
     (e) => (e.targetPct || 4) / (e.stopPct ?? Math.max(4, e.targetPct || 4))
@@ -2275,8 +2191,6 @@ async function main() {
   }
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   ledger.stats.discipline = {
-    equity: EQUITY,
-    notional: NOTIONAL,
     avgRiskPctAcct: closedAll.length ? round(avg(riskPctList), 2) : null,
     avgRR: closedAll.length ? round(avg(rrList), 2) : null,
     rr12plus: closedAll.length
@@ -2827,68 +2741,8 @@ async function main() {
   } catch {}
 
 
-  // ---- vault: a fixed share of every realized gain compounds into a
-  // hold-forever BTC/ETH/SOL basket, marked to live prices ----
-  let vault = { depositedUsd: 0, holdings: {}, fills: [] };
-  let vaultCorrupt = false;
-  try {
-    vault = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
-  } catch (err) {
-    vaultCorrupt = err.code !== 'ENOENT';
-  }
-  vault.fills ??= [];
-  vault.holdings ??= {};
-  for (const e of closed) {
-    if (e.vaulted || (e.pnlPct ?? 0) <= 0) continue;
-    const usd = (e.notional ?? TRADE_NOTIONAL) * (e.pnlPct / 100) * VAULT_PCT;
-    vault.depositedUsd = pct(vault.depositedUsd + usd);
-    vault.fills.unshift({
-      ts: e.exitTs ?? now,
-      asset: e.asset,
-      status: e.status,
-      pnlPct: e.pnlPct,
-      usd: round(usd, 2),
-    });
-    for (const sym of VAULT_ASSETS) {
-      const p = priceByAsset.get(sym);
-      if (!p) continue;
-      const h = (vault.holdings[sym] ??= { units: 0, costUsd: 0 });
-      h.units += usd / VAULT_ASSETS.length / p;
-      h.costUsd = round(h.costUsd + usd / VAULT_ASSETS.length, 2);
-    }
-    // DON'T write the ledger here — if the process died between this write
-    // and the vault write below, the sweep was marked done but never
-    // deposited, permanently lost. The final ledger write (post-vault)
-    // persists the flag atomically relative to the vault file.
-    e.vaulted = true;
-  }
-  let valueUsd = 0;
-  const holdings = {};
-  for (const [sym, h] of Object.entries(vault.holdings)) {
-    const p = priceByAsset.get(sym);
-    const v = h.units * (p ?? 0);
-    valueUsd += v;
-    holdings[sym] = {
-      units: round(h.units, 6),
-      costUsd: h.costUsd,
-      valueUsd: round(v, 2),
-      price: p ?? null,
-    };
-  }
-  if (!vaultCorrupt) {
-    fs.writeFileSync(
-      VAULT_FILE,
-      JSON.stringify({
-        refreshedAt: snap.refreshedAt,
-        vaultPct: VAULT_PCT,
-        depositedUsd: vault.depositedUsd,
-        valueUsd: round(valueUsd, 2),
-        pnlUsd: round(valueUsd - vault.depositedUsd, 2),
-        fills: vault.fills.slice(0, 200),
-        holdings,
-      })
-    );
-  }
+  // vault retired — it compounded gains from simulated (paper) trades.
+  // Real-account accounting lives in live-ledger.json only.
 
   // ---- live-execution intent → api/live-plan.json ----
   // The scanner decides; bitget-exec.mjs routes. A plan older than the TTL
@@ -2917,11 +2771,17 @@ async function main() {
     let bench = { startedAt: null, series: [] };
     try { bench = JSON.parse(fs.readFileSync(BENCH_FILE, 'utf8')); } catch {}
     bench.series ??= [];
-    // sentinel equity first so the sample point can carry it — the chart
-    // wants engine-vs-benchmark curves on one axis, not two stories
-    let eqUsd = EQUITY;
-    for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0)))
-      eqUsd *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY) * (e.pnlPct > 0 ? 0.8 : 1);
+    // Sentinel's curve is the REAL Bitget account — equityUsd from
+    // live-ledger.json against the first real-equity observation this file
+    // recorded. No simulated book feeds this number.
+    let sentPctNow = null;
+    try {
+      const ll = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      if (ll?.equityUsd > 0) {
+        bench.sentBase ??= ll.equityUsd;
+        sentPctNow = pct(((ll.equityUsd - bench.sentBase) / bench.sentBase) * 100);
+      }
+    } catch {}
     const lastB = bench.series.length ? bench.series[bench.series.length - 1].ts : 0;
     if (now - lastB >= 4 * 60e3) {
       bench.series.push({
@@ -2929,7 +2789,7 @@ async function main() {
         btc: priceByAsset.get('BTC') ?? null,
         eth: priceByAsset.get('ETH') ?? null,
         sol: priceByAsset.get('SOL') ?? null,
-        sent: pct(((eqUsd - EQUITY) / EQUITY) * 100),
+        sent: sentPctNow,
       });
       bench.series = bench.series.slice(-3000);
     }
@@ -2961,15 +2821,15 @@ async function main() {
     }
     bench.naiveBoardPct = pct((naiveEq - 1) * 100);
     bench.naiveRuns = naiveN;
-    bench.sentinelPct = pct(((eqUsd - EQUITY) / EQUITY) * 100);
-    bench.combinedPct = pct(((eqUsd + valueUsd - EQUITY) / EQUITY) * 100);
+    bench.sentinelPct = sentPctNow;
+    delete bench.combinedPct;
     bench.note =
-      'BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = trading ledger equity; combined adds the vault basket.';
+      'BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = real Bitget account equity return since first observation.';
     fs.writeFileSync(BENCH_FILE, JSON.stringify({ refreshedAt: snap.refreshedAt, ...bench }));
   } catch {}
 
-  // final unconditional ledger write — archive-depth stats and vault
-  // `vaulted` flags set after the first write must still persist
+  // final unconditional ledger write — stats computed after the first
+  // write must still persist
   if (!ledgerCorrupt) fs.writeFileSync(LEDGER_FILE, JSON.stringify(ledger));
 
   // pipeline health for the landing footer — only keys this pipeline owns;

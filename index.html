@@ -6,9 +6,9 @@
 <meta name="color-scheme" content="dark"/>
 <meta name="theme-color" content="#07050f"/>
 <title>Sentinel Tactical Radar</title>
-<meta name="description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, paper-trade ledger."/>
+<meta name="description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
 <meta property="og:title" content="Sentinel Tactical Radar"/>
-<meta property="og:description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, paper-trade ledger."/>
+<meta property="og:description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
 <script src="/sentinel-tactical-radar/live-feed.js"></script>
 <script src="/sentinel-tactical-radar/harmonics.js"></script>
@@ -255,13 +255,6 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
     </div>
     <div class="col">
       <div class="panel">
-        <div class="ptitle">Signal track record</div>
-        <div id="ledgerStats" style="margin-bottom:12px"></div>
-        <svg id="pnlSvg" viewBox="0 0 300 64" width="100%" height="56" preserveAspectRatio="none" style="margin-bottom:8px"></svg>
-        <div id="byStrat" class="pro" style="margin-bottom:10px"></div>
-        <div id="ledger" class="pro"></div>
-      </div>
-      <div class="panel">
         <div class="ptitle">Top movers / laggards · 24h</div>
         <div class="ml">
           <div><div class="h">Movers</div><div id="mv"></div></div>
@@ -270,12 +263,8 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
       </div>
     </div>
   </div>
-  <div class="panel" style="margin-top:16px;border-style:dashed;border-color:rgba(255,209,102,.4)">
-    <div class="ptitle">Wallet · <b style="color:var(--warn,#ffd166)">PAPER FUNDS</b> <span class="sub">— simulated account, not real money · real wallet integration coming · trading acct started $1,000 AUD · vault started $0 AUD · <b>dynamic 3–20x isolated USDT-M perp</b> model · vault sweeps deducted from trading equity · wallet figures AUD, market prices USD</span></div>
-    <div class="stats" id="walletStats" style="grid-template-columns:repeat(6,1fr)"></div>
-  </div>
   <div class="panel neon" id="livePanel" style="margin-top:16px;display:none">
-    <div class="ptitle">Live execution · real Bitget account <span class="sub">— exchange state is ground truth, not the simulation</span><span id="liveMode" style="float:right"></span></div>
+    <div class="ptitle">Live execution · real Bitget account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
     <div class="stats" id="liveStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="liveRows"></div>
     <div id="liveRisk" class="sub" style="margin-top:8px;font-size:10px"></div>
@@ -287,16 +276,7 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
     <div id="godChecks" class="pro"></div>
     <div class="sub" id="godAt" style="margin-top:6px;font-size:9px"></div>
   </div>
-  <div class="panel" style="margin-top:16px">
-    <div class="ptitle">Trade journal · every tracked signal, full accounting <span class="sub">— click a row for the trade synopsis</span><span class="pro" style="float:right;font-weight:400">account $ <input id="acctIn" inputmode="decimal" style="width:70px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:1px 5px;font:inherit" placeholder="10000"> <span class="sub" id="acctNote"></span></span></div>
-    <div class="jscroll"><table><thead><tr><th>Coin</th><th>Side</th><th>Grade</th><th>Strategy</th><th>Entry</th><th>Mark / Exit</th><th>Target</th><th>P&amp;L</th><th>Status</th><th>Opened</th><th>Held</th></tr></thead><tbody id="journal"></tbody></table></div>
-  </div>
   <div class="duo">
-    <div class="panel">
-      <div class="ptitle">VaultKit · 20% of every win sweeps into a hold basket</div>
-      <div class="stats" id="vaultStats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px"></div>
-      <div id="vaultRows"></div>
-    </div>
     <div class="panel pro">
       <div class="ptitle">Logic drivers · book-weighted strategy influence</div>
       <div id="drivers"></div>
@@ -308,12 +288,12 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
     <div class="jscroll"><table><thead><tr><th>Coin</th><th>Funding 8h</th><th>Annualized</th><th>Basis</th><th>Arb play</th><th>Breakeven</th></tr></thead><tbody id="fundRows"></tbody></table></div>
   </div>
   <div class="panel" style="margin-top:16px">
-    <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— discipline scorecard measured on our own ledger, held to <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
+    <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— real Bitget account equity vs passive benchmarks, framed by <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
     <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="ptitle" style="margin-top:14px;font-size:10px">vs boring benchmarks <span class="sub" id="benchSince">— does the intelligence add value beyond doing something trivial?</span></div>
     <div id="benchSvgWrap" style="display:none;margin:6px 0 2px"><svg id="benchSvg" viewBox="0 0 560 80" width="100%" height="70" preserveAspectRatio="none"></svg><div class="sub" style="font-size:9px"><span style="color:var(--grn)">— sentinel</span> vs <span style="color:var(--mut)">- - BTC hold</span> · % since clock start</div></div>
     <div id="benchVs" class="stats" style="grid-template-columns:repeat(5,1fr)"></div>
-    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable ledger, R-multiples, or SQN. This engine's entire record is public, committed to git, and independently verifiable against Bitget candles. Built to a higher standard of verifiability: every signal is timestamped, archived and independently checkable — the performance benchmark gets earned by the ledger.</div>
+    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable record, R-multiples, or SQN. This engine's entire record is public: every signal is timestamped and archived, and every fill comes straight from the Bitget exchange — committed to git and independently verifiable against Bitget candles. The performance benchmark gets earned by the real account.</div>
   </div>
 </div>
 <footer>
@@ -334,7 +314,7 @@ const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigi
 const ago=t=>{const s=(Date.now()-t)/1e3;return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 const j=u=>fetch(u,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
 let LAST={};
-let OPENPOS=[],WALLET=null;
+
 
 function sparkSVG(vals,w=90,h=26){
   if(!vals||vals.length<2)return'';
@@ -406,131 +386,17 @@ const BOOKS={
 };
 const SUPPORT=[
  {t:'Super Trader',a:'Van K. Tharp',u:'https://www.vantharp.com',d:'position sizing and stop discipline govern every entry'},
- {t:'Rich Dad Poor Dad',a:'Robert T. Kiyosaki',u:'https://www.richdad.com',d:'income buys assets — realized gains sweep into the Vault basket'},
+ {t:'Rich Dad Poor Dad',a:'Robert T. Kiyosaki',u:'https://www.richdad.com',d:'income buys assets — let winners work, cut losers fast'},
  {t:'The Barefoot Investor',a:'Scott Pape',u:'https://barefootinvestor.com',d:'bucketing: profits are routed to long-term buckets, never re-gambled'},
  {t:'The Richest Man in Babylon',a:'George S. Clason',u:'https://en.wikipedia.org/wiki/The_Richest_Man_in_Babylon',d:'a part of all you earn is yours to keep — 20% of every win is sequestered'},
  {t:'Crypto Risk Management Framework',a:'Michael Sloggett',u:'https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html',d:'1% risk per idea, invalidation before entry, ≥1:2 asymmetry — discipline separates pros from gamblers'},
  {t:'Lepus Proprietary Trading',a:'Lepus / Peter Jackson',u:'https://www.lepusproprietarytrading.com.au/',d:'mechanical VWAP reversion process on fast timeframes — repeatable execution beats prediction'},
 ];
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
-function confList(e){
-  const L=e.direction==='LONG',T=e.ta||{};
-  const v=b=>b? (L?'sup':'con') : (L?'con':'sup'); // bullish factor → sup/con vs direction
-  const items=[];
-  const add=(s,l)=>items.push([s,l]);
-  if(e.score!=null)add('inf',`composite score ${e.score}/100 · grade ${e.grade||'—'} · strategy "${e.strategy||'—'}"`);
-  if(T.bias)add(T.bias===e.direction?'sup':'con',`TA composite bias resolved ${T.bias}`);
-  if(T.sfp)add(v(T.sfp.type==='bullish'),`${T.sfp.type} swing-failure @ $${fmtP(T.sfp.level)} USD — strength ${T.sfp.strength}/100, ${T.sfp.age} candle(s) old`);
-  if(T.elliott){const bull=T.elliott.dir==='down'&&T.elliott.longBottom,bear=T.elliott.dir==='up'&&T.elliott.shortTop;
-    add(bull?v(true):bear?v(false):'inf',`Elliott five-wave ${T.elliott.dir} impulse · quality ${T.elliott.quality}/100${T.elliott.shortTop?' · terminal W5 top':''}${T.elliott.longBottom?' · terminal W5 bottom':''}`)}
-  if(T.wyckoff){const wy=T.wyckoff;const bull=wy.type==='accumulation',bear=wy.type==='distribution';
-    const ev=(wy.events||[]).map(x=>x.type).join(' → ');
-    add(wy.type==='ranging'?'inf':v(bull),`Wyckoff ${wy.type}${wy.phase?' · phase '+wy.phase:''}${ev?' · trail: '+ev:''}${wy.tr?` · TR $${fmtP(wy.tr.support)}–$${fmtP(wy.tr.resist)} USD (${wy.tr.widthPct}% wide)`:''}${wy.volX?' · vol '+wy.volX+'×':''}`)}
-  if(T.smc){const s=T.smc;
-    if(s.bos)add(v(s.bos==='bullish'),`SMC ${s.bos} BOS — structure break`);
-    if(s.choch)add(v(s.choch==='bullish'),`SMC ${s.choch} CHoCH — character change`);
-    if(s.inOB)add(v(s.inOB.dir==='bullish'),`inside ${s.inOB.dir} order block $${fmtP(s.inOB.bot)}–$${fmtP(s.inOB.top)} USD`);
-    if(s.zone)add(s.zone==='discount'?v(true):s.zone==='premium'?v(false):'inf',`dealing-range zone: ${s.zone}`);
-    if(s.eqh!=null)add('inf',`EQH liquidity pool @ $${fmtP(s.eqh)} USD`);
-    if(s.eql!=null)add('inf',`EQL liquidity pool @ $${fmtP(s.eql)} USD`);
-    if(s.trend)add('inf',`SMC trend state: ${s.trend}`)}
-  if(T.eq){const q=T.eq;
-    if(q.lastQ)add(q.lastQ==='Q4'?v(true):q.lastQ==='Q1'?v(false):'inf',`last candle closed ${q.lastQ} of its own range (25/50/75% quartiles)`);
-    if(q.respect)add(v(q.respect==='held'),`prior-bar 50% EQ ${q.respect}`);
-    if(q.swept)add(v(q.swept==='reclaimed-eq'),`EQ state: ${q.swept}`);
-    if(q.wick)add(v(q.wick==='reject-low'),`wick read: ${q.wick}`);
-    if(q.rangeQ)add(q.rangeQ==='Q1'?v(true):q.rangeQ==='Q4'?v(false):'inf',`dealing-range quartile ${q.rangeQ} (${Math.round((q.rangePos??0)*100)}% up the range)`)}
-  (T.candles||[]).forEach(c=>{const bull=/hammer|bull|morning|marubozu-up/.test(c);
-    add(v(bull),`candlestick: ${c}`)});
-  if(T.fvgOpen)add('inf',`${T.fvgOpen} open fair-value gap(s) on the book`);
-  if(T.fvgNearest)add(v(T.fvgNearest.type==='bullish'),`nearest FVG ${T.fvgNearest.type} $${fmtP(T.fvgNearest.bot)}–$${fmtP(T.fvgNearest.top)} USD${T.fvgNearest.filled?' (filled)':''}`);
-  if(T.goldenPocket)add(v(true),'price inside fib golden pocket (0.618–0.65 retracement zone)');
-  if(T.fibClusters)add('inf',`${T.fibClusters} fib-cluster confluence points mapped`);
-  if(T.trend)add(v(T.trend==='up'),`market structure trend: ${T.trend}`);
-  if(T.eng){['rsi','macd','obv','dow','minor','major','macro','superMacro','rev','mtf'].forEach(k=>{
-    const x=T.eng[k];if(!x)return;
-    add(x.dir?v(x.dir==='bull'):'inf',`${({rsi:'RSI eng',macd:'MACD eng',obv:'OBV eng',dow:'Dow eng',minor:'Minor',major:'Major',macro:'Macro',superMacro:'Super-macro',rev:'Reversal eng',mtf:'MTF eng'})[k]} — ${x.label}`)});}
-  if(T.vwap)add(v(T.vwap.fade==='LONG'),`5-min VWAP ${T.vwap.devPct>0?'+':''}${T.vwap.devPct}% (z ${T.vwap.z}) → ${T.vwap.fade} fade doctrine`);
-  if(e.harmonic)add(v(e.harmonic.dir==='bullish'),`${e.harmonic.dir} ${e.harmonic.type} validated · q${e.harmonic.quality}/100 · D @ $${fmtP(e.harmonic.dPrice)} USD`);
-  if(e.deriv)add(e.deriv.dir?v(e.deriv.dir==='bull'):'inf',`derivatives: ${e.deriv.oiUsd?'OI $'+(e.deriv.oiUsd/1e6).toFixed(1)+'M USD · ':''}funding ${e.deriv.fundingTrend||'—'} · ${e.deriv.crowding||'—'}${e.deriv.longShortRatio?' · L/S '+e.deriv.longShortRatio:''}${e.deriv.liqLongUsd!=null?` · liq 24h $${((e.deriv.liqLongUsd+(e.deriv.liqShortUsd||0))/1e6).toFixed(1)}M USD`:''}`);
-  if(e.social)add(e.social.dir?v(e.social.dir==='bull'):'inf',`LunarCrush: galaxy ${e.social.galaxy??'—'} · altRank ${e.social.altRank??'—'} · sentiment ${e.social.sentiment??'—'} · social vol ${e.social.socialVol??'—'}`);
-  if(e.news)add(e.news.dir?v(e.news.dir==='bull'):e.news.fud?(L?'con':'sup'):'inf',`CryptoPanic: ${e.news.n} posts · sentiment ${e.news.sentiment??'—'}${e.news.imp?` · ${e.news.imp} important`:''}${e.news.hype?` · ${e.news.hype} hype-filtered`:''}${e.news.fud?' · FUD cluster':''}${e.news.heads&&e.news.heads[0]?` · "${e.news.heads[0]}"`:''}`);
-  if(e.lev>1)add('inf',`${e.lev}× isolated USDT-M perpetual — margin $${(e.margin??(e.notional??1000)/e.lev).toLocaleString()} USD controls $${(e.notional??1000).toLocaleString()} USD notional · est. liquidation −${e.liqPct??9.2}% adverse${e.fundingPnl!=null?` · funding ${e.fundingPnl>=0?'+':''}${e.fundingPnl}%`:''}`);
-  if(e.tps){const hits=e.tps.filter(t=>t.hit);add('inf',`take-profit ladder 40/70/100% of target — ${hits.length}/3 rungs banked${hits.length?` (last +${hits[hits.length-1].pnl}%)`:''} · stop ${e.stopAt===0?'at breakeven (zero-risk)':e.stopAt>0?`locked +${e.stopAt}%`:`at −${Math.abs(e.stopAt??e.stopPct??4)}%`}${e.peakPnl>e.targetPct?' · trailing runner active':''}`)}
-  if(e.mcap)add(e.mcap.dir?v(e.mcap.dir==='bull'):'inf',`market cap $${e.mcap.mcapUsd!=null?(e.mcap.mcapUsd/1e9>=1?(e.mcap.mcapUsd/1e9).toFixed(1)+'B':(e.mcap.mcapUsd/1e6).toFixed(0)+'M'):'—'} USD${e.mcap.rank?` · rank #${e.mcap.rank}`:''}${e.mcap.floatPct!=null?` · ${e.mcap.floatPct}% float unlocked${e.mcap.floatPct<30?' (dilution risk)':''}`:''}${e.mcap.athDistPct!=null?` · ${e.mcap.athDistPct}% vs ATH`:''}${e.mcap.volMcapPct!=null?` · vol/mcap ${e.mcap.volMcapPct}%`:''}${e.mcap.cmc?` · CMC rank ${e.mcap.cmc.rank}`:''}`);
-  if(e.events)add(e.events.unlocks>0?(L?'con':'sup'):e.events.dir?v(e.events.dir==='bull'):'inf',`events ≤7d: ${e.events.n}${e.events.unlocks?` · ${e.events.unlocks} UNLOCK (supply risk)`:''}${e.events.catalysts?` · ${e.events.catalysts} catalyst`:''}${e.events.next&&e.events.next[0]?` — ${e.events.next[0]}`:''}`);
-  if(e.carry==='earn')add('sup','carry: position earns funding while open');
-  else if(e.carry==='pay')add('con','carry: position pays funding while open');
-  else if(e.carry==='flat')add('inf','carry: funding flat');
-  if(e.momentumScore!=null||e.reversalScore!=null)add('inf',`raw factors — momentum ${e.momentumScore??'—'} · surge ${e.reversalScore??'—'} · liquidity ${e.liquidityScore??'—'} · range pos ${e.rangePosition??'—'}`);
-  return items;
-}
-function synopsis(e){
-  const sym=e.asset+'/USDT';
-  const B=BOOKS[e.strategy]||BOOKS['Momentum Confluence'];
-  const when=new Date(e.ts).toUTCString().slice(17,22);
-  const end=e.exitTs?new Date(e.exitTs).toUTCString().slice(17,22):null;
-  const held=((e.exitTs||Date.now())-e.ts)/36e5;
-  const heldStr=held<1?Math.round(held*60)+' minutes':held.toFixed(1)+' hours';
-  const mk=e.exitPrice??e.lastPrice;
-  const pnl=e.pnlPct;
-  const tpTxt=e.tps?`TP ladder: ${e.tps.filter(t=>t.hit).length}/3 rungs banked at ${e.tps.map(t=>`${t.at*100}%T`).join('/')}${e.stopAt!=null?` — live stop ${e.stopAt>=0?'+':''}${e.stopAt}% from entry${e.stopAt>=0?' (profit locked)':e.stopAt===0?' (breakeven)':''}`:''}. `:(e.lockPnl!=null?`Legacy LOCK-50 fired at +${e.lockPnl}% — half banked, stop to breakeven. `:'');
-  const outcome={
-    open:`Open and marked live on every Bitget futures tick — P&L ${pnl!=null?(pnl>=0?'+':'')+pnl+'%':'unpriced'}${e.fundingPnl!=null?`, funding carry ${e.fundingPnl>=0?'+':''}${e.fundingPnl}%`:''}. ${tpTxt}Resolution paths: TP ladder rungs → full target at $${fmtP(e.targetPrice)} USD, dynamic stop currently ${e.stopAt!=null?(e.stopAt>=0?'+':'')+e.stopAt+'%':'−'+(e.stopPct??Math.max(4,e.targetPct))+'%'} from entry, opposite-signal reversal, or 24h expiry.`,
-    won:`The ${e.direction==='LONG'?'upside':'downside'} target at $${fmtP(e.targetPrice)} USD was reached at ${end} UTC — ${heldStr} after entry. Final blended P&L printed ${pnl>=0?'+':''}${pnl}%.`,
-    stopped:`Price moved adversely through the −${(e.stopPct??Math.max(4,e.targetPct))}% invalidation band. The stop executed at $${fmtP(e.exitPrice)} USD at ${end} UTC, ${heldStr} after entry, closing the idea at ${pnl}% — a controlled loss inside designed parameters.`,
-    reversed:`The engine emitted a fresh ${e.direction==='LONG'?'SHORT':'LONG'} signal on the same asset while this position was open — a thesis contradiction. Per reversal doctrine the position was closed at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC rather than riding into a flipped signal set.`,
-    breakeven:`After the zero-risk ratchet fired, price retraced to entry. The breakeven stop closed the remainder at $${fmtP(e.exitPrice)} USD at ${end} UTC — ${e.tps?`${e.tps.filter(t=>t.hit).length} banked rung(s) preserved the realized ${pnl>=0?'+':''}${pnl}%`:`the banked half preserved the realized +${pnl}%`} while the rest scratched at zero.`,
-    expired:`The 24-hour maximum holding horizon elapsed without target or stop contact. The position was marked out at $${fmtP(e.exitPrice)} USD (${pnl}%) at ${end} UTC — time-exposure limits enforced.`,
-    liquidated:`Price wicked through the −${e.liqPct??9.2}% liquidation band on the ${e.lev??10}× isolated position before the stop could rescue it — the margin ($${(e.margin??0).toLocaleString()} USD) was taken in full at ${end} UTC. This is the failure mode leverage introduces that spot never has: the position is force-closed, not stopped, and there is no recovery.`,
-    trailed:`The trailing stop locked the trade out at $${fmtP(e.exitPrice)} USD at ${end} UTC — profit-protection, not failure. The take-profit ladder had already banked${e.tps?' '+e.tps.filter(t=>t.hit).length+' rung(s)':''} along the way, and the dynamic stop finished +${Math.abs(e.stopAt??0)}% above entry, so the exit prints ${pnl}% — a win closed by the trail, which is exactly what the trail is for.`,
-  }[e.status]||'';
-  const vaultTxt=(e.status!=='open'&&(pnl??0)>0)
-    ?`VaultKit sweep: 20% of the realized gain ($${(e.notional??1000).toLocaleString()} USD notional × ${pnl}% × 20%) converted into the BTC/ETH/SOL hold basket at prevailing prices.`
-    :`No vault sweep — sweeps fire only on realized profits.`;
-  const T=e.ta||null;
-  const taTxt=T?`
-<h4>Engine TA evidence — multi-doctrine read</h4>
-<p>At entry the doctrine stack returned a <b>${T.bias||'neutral'}</b> composite bias with ${T.confluence||0} confirming factor(s)${T.reasons&&T.reasons.length?`: ${T.reasons.join(' + ')}`:''}.
-${T.sfp?`A <b>${T.sfp.type}</b> swing-failure pattern printed at the $${fmtP(T.sfp.level)} USD key level ${T.sfp.age} candle(s) ago (strength ${T.sfp.strength}/100) — the sweep that failed to hold, per the Bulkowski reversal doctrine. `:`No swing-failure was present at a key level on this read. `}
-${T.elliott?`Elliott structure resolved as a completed five-wave ${T.elliott.dir} impulse (quality ${T.elliott.quality}/100, leg ratios w2 ${T.elliott.ratios.w2r} / w4 ${T.elliott.ratios.w4r} / w5-vs-1+3 ${T.elliott.ratios.w5w13})${T.elliott.shortTop?' — a terminal wave-5 top: the Philakone short-the-fifth setup, traded only because confluence agreed':' — a terminal wave-5 bottom'}. `:`No completed five-wave impulse measured at entry. `}
-${T.wyckoff&&T.wyckoff.type&&T.wyckoff.type!=='ranging'?`Wyckoff schematic resolved a <b>${T.wyckoff.type}</b> range in <b>phase ${T.wyckoff.phase}</b>${T.wyckoff.event?` — latest event <b>${T.wyckoff.event}</b> (quality ${T.wyckoff.quality}/100${T.wyckoff.volX?`, ${T.wyckoff.volX}× volume`:''})`:''}${T.wyckoff.events&&T.wyckoff.events.length?` — event trail: ${T.wyckoff.events.join(' → ')}`:''}. `:'No Wyckoff schematic events measured. '}
-${T.smc?`SMC read: ${T.smc.bos?`<b>${T.smc.bos} BOS</b> `:''}${T.smc.choch?`<b>${T.smc.choch} CHoCH</b> `:''}${!T.smc.bos&&!T.smc.choch?'no structural break — ':''}price in the <b>${T.smc.zone}</b> zone${T.smc.inOB?`, sitting inside a ${T.smc.inOB.dir} order block`:''}${T.smc.eqh?`, EQH liquidity resting at $${fmtP(T.smc.eqh)} USD`:''}${T.smc.eql?`, EQL liquidity at $${fmtP(T.smc.eql)} USD`:''}. `:''}
-${T.eq?`EQ quartile read: last candle closed in <b>${T.eq.lastQ}</b> of its own range${T.eq.respect?`, <b>${T.eq.respect}</b> at the prior bar's 50% EQ`:''}${T.eq.swept?`, <b>${T.eq.swept}</b> vs prior bar mean`:''}${T.eq.wick?`, ${T.eq.wick} wick`:''} — dealing-range position <b>${T.eq.rangeQ}</b>. `:''}
-${T.candles&&T.candles.length?`Candlestick evidence: ${T.candles.join(', ')}. `:''}
-${T.fvgOpen?`ICT structure showed ${T.fvgOpen} open fair-value gap(s)${T.fvgNearest?`, nearest a ${T.fvgNearest.dir} FVG spanning $${fmtP(T.fvgNearest.lo)} USD–$${fmtP(T.fvgNearest.hi)} USD`:''}. `:'No open fair-value gaps nearby. '}
-${T.goldenPocket?`Price sat inside the fib golden pocket (0.618–0.66 retracement of the prior leg) — a measured entry zone, not a chased one. `:''}${T.fibClusters?`${T.fibClusters} fib level cluster(s) aligned with the entry zone. `:''}
-${T.vwap?`VWAP read (session): ${T.vwap.devPct}% deviation (z=${T.vwap.z})${T.vwap.fade?' — stretched beyond the fade band, per the Lepus/Jackson mechanical reversion doctrine':' — inside the normal tether'}.`:''}
-Every factor above is a measurable heuristic on the entry-window candles — none of them is a guarantee, and the composite only ever moves the score, never overrides the stop.</p>`:'';
-  const harmTxt=e.harmonic?`
-<h4>Harmonic validation — Bulkowski-grade XABCD</h4>
-<p>A <b>${e.harmonic.dir} ${e.harmonic.type}</b> was validated on the ${sym} hourly structure at entry (quality ${e.harmonic.quality}/100). Measured legs: AB/XA ${e.harmonic.ratios.abXa}, BC/AB ${e.harmonic.ratios.bcAb}, CD/BC ${e.harmonic.ratios.cdBc}, AD/XA ${e.harmonic.ratios.adXa} — checked against the classic ${e.harmonic.type} ratio bands with the D completion near $${fmtP(e.harmonic.dPrice)} USD. This validation layer follows <a href="https://thepatternsite.com" target="_blank" rel="noopener"><i>Encyclopedia of Chart Patterns</i> — Thomas N. Bulkowski</a>: pattern claims are only honored when the geometry actually measures inside spec, not merely resembles it. ${e.direction==='LONG'&&e.harmonic.dir==='bearish'||e.direction==='SHORT'&&e.harmonic.dir==='bullish'?'Note the harmonic bias ran counter to the traded direction — a documented divergence, not a concealed one.':'The harmonic bias agreed with the traded direction.'}</p>`:'';
-  return `
-<h4>Executive summary</h4>
-<p>${sym} ${e.direction} — grade ${e.grade||'—'}, confluence ${e.score}/100, strategy "${e.strategy}", engine <b>${e.ver||'v0.x'}</b>${e.boardRank?`, board slot #${e.boardRank}`:''}. Entered at $${fmtP(e.entry)} USD (${when} UTC)${mk?`, last marked at $${fmtP(mk)} USD`:''}. Status: <b>${e.status.toUpperCase()}</b>. ${e.direction==='LONG'?'Profit accrues as price rises.':'Profit accrues as price falls.'} This synopsis is generated deterministically from the ledger record — every figure below is drawn from the stored entry and verifiable against Bitget market data for the same timestamps.</p>
-${(()=>{const cl=confList(e);const sup=cl.filter(c=>c[0]==='sup').length,con=cl.filter(c=>c[0]==='con').length,inf=cl.length-sup-con;
-return `<h4>Confluence map — ${sup} supporting · ${con} conflicting · ${inf} measured</h4>
-<ul class="conf">${cl.map(([s,l])=>`<li class="${s}">${s==='sup'?'✓':s==='con'?'✗':'·'} ${l}</li>`).join('')}</ul>
-<p class="sub" style="margin-top:-4px">Only factors actually measured at entry are listed — a null field is omitted, never assumed. Conflicting evidence is shown, not hidden.</p>`})()}
-<h4>Signal genesis</h4>
-<p>The engine scans the Bitget USDT-M futures universe — crypto plus stock, index, metal, commodity and FX perpetuals, fiat-stable bases excluded — for contracts clearing a $250K USD daily quote-volume floor, then enriches the top ${48} candidates with closed hourly klines (the live, unclosed candle is excluded — patterns that evaporate on settlement are not evidence). ${sym} ranked inside the emitted set because its composite score of ${e.score}/100 placed it among the strongest setups on the board, scored directionally — momentum is ranked in the traded direction, so a high score on a ${e.direction} means the ${e.direction==='LONG'?'upside':'downside'} move itself was strong, not just that the coin moved.</p>
-<h4>Risk frame</h4>
-<p>Notional $${((e.notional??1000)).toLocaleString()} USD = ${(((e.notional??1000)*(e.stopPct??Math.max(4,e.targetPct||4)))/100).toFixed(0)} USD max risk at the designed −${e.stopPct??Math.max(4,e.targetPct)}% invalidation (≈1% equity target)${e.lev>1?`, ${e.lev}× isolated USDT-M perp — $${(e.margin??Math.round((e.notional??1000)/e.lev)).toLocaleString()} USD margin, liquidation ≈−${e.liqPct??9.2}% adverse`:''}. Target +${e.targetPct}% at $${fmtP(e.targetPrice)} USD — designed R:R 1:${(e.targetPct/(e.stopPct??Math.max(4,e.targetPct))).toFixed(1)}. Fees ${e.feePct??0.12}% round-trip and funding carry are modeled on every close; book exposure is capped at 400% of equity.${e.spreadPct!=null?` Entry spread measured ${e.spreadPct}% (≈${e.slipPct}% est. slippage), universe ${e.universeSize??'—'} contracts, top-${e.poolN??'—'} kline pool.` : ''}${e.regime?` Tape regime at entry was <b>${e.regime}</b> — leverage and the book's heat budget scale with measured regime: aligned trades earn up to 20×/6% heat, counter-trend trades are cut to 5×/2.5%, and the stop always stays inside the liquidation band.` : ''}</p>
-<p><b>Prospective record:</b> this signal was archived at emission time with its full parameter set into an append-only log (<code>api/signal-archive.json</code>, permanently in <code>api/history/</code> monthly files) — entries are never deleted or rewritten, and settlement replays the 5-minute candle tape so wick-level touches count even between snapshots. That is what makes this a verifiable out-of-sample test rather than a curated highlight reel.</p>
-<h4>Trade management</h4>
-<p>${tpTxt}Each settlement tick: TP rungs bank fractions on the way up; once price covers 40% of target the stop ratchets to breakeven (zero-risk), then locks +40%/+65% of target behind further progress; past full target a trailing stop guards the runner. Stopped, reversed, expired and liquidated are first-class outcomes — a stopped trade is the design working, not a malfunction.</p>
-${harmTxt}${taTxt}
-${e.funding?`<h4>Carry &amp; funding</h4><p>At entry, ${e.asset} funding was <b>${e.funding.ratePct>0?'+':''}${e.funding.ratePct}%</b> per 8h (${e.funding.annualPct}% annualized${e.funding.basisPct!=null?`, perp/index basis ${e.funding.basisPct>=0?'+':''}${e.funding.basisPct}%`:''}). Position is on the <b>${e.carry==='earn'?'receiving':e.carry==='pay'?'paying':'neutral'}</b> side of carry.</p>`:''}
-<h4>Outcome</h4>
-<p>${outcome} ${vaultTxt}${e.alphaPct!=null?` Alpha vs universe drift: <b>${e.alphaPct>=0?'+':''}${e.alphaPct}%</b> — ${e.alphaPct>=0?'the signal beat riding the market median':'the market median would have done better'}.`:''}</p>
-<h4>Audit</h4>
-<p>Ledger committed to <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar" target="_blank" rel="noopener">github.com/wh0d4r35w1n5/sentinel-tactical-radar</a> by automated workflow — entry timestamp, price, and status transitions carry git-level provenance. Prints are checkable against Bitget public candle history for ${e.asset}USDT around ${when} UTC. Dry-run only: no order was ever routed; fees, funding and liquidation are modeled, not charged.</p>
-<div class="srcs">DOCTRINE — ${LK(B.u,B.t)} (${B.a}) · ${SUPPORT.map(s=>`${LK(s.u,s.t)} (${s.a})`).join(' · ')}</div>`;
-}
 async function render(){
-  const acctN=(()=>{const v=parseFloat(localStorage.acctSize||'');return v>0?v:null})();
-  const [scan,detail,ledger,prices,health,vault,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,liveShadow,god]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'vault.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'live-shadow.json'),j(API+'god.json')]);
+
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -576,45 +442,9 @@ async function render(){
     <td>${sparkSVG(c.spark)}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
   if(ledger){
     const st=ledger.stats||{};
-    $('ledgerStats').innerHTML=`<div class="stats" style="grid-template-columns:repeat(3,1fr)">
-      <div class="stat"><div class="v num">${st.open??0}</div><div class="k">Open</div></div>
-      <div class="stat"><div class="v num">${st.closed?`${st.wins}W / ${st.losses}L`:'—'}</div><div class="k">decisive W/L${st.flat?` · ${st.flat} flat`:''}${st.winRate!=null?` · ${st.winRate}%`+(st.winRateCI?` <span class="sub">CI ${st.winRateCI.lo}–${st.winRateCI.hi}</span>`:''):''}</div></div>
-      <div class="stat"><div class="v num">${st.avgPnlPct!=null?st.avgPnlPct+'%':'—'}</div><div class="k">Avg P&amp;L${st.sqn!=null?` · SQN ${st.sqn} <span class="sub">${st.sqnBand||''}</span>`:''}${st.avgR!=null?` · ${st.avgR}R avg`+(st.expectancyCI?` <span class="sub">CI ${st.expectancyCI.lo}..${st.expectancyCI.hi}R</span>`:''):''}</div></div></div>`+
-      (()=>{const L=ledger.model||{};const g=L.learning;
-        if(g&&g.active)return `<div class="sub" style="margin-top:4px">adaptive weights ACTIVE (${g.closedN} closed ≥ ${g.gate.total}): ${Object.entries(L.stratAdj||{}).map(([k,v])=>`${k} ${v>0?'+':''}${v}`).join(' · ')}</div>`;
-        return `<div class="sub" style="margin-top:4px">adaptive weights DORMANT — ${g?g.closedN:0} closed signals (needs ${g?g.gate.total:100}+, ${g?g.gate.perStrategy:20}/strategy) · engine won't learn from luck-sized samples</div>`})();
-    $('ledger').innerHTML=(ledger.entries||[]).slice(0,10).map(e=>{
-      const cls=e.status==='won'?'up':e.status==='open'?'':e.pnlPct>=0?'up':'dn';
-      const lbl=e.status==='open'?`${e.pnlPct>=0?'+':''}${e.pnlPct}%`:e.status.toUpperCase()+(e.pnlPct!=null?` ${e.pnlPct>=0?'+':''}${e.pnlPct}%`:'');
-      return `<div class="ledger-row"><span>${LK(BG(e.asset),'<b>'+e.asset+'</b>')} <span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction[0]}</span> <span class="sub">${ago(e.ts)} ago</span></span><span class="num ${cls}">${lbl}</span></div>`}).join('')||'<div class="sub">no tracked signals yet</div>';
-    // cumulative P&L curve over closed entries
-    const closed=(ledger.entries||[]).filter(e=>e.status!=='open').sort((a,b)=>a.exitTs-b.exitTs);
-    if(closed.length>1){
-      let cum=0;const pts=closed.map(e=>cum+=e.pnlPct||0);
-      const mn=Math.min(0,...pts),mx=Math.max(0,...pts),rg=mx-mn||1,W=300,H=64;
-      const xy=pts.map((v,i)=>[(i/(pts.length-1))*W,H-8-((v-mn)/rg)*(H-16)]);
-      const line=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-      $('pnlSvg').innerHTML=`<line x1="0" x2="${W}" y1="${H-8-((0-mn)/rg)*(H-16)}" y2="${H-8-((0-mn)/rg)*(H-16)}" stroke="rgba(159,232,179,.25)" stroke-dasharray="3 3"/><path d="${line}" fill="none" stroke="${cum>=0?'var(--grn)':'var(--red)'}" stroke-width="1.5"/>`;
-    } else $('pnlSvg').innerHTML='';
-    // per-strategy breakdown
-    const bs=(ledger.stats&&ledger.stats.byStrategy)||{};
-    $('byStrat').innerHTML=Object.entries(bs).map(([k,v])=>
-      `<div class="ledger-row"><span class="sub">${k}</span><span class="num">${v.winRate}% <span class="sub">(${v.n})</span></span></div>`).join('');
-    // discipline scorecard — Sloggett framework adherence, measured on our ledger
-    const d=st.discipline||{};
-    const byV=(st.byVersion&&Object.entries(st.byVersion))||[];
-    const byG=(st.byGrade&&Object.entries(st.byGrade))||[];
+    // discipline/context scorecard — ledger-trade rows removed with the paper
+    // book; what remains is signal-archive + eval evidence and the real kill rail
     $('bench').innerHTML=[
-      ['Risk per trade',d.avgRiskPctAcct!=null?d.avgRiskPctAcct+'% of equity':'—','target ≤1–2%'],
-      ['Book heat',st.openRiskPct!=null?st.openRiskPct+'%':'—','equity at risk if all stops fire · cap 4%'],
-      ['Avg R:R',d.avgRR!=null?'1 : '+d.avgRR:'—','target ≥1 : 2'],
-      ['Profit factor',st.profitFactor!=null?''+st.profitFactor:'—','gross W ÷ gross L'],
-      ['Max drawdown',st.maxDrawdownPct!=null?'−'+st.maxDrawdownPct+'% of equity':'—','realized equity path'],
-      ['Avg winner / loser',st.avgWinPct!=null?`+${st.avgWinPct}% / ${st.avgLossPct}%`:'—','net expectancy after costs'],
-      ['Max consec. losses',d.maxConsecLosses??'—','drawdown control'],
-      ['Sharpe (per-trade)',st.sharpeR!=null?''+st.sharpeR:'—','SQN = Sharpe × √N'],
-      ['Alpha vs market',st.avgAlphaPct!=null?(st.avgAlphaPct>=0?'+':'')+st.avgAlphaPct+'%'+(st.avgAlphaCI?` <span class="sub" style="font-size:9px">CI ${st.avgAlphaCI.lo}..${st.avgAlphaCI.hi}</span>`:''):'—','excess over universe drift · 95% CI'],
-      ['Journal coverage',(d.journalCoverage??100)+'%','every trade synopsized'],
       ['Prospective archive',st.signalsArchived!=null?`${st.signalsArchived} signals · ${st.archiveRuns} runs`:'—','append-only · never rewritten'],
       ...(evals&&evals.stats&&evals.stats.n?[
         ['Signal hit rate',evals.stats.hitRate24h+'%','TP-before-SL within 24h · all '+evals.stats.n+' evaluated'],
@@ -626,14 +456,7 @@ async function render(){
       ]:[]),
       ...(corr&&corr.meanBoardCorr!=null?[['Board coupling',corr.meanBoardCorr,'mean pairwise corr · high = diversification is an illusion']]:[]),
       ...(o.regime?[['Tape regime',o.regime+' · '+(o.mktType||''),'market SQN '+(o.marketSQN??'—')+' · ATR '+(o.atrPct??'—')+'% · drives leverage + heat']]:[]),
-      ...(st.rDist?[['R-distribution',Object.entries(st.rDist).map(([k,v])=>`${k}:${v}`).join(' · '),'the system IS this shape — needs a ≥+2R tail']]:[]),
-      ...(st.capturePct!=null?[['Capture ratio',st.capturePct+'%','of peak favorable excursion banked · forensic leak metric']]:[]),
-      ...(byV.length?[['By engine version',byV.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'ruleset-comparable results']]:[]),
-      ...(byG.length?[['By grade',byG.map(([k,v])=>`${k}: ${v.winRate}% (${v.n})`).join(' · '),'does grading predict?']]:[]),
-      ...(st.costDrag?[['Cost decomposition',`gross ${st.costDrag.grossPct>=0?'+':''}${st.costDrag.grossPct}% → net ${st.costDrag.netPct>=0?'+':''}${st.costDrag.netPct}%`,`fees ate ${st.costDrag.feesPct}% · funding ${st.costDrag.fundingPct>=0?'+':''}${st.costDrag.fundingPct}% over ${st.costDrag.n} trades`]]:[]),
-      ...(st.kellyPct!=null?[['Kelly ceiling',st.kellyPct+'% of equity','theoretical max bet the realized record supports · we risk 1%']]:[]),
-      ...(st.monteCarlo?[['Monte-Carlo',`P5 ${st.monteCarlo.p5>=0?'+':''}${st.monteCarlo.p5}% · med ${st.monteCarlo.p50>=0?'+':''}${st.monteCarlo.p50}% · P95 ${st.monteCarlo.p95>=0?'+':''}${st.monteCarlo.p95}%`,`${st.monteCarlo.sims} resamples · P(lose)=${st.monteCarlo.pLoss}% · P(DD>10%)=${st.monteCarlo.pDdOver10}%`]]:[]),
-      ...(st.ddKill?[['Kill-switch',st.ddKill.active?'STANDING DOWN':'armed · DD '+st.ddKill.currentPct+'%','entries halt at ≥'+st.ddKill.thresholdPct+'% realized equity drawdown']]:[]),
+...(st.ddKill?[['Kill-switch',st.ddKill.active?'STANDING DOWN':'armed · DD '+st.ddKill.currentPct+'%','entries halt at ≥'+st.ddKill.thresholdPct+'% realized equity drawdown']]:[]),
     ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
     // ---- evidence/validation panel: prospective record of the CURRENT
     // frozen ruleset only — v0.x legacy results deliberately excluded ----
@@ -694,8 +517,7 @@ async function render(){
       const f=v=>v==null?'—':(v>=0?'+':'')+v+'%';
       const cls=v=>v==null?'':v>=0?'up':'dn';
       $('benchVs').innerHTML=[
-        ['Sentinel engine',bench.sentinelPct,'trading ledger equity · vault sweeps retained separately'],
-        ['System combined',bench.combinedPct,'trading + vault basket'],
+        ['Sentinel engine',bench.sentinelPct,'real Bitget account equity · since first observation'],
         ['BTC buy & hold',bench.btcHoldPct,'the benchmark to beat'],
         ['BTC/ETH/SOL basket',bench.basketHoldPct,'equal-weight passive'],
         ['Naive top-3 board',bench.naiveBoardPct,`mechanical 1h holds · ${bench.naiveRuns||0} runs`],
@@ -717,11 +539,10 @@ async function render(){
     // ---- live execution panel — real exchange state, never the sim ----
     {
       const lp=$('livePanel');
-      const src=liveLedger||liveShadow;
-      if(src&&(src.mode==='live'||src.mode==='demo'||src.mode==='shadow')){
+      const src=liveLedger;
+      if(src&&src.mode==='live'){
         lp.style.display='block';
-        const isSim=src.mode==='shadow';
-        $('liveMode').innerHTML=`<b style="color:${src.mode==='live'?'var(--red)':src.mode==='demo'?'var(--warn,#ffd166)':'var(--mut)'};letter-spacing:.12em;font-size:10px">${src.mode.toUpperCase()}${isSim?' — intent only, nothing sent':''}</b>`;
+        $('liveMode').innerHTML=`<b style="color:var(--red);letter-spacing:.12em;font-size:10px">LIVE</b>`;
         const pos=(src.positionsAfter||src.positions||[]);
         $('liveStats').innerHTML=[
           ['Equity',src.equityUsd!=null?'$'+src.equityUsd+' USD':'—',src.mode],
@@ -729,8 +550,7 @@ async function render(){
           ['Actions',(src.actions||[]).length,'this execution run'],
           ['Errors',(src.errors||[]).length,'any failure is listed, not hidden'],
         ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
-        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('')
-          ||(isSim?((src.plan&&src.plan.orders||[]).map(o=>`<div class="ledger-row"><span class="sub">would open <b>${o.symbol}</b> ${o.direction} ~$${o.notionalUsd} @ ${o.leverage}x · TP×3 + trail stop</span></div>`).join('')||'<div class="sub">shadow plan: no qualifying orders this run</div>'):'');
+        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('');
         // risk rails — the kill-switches and limits, made visible instead
         // of implied. External teardown flagged them as "not visible".
         if(src.risk){
@@ -792,84 +612,8 @@ async function render(){
       const tc=i.tone==='bull'?'var(--grn)':i.tone==='bear'?'var(--red)':'var(--mut)';
       return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a class="al" href="${i.link}" target="_blank" rel="noopener">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
     }).join('')||'<div class="sub">wire quiet — no fresh headlines in the last 24h</div>';
-    // full trade journal — every entry, all fields
-    const dur=e=>{const end=e.exitTs||Date.now();const m=Math.round((end-e.ts)/6e4);return m<60?m+'m':Math.round(m/60)+'h '+m%60+'m'};
-    // account-scale mode: render $ P&L at the user's real size (10% notional/trade)
-    if($('acctIn')&&document.activeElement!==$('acctIn'))$('acctIn').value=acctN||'';
-    const acctD=(pnl,not)=>acctN?' <span class="sub">$'+(pnl/100*acctN*0.1*((not??1000)/1000)).toFixed(2)+' AUD</span>':'';
-    if(acctN){
-      // sequential compounding on closed trades, engine sizing (10%/trade)
-      let eq=acctN;
-      closed.sort((a,b)=>(a.exitTs||0)-(b.exitTs||0)).forEach(e=>eq*=1+0.1*e.pnlPct/100);
-      $('acctNote').textContent=`→ realized $${eq.toFixed(2)} AUD (${((eq/acctN-1)*100).toFixed(2)}%)`;
-    } else $('acctNote').textContent='';
-    $('journal').innerHTML=(ledger.entries||[]).map(e=>{
-      const mark=e.status==='open'?(e.lastPrice!=null?'$'+fmtP(e.lastPrice)+' USD':'—'):(e.exitPrice!=null?'$'+fmtP(e.exitPrice)+' USD':'—');
-      const flags=(e.ver?`<span class="mbadge" title="engine ruleset version">${e.ver}</span>`:'')
-        +(e.lockPnl!=null?'<span class="mbadge">LOCK50</span>':'')+(e.beStop?'<span class="mbadge">BE-STOP</span>':'')
-        +(e.tps?`<span class="mbadge" title="split take-profit ladder">${e.tps.map(t=>t.hit?'TP✓':'TP·').join('')}</span>`:'')
-        +(e.stopAt===0?'<span class="mbadge" title="stop moved to entry — trade cannot lose">ZERO-RISK</span>':'')
-        +(e.stopAt>0?`<span class="mbadge" title="stop locked in +${e.stopAt}% profit">LOCKED+${e.stopAt}%</span>`:'');
-      const pnlCls=e.pnlPct==null?'':e.pnlPct>0?'up':e.pnlPct<0?'dn':'';
-      const live=e.status==='open'?1:0;
-      const key=e.asset+':'+e.ts;
-      const bk=BOOKS[e.strategy];
-      return `<tr class="jrow" data-j="${key}" tabindex="0"><td>${LK(BG(e.asset),'<b>'+e.asset+'</b>')}${e.cls&&e.cls!=='crypto'?` <span class="mbadge cls-${e.cls}" title="USDT-M ${e.cls} perpetual">${e.cls.toUpperCase()}</span>`:''}</td>
-      <td><span class="tag ${e.direction==='LONG'?'long':'short'}">${e.direction}</span></td>
-      <td class="grade">${e.grade||'—'}</td><td class="sub">${bk&&bk.u?LK(bk.u,e.strategy):e.strategy||''} <span class="cf">${(()=>{const cl=confList(e);return cl.filter(c=>c[0]==='sup').length+'✓/'+cl.filter(c=>c[0]==='con').length+'✗'})()}</span></td>
-      <td class="num">$${fmtP(e.entry)} USD</td><td class="num" ${live?`data-mark data-sym="${e.asset}USDT"`:''}>${mark}</td>
-      <td class="num">${e.targetPrice?'$'+fmtP(e.targetPrice)+' USD <span class="sub">'+e.targetPct+'%</span>':'—'}</td>
-      <td class="num ${pnlCls}" ${live?`data-pnl data-sym="${e.asset}USDT" data-entry="${e.entry}" data-dir="${e.direction}" data-banked="${e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0)}" data-rem="${e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0)+(e.runner||0):(e.lockPnl!=null?0.5:1)}" data-fee="${e.feesPaid!=null?e.feesPaid+0.06:(e.feePct??0.12)}" data-fr="${e.funding?e.funding.ratePct:''}" data-fc="${e.carry??''}" data-ts="${e.ts}" data-not="${e.notional??1000}" data-tgt="${e.targetPct}" data-stop="${e.tps?(e.stopAt??-(e.stopPct??Math.max(4,e.targetPct))):-(e.stopPct??Math.max(4,e.targetPct))}"`:''}>${e.pnlPct!=null?(e.pnlPct>=0?'+':'')+e.pnlPct+'%'+acctD(e.pnlPct,e.notional):'—'}</td>
-      <td><span class="st ${e.status}" ${live?'data-st':''}>${e.status.toUpperCase()}</span>${flags}</td>
-      <td class="sub">${ago(e.ts)} ago</td><td class="sub num">${dur(e)}</td></tr>`
-      +`<tr class="jsyn" data-js="${key}"${JOPEN.has(key)?'':' hidden'}><td colspan="11">
-      <div class="chwrap"><div><div class="chlab">Before · <b>setup tape</b> — 48h into entry · dealing range/EQ · fib on last impulse leg${e.harmonic?' · '+e.harmonic.type+' XABCD':''}</div><div class="cht" data-chb></div></div>
-      <div><div class="chlab">After · <b>outcome tape</b> — entry → ${e.status==='open'?'now':'exit'} · ladder fills marked</div><div class="cht" data-cha></div></div></div>
-      <div class="syn">${synopsis(e)}</div></td></tr>`;
-    }).join('')||'<tr><td colspan="11" class="err">no tracked signals yet</td></tr>';
-    JOPEN.forEach(k=>{CHARTED.delete(k);mountJournalCharts(k)});
+
   }
-  if(vault){
-    const h=vault.holdings||{};
-    const vScale=acctN?acctN/10000:1;
-    const vCur=acctN?'AUD':'USD';
-    const vSfx=acctN?` <span class="sub">@ $${acctN} AUD acct</span>`:'';
-    $('vaultStats').innerHTML=[
-      ['Basket value',`<span data-vtotal>$${((vault.valueUsd??0)*vScale).toFixed(2)} ${vCur}</span>${vSfx}`],['Deposited','$'+((vault.depositedUsd??0)*vScale).toFixed(2)+' '+vCur],['Vault P&L',(vault.pnlUsd>=0?'+':'')+'$'+((vault.pnlUsd??0)*vScale).toFixed(2)+' '+vCur]
-    ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
-    const rows=Object.entries(h).map(([s,x])=>
-      `<div class="ledger-row"><span>${LK(BG(s),'<b>'+s+'</b>')} <span class="sub">${x.units} units · $${fmtP(x.price)} USD</span></span><span class="num" data-vunits="${x.units}" data-sym="${s}USDT">$${(x.valueUsd*vScale).toFixed(2)} ${vCur}</span></div>`).join('');
-    const fills=(vault.fills||[]).slice(0,5).map(f=>
-      `<div class="ledger-row"><span class="sub">+ $${(f.usd*vScale).toFixed(2)} ${vCur} from ${LK(BG(f.asset),f.asset)} ${f.status}</span><span class="sub">${ago(f.ts)} ago</span></div>`).join('');
-    $('vaultRows').innerHTML=rows+(fills?`<div class="h" style="margin-top:8px;font-size:10px;color:var(--mut);letter-spacing:.14em">RECENT SWEEPS</div>`+fills:'');
-    if(!vault.fills||!vault.fills.length)$('vaultRows').innerHTML='<div class="sub">no profitable closes yet — first win sweeps 20% into the basket</div>';
-  }
-  // ---- paper wallet: trading acct ($1k AUD start) + vault ($0 AUD start) ----
-  const acctN2=parseFloat(localStorage.acctSize||'');
-  const acct=(acctN2>0)?acctN2:1000;
-  const closedW=(ledger?ledger.entries||[]:[]).filter(e=>e.status!=='open');
-  let eqR=acct;
-  // vault sweep = 20% of realised wins moves OFF the trading table — trading
-  // equity compounds only the retained 80%, so trading+vault never
-  // double-counts the swept portion. Losses are borne fully by trading.
-  closedW.forEach(e=>{const p=e.pnlPct??0;eqR*=1+(p/100)*((e.notional??1000)/10000)*(p>0?0.8:1)});
-  OPENPOS.length=0;
-  ((ledger&&ledger.entries)||[]).forEach(e=>{if(e.status==='open')OPENPOS.push({sym:e.asset+'USDT',entry:e.entry,dir:e.direction,not:e.notional??1000,margin:e.margin??(e.lev?e.notional/e.lev:e.notional??1000),lock:e.lockPnl??null,pnl:e.pnlPct,
-    banked:e.tps?e.tps.filter(t=>t.hit).reduce((a,t)=>a+t.frac*t.pnl,0):(e.lockPnl!=null?e.lockPnl/2:0),
-    rem:e.tps?e.tps.filter(t=>!t.hit).reduce((a,t)=>a+t.frac,0)+(e.runner||0):(e.lockPnl!=null?0.5:1),
-    fee:e.feesPaid!=null?e.feesPaid+0.06:(e.feePct??0.12),fr:e.funding?e.funding.ratePct:0,fc:e.carry,ts:e.ts})});
-  const openMark=OPENPOS.reduce((a,o)=>a+(o.pnl??0)/100*o.not*(acct/10000),0);
-  const depD=OPENPOS.reduce((a,o)=>a+(o.margin??o.not)*(acct/10000),0); // margin posted, not notional
-  const vUsd=((vault&&vault.valueUsd)||0)*(acct/10000);
-  WALLET={acct,realized:eqR,openMark,dep:depD,vault:vUsd};
-  $('walletStats').innerHTML=[
-    ['Equity',`<b class="num" data-weq>$${(eqR+openMark).toFixed(2)} AUD</b>`,'start $'+acct.toLocaleString()+' AUD · PAPER'],
-    ['Cash available',`<span class="num" data-wcash>$${Math.max(0,eqR+openMark-depD).toFixed(2)} AUD</span>`,'margin posted $'+depD.toFixed(0)+' AUD'],
-    ['Realized P&L',`<span class="num ${eqR>=acct?'up':'dn'}">${eqR>=acct?'+':'−'}$${Math.abs(eqR-acct).toFixed(2)} AUD</span>`,closedW.length+' closed · net of 20% vault sweeps'],
-    ['Open marks',`<span class="num ${openMark>=0?'up':'dn'}" data-wopen>${openMark>=0?'+':'−'}$${Math.abs(openMark).toFixed(2)} AUD</span>`,OPENPOS.length+' positions live'],
-    ['Vault wallet',`<span class="num" data-wvault>$${vUsd.toFixed(2)} AUD</span>`,'started $0 AUD · 20% of wins'],
-    ['System total',`<b class="num" data-wsys>$${(eqR+openMark+vUsd).toFixed(2)} AUD</b>`,'trading acct + vault combined'],
-  ].map(([k,v,s])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k} <span class="sub">${s}</span></div></div>`).join('');
   // logic drivers: strategy influence = live signal share + ledger weight
   const BOOKLBL={'Breakout Continuation':'Murphy · Technical Analysis','Volume Surge':'Bulkowski · Chart Patterns','Momentum Breakdown':'Tharp · Super Trader','Oversold Reversal':'Bulkowski · Chart Patterns','Momentum Confluence':'Hill · Think & Grow Rich','Key Level SFP':'Bulkowski · Reversal Doctrine','Elliott W5 Short':'Murphy/Philakone · Terminal Impulse','Elliott W5 Bottom':'Murphy/Philakone · Terminal Impulse','Wyckoff Spring':'Wyckoff/Bulkowski · Accumulation','Wyckoff JTC':'Wyckoff · Jump the Creek','Wyckoff Upthrust':'Wyckoff/Bulkowski · Distribution','Wyckoff Ice Break':'Wyckoff · Fall Through Ice','SMC CHoCH':'LuxAlgo · Smart Money','SMC BOS':'LuxAlgo · Smart Money','PA Quartile':'LuxAlgo · EQ Levels','Momentum Ignition':'Hill · Commitment','VWAP Reversion':'Lepus/Jackson · Mechanical'};
   const sigN={};(scan.signals||[]).forEach(s=>sigN[s.strategy]=(sigN[s.strategy]||0)+1);
@@ -913,7 +657,7 @@ function toggleRow(tr){
 // repaint price-derived cells on every WS tick — no refetch, no refresh
 function livePaint(){
   const L=window.__live;if(!L)return;
-  document.querySelectorAll('[data-px],[data-mark]').forEach(el=>{
+  document.querySelectorAll('[data-px]').forEach(el=>{
     const p=L.price(el.dataset.px||el.dataset.sym);if(p)el.textContent='$'+fmtP(p)+' USD';
   });
   document.querySelectorAll('[data-chg]').forEach(el=>{
@@ -922,51 +666,7 @@ function livePaint(){
     el.textContent=(c>=0?'+':'')+c.toFixed(2)+'%';
     el.className='num '+(c>=0?'up':'dn');
   });
-  document.querySelectorAll('[data-pnl]').forEach(el=>{
-    const p=L.price(el.dataset.sym);if(!p)return;
-    const entry=+el.dataset.entry;
-    const live=(el.dataset.dir==='LONG'?(p-entry)/entry:(entry-p)/entry)*100;
-    // blended mark = banked rungs + live remainder − fees + funding carry
-    const banked=+el.dataset.banked||0,rem=+el.dataset.rem||1,fee=+el.dataset.fee||0;
-    const fr=+el.dataset.fr||0,fc=el.dataset.fc,ts=+el.dataset.ts;
-    const fund=fc&&fc!=='flat'?fr*((Date.now()-ts)/2.88e7)*(fc==='earn'?1:-1)*rem:0;
-    const pnl=banked+rem*live-fee+fund;
-    const not=+el.dataset.not||1000,acctN=parseFloat(localStorage.acctSize||'');
-    el.innerHTML=(pnl>=0?'+':'')+pnl.toFixed(2)+'%'+(acctN>0?` <span class="sub">$${(pnl/100*acctN*not/10000).toFixed(2)} AUD</span>`:'');
-    el.className='num '+(pnl>0?'up':pnl<0?'dn':'');
-    const st=el.closest('tr')&&el.closest('tr').querySelector('[data-st]');
-    if(st&&st.textContent==='OPEN'){
-      const tgt=+el.dataset.tgt||4,stopL=+el.dataset.stop;
-      if(live>=tgt){st.textContent='TARGET ✓';st.className='st won'}
-      else if(isFinite(stopL)&&live<=stopL){st.textContent=stopL>0?'TRAIL ✓':'STOP ✓';st.className='st stopped'}
-    }
-  });
-  const aN=parseFloat(localStorage.acctSize||'');
-  const vSc=aN>0?aN/10000:1,vCur=aN>0?' AUD':' USD';
-  let vRaw=0;document.querySelectorAll('[data-vunits]').forEach(el=>{
-    const p=L.price(el.dataset.sym);
-    if(p){const raw=(+el.dataset.vunits)*p;vRaw+=raw;el.textContent='$'+(raw*vSc).toFixed(2)+vCur}
-  });
-  const ve=document.querySelector('[data-vtotal]');if(ve&&vRaw)ve.textContent='$'+(vRaw*vSc).toFixed(2)+vCur;
-  // live paper-wallet marks — wallet is always AUD (acct defaults 1000 AUD)
-  const W=WALLET;
-  if(W&&W.acct){
-    let om=0;
-    OPENPOS.forEach(o=>{const p=L.price(o.sym);if(!p)return;const live=(o.dir==='LONG'?(p-o.entry)/o.entry:(o.entry-p)/o.entry)*100;
-      const fund=o.fc&&o.fc!=='flat'?o.fr*((Date.now()-o.ts)/2.88e7)*(o.fc==='earn'?1:-1)*o.rem:0;
-      const pc=(o.banked??(o.lock!=null?o.lock/2:0))+(o.rem??(o.lock!=null?0.5:1))*live-(o.fee??0)+fund;
-      om+=pc/100*o.not*(W.acct/10000)});
-    const we=document.querySelector('[data-weq]');if(we)we.textContent='$'+(W.realized+om).toFixed(2)+' AUD';
-    const wo=document.querySelector('[data-wopen]');if(wo){wo.textContent=(om>=0?'+':'−')+'$'+Math.abs(om).toFixed(2)+' AUD';wo.className='num '+(om>=0?'up':'dn')}
-    const wc=document.querySelector('[data-wcash]');if(wc)wc.textContent='$'+Math.max(0,W.realized+om-W.dep).toFixed(2)+' AUD';
-    const wv=document.querySelector('[data-wvault]');if(wv&&vRaw)wv.textContent='$'+(vRaw*W.acct/10000).toFixed(2)+' AUD';
-    // system total must repaint too — it was the only wallet cell left stale
-    const ws=document.querySelector('[data-wsys]');if(ws)ws.textContent='$'+(W.realized+om+(vRaw?vRaw*W.acct/10000:W.vault)).toFixed(2)+' AUD';
-  }
 }
-document.getElementById('acctIn').addEventListener('change',e=>{
-  localStorage.acctSize=e.target.value;render();
-});
 document.getElementById('sigBody').addEventListener('click',e=>{
   const tr=e.target.closest('tr.sig');if(tr)toggleRow(tr);
 });
@@ -974,8 +674,6 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
   const tr=e.target.closest('tr.sig');
   if(tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleRow(tr)}
 });
-const JOPEN=new Set();
-const CHARTED=new Set();
 async function candlesFor(asset,fromMs,toMs,gran){
   // paginate — a single 200-bar page truncated 15m charts on 50h+ trades,
   // silently cutting the exit end of the trade off the replay chart
@@ -1090,36 +788,6 @@ function drawChart(el,e,cs,after){
   s.setMarkers(marks.sort((a,b)=>a.time-b.time));
   chart.timeScale().fitContent();
 }
-async function mountJournalCharts(key){
-  if(CHARTED.has(key)||!window.LightweightCharts)return;
-  const row=document.querySelector(`tr.jsyn[data-js="${key}"]`);
-  const e=(LAST.ledger&&LAST.ledger.entries||[]).find(x=>x.asset+':'+x.ts===key);
-  if(!row||row.hidden||!e)return;
-  CHARTED.add(key);
-  // before: the 48h setup tape the engine read, ending at the entry candle —
-  // no post-entry leakage into the "what it saw" view
-  const afterEnd=e.exitTs||Date.now();
-  const span=afterEnd-e.ts;
-  // after: granularity follows hold time so a 90-minute trade shows the
-  // actual path, not two fat hourly candles
-  const aGran=span<=10*3600e3?'5m':span<=72*3600e3?'15m':'1H';
-  const granMs=aGran==='5m'?300e3:aGran==='15m'?900e3:3600e3;
-  const aPad=Math.max(3*granMs,span*0.08);
-  const [csB,csA]=await Promise.all([
-    candlesFor(e.asset,e.ts-48*3600e3,e.ts+2*3600e3,'1H').catch(()=>[]),
-    candlesFor(e.asset,e.ts-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
-  const eb=row.querySelector('[data-chb]'),ea=row.querySelector('[data-cha]');
-  // setup tape = bars fully CLOSED at entry — the 1h bar containing the
-  // entry print leaks up to 59min of post-entry price into "what it saw"
-  if(eb)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);
-  if(ea)drawChart(ea,e,csA,true);
-}
-document.getElementById('journal').addEventListener('click',e=>{
-  const tr=e.target.closest('tr.jrow');if(!tr)return;
-  const d=document.querySelector(`tr.jsyn[data-js="${tr.dataset.j}"]`);
-  if(d){d.hidden=!d.hidden;tr.classList.toggle('open',!d.hidden);
-    d.hidden?JOPEN.delete(tr.dataset.j):(JOPEN.add(tr.dataset.j),mountJournalCharts(tr.dataset.j))}
-});
 // pointer-reactive panel glow — one rAF-throttled listener feeds --mx/--my
 let mxRaf=0;
 addEventListener('pointermove',e=>{if(mxRaf)return;mxRaf=requestAnimationFrame(()=>{mxRaf=0;const p=e.target&&e.target.closest?e.target.closest('.panel'):null;if(p){const r=p.getBoundingClientRect();p.style.setProperty('--mx',(e.clientX-r.left)+'px');p.style.setProperty('--my',(e.clientY-r.top)+'px')}})},{passive:true});
