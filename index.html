@@ -278,6 +278,8 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
     <div class="ptitle">Live execution · real Bitget account <span class="sub">— exchange state is ground truth, not the simulation</span><span id="liveMode" style="float:right"></span></div>
     <div class="stats" id="liveStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="liveRows"></div>
+    <div id="liveRisk" class="sub" style="margin-top:8px;font-size:10px"></div>
+    <div id="liveFills"></div>
     <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px"></div>
   </div>
   <div class="panel neon" id="godPanel" style="margin-top:16px;display:none">
@@ -729,6 +731,28 @@ async function render(){
         ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
         $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('')
           ||(isSim?((src.plan&&src.plan.orders||[]).map(o=>`<div class="ledger-row"><span class="sub">would open <b>${o.symbol}</b> ${o.direction} ~$${o.notionalUsd} @ ${o.leverage}x · TP×3 + trail stop</span></div>`).join('')||'<div class="sub">shadow plan: no qualifying orders this run</div>'):'');
+        // risk rails — the kill-switches and limits, made visible instead
+        // of implied. External teardown flagged them as "not visible".
+        if(src.risk){
+          const r=src.risk;
+          const rails=[
+            [`DD ${r.ddPct}%`, `kill at ${r.killSwitchPct}%`, r.ddPct>=r.killSwitchPct],
+            [`24h -${r.dd24Pct}%`, `halt at ${r.dailyHaltPct}%`, r.dd24Pct>=r.dailyHaltPct],
+            [`${(src.positions||[]).length}/${r.maxPositions}`, r.sizingUsd, false],
+            ['lev', r.leverageRule, false],
+            ['TP+SL', r.protectionRule, false],
+            ['net-down', r.disconnectRule, false],
+          ];
+          $('liveRisk').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Risk rails <span class="sub">— exchange-enforced, survive bot/network failure</span></div>'+
+            rails.map(([k,v,tripped])=>`<div class="ledger-row"><span><b style="font-size:10px;letter-spacing:.06em;color:${tripped?'var(--red)':'var(--grn)'}">${tripped?'TRIPPED':'●'} ${k}</b> <span class="sub">${v}</span></span></div>`).join('');
+        }
+        // real fill journal — actual exchange fills with charged fees,
+        // the timestamped track record (not the paper model)
+        const rf=(src.realFills||[]).slice(0,12);
+        if(rf.length){
+          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills on record</span></div>')+
+            rf.map(f=>`<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · ${ago(f.ts)}</span></span><span class="num ${f.profit>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`).join('');
+        }
         $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
       }
     }

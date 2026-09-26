@@ -1415,6 +1415,14 @@ async function main() {
     s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
   const tradeScoreOf = (s) => s.score - carryPenaltyOf(s);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
+  // taker slippage beyond the half-spread already priced on entry — market
+  // exits (stops, trails, time-outs, reversals, liq) never fill the level.
+  // External teardown flagged "paper fills lie": without this the ledger
+  // harvests unrealistically good exits on every stop.
+  const SLIP_PCT = 0.08;
+  const SLIPPED_EXITS = new Set([
+    'stopped', 'trailed', 'breakeven', 'liquidated', 'reversed', 'expired', 'clustered',
+  ]);
   const LEVERAGE = 10; // 10x isolated perpetuals
   const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
   let ledger = { entries: [], stats: {} };
@@ -1620,8 +1628,8 @@ async function main() {
     ) {
       const fillPx =
         s.spreadPct != null
-          ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200))
-          : s.entryPrice;
+          ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200 + SLIP_PCT / 100))
+          : s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (SLIP_PCT / 100));
       ledger.entries.unshift({
         asset: s.asset,
         cls: s.cls ?? 'crypto',
@@ -1806,14 +1814,17 @@ async function main() {
         ? (e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
         : 0;
     const settle = (status, exitPx, rawPnl, tsC) => {
+      // market exits slip past the level — only limit TP fills ('won',
+      // ladder rungs) settle at their quoted price
+      const slip = SLIPPED_EXITS.has(status) ? SLIP_PCT : 0;
       e.status = status;
-      e.exitPrice = exitPx;
+      e.exitPrice = slip ? exitPx * (1 - (sgn * slip) / 100) : exitPx;
       e.exitTs = tsC ?? now;
       // the closing print is one more taker fill on the residual fraction
       e.feesPaid = (e.feesPaid ?? fee - FEE_PCT / 2) + FEE_PCT / 2;
       const fp = fundPnlNow(tsC);
       e.fundingPnl = pct(fp);
-      e.pnlPct = pct(blended(rawPnl) - e.feesPaid + fp);
+      e.pnlPct = pct(blended(rawPnl) - slip - e.feesPaid + fp);
       // alpha vs market drift: did the signal beat just riding the universe?
       if (e.mkt0 != null) {
         const drift = medianChangePct - e.mkt0;

@@ -162,6 +162,16 @@ const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
       triggerType: 'mark_price', size: String(size), holdSide,
     },
   });
+// recent fills — the REAL trade journal: every actual fill the exchange
+// recorded, deduped into state/real-fills.json so the public ledger shows
+// real entries/exits with real fees, not just the sim's paper model
+const getFills = () =>
+  api('GET', '/api/v2/mix/order/fills', {
+    qs: `productType=${PRODUCT}&limit=100`,
+  }).then((d) => {
+    const l = d?.fillList || d?.fills || d;
+    return Array.isArray(l) ? l : [];
+  });
 // full-position close — dedicated endpoint, works in both position modes
 // (place-order close got 22002 on hedge mode even with holdSide)
 const closePosition = (symbol, holdSide) =>
@@ -382,15 +392,45 @@ async function main() {
 
   // ---- real-equity drawdown guard: the kill-switch keys off the ACTUAL
   // account equity curve (peak persisted across runs), not the sim ledger —
-  // sim bookkeeping diverges from exchange truth and must not gate money
+  // sim bookkeeping diverges from exchange truth and must not gate money.
+  // The same file keeps a rolling equity tape so a rolling-24h loss halt
+  // exists too — max daily drawdown is the rail the teardown flagged missing.
   const peakPath = path.join(__dirname, '..', 'state', 'equity-peak.json');
-  let eqPeak = equityUsd;
+  let eqTrack = { peak: equityUsd, samples: [] };
   try {
-    eqPeak = Math.max(equityUsd, +JSON.parse(fs.readFileSync(peakPath, 'utf8')).peak || 0);
+    const prior = JSON.parse(fs.readFileSync(peakPath, 'utf8'));
+    eqTrack.peak = Math.max(equityUsd, +prior.peak || 0);
+    eqTrack.samples = Array.isArray(prior.samples) ? prior.samples : [];
   } catch {}
-  try { fs.writeFileSync(peakPath, JSON.stringify({ peak: eqPeak, at: new Date().toISOString() })); } catch {}
-  const realDdPct = eqPeak > 0 ? ((eqPeak - equityUsd) / eqPeak) * 100 : 0;
+  const nowMs = Date.now();
+  eqTrack.samples.push([nowMs, equityUsd]);
+  eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
+  try { fs.writeFileSync(peakPath, JSON.stringify({ peak: eqTrack.peak, samples: eqTrack.samples, at: new Date().toISOString() })); } catch {}
+  const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - equityUsd) / eqTrack.peak) * 100 : 0;
+  const peak24 = Math.max(equityUsd, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
+  const dd24 = peak24 > 0 ? ((peak24 - equityUsd) / peak24) * 100 : 0;
   state.ddPct = round(realDdPct, 2);
+  state.dd24Pct = round(dd24, 2);
+  const entriesBlocked =
+    realDdPct >= 8 ? `kill-switch (real equity dd ${state.ddPct}% >= 8%)`
+    : dd24 >= 6 ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= 6%)`
+    : null;
+
+  // published risk rails — the machine-readable answer to "where are the
+  // kill-switches / position limits / disconnect handling" — rendered on
+  // the dashboard and exported with the ledger.
+  state.risk = {
+    sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each)`,
+    maxPositions: MAX_POSITIONS,
+    leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
+    killSwitchPct: 8,
+    dailyHaltPct: 6,
+    ddPct: state.ddPct,
+    dd24Pct: state.dd24Pct,
+    protectionRule: 'exactly one TP + one SL per position; orphan positions get protection synthesized; entry emergency-closes if protection placement fails — never naked',
+    rebalanceRule: 'a position holding > slot margin gets partially closed to free balance for other slots',
+    disconnectRule: 'TP/SL are exchange-side plan orders — a VPS/network outage cannot leave a position unprotected',
+  };
 
   // ---- margin rebalance: a single position may not hold more margin than
   // its slot share (equity / TARGET_POSITIONS). Oversized positions get a
@@ -462,10 +502,10 @@ async function main() {
     }
   }
 
-  // ---- entries: only when the real drawdown guard is clear and capacity
+  // ---- entries: only when the real drawdown guards are clear and capacity
   // allows — plan.killSwitch is sim-derived and logged for reference only ----
-  if (realDdPct >= 8) {
-    state.actions.push(`kill-switch active (real equity dd ${state.ddPct}%) — no new entries`);
+  if (entriesBlocked) {
+    state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
     let opened = 0;
     for (const o of plan.orders) {
@@ -571,6 +611,42 @@ async function main() {
         }
       }
     }
+  }
+
+  // ---- real fill journal: pull the exchange's fill list, dedupe into a
+  // persistent store, expose the last 50 on the ledger. This is the actual
+  // track record — fees and profits as charged, not modeled.
+  try {
+    const fillsPath = path.join(__dirname, '..', 'state', 'real-fills.json');
+    let store = { fills: [] };
+    try { store = JSON.parse(fs.readFileSync(fillsPath, 'utf8')); } catch {}
+    if (!Array.isArray(store.fills)) store.fills = [];
+    const seen = new Set(store.fills.map((f) => f.tradeId));
+    let added = 0;
+    for (const f of await getFills().catch(() => [])) {
+      const id = f.tradeId || f.fillId || `${f.orderId}:${f.cTime}`;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      store.fills.unshift({
+        tradeId: id,
+        symbol: f.symbol,
+        side: f.side,
+        price: +f.price,
+        size: +f.size,
+        fee: +(f.fee ?? f.totalFee ?? 0),
+        profit: +(f.profit ?? 0),
+        ts: +(f.cTime ?? f.uTime ?? Date.now()),
+      });
+      added++;
+    }
+    if (added) {
+      store.fills = store.fills.slice(0, 400);
+      fs.writeFileSync(fillsPath, JSON.stringify(store));
+    }
+    state.realFills = store.fills.slice(0, 50);
+    state.realFillCount = store.fills.length;
+  } catch (e) {
+    state.errors.push(`fills journal: ${e.message}`);
   }
 
   // final position snapshot — exchange state is the ledger's ground truth
