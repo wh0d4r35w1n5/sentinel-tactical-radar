@@ -807,7 +807,13 @@ async function main() {
     const n = v.n || 0;
     if (n < EVAL_MIN_N) { stratBoost[k] = 0; continue; }
     const shrunkAlpha = (v.avgAlpha24h ?? 0) * (n / (n + 10));
-    if (shrunkAlpha < -0.6 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
+    // hit-rate gate toward the 70% target: a strategy with a real record
+    // (n>=20) whose Bayesian-shrunk hit rate can't clear 40% is a proven
+    // bleeder — it keeps emitting board signals for evidence but can't take
+    // positions. Prior: Beta(15,15) shrunk toward 50%.
+    const shrunkHit =
+      v.hitRate == null ? 50 : (v.hitRate * n + 50 * 15) / (n + 15);
+    if (shrunkAlpha < -0.6 || shrunkHit < 40 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
       stratBlock.add(k);
       stratBoost[k] = 0;
     } else {
@@ -1673,7 +1679,14 @@ async function main() {
     const counter =
       (dirUp && regime === 'risk-off') || (!dirUp && regime === 'risk-on');
     const levTarget = aligned && s.score >= 85 ? 20 : aligned ? 15 : counter ? 5 : 10;
-    const stopWant = s.stopPct ?? Math.max(4, s.targetPct || 4);
+    // stop floor at ~1.8x 1h ATR — a stop inside the noise band gets clipped
+    // by chop before the thesis can play out (PHA 0.5x, ENA 1.0x were the
+    // noise-clipped red rows). Wider stop = same $ risk at lower leverage.
+    const atrFloor = Math.min(4.5, 1.8 * (s.ta?.atrPct ?? 0));
+    const stopWant = Math.max(
+      s.stopPct ?? Math.max(4, s.targetPct || 4),
+      atrFloor
+    );
     const levMax = Math.max(3, Math.floor(80 / (stopWant + 0.64)));
     const lev = Math.max(3, Math.min(levTarget, levMax, s.maxLever ?? 20));
     const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
@@ -1708,6 +1721,14 @@ async function main() {
       s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >= 1.2 &&
       ddNow < ddKillPct &&
       mktAllows(s) &&
+      // SHORT class gate: 7.19% hit rate over n=167 — a sideways/bull-tape
+      // short is the documented bleed. Only structure-validated doctrines
+      // (liquidity raid in premium, key-level SFP) may short a non-bear tape.
+      (s.direction !== 'SHORT' ||
+        mktType.startsWith('bear') ||
+        regime === 'risk-off' ||
+        s.strategy === 'Liquidity Sweep' ||
+        s.strategy === 'Key Level SFP') &&
       !stratBlock.has(s.strategy) &&
       !openFor(s.asset, s.direction) &&
       !proxyBlocked(s) &&
@@ -2276,6 +2297,9 @@ async function main() {
       source: 'signal-eval.json byStrategy · min n=20',
       blocked: [...stratBlock],
       boosts: stratBoost,
+      hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
+      shortGate: 'SHORTs blocked outside bear/risk-off tape except Liquidity Sweep + Key Level SFP',
+      atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
     },
     learning: {
       active: learnActive,

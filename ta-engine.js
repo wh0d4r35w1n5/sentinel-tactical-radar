@@ -896,9 +896,17 @@
       if (eng.mtf && eng.mtf.aligned && eng.mtf.dir === (L ? 'bull' : 'bear')) ev++;
       confluence += Math.min(4, ev);
     }
+    // 14-period true-range % of price — the noise floor a stop must clear
+    var atrSum = 0, atrN = 0;
+    for (var ai = Math.max(1, cs.length - 15); ai < cs.length; ai++) {
+      var ac = cs[ai], ap = cs[ai - 1];
+      atrSum += Math.max(ac.h - ac.l, Math.abs(ac.h - ap.c), Math.abs(ac.l - ap.c));
+      atrN++;
+    }
+    var atrPct = atrN ? +(atrSum / atrN / cs[cs.length - 1].c * 100).toFixed(3) : null;
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
-             smc: mc, eq: eq, eng: eng, liquidity: lq,
+             smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
