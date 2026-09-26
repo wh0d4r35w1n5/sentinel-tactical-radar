@@ -546,6 +546,47 @@ async function main() {
           );
         }
       }
+      // retrofit: an open position still carrying ONE full-size profit plan
+      // gets the staggered ladder — cancel the single TP, replace with
+      // 45/35/20 tranches at 0.55x/1.0x/1.8x of its original target distance.
+      // Too-small positions (<3x contract min) keep their single TP.
+      if (profitPlans.length === 1 && p.size > 0) {
+        const sgn0 = p.side === 'long' ? 1 : -1;
+        const tpTrig = +profitPlans[0].triggerPrice;
+        const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
+        const sp0 = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
+        const pp0 = cm[p.symbol]?.pricePlace ?? 6;
+        const minQty0 = Math.max(
+          cm[p.symbol]?.minTradeNum || 0,
+          (cm[p.symbol]?.minTradeUSDT || 0) / p.entry
+        );
+        if (distPct > 0 && p.size >= 3 * minQty0) {
+          const pid = profitPlans[0].orderId || profitPlans[0].planId || profitPlans[0].id;
+          if (pid) await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+          const tranches = [
+            { frac: 0.45, mult: 0.55 },
+            { frac: 0.35, mult: 1.0 },
+            { frac: 0.20, mult: 1.8 },
+          ];
+          let placed = 0;
+          for (let ti = 0; ti < tranches.length; ti++) {
+            const t = tranches[ti];
+            const tsize = ti === 2
+              ? Math.floor((p.size - placed) * sp0) / sp0
+              : Math.floor(p.size * t.frac * sp0) / sp0;
+            if (tsize < minQty0) continue;
+            placed += tsize;
+            await planOrder(
+              p.symbol, 'profit_plan',
+              round(p.entry * (1 + sgn0 * (distPct * t.mult) / 100), pp0),
+              String(tsize), p.side
+            );
+          }
+          state.actions.push(
+            `laddered ${p.symbol}: single TP split 45/35/20 @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}%`
+          );
+        }
+      }
       if (lossPlan && hasProfit) continue;
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
