@@ -451,9 +451,9 @@ async function main() {
       if (!hasProfit) {
         const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
         try {
-          await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
-        } catch {
           await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side);
+        } catch {
+          await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
         }
         state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
       }
