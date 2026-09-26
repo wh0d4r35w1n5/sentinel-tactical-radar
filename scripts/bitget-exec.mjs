@@ -55,11 +55,12 @@ const PASS = MODE === 'demo'
   : (process.env.BITGET_PASSPHRASE || '');
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
-const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || 10);
-const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
 // SENTINEL_RISK_PROFILE=max: maximum aggression — kill-switch at 35% DD and
 // daily halt at 25% (defaults 8/6). Below those floors the book still stands
 // down — a wipeout spiral isn't risk, it's the end of the book.
+const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
+const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || (RISK_MAX ? 12 : 10));
+const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
 const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const DD_KILL = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
 const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6));
@@ -426,6 +427,7 @@ async function main() {
   // kill-switches / position limits / disconnect handling" — rendered on
   // the dashboard and exported with the ledger.
   state.risk = {
+    riskProfile: RISK_MAX ? 'max' : 'default',
     sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each)`,
     maxPositions: MAX_POSITIONS,
     leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
