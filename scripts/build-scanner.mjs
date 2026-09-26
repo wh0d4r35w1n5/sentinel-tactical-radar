@@ -348,26 +348,27 @@ async function main() {
   const candidates = rows.slice(0, KLINE_CANDIDATES);
   for (const r of rows)
     if (TG_VIP[r.asset] && !candidates.includes(r)) candidates.push(r);
-  for (let i = 0; i < candidates.length; i += 12) {
-    const batch = candidates.slice(i, i + 12);
-    await Promise.all(
-      batch.map(async (r) => {
-        const k = await fetchKlines(r.pair).catch(() => null);
-        if (k) enriched.set(r.asset, k);
-      })
-    );
+  // 6-wide batches with spacing + two backoff retries — the 15s daemon
+  // bursts (klines + funding + OI + eval prefetches) were tripping rate
+  // limits, and the single retry left most of the board with no klines:
+  // empty sparkline, no RSI, ta:null (generic Momentum-* strategy names)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const missing = candidates.filter((r) => !enriched.has(r.asset));
+    if (!missing.length) break;
+    if (attempt) await new Promise((r) => setTimeout(r, 900 * attempt));
+    for (let i = 0; i < missing.length; i += 6) {
+      await Promise.all(
+        missing.slice(i, i + 6).map(async (r) => {
+          const k = await fetchKlines(r.pair).catch(() => null);
+          if (k) enriched.set(r.asset, k);
+        })
+      );
+      if (i + 6 < missing.length) await new Promise((r) => setTimeout(r, 250));
+    }
   }
-  // one retry pass for rate-limited/missed klines
-  const missing = candidates.filter((r) => !enriched.has(r.asset));
-  if (missing.length) {
-    await new Promise((r) => setTimeout(r, 1500));
-    await Promise.all(
-      missing.map(async (r) => {
-        const k = await fetchKlines(r.pair).catch(() => null);
-        if (k) enriched.set(r.asset, k);
-      })
-    );
-  }
+  const klineMiss = candidates
+    .filter((r) => !enriched.has(r.asset))
+    .map((r) => r.asset);
 
   // ---- funding intelligence: perp funding rates + spot/perp basis ----
   const funding = {};
@@ -1229,6 +1230,7 @@ async function main() {
         if (k) enriched.set(s.asset, k);
       })
     );
+    for (const s of boardMissing) if (!enriched.has(s.asset)) klineMiss.push(s.asset);
   }
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
@@ -1238,10 +1240,33 @@ async function main() {
     ...rows.slice(0, KLINE_CANDIDATES).map((r) => r.asset),
     ...signals.map((s) => s.asset),
   ]);
+  // spark persistence: a transient fetch failure must not blank the chart —
+  // carry the previous cycle's spark (up to 25min old) for any asset that
+  // missed klines this round. Fresh data always wins.
+  let prevDetail = { refreshedAt: null, coins: {} };
+  try {
+    prevDetail = JSON.parse(
+      fs.readFileSync(path.join(API, 'coin-detail.json'), 'utf8')
+    );
+  } catch {}
+  const prevFresh =
+    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 25 * 60e3;
   for (const asset of detailAssets) {
     const r = rows.find((x) => x.asset === asset);
     const k = enriched.get(asset);
-    if (!r || !k) continue;
+    if (!r) continue;
+    if (!k) {
+      const prev = prevFresh && prevDetail.coins && prevDetail.coins[asset];
+      if (prev && prev.spark && prev.spark.length) {
+        coinDetail[asset] = {
+          ...prev,
+          price: r.lastPrice,
+          changePct: pct(r.changePct),
+          stale: true,
+        };
+      }
+      continue;
+    }
     coinDetail[asset] = {
       price: r.lastPrice,
       changePct: pct(r.changePct),
@@ -2931,6 +2956,7 @@ async function main() {
     pairs: rows.length,
     signals: signals.length,
     klineEnriched: enriched.size,
+    klineMiss: klineMiss.length ? klineMiss : undefined,
     ledgerOpen: ledger.stats.open,
   };
   fs.writeFileSync(path.join(API, 'health.json'), JSON.stringify(health));
