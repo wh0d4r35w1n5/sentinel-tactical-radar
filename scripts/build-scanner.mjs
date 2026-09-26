@@ -166,7 +166,7 @@ function rsi(closes, period = 14) {
   return 100 - 100 / (1 + rs);
 }
 
-async function fetchKlines(symbol) {
+async function fetchKlines(symbol, light = false) {
   const res = await fetch(
     `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`
   );
@@ -193,7 +193,7 @@ async function fetchKlines(symbol) {
   const candles = rows.map(({ t, o, h, l, c, qv }) => ({ t, o, h, l, c, qv }));
   let candles5m = null;
   try {
-    const r5 = await fetch(
+    const r5 = light ? { ok: false } : await fetch(
       `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`
     );
     if (r5.ok) {
@@ -1232,14 +1232,24 @@ async function main() {
   const pairByAsset = new Map(rows.map((r) => [r.asset, r.pair]));
   const boardMissing = signals.filter((s) => !enriched.has(s.asset));
   if (boardMissing.length) {
-    await Promise.all(
-      boardMissing.map(async (s) => {
-        const pair = pairByAsset.get(s.asset);
-        if (!pair) return;
-        const k = await fetchKlines(pair).catch(() => null);
-        if (k) enriched.set(s.asset, k);
-      })
-    );
+    // same 6-wide batched retry as the candidates pass — a bare Promise.all
+    // burst on a rate-limited cycle blanks the whole board's 48h cells at once
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const missing = boardMissing.filter((s) => !enriched.has(s.asset));
+      if (!missing.length) break;
+      if (attempt) await new Promise((r) => setTimeout(r, 900 * attempt));
+      for (let i = 0; i < missing.length; i += 6) {
+        await Promise.all(
+          missing.slice(i, i + 6).map(async (s) => {
+            const pair = pairByAsset.get(s.asset);
+            if (!pair) return;
+            const k = await fetchKlines(pair, true).catch(() => null);
+            if (k) enriched.set(s.asset, k);
+          })
+        );
+        if (i + 6 < missing.length) await new Promise((r) => setTimeout(r, 250));
+      }
+    }
     for (const s of boardMissing) if (!enriched.has(s.asset)) klineMiss.push(s.asset);
   }
 
@@ -1251,8 +1261,9 @@ async function main() {
     ...signals.map((s) => s.asset),
   ]);
   // spark persistence: a transient fetch failure must not blank the chart —
-  // carry the previous cycle's spark (up to 25min old) for any asset that
-  // missed klines this round. Fresh data always wins.
+  // carry the previous spark (up to 6h old — 42 of 48 hourly bars still
+  // correct, flagged stale) for any asset that missed klines this round.
+  // Fresh data always wins.
   let prevDetail = { refreshedAt: null, coins: {} };
   try {
     prevDetail = JSON.parse(
@@ -1260,7 +1271,7 @@ async function main() {
     );
   } catch {}
   const prevFresh =
-    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 25 * 60e3;
+    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 6 * 3600e3;
   for (const asset of detailAssets) {
     const r = rows.find((x) => x.asset === asset);
     const k = enriched.get(asset);
