@@ -1295,8 +1295,19 @@ async function main() {
       rsi14: Math.round(k.rsi14),
       volRatio: round(k.volRatio, 2),
       spark: k.closes,
+      sparkAt: Date.now(), // fresh-enrich stamp — carries age carried coins
     };
   }
+  // carry-forward: any coin enriched inside its own 6h window stays
+  // renderable even after rotating off the board — the old from-scratch
+  // rebuild deleted exotic-board sparks whenever the board flipped back
+  // to watchlist, and blanks reappeared on every rate-limited re-entry
+  for (const [asset, prev] of Object.entries(prevDetail.coins || {}))
+    if (
+      !coinDetail[asset] && prev && prev.spark && prev.spark.length &&
+      Date.now() - (prev.sparkAt || Date.parse(prevDetail.refreshedAt) || 0) < 6 * 3600e3
+    )
+      coinDetail[asset] = { ...prev, stale: true };
   fs.writeFileSync(
     path.join(API, 'coin-detail.json'),
     JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
