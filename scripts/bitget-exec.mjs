@@ -650,33 +650,33 @@ async function main() {
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
         const sp0 = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
         const pp0 = cm[p.symbol]?.pricePlace ?? 6;
-        const minQty0 = Math.max(
-          cm[p.symbol]?.minTradeNum || 0,
-          (cm[p.symbol]?.minTradeUSDT || 0) / p.entry
-        );
-        if (distPct > 0 && p.size >= 3 * minQty0) {
+        // plan orders accept sub-minimum tranche sizes — no minQty gate.
+        // Cumulative-difference allocation maximizes granularity coverage:
+        // tranche_i = floor(size*cum[i+1]) - floor(size*cum[i]) so rounding
+        // residue lands in the moon bag, not lost. Place tranches BEFORE
+        // cancelling the original TP — the position is never uncovered.
+        if (distPct > 0 && p.size > 0) {
           const pid = profitPlans[0].orderId || profitPlans[0].planId || profitPlans[0].id;
-          if (pid) await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
-          // 40/30/15 banks + ~15% moon bag left unplanned for the trail
-          const tranches = [
-            { frac: 0.40, mult: 0.55 },
-            { frac: 0.30, mult: 1.0 },
-            { frac: 0.15, mult: 1.8 },
-          ];
-          let placed = 0;
-          for (const t of tranches) {
-            const tsize = Math.floor(p.size * t.frac * sp0) / sp0;
-            if (tsize < minQty0 || placed + tsize > p.size) continue;
-            placed += tsize;
-            await planOrder(
-              p.symbol, 'profit_plan',
-              round(p.entry * (1 + sgn0 * (distPct * t.mult) / 100), pp0),
-              String(tsize), p.side
+          const cum = [0, 0.40, 0.70, 0.85];
+          const mults = [0.55, 1.0, 1.8];
+          const pending = [];
+          for (let i = 0; i < 3; i++) {
+            const tsize =
+              (Math.floor(p.size * cum[i + 1] * sp0) - Math.floor(p.size * cum[i] * sp0)) / sp0;
+            if (tsize > 0) pending.push({ tsize, mult: mults[i] });
+          }
+          if (pending.length >= 2) {
+            for (const tr of pending)
+              await planOrder(
+                p.symbol, 'profit_plan',
+                round(p.entry * (1 + sgn0 * (distPct * tr.mult) / 100), pp0),
+                String(tr.tsize), p.side
+              );
+            if (pid) await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+            state.actions.push(
+              `laddered ${p.symbol}: TP split ${pending.length} ways @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon-bag trail`
             );
           }
-          state.actions.push(
-            `laddered ${p.symbol}: TP split 40/30/15 @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon-bag trail`
-          );
         }
       }
       if (lossPlan && hasProfit) continue;
@@ -834,9 +834,10 @@ async function main() {
           cm[o.symbol]?.minTradeNum || 0,
           (cm[o.symbol]?.minTradeUSDT || 0) / fill
         );
-        // ladder only when tranche-1's distance still clears round-trip
-        // fees (~0.25%) with room — a sub-fee TP1 banks dust, not profit
-        const ladder = size >= 3 * minQty && o.targetPct * 0.55 >= 0.9;
+        // plan orders accept sub-minimum sizes (conditional triggers aren't
+        // market entries — verified live) — the only real constraints are
+        // tranche-1 clearing round-trip fees and nonzero sizes after rounding
+        const ladder = o.targetPct * 0.55 >= 0.9;
         // runner distance scales with signal confluence — strong setups
         // earn a longer tail (1.6x..2.4x), weak ones bank sooner
         const runnerMult = Math.max(1.2, +(o.runnerMult || 1.8));
@@ -845,21 +846,31 @@ async function main() {
           // 40/30/15 staggered banks — the leftover ~15% is the moon bag:
           // deliberately given NO profit plan so it rides the trailing stop
           // and lets a real winner run past every target
-          const tranches = [
-            { frac: 0.40, mult: 0.55 },
-            { frac: 0.30, mult: 1.0 },
-            { frac: 0.15, mult: runnerMult },
-          ];
-          let placed = 0;
-          for (const t of tranches) {
-            const tsize = Math.floor(size * t.frac * sp) / sp;
-            if (tsize < minQty || placed + tsize > size) continue;
-            placed += tsize;
+          const cum = [0, 0.40, 0.70, 0.85];
+          const mults = [0.55, 1.0, runnerMult];
+          const trancheSizes = [];
+          for (let i = 0; i < 3; i++) {
+            const tsize =
+              (Math.floor(size * cum[i + 1] * sp) - Math.floor(size * cum[i] * sp)) / sp;
+            if (tsize > 0) trancheSizes.push({ tsize, mult: mults[i] });
+          }
+          // a single surviving tranche protects only a fraction of the
+          // position — fall back to one full-size TP instead
+          if (trancheSizes.length >= 2) {
+            for (const tr of trancheSizes)
+              plans.push(
+                planOrder(
+                  o.symbol, 'profit_plan',
+                  round(fill * (1 + sgn * (o.targetPct * tr.mult) / 100), pp),
+                  String(tr.tsize), holdSide
+                )
+              );
+          } else {
             plans.push(
               planOrder(
                 o.symbol, 'profit_plan',
-                round(fill * (1 + sgn * (o.targetPct * t.mult) / 100), pp),
-                String(tsize), holdSide
+                round(fill * (1 + sgn * (o.targetPct / 100)), pp),
+                size, holdSide
               )
             );
           }
