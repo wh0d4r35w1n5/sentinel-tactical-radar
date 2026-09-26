@@ -142,11 +142,19 @@ async def main():
     async for msg in client.iter_messages(group, limit=80):
         if msg.date.timestamp() * 1000 < int(time.time() * 1000) - MAX_AGE_S * 1000:
             break
-        await handle(msg)
+        try:
+            await handle(msg)
+        except Exception as e:
+            print(f"[tg] backfill message skipped: {type(e).__name__}: {e}", flush=True)
 
     @client.on(events.NewMessage(chats=group))
     async def on_new(ev):
-        await handle(ev.message)
+        # a parsing/persist failure must not kill the listener — Telethon
+        # propagates handler exceptions into the event loop
+        try:
+            await handle(ev.message)
+        except Exception as e:
+            print(f"[tg] handler error (ignored): {type(e).__name__}: {e}", flush=True)
 
     print("[tg] live — listening for new messages")
     await client.run_until_disconnected()

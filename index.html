@@ -559,10 +559,12 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         $('liveStats').innerHTML=[
           ['Equity',eqAud?eqAud:(src.equityUsd!=null?'$'+src.equityUsd+' USD':'—'),src.mode+(src.equityUsd!=null?' · $'+src.equityUsd+' USD':'')],
           ['Positions',pos.length,'from the exchange, not the model'],
+          ...(src.cycleMs!=null?[['Cycle',(src.cycleMs/1e3).toFixed(1)+'s',src.planAgeMs!=null?`plan age ${(src.planAgeMs/1e3).toFixed(0)}s`:'executor runtime']]:[]),
           ['Actions',(src.actions||[]).length,'this execution run'],
           ['Errors',(src.errors||[]).length,'any failure is listed, not hidden'],
         ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
-        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span> <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('');
+        const heldSyms=new Set(src.manualHoldActive||[]);
+        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span>${heldSyms.has(p.symbol)?' <span class="sub" style="color:var(--warn,#ffd166)">MANUAL</span>':''} <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('');
         // risk rails — the kill-switches and limits, made visible instead
         // of implied. External teardown flagged them as "not visible".
         if(src.risk){
@@ -586,7 +588,10 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?' · '+rs.winRatePct+'% win over '+rs.closes+' closes · net $'+rs.netUsd+' · PF '+rs.profitFactor:'')+'</span></div>')+
             rf.map(f=>{const net=(f.profit||0)-(f.fee||0);return `<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.tradeSide||''} ${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · net ${net>=0?'+':''}${net.toFixed(4)} · ${ago(f.ts)}</span></span><span class="num ${net>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`}).join('');
         }
-        $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
+        // gate-reject transparency — 'why didn't it trade' answers itself
+        const rj=(src.rejects||[]).map(r=>`· <span class="sub">rejected</span> ${r.symbol} ${r.direction} <span class="sub">${(r.gates||[]).join(', ')}</span>`);
+        if((src.manualHoldStale||[]).length)rj.unshift(`· <span class="sub" style="color:var(--warn,#ffd166)">stale manual-hold on flat ${src.manualHoldStale.join(',')} — future entries on it go unmanaged</span>`);
+        $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...rj,...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
       }
     }
     // ---- GOD overseer — every invariant, audited each cycle ----

@@ -199,7 +199,9 @@ const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
 // real entries/exits with real fees, not just the sim's paper model
 const getFills = () =>
   api('GET', '/api/v2/mix/order/fills', {
-    qs: `productType=${PRODUCT}&limit=100`,
+    // bounded window — an unbounded 'latest 100' can miss today's fills when
+    // a churn burst fills the window with plan-order traffic
+    qs: `productType=${PRODUCT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
   }).then((d) => {
     const l = d?.fillList || d?.fills || d;
     return Array.isArray(l) ? l : [];
@@ -279,6 +281,7 @@ const sizeFor = (cm, symbol, notionalUsd, price) => {
 
 // ---------- main ----------
 async function main() {
+  const tRun = Date.now();
   const planPath = path.join(API_DIR, 'live-plan.json');
   const outPath = path.join(API_DIR, 'live-ledger.json');
   const state = { mode: MODE, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
@@ -313,6 +316,12 @@ async function main() {
   plan.orders = Array.isArray(plan.orders) ? plan.orders : [];
   plan.closes = Array.isArray(plan.closes) ? plan.closes : [];
   plan.trails = Array.isArray(plan.trails) ? plan.trails : [];
+  state.planAgeMs = Number.isFinite(plan.ts) ? Date.now() - plan.ts : null;
+  // gate-reject transparency: the scanner now tells us WHY each candidate
+  // was stood down — surface the counts so "nothing opened" has a reason
+  // attached instead of silence
+  if (Array.isArray(plan.rejects) && plan.rejects.length)
+    state.rejects = plan.rejects.slice(0, 12);
   const stale = !Number.isFinite(plan.ts) || Date.now() - plan.ts > (plan.ttlMs || 900e3);
 
   if (stale) {
@@ -386,6 +395,10 @@ async function main() {
   state.marginFreeUsd = round(marginFree, 2);
   state.posMode = POS_MODE;
   const rawPos = (positions || []).filter((p) => +p.total > 0);
+  // a MANUAL_HOLD on a flat symbol silently exempts future auto-entries from
+  // management — flag it so the exemption can't linger forgotten
+  state.manualHoldStale = [...MANUAL].filter((s) => !rawPos.some((p) => p.symbol === s && +p.total > 0));
+  state.manualHoldActive = [...MANUAL].filter((s) => rawPos.some((p) => p.symbol === s && +p.total > 0));
   state.positions = rawPos.map((p) => ({
     symbol: p.symbol, side: p.holdSide, size: +p.total,
     entry: +p.openPriceAvg, upl: +p.unrealizedPL, lev: +p.leverage,
@@ -446,7 +459,9 @@ async function main() {
     eqTrack.samples = Array.isArray(prior.samples) ? prior.samples : [];
   } catch {}
   const nowMs = Date.now();
-  eqTrack.samples.push([nowMs, equityUsd]);
+  // a failed account read returns equity=0 — pushing that sample would fake
+  // a total wipeout on the rolling DD tape. Only record real reads.
+  if (equityUsd > 0) eqTrack.samples.push([nowMs, equityUsd]);
   eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
   try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, at: new Date().toISOString() }); } catch {}
   const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - equityUsd) / eqTrack.peak) * 100 : 0;
@@ -597,7 +612,7 @@ async function main() {
   // total. Max 3 new entries per rolling hour stops fee-churn sprays while
   // the book never sits dead waiting for a window to drain.
   const windowStart = Date.now() - 3600e3;
-  let entriesToday = 0;
+  let entriesThisHour = 0;
   try {
     const fj =
       JSON.parse(
@@ -607,18 +622,28 @@ async function main() {
       // opens only — a scratch close (profit 0, tradeSide missing) must not
       // eat the rate budget the same way a real entry does
       if ((f.tradeSide === 'open' || (f.tradeSide == null && (f.profit || 0) === 0)) && f.ts >= windowStart)
-        entriesToday++;
+        entriesThisHour++;
   } catch {}
-  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
+  // env kept for compat; the name lies (it's a rolling 1h cap, not a day cap)
+  const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a profit plan. Orphaned/manual positions get synthesized protection —
   // stop distance is inferred from an existing loss plan, else 1.2%; the
   // take-profit lands at 2R of that distance.
+  // Prefetch all pending plans in parallel — a serial await-per-symbol made
+  // each position pay a full round-trip inside the loop (~200ms × N symbols).
+  const planCache = new Map();
+  await Promise.all(
+    [...posBySym.keys(), ...ambiguous].map(async (sym) =>
+      planCache.set(sym, await getPlans(sym).catch(() => []))
+    )
+  );
+  const plansOf = (sym) => planCache.get(sym) || [];
   for (const p of posBySym.values()) {
     try {
       const manualHold = MANUAL.has(p.symbol);
-      const existing = await getPlans(p.symbol).catch(() => []);
+      const existing = plansOf(p.symbol);
       // 'moving_plan' (trailing stop) IS loss protection — without it in the
       // regex the repair loop would stack a second stop on a trailed position
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || ''));
@@ -806,7 +831,7 @@ async function main() {
   for (const p of state.positions) {
     if (!ambiguous.has(p.symbol)) continue;
     try {
-      const existing = await getPlans(p.symbol).catch(() => []);
+      const existing = plansOf(p.symbol);
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
@@ -844,8 +869,8 @@ async function main() {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
       }
-      if (entriesToday >= MAX_ENTRIES_DAY) {
-        state.actions.push(`entry rate cap (${MAX_ENTRIES_DAY}/h) — too soon, standing down`);
+      if (entriesThisHour >= MAX_ENTRIES_HOUR) {
+        state.actions.push(`entry rate cap (${MAX_ENTRIES_HOUR}/h) — too soon, standing down`);
         break;
       }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
@@ -963,6 +988,7 @@ async function main() {
       const sgn = o.direction === 'LONG' ? 1 : -1;
       const holdSide = o.direction === 'LONG' ? 'long' : 'short';
       const coid = `s${plan.ts}${o.symbol}`.slice(0, 38);
+      const t0 = Date.now();
       try {
         await setIsolated(o.symbol);
         await setLeverage(o.symbol, lev);
@@ -1057,10 +1083,16 @@ async function main() {
         await Promise.all(plans);
         const usedMargin = (filledSize * fill) / lev;
         marginFree = Math.max(0, marginFree - usedMargin);
-        state.actions.push(`opened ${o.symbol} ${o.direction} ${filledSize} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
+        // observable execution quality: slippage vs the scanner's reference
+        // print + how long the fill took to confirm — the journal that
+        // proves whether modeled SLIP_PCT matches reality
+        const slipPct = ((fill - o.refEntry) / o.refEntry) * 100 * sgn;
+        state.actions.push(
+          `opened ${o.symbol} ${o.direction} ${filledSize} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(filledSize * fill, 2)} · slip ${slipPct >= 0 ? '+' : ''}${round(slipPct, 3)}% · ${Date.now() - t0}ms`
+        );
         opened++;
         openedSym.add(o.symbol);
-        entriesToday++;
+        entriesThisHour++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting
         // entries the exchange can't hold: 40805 'Unsupported operation'
@@ -1177,11 +1209,15 @@ async function main() {
   // audits these to prove no position is ever naked on the exchange
   try {
     state.plans = {};
-    for (const p of state.positionsAfter || []) {
-      state.plans[p.symbol] = (await getPlans(p.symbol).catch(() => []))
-        .map((x) => ({ planType: x.planType, triggerPrice: +x.triggerPrice, size: +x.size, holdSide: x.holdSide }));
-    }
+    await Promise.all(
+      (state.positionsAfter || []).map(async (p) => {
+        state.plans[p.symbol] = (await getPlans(p.symbol).catch(() => []))
+          .map((x) => ({ planType: x.planType, triggerPrice: +x.triggerPrice, size: +x.size, holdSide: x.holdSide }));
+      })
+    );
   } catch {}
+  state.cycleMs = Date.now() - tRun;
+  state.refreshedAt = new Date().toISOString(); // freshness = write time, not run start
   writeJson(outPath, state);
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);
   if (state.errors.length) console.log(state.errors.join('\n'));

@@ -60,14 +60,15 @@ let cycle = 0;
 for (;;) {
   const t = Date.now();
   cycle++;
+  let tScan = 0, tExec = 0;
   try {
-    await run('scripts/build-scanner.mjs');
-    await run('scripts/bitget-exec.mjs');
+    const a = Date.now(); await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;
+    const b = Date.now(); await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
   } catch (e) {
     console.log(`[rapid] cycle ${cycle} error:`, e.message || e);
   }
   const dt = Date.now() - t;
   const wait = Math.max(1_000, MS - dt);
-  console.log(`[rapid] cycle ${cycle} done in ${(dt / 1e3).toFixed(1)}s — next in ${Math.round(wait / 1e3)}s`);
+  console.log(`[rapid] cycle ${cycle} done in ${(dt / 1e3).toFixed(1)}s (scan ${(tScan / 1e3).toFixed(1)}s + exec ${(tExec / 1e3).toFixed(1)}s) — next in ${Math.round(wait / 1e3)}s`);
   await new Promise((r) => setTimeout(r, wait));
 }

@@ -177,14 +177,41 @@ function rsi(closes, period = 14) {
   return 100 - 100 / (1 + rs);
 }
 
+// kline cache: closed 1h bars change at most once/hour, so refetching every
+// 15s cycle is ~99% wasted API load (and the burst was tripping rate limits).
+// Fresh-enough TTL: 5min — TA sees a new bar within minutes of it closing.
+const KLINE_CACHE = path.join(API, '..', 'state', 'klines-1h.json');
+let klineCache = null;
+function klineCacheLoad() {
+  if (klineCache) return klineCache;
+  try { klineCache = JSON.parse(fs.readFileSync(KLINE_CACHE, 'utf8')); }
+  catch { klineCache = {}; }
+  return klineCache;
+}
+function klineCacheSave() {
+  try {
+    fs.mkdirSync(path.dirname(KLINE_CACHE), { recursive: true });
+    const cutoff = Date.now() - 2 * 3600e3;
+    for (const k of Object.keys(klineCache || {}))
+      if (!klineCache[k].at || klineCache[k].at < cutoff) delete klineCache[k];
+    writeJson(KLINE_CACHE, klineCache || {});
+  } catch {}
+}
+const KLINE_TTL = 5 * 60e3;
+
 async function fetchKlines(symbol, light = false) {
+  const cache = klineCacheLoad();
+  const hit = cache[symbol];
+  if (hit && Date.now() - hit.at < KLINE_TTL && hit.payload) return hit.payload;
   const res = await fetch(
     `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`,
     { signal: TF() }
   );
-  if (!res.ok) return null;
+  // stale cache beats a blank cell — a rate-limited cycle shouldn't erase
+  // TA that was valid 6 minutes ago
+  if (!res.ok) return hit?.payload ?? null;
   const { data } = await res.json();
-  if (!Array.isArray(data) || data.length < 20) return null;
+  if (!Array.isArray(data) || data.length < 20) return hit?.payload ?? null;
   const rows = data
     .map((c) => ({
       t: Number(c[0]),
@@ -218,7 +245,7 @@ async function fetchKlines(symbol, light = false) {
           .filter((c) => c.t + 300e3 <= Date.now());
     }
   } catch {}
-  return {
+  const payload = {
     rsi14: rsi(closes),
     volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
     closes: closes.slice(-48), // sparkline stays 48h
@@ -226,6 +253,13 @@ async function fetchKlines(symbol, light = false) {
     harmonic: Harmonics.active(candles, 8),
     ta: TAEngine.analyze(candles, candles5m),
   };
+  // only cache full fetches — a light pass has candles5m:null and would
+  // poison the cache for callers that need the 5m tape
+  if (!light) {
+    cache[symbol] = { at: Date.now(), payload };
+    klineCacheSave();
+  }
+  return payload;
 }
 
 // 5m candles from entry open -> now, for intraperiod settlement replay.
@@ -299,10 +333,7 @@ async function main() {
     (s) => s.symbolStatus === 'normal' && s.quoteCoin === 'USDT'
   );
   const listed = new Set(online.map((s) => (s.baseCoin ?? '').toUpperCase()));
-  fs.writeFileSync(
-    path.join(API, 'bitget-symbols.json'),
-    JSON.stringify([...listed].sort())
-  );
+  writeJson(path.join(API, 'bitget-symbols.json'), [...listed].sort());
   const contractBySymbol = new Map(
     online.map((s) => [s.symbol.toUpperCase(), s])
   );
@@ -1175,7 +1206,7 @@ async function main() {
   if (!RAPID) {
     history.push({ ts: Date.now(), value: pct(100 + medianChangePct) });
     history = history.slice(-PULSE_MAX_POINTS);
-    fs.writeFileSync(PULSE_FILE, JSON.stringify(history));
+    writeJson(PULSE_FILE, history);
   }
   const values = history.map((p) => p.value);
 
@@ -1348,10 +1379,7 @@ async function main() {
       Date.now() - (prev.sparkAt || Date.parse(prevDetail.refreshedAt) || 0) < 6 * 3600e3
     )
       coinDetail[asset] = { ...prev, stale: true };
-  fs.writeFileSync(
-    path.join(API, 'coin-detail.json'),
-    JSON.stringify({ refreshedAt: snap.refreshedAt, coins: coinDetail })
-  );
+  writeJson(path.join(API, 'coin-detail.json'), { refreshedAt: snap.refreshedAt, coins: coinDetail });
 
   // ---- measured correlation structure → api/correlation.json ----
   try {
@@ -1372,9 +1400,7 @@ async function main() {
     for (let i = 0; i < board.length; i++)
       for (let j = i + 1; j < board.length; j++)
         if (matrix[i][j] != null) pairs.push(matrix[i][j]);
-    fs.writeFileSync(
-      path.join(API, 'correlation.json'),
-      JSON.stringify({
+    writeJson(path.join(API, 'correlation.json'), {
         refreshedAt: snap.refreshedAt,
         note: 'realized 48h pairwise correlation of 1h returns, Bitget USDT-M candidates. The risk governor treats corr>=0.6 as the same bet.',
         windowHours: 48,
@@ -1382,8 +1408,7 @@ async function main() {
         boardMatrix: matrix,
         meanBoardCorr: pairs.length ? round(pairs.reduce((a, b) => a + b, 0) / pairs.length, 2) : null,
         assets: corrList,
-      })
-    );
+      });
   } catch {}
 
   // ---- funding intelligence: write api/funding.json ----
@@ -1391,15 +1416,12 @@ async function main() {
     const rows2 = Object.entries(funding)
       .map(([asset, f]) => ({ asset, ...f }))
       .sort((a, b) => Math.abs(b.annualPct) - Math.abs(a.annualPct));
-    fs.writeFileSync(
-      path.join(API, 'funding.json'),
-      JSON.stringify({
+    writeJson(path.join(API, 'funding.json'), {
         refreshedAt: snap.refreshedAt,
         note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. indicative estimates, Bitget USDT-FUTURES.',
         best: rows2.slice(0, 10),
         rows: rows2,
-      })
-    );
+      });
   } catch {}
 
   // ---- derivatives + social intelligence: write api/sentiment.json ----
@@ -1411,15 +1433,12 @@ async function main() {
       if (a === '_feeds') continue;
       assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), ...(mcap[a] || {}), news: nw2[a] ?? null, events: evs[a] ?? null, dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? (mcap[a] || {}).dir ?? null };
     }
-    fs.writeFileSync(
-      path.join(API, 'sentiment.json'),
-      JSON.stringify({
+    writeJson(path.join(API, 'sentiment.json'), {
         refreshedAt: snap.refreshedAt,
         feeds: dv._feeds || {},
         note: 'positioning pressure: open interest + funding trend (Bitget public futures). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment activate when API keys are configured (scripts/api-keys.json or env). Crowded positioning is treated as squeeze fuel against the crowd.',
         assets,
-      })
-    );
+      });
   } catch {}
 
   // ---- intelligence wire: RSS headlines, asset-tagged → api/news.json ----
@@ -1479,14 +1498,11 @@ async function main() {
     }
     items.sort((a, b) => b.ts - a.ts);
     const fresh = items.filter((i) => now - i.ts < 24 * 3600e3);
-    fs.writeFileSync(
-      path.join(API, 'news.json'),
-      JSON.stringify({
+    writeJson(path.join(API, 'news.json'), {
         refreshedAt: snap.refreshedAt,
         note: 'public RSS wire — headlines tagged to universe assets; tone is a keyword estimate, context only, never a score input',
         items: fresh.slice(0, 40),
-      })
-    );
+      });
   } catch {}
 
   // headline prices for the landing header chips
@@ -1495,10 +1511,7 @@ async function main() {
     const r = rows.find((x) => x.asset === sym);
     if (r) majors[sym] = { price: r.lastPrice, changePct: pct(r.changePct) };
   }
-  fs.writeFileSync(
-    path.join(API, 'prices.json'),
-    JSON.stringify({ refreshedAt: snap.refreshedAt, majors })
-  );
+  writeJson(path.join(API, 'prices.json'), { refreshedAt: snap.refreshedAt, majors });
 
   // ---- signal ledger: open entries + settled outcomes ----
   const EQUITY = 10000; // paper account, USD model
@@ -1749,7 +1762,7 @@ async function main() {
   })();
   // live-execution plan — emitted every build regardless of executor state.
   // orders = gate-passed entries this run; closes/trails filled post-settle.
-  const livePlan = { orders: [], closes: [], trails: [] };
+  const livePlan = { orders: [], closes: [], trails: [], rejects: [] };
   // portfolio heat: total equity at risk if every live stop fired right
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
@@ -1830,64 +1843,52 @@ async function main() {
     // account, silently unbinding the heat cap whenever a position existed.
     const execNotional = liveEquityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85) * lev;
     const newHeatPct = (stopFrac * Math.min(notional, execNotional)) / liveEquityUsd * 100;
-    if (
-      tradeScore >= entryFloor &&
-      Number.isFinite(s.entryPrice) &&
-      s.entryPrice > 0 &&
-      // net-of-cost floor: a setup whose target can't clear round-trip
-      // costs is a donation, not a trade. taker fees (0.12% RT notional) +
-      // half the quoted spread + modeled exit slippage + a 1.2% net-edge
-      // minimum. Funding drag when paying is charged separately above.
-      // net-of-cost floor, proportional: costs can't eat more than 60% of
-      // the target AND the net must still be worth taking. An absolute 2%
-      // floor banned every 2% target by construction — fees scale with
-      // the move, so the bar must too. Volatile tape keeps a higher share.
-      (() => {
-        const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
-        return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
-      })() &&
-      // only ≥3:1 net R:R setups trade — everything thinner is a donation
-      rrOk &&
-      // real-vs-fake move (OBV / Dow Theory): a breakout the volume trend
-      // doesn't sponsor is fake — price extends while participation
-      // disagrees. Require volume alignment: OBV trending our way, or a
-      // Dow-confirmed trend in our direction, or the ignition candle that
-      // IS this signal. Missing OBV data doesn't block (can't fake-check
-      // what doesn't exist).
-      ((s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
-        (s.ta?.eng?.dow?.confirmed === true &&
-          s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
-        s.ta?.ignition?.dir === s.direction ||
-        !s.ta?.eng?.obv) &&
-      // noise cap: a symbol whose 1h ATR exceeds ~3.5% of price moves
-      // faster than a sized position can be protected — clip, don't trade
-      (s.ta?.atrPct ?? 0) <= 3.5 &&
-      // spread cap: >0.4% quoted spread = half the target eaten before
-      // the trade starts — the exchange's toll, not our edge
-      (s.spreadPct ?? 0) <= 0.4 &&
-      // funding hard block: paying >0.10%/8h to hold is a structural leak
-      // a 2% target can't repay — carry cost beats the entry
-      !(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1) &&
-      ddNow < ddKillPct &&
-      mktAllows(s) &&
-      // SHORT class gate: 7.19% hit rate over n=167 — a sideways/bull-tape
-      // short is the documented bleed. Only structure-validated doctrines
-      // (liquidity raid in premium, key-level SFP) may short a non-bear tape.
-      (s.direction !== 'SHORT' ||
-        mktType.startsWith('bear') ||
-        regime === 'risk-off' ||
-        s.strategy === 'Liquidity Sweep' ||
-        s.strategy === 'Key Level SFP') &&
-      !stratBlock.has(s.strategy) &&
-      !openFor(s.asset, s.direction) &&
-      !proxyBlocked(s) &&
-      !untradeable.has(s.asset.toUpperCase()) &&
-      !recentClosed(s.asset, s.direction) &&
-      !recentReversed(s.asset) &&
-      deployed() + notional <= MAX_DEPLOYED &&
-      openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut &&
-      openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut
-    ) {
+    // gate audit — every rejection names its gate so the plan is
+    // self-explaining: 'why didn't it trade' is answered by the artifact,
+    // not by digging through code. First failure wins (eval order).
+    const gateFails = [];
+    const gate = (ok, name) => { if (!ok) gateFails.push(name); return ok; };
+    gate(tradeScore >= entryFloor, `score ${tradeScore}<${entryFloor}`);
+    gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
+    // net-of-cost floor, proportional: costs can't eat more than 60% of
+    // the target AND the net must still be worth taking. An absolute 2%
+    // floor banned every 2% target by construction — fees scale with
+    // the move, so the bar must too. Volatile tape keeps a higher share.
+    gate((() => {
+      const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
+      return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
+    })(), 'net-edge');
+    gate(rrOk, `rr<3:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
+    gate(
+      (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
+      (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
+      s.ta?.ignition?.dir === s.direction ||
+      !s.ta?.eng?.obv,
+      'fake-move (no OBV/Dow sponsorship)');
+    gate((s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
+    gate((s.spreadPct ?? 0) <= 0.4, 'spread');
+    gate(!(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1), 'funding-drag');
+    gate(ddNow < ddKillPct, 'dd-kill');
+    gate(mktAllows(s), 'mkt-type');
+    gate(s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
+      s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
+    gate(!stratBlock.has(s.strategy), 'strat-blocked');
+    gate(!openFor(s.asset, s.direction), 'already-open');
+    gate(!proxyBlocked(s), 'proxy-dup');
+    gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
+    gate(!recentClosed(s.asset, s.direction), 'recent-closed');
+    gate(!recentReversed(s.asset), 'recent-reversed');
+    gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
+    gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
+    gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
+    if (gateFails.length) {
+      livePlan.rejects.push({
+        symbol: s.asset + 'USDT', direction: s.direction, score: s.score,
+        targetPct: s.targetPct, gates: gateFails,
+      });
+      continue;
+    }
+    {
       const fillPx =
         s.spreadPct != null
           ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200 + SLIP_PCT / 100))
@@ -2664,7 +2665,7 @@ async function main() {
     const seen = new Set(h.runs.map((x) => x.ts));
     for (const r of rs) if (!seen.has(r.ts)) h.runs.push(r);
     h.runs.sort((a, b) => a.ts - b.ts);
-    fs.writeFileSync(hf, JSON.stringify(h));
+    writeJson(hf, h);
   }
   for (const f of fs.readdirSync(histDir)) {
     if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
@@ -2677,7 +2678,7 @@ async function main() {
     } catch {}
   }
   archive.runs = archive.runs.slice(-ARCHIVE_MAX_RUNS);
-  fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive));
+  writeJson(ARCHIVE_FILE, archive);
   // surface the permanent record's depth on the ledger itself
   ledger.stats.archiveRuns = histRuns;
   ledger.stats.signalsArchived = histSignals;
@@ -2869,7 +2870,7 @@ async function main() {
     eh.records ??= [];
     const seen = new Set(eh.records.map((x) => x.key));
     for (const r of rs) if (!seen.has(r.key)) eh.records.push(r);
-    fs.writeFileSync(ef, JSON.stringify(eh));
+    writeJson(ef, eh);
   }
   for (const f of fs.readdirSync(histDir)) {
     if (!/^eval-\d{4}-\d{2}\.json$/.test(f)) continue;
@@ -2984,16 +2985,13 @@ async function main() {
   // hot file: pending (incomplete) + most recent completes for the UI
   const incomplete = [...evalMap.values()].filter((r) => !r.complete);
   const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
-  fs.writeFileSync(
-    EVAL_FILE,
-    JSON.stringify({
+  writeJson(EVAL_FILE, {
       refreshedAt: snap.refreshedAt,
       note: 'forward-outcome labels for EVERY emitted signal — monthly eval-YYYY-MM.json files hold the complete permanent set',
       stats: evStats,
       pending: incomplete.length,
       records: [...incomplete, ...recent],
-    })
-  );
+    });
 
   // ---- hypothesis engine → api/hypotheses.json ----
   // The self-improvement layer, done honestly: registered falsifiable claims
@@ -3093,14 +3091,11 @@ async function main() {
         history: hist,
       };
     });
-    fs.writeFileSync(
-      HYPO_FILE,
-      JSON.stringify({
+    writeJson(HYPO_FILE, {
         refreshedAt: snap.refreshedAt,
         note: 'registered falsifiable claims scored prospectively from eval labels + ledger. Status: UNTESTED<10, EARLY<30, SUGGESTIVE<100, then SUPPORTED/REFUTED. The engine only gets to believe what the sample has earned.',
         claims,
-      })
-    );
+      });
   } catch {}
 
 
@@ -3185,7 +3180,7 @@ async function main() {
     delete bench.combinedPct;
     bench.note =
       'BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = real Bitget account equity return since first observation.';
-    fs.writeFileSync(BENCH_FILE, JSON.stringify({ refreshedAt: snap.refreshedAt, ...bench }));
+    writeJson(BENCH_FILE, { refreshedAt: snap.refreshedAt, ...bench });
   } catch {}
 
   // final unconditional ledger write — stats computed after the first
@@ -3205,10 +3200,12 @@ async function main() {
     pairs: rows.length,
     signals: signals.length,
     klineEnriched: enriched.size,
+    klineCached: Object.keys(klineCache || {}).length,
     klineMiss: klineMiss.length ? klineMiss : undefined,
     ledgerOpen: ledger.stats.open,
+    rejects: livePlan.rejects.length || undefined,
   };
-  fs.writeFileSync(path.join(API, 'health.json'), JSON.stringify(health));
+  writeJson(path.join(API, 'health.json'), health);
 
   console.log(
     `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched) | ledger ${ledger.stats.open} open, ${wins}/${closed.length} won`
