@@ -1155,13 +1155,34 @@ async function main() {
 
   fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
 
+  // ---- board enrichment: every ranked signal gets klines too — the board
+  // ranks by score, not volume, so top-N volume coverage alone leaves most
+  // rows with no sparkline and no RSI. Same pattern as the TG_VIP pass.
+  const pairByAsset = new Map(rows.map((r) => [r.asset, r.pair]));
+  const boardMissing = signals.filter((s) => !enriched.has(s.asset));
+  if (boardMissing.length) {
+    await Promise.all(
+      boardMissing.map(async (s) => {
+        const pair = pairByAsset.get(s.asset);
+        if (!pair) return;
+        const k = await fetchKlines(pair).catch(() => null);
+        if (k) enriched.set(s.asset, k);
+      })
+    );
+  }
+
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
   const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
   const coinDetail = {};
-  for (const r of rows.slice(0, KLINE_CANDIDATES)) {
-    const k = enriched.get(r.asset);
-    if (!k) continue;
-    coinDetail[r.asset] = {
+  const detailAssets = new Set([
+    ...rows.slice(0, KLINE_CANDIDATES).map((r) => r.asset),
+    ...signals.map((s) => s.asset),
+  ]);
+  for (const asset of detailAssets) {
+    const r = rows.find((x) => x.asset === asset);
+    const k = enriched.get(asset);
+    if (!r || !k) continue;
+    coinDetail[asset] = {
       price: r.lastPrice,
       changePct: pct(r.changePct),
       quoteVolume: Math.round(r.quoteVolume),
