@@ -632,7 +632,7 @@ async function main() {
         symbol: f.symbol,
         side: f.side,
         price: +f.price,
-        size: +f.size,
+        size: +(f.size ?? f.volume ?? f.qty ?? 0),
         fee: +(f.fee ?? f.totalFee ?? 0),
         profit: +(f.profit ?? 0),
         ts: +(f.cTime ?? f.uTime ?? Date.now()),
