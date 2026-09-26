@@ -509,7 +509,35 @@ async function main() {
     try {
       const existing = await getPlans(p.symbol).catch(() => []);
       const lossPlan = existing.find((x) => /loss|stop/i.test(x.planType || ''));
-      const hasProfit = existing.some((x) => /profit/i.test(x.planType || ''));
+      const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
+      const hasProfit = !!profitPlan;
+      // breakeven ratchet — "no one went broke taking profit": once a
+      // position is >=55% of the way to its profit target, the stop moves
+      // up to entry + ~0.2% (covers round-trip taker fees). From there the
+      // trade cannot lose — worst case is a scratch, upside runs to TP.
+      if (lossPlan && profitPlan && p.size > 0) {
+        const sgn = p.side === 'long' ? 1 : -1;
+        const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
+        const tpTrig = +profitPlan.triggerPrice;
+        const slTrig = +lossPlan.triggerPrice;
+        const dist = Math.abs(tpTrig - p.entry);
+        const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
+        const pp = cm[p.symbol]?.pricePlace ?? 6;
+        const bePx = round(p.entry * (1 + (sgn * 0.2) / 100), pp);
+        const slSubBE = sgn === 1 ? slTrig < p.entry : slTrig > p.entry;
+        if (prog >= 0.55 && slTrig > 0 && slSubBE) {
+          const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
+          if (planId)
+            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
+          await planOrder(
+            p.symbol, lossPlan.planType, bePx,
+            /pos_/.test(lossPlan.planType) ? '0' : String(p.size), p.side
+          );
+          state.actions.push(
+            `breakeven ${p.symbol}: ${round(prog * 100, 0)}% to TP — stop ratcheted to entry+fees @ ${bePx}, trade is now a free runner`
+          );
+        }
+      }
       if (lossPlan && hasProfit) continue;
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
@@ -541,7 +569,7 @@ async function main() {
     state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
     let opened = 0;
-    for (const o of plan.orders) {
+    for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
       if (posBySym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
@@ -564,7 +592,14 @@ async function main() {
       const openNow = posBySym.size + opened;
       const slotsLeft = Math.max(0, MAX_POSITIONS - openNow);
       const targetLeft = Math.max(0, TARGET_POSITIONS - openNow);
-      const denom = Math.max(1, targetLeft > 0 ? targetLeft : slotsLeft);
+      // denominator counts REMAINING plan orders, not a static slot count —
+      // orders skipped by the gates free their share forward, and the last
+      // eligible order deploys everything that's left. No idle margin.
+      const ordersLeft = Math.max(1, plan.orders.length - oi);
+      const denom = Math.min(
+        Math.max(1, targetLeft > 0 ? targetLeft : slotsLeft),
+        ordersLeft
+      );
       // risk multiplier: max profile (or SENTINEL_RISK_MUL) puts 3x the
       // per-slot share on each order — same slot logic, triple the slice.
       // Capped at the full free margin after the fee reserve either way.
@@ -582,7 +617,10 @@ async function main() {
       // the source of the 40762 'order amount exceeds the balance'
       // rejections — the fee landed on top of a fully-deployed balance.
       const FEE_RT = 0.0012; // 0.06% taker x2 sides of notional
-      const marginUsd = (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT);
+      const marginUsd = Math.min(
+        (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT),
+        equityUsd * 0.5 // single-position margin cap — no all-in one-dice-roll
+      );
       const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       let minMarginNeeded = null;
@@ -690,9 +728,11 @@ async function main() {
         symbol: f.symbol,
         side: f.side,
         price: +f.price,
-        size: +(f.size ?? f.volume ?? f.qty ?? 0),
-        fee: +(f.fee ?? f.totalFee ?? 0),
+        size: +(f.baseVolume ?? f.size ?? f.volume ?? f.qty ?? 0),
+        notionalUsd: +(f.quoteVolume ?? 0),
+        fee: Math.abs(+((f.feeDetail || [])[0]?.totalFee ?? f.fee ?? f.totalFee ?? 0)),
         profit: +(f.profit ?? 0),
+        tradeSide: f.tradeSide || null,
         ts: +(f.cTime ?? f.uTime ?? Date.now()),
       });
       added++;

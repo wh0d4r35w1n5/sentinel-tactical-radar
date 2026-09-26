@@ -581,7 +581,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         const rf=(src.realFills||[]).slice(0,12);
         if(rf.length){
           $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills on record</span></div>')+
-            rf.map(f=>`<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · ${ago(f.ts)}</span></span><span class="num ${f.profit>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`).join('');
+            rf.map(f=>{const net=(f.profit||0)-(f.fee||0);return `<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.tradeSide||''} ${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · net ${net>=0?'+':''}${net.toFixed(4)} · ${ago(f.ts)}</span></span><span class="num ${net>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`}).join('');
         }
         $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
       }
