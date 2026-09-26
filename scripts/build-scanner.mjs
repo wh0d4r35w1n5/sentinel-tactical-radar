@@ -172,6 +172,7 @@ async function fetchKlines(symbol) {
   const rows = data
     .map((c) => ({
       t: Number(c[0]),
+      o: Number(c[1]),
       h: Number(c[2]),
       l: Number(c[3]),
       c: Number(c[4]),
@@ -185,7 +186,7 @@ async function fetchKlines(symbol) {
   const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
   const prior = rows.slice(0, -6);
   const priorAvg = prior.reduce((a, r) => a + r.qv, 0) / (prior.length || 1);
-  const candles = rows.map(({ t, h, l, c, qv }) => ({ t, h, l, c, qv }));
+  const candles = rows.map(({ t, o, h, l, c, qv }) => ({ t, o, h, l, c, qv }));
   let candles5m = null;
   try {
     const r5 = await fetch(
@@ -195,7 +196,7 @@ async function fetchKlines(symbol) {
       const d5 = await r5.json();
       if (Array.isArray(d5.data))
         candles5m = d5.data
-          .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+          .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
           .sort((a, b) => a.t - b.t)
           .filter((c) => c.t + 300e3 <= Date.now());
     }
@@ -790,6 +791,7 @@ async function main() {
   const stratName = (r, k) => {
     const ta = k && k.ta;
     if (ta && ta.bias) {
+      if (ta.reasons[0] === 'liq-sweep') return 'Liquidity Sweep';
       if (ta.sfp) return 'Key Level SFP';
       if (ta.reasons[0] === 'elliott-w5')
         return ta.elliott.shortTop ? 'Elliott W5 Short' : 'Elliott W5 Bottom';
@@ -894,15 +896,30 @@ async function main() {
       // paired 7–9% stops fill constantly — asymmetric suicide. Targets cap
       // at 8% (moves that actually complete in <24h) and stops at half that
       // (≤4%) so a stop-out costs ~-2R not -9R.
-      const targetPct = pct(clamp(r.rangePct * 0.35, 3, 8));
+      let targetPct = pct(clamp(r.rangePct * 0.35, 3, 8));
+      let stopPct = null;
+      const liq = ta && ta.liquidity;
+      if (liq && liq.setup) {
+        // TTC liquidity doctrine: the draw is the OPPOSING pool, and the
+        // invalidation is the sweep wick itself — not a generic fraction of
+        // the daily range.
+        if (liq.targetDistPct) targetPct = pct(clamp(liq.targetDistPct, 2, 8));
+        if (liq.setup.wickPx)
+          stopPct = pct(
+            clamp((Math.abs(r.lastPrice - liq.setup.wickPx) / r.lastPrice) * 115, 1.5, 4)
+          );
+      }
       const hasK = enriched.has(r.asset);
       const drivers = [
+        liq && liq.setup
+          ? `${liq.setup.dir === 'SHORT' ? 'Buy' : 'Sell'}-side liquidity swept @ ${liq.setup.levelPx} (grade ${liq.setup.grade}) — draw is opposing pool${liq.targetPx ? ` @ ${liq.targetPx}` : ''}`
+          : null,
         `24h momentum ${r.changePct >= 0 ? '+' : ''}${pct(r.changePct)}%`,
         hasK
           ? `RSI(1h) ${Math.round(r.k.rsi14)} · volume ${round(r.k.volRatio, 1)}× baseline`
           : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
         `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
-      ];
+      ].filter(Boolean);
       if (r.vip) drivers.push(`VIP group ${r.vip.side.toUpperCase()} ${r.vip.ageMin}m ago — engine-evaluated`);
       return {
         asset: r.asset,
@@ -979,7 +996,7 @@ async function main() {
         news: (globalThis.__news || {})[r.asset] ?? null,
         mcap: (globalThis.__mcaps || {})[r.asset] ?? null,
         events: (globalThis.__events || {})[r.asset] ?? null,
-        stopPct: pct(clamp(targetPct / 2, 1.5, 4)),
+        stopPct: stopPct ?? pct(clamp(targetPct / 2, 1.5, 4)),
         ta: ta
           ? {
               bias: ta.bias,
@@ -1015,6 +1032,18 @@ async function main() {
                 ? {
                     lastQ: ta.eq.lastQ, respect: ta.eq.respect, swept: ta.eq.swept,
                     wick: ta.eq.wick, rangeQ: ta.eq.rangeQ, rangePos: ta.eq.rangePos,
+                  }
+                : null,
+              liquidity: ta.liquidity
+                ? {
+                    setup: ta.liquidity.setup,
+                    sweep: ta.liquidity.sweep,
+                    zone: ta.liquidity.zone,
+                    bsl: ta.liquidity.bsl,
+                    ssl: ta.liquidity.ssl,
+                    inducement: ta.liquidity.inducement,
+                    targetPx: ta.liquidity.targetPx,
+                    targetDistPct: ta.liquidity.targetDistPct,
                   }
                 : null,
               candles: ta.candles,
@@ -1394,8 +1423,8 @@ async function main() {
   // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
   // (the forensic bleeders were exactly momentum-in-chop). Volatile tapes
   // get a 0.75× heat haircut — chop is where books die.
-  const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP']);
-  const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown']);
+  const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP', 'Liquidity Sweep']);
+  const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown', 'Liquidity Sweep']);
   const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
   const mktAllows = (s) => {
     if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);

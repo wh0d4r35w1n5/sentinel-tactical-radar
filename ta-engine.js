@@ -637,17 +637,216 @@
              + (aligned ? ' — fully aligned' : ' — mixed/transition') };
   }
 
+  // ---------- Liquidity Levels (TTC doctrine — Anni Snelleksz) ----------
+  // Liquidity = resting stop orders. Pools stack above equal/swing/session
+  // highs (buy-side: short stops + breakout buys) and below equal/swing/
+  // session lows (sell-side: long stops + breakdown sells). The playbook:
+  // a pool is swept, the sweep candle closes back inside the level
+  // (reclaim), and displacement carries price toward the OPPOSING pool.
+  // Zone filter: short sweeps only count in premium, long sweeps in
+  // discount. Inducement = a minor pool engineered inside the leg to be
+  // raided before the real target — it warns the trade may still stop-run
+  // the closer level first.
+  function liquidity(cs) {
+    var n = cs.length;
+    if (n < 60 || !zigzag) return null;
+    var px = cs[n - 1].c;
+    var DAY = 864e5, lastT = cs[n - 1].t;
+
+    // --- pool registry: merge overlapping levels, count touches ---
+    var pools = []; // {px, side:'bsl'|'ssl', src:{}, touches, i, str}
+    var TOL = 0.0015;
+    function pool(price, side, src, i) {
+      for (var j = 0; j < pools.length; j++) {
+        var p = pools[j];
+        if (p.side === side && Math.abs(p.px - price) / price < TOL) {
+          p.src[src] = true; p.touches++;
+          p.px = (p.px * (p.touches - 1) + price) / p.touches;
+          if (i > p.i) p.i = i;
+          return;
+        }
+      }
+      var q = { px: price, side: side, src: {}, touches: 1, i: i };
+      q.src[src] = true; pools.push(q);
+    }
+    // swing pools at two scales — minor (inducement) + major (real pools)
+    var zmin = zigzag(cs, 0.008), zmaj = zigzag(cs, 0.02);
+    zmin.forEach(function (p) { pool(p.p, p.type === 'H' ? 'bsl' : 'ssl', 'minor', p.i); });
+    zmaj.forEach(function (p) { pool(p.p, p.type === 'H' ? 'bsl' : 'ssl', 'swing', p.i); });
+    // raw local extrema — zigzag misses prominent highs/lows when the leg
+    // deviation stays under its threshold; a ±3-bar extremum never lies
+    for (var e = 3; e < n - 3; e++) {
+      var isH = true, isL = true;
+      for (var f = 1; f <= 3 && (isH || isL); f++) {
+        if (cs[e].h < cs[e - f].h || cs[e].h < cs[e + f].h) isH = false;
+        if (cs[e].l > cs[e - f].l || cs[e].l > cs[e + f].l) isL = false;
+      }
+      if (isH) pool(cs[e].h, 'bsl', 'swing', e);
+      if (isL) pool(cs[e].l, 'ssl', 'swing', e);
+    }
+    // session anchors — prior-day hi/lo, week-to-date hi/lo, Asia 00–08 UTC
+    var d0 = Math.floor(lastT / DAY) * DAY;
+    var slice = function (a, b) { return cs.filter(function (c) { return c.t >= a && c.t < b; }); };
+    var anchors = [
+      ['pdh', 'pdl', slice(d0 - DAY, d0)],
+      ['wtd-hi', 'wtd-lo', slice(d0 - ((new Date(d0).getUTCDay() + 6) % 7) * DAY, lastT)],
+      ['asia-hi', 'asia-lo', slice(d0, Math.min(d0 + 8 * 36e5, lastT))],
+      ['day-hi', 'day-lo', slice(d0, lastT)],
+    ];
+    anchors.forEach(function (a) {
+      var seg = a[2];
+      if (seg.length < 4) return;
+      var hiI = 0, loI = 0;
+      seg.forEach(function (c, k) { if (c.h > seg[hiI].h) hiI = k; if (c.l < seg[loI].l) loI = k; });
+      pool(seg[hiI].h, 'bsl', a[0], n - seg.length + hiI);
+      pool(seg[loI].l, 'ssl', a[1], n - seg.length + loI);
+    });
+    // equal highs/lows — raw candle prints ≥4 bars apart inside 0.2% = an
+    // engineered pool (the level algos keep defending = where stops stack)
+    for (var a2 = 0; a2 < n - 4; a2++) {
+      for (var b2 = a2 + 4; b2 < n; b2++) {
+        if (Math.abs(cs[a2].h - cs[b2].h) / cs[b2].h < 0.002)
+          pool((cs[a2].h + cs[b2].h) / 2, 'bsl', 'equal', b2);
+        if (Math.abs(cs[a2].l - cs[b2].l) / cs[b2].l < 0.002)
+          pool((cs[a2].l + cs[b2].l) / 2, 'ssl', 'equal', b2);
+      }
+    }
+    // round numbers — adaptive magnitude (BTC 100s, alts ~2 significant digits)
+    var step = Math.pow(10, Math.floor(Math.log10(px)) - 1);
+    if (px / step > 9) step *= 5;
+    for (var r0 = Math.floor(px / step) * step - step * 2; r0 < px + step * 3; r0 += step) {
+      if (Math.abs(r0 - px) / px < 0.0008) continue; // sitting on it — not a pool yet
+      pool(r0, r0 > px ? 'bsl' : 'ssl', 'round', n - 1);
+    }
+    // strength: touches + anchor bonus; fresh pools beat stale ones
+    pools.forEach(function (p) {
+      var s = 30 + Math.min(30, (p.touches - 1) * 15);
+      if (p.src['equal']) s += 15;
+      ['pdh', 'pdl', 'wtd-hi', 'wtd-lo', 'asia-hi', 'asia-lo'].forEach(function (k) {
+        if (p.src[k]) s += 10;
+      });
+      if (p.src['round']) s += 5;
+      p.ageH = n - 1 - p.i;
+      if (p.ageH > 72) s -= 10;
+      p.str = Math.min(100, s);
+      // engineered/anchored pools are the elite liquidity — algos defend
+      // equal highs and session extremes; a minor swing nick is not a pool
+      p.elite = !!(p.src['equal'] || p.src['pdh'] || p.src['pdl'] ||
+                   p.src['wtd-hi'] || p.src['wtd-lo'] || p.src['asia-hi'] ||
+                   p.src['asia-lo'] || p.src['day-hi'] || p.src['day-lo']);
+      p.distPct = +((Math.abs(p.px - px) / px) * 100).toFixed(2);
+      p.swept = false;
+    });
+    // --- sweep scan: recent candles wicking a pool and closing back inside
+    var medianR = (function () {
+      var rr = cs.slice(-24).map(function (c) { return c.h - c.l; }).sort(function (a, b) { return a - b; });
+      return rr[Math.floor(rr.length / 2)] || 1e-9;
+    })();
+    var sweeps = [];
+    for (var i = Math.max(2, n - 12); i < n; i++) {
+      var c = cs[i];
+      var bodyHi = Math.max(c.o || c.c, c.c), bodyLo = Math.min(c.o || c.c, c.c);
+      pools.forEach(function (p) {
+        if (p.side === 'bsl' && c.h > p.px * 1.0003 && bodyHi < p.px) {
+          var broken = false;
+          for (var j = i + 1; j < n; j++)
+            if (cs[j].c > p.px * 1.001 || (cs[j].o || cs[j].c) > p.px * 1.001) { broken = true; break; }
+          if (!broken) {
+            p.swept = true;
+            sweeps.push({ side: 'bsl', px: p.px, wickPx: c.h, i: i, age: n - 1 - i,
+                          disp: (c.h - bodyLo) / medianR, pool: p });
+          }
+        }
+        if (p.side === 'ssl' && c.l < p.px * 0.9997 && bodyLo > p.px) {
+          var broken2 = false;
+          for (var j2 = i + 1; j2 < n; j2++)
+            if (cs[j2].c < p.px * 0.999 || (cs[j2].o || cs[j2].c) < p.px * 0.999) { broken2 = true; break; }
+          if (!broken2) {
+            p.swept = true;
+            sweeps.push({ side: 'ssl', px: p.px, wickPx: c.l, i: i, age: n - 1 - i,
+                          disp: (bodyHi - c.l) / medianR, pool: p });
+          }
+        }
+      });
+    }
+    // premium/discount of the 60h dealing range — zone gate
+    var lo60 = Math.min.apply(null, cs.slice(-60).map(function (c) { return c.l; }));
+    var hi60 = Math.max.apply(null, cs.slice(-60).map(function (c) { return c.h; }));
+    var zPos = hi60 > lo60 ? (px - lo60) / (hi60 - lo60) : 0.5;
+    var zone = zPos > 0.618 ? 'premium' : zPos < 0.382 ? 'discount' : 'equilibrium';
+    // pick the best qualifying sweep — pool strength weighted against age:
+    // a fresh equal-highs raid beats a stale one; a marginal minor nick
+    // never outranks a real pool just for being newer
+    sweeps.sort(function (a, b) {
+      return (b.pool.elite ? 1 : 0) - (a.pool.elite ? 1 : 0) ||
+             (b.pool.str - b.age * 8 + b.disp * 10) - (a.pool.str - a.age * 8 + a.disp * 10);
+    });
+    var sw = sweeps.find(function (s2) {
+      return s2.side === 'bsl' ? zone !== 'discount' : zone !== 'premium';
+    });
+    var setup = null;
+    if (sw && sw.age <= 10) {
+      var dir = sw.side === 'bsl' ? 'SHORT' : 'LONG';
+      var anchor = ['pdh', 'pdl', 'asia-hi', 'asia-lo', 'equal'].some(function (k) { return sw.pool.src[k]; });
+      var zoneOk = (dir === 'SHORT') === (zone === 'premium') || (dir === 'LONG') === (zone === 'discount');
+      var g = 'C';
+      if (anchor && zoneOk && sw.disp >= 1.2 && sw.age <= 6) g = 'A';
+      else if (anchor && sw.disp >= 0.8) g = 'B';
+      setup = { dir: dir, grade: g, levelPx: +sw.px.toFixed(8), wickPx: +sw.wickPx.toFixed(8),
+                sweepDepthPct: +((Math.abs(sw.wickPx - sw.px) / sw.px) * 100).toFixed(2),
+                age: sw.age, poolStr: sw.pool.str };
+    }
+    // nearest live pools each side + inducement (minor pool in the way)
+    var bsl = pools.filter(function (p) { return p.side === 'bsl' && !p.swept && p.px > px; })
+                   .sort(function (a, b) { return a.px - b.px; });
+    var ssl = pools.filter(function (p) { return p.side === 'ssl' && !p.swept && p.px < px; })
+                   .sort(function (a, b) { return b.px - a.px; });
+    // opposing pool = the draw — TTC targets the next MAJOR pool; a
+    // minor-only pool sitting in the path is inducement (fuel to be raided
+    // first), not the real target
+    var isMinorOnly = function (p) {
+      var ks = Object.keys(p.src);
+      return ks.length === 1 && ks[0] === 'minor';
+    };
+    var oppSide = setup && setup.dir === 'SHORT' ? ssl : bsl;
+    var targetPool = null, inducement = null;
+    if (setup) {
+      for (var t2 = 0; t2 < oppSide.length; t2++) {
+        var pp = oppSide[t2];
+        if (!isMinorOnly(pp)) { targetPool = pp; break; }
+        if (pp.distPct > 0.3 && !inducement) inducement = { px: pp.px, distPct: pp.distPct };
+      }
+      if (!targetPool) targetPool = oppSide[0] || null;
+    }
+    return {
+      setup: setup,
+      sweep: sw ? { side: sw.side, px: +sw.px.toFixed(8), wickPx: +sw.wickPx.toFixed(8),
+                    age: sw.age, disp: +sw.disp.toFixed(2), poolStr: sw.pool.str } : null,
+      zone: zone, zonePos: +zPos.toFixed(2),
+      bsl: bsl[0] ? { px: +bsl[0].px.toFixed(8), distPct: bsl[0].distPct, str: bsl[0].str, src: Object.keys(bsl[0].src) } : null,
+      ssl: ssl[0] ? { px: +ssl[0].px.toFixed(8), distPct: ssl[0].distPct, str: ssl[0].str, src: Object.keys(ssl[0].src) } : null,
+      pools: { bsl: bsl.length, ssl: ssl.length },
+      inducement: inducement,
+      targetPx: targetPool ? +targetPool.px.toFixed(8) : null,
+      targetDistPct: targetPool ? +((Math.abs(targetPool.px - px) / px) * 100).toFixed(2) : null,
+    };
+  }
+
   // ---------- composite ----------
   function analyze(cs, cs5m) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
-        mc = smc(cs), eq = eqLevels(cs),
+        mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
-    // bias: SFP leads, then completed W5, then wyckoff event, then smc choch,
-    // then ignition — each lower rung only fires when the stronger ones are silent
+    // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
+    // signal), then SFP, completed W5, wyckoff event, smc choch, then
+    // ignition — each lower rung only fires when the stronger ones are silent
     var bias = null, reasons = [];
-    if (s) { bias = s.type === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('sfp'); }
+    if (lq && lq.setup && lq.setup.grade !== 'C') {
+      bias = lq.setup.dir; reasons.push('liq-sweep');
+    }
+    else if (s) { bias = s.type === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('sfp'); }
     else if (e && e.complete && cs.length - 1 - e.dIdx <= 10) {
       bias = e.shortTop ? 'SHORT' : 'LONG'; reasons.push('elliott-w5');
     } else if (w && w.event) { bias = w.bias; reasons.push('wyckoff-' + w.event.toLowerCase()); }
@@ -671,6 +870,10 @@
     var confluence = 0;
     if (bias) {
       var L = bias === 'LONG';
+      if (lq && lq.setup && lq.setup.dir === bias) confluence++;
+      if (lq && ((lq.zone === 'discount') === L) && lq.zone !== 'equilibrium') confluence++;
+      if (lq && lq.targetPx && lq.targetDistPct >= 1 && lq.targetDistPct <= 8) confluence++;
+      if (lq && lq.inducement) confluence--; // minor pool in the way — may stop-run first
       if (s && (s.type === 'bullish') === L) confluence++;
       if (e && ((e.shortTop) === !L)) confluence++;
       if (w && w.bias === bias) confluence++;
@@ -695,14 +898,14 @@
     }
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
-             smc: mc, eq: eq, eng: eng,
+             smc: mc, eq: eq, eng: eng, liquidity: lq,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
   g.TAEngine = { analyze: analyze, sfp: sfp, fvgs: fvgs, elliott: elliott,
                  wyckoff: wyckoff, candlesticks: candlesticks, fib: fib,
                  structure: structure, ignition: ignition, keyLevels: keyLevels,
-                 vwap: vwap, smc: smc, eqLevels: eqLevels,
+                 vwap: vwap, smc: smc, eqLevels: eqLevels, liquidity: liquidity,
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
                  mtfEng: mtfEng, revEng: revEng };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
