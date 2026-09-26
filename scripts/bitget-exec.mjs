@@ -9,9 +9,14 @@
 //   live   — real money. Requires SENTINEL_LIVE=1 AND CONFIRM_LIVE=YES plus
 //            a TRADE-ONLY API key (withdrawals disabled at Bitget).
 //
-// Sizing: the plan carries paper-model notional ($10k equity). Live notional
-// = planNotional × (realEquityUsd / 10000), clamped to LIVE_MAX_NOTIONAL_USD
-// (default 50) — the engine's risk proportions scale to the real account.
+// Sizing (mandate): deploy ALL free margin evenly across the target slots —
+// LIVE_TARGET_POSITIONS (default 4) gives ~25% of balance per trade, up to
+// LIVE_MAX_POSITIONS (default 10) concurrent. Leverage = contract maxLever
+// bounded by the liquidation band (lev <= 80/(stopPct+0.64)) so the stop
+// always fires before liquidation. Exactly ONE take-profit + ONE stop-loss
+// per position; no trailing, no TP ladder, no notional cap. Existing
+// positions missing either leg get it repaired; positions exceeding their
+// slot margin get partially closed to free balance for the other slots.
 //
 // Failure discipline: if an entry fills but its TP/SL plan orders fail, the
 // position is closed immediately — a naked position is a worse error than a
@@ -375,9 +380,92 @@ async function main() {
 
   // trailing stops removed by mandate — stops stay where the entry set them
 
-  // ---- entries: only when the kill-switch is clear and capacity allows ----
-  if (plan.killSwitch) {
-    state.actions.push('kill-switch active — no new entries');
+  // ---- real-equity drawdown guard: the kill-switch keys off the ACTUAL
+  // account equity curve (peak persisted across runs), not the sim ledger —
+  // sim bookkeeping diverges from exchange truth and must not gate money
+  const peakPath = path.join(__dirname, '..', 'state', 'equity-peak.json');
+  let eqPeak = equityUsd;
+  try {
+    eqPeak = Math.max(equityUsd, +JSON.parse(fs.readFileSync(peakPath, 'utf8')).peak || 0);
+  } catch {}
+  try { fs.writeFileSync(peakPath, JSON.stringify({ peak: eqPeak, at: new Date().toISOString() })); } catch {}
+  const realDdPct = eqPeak > 0 ? ((eqPeak - equityUsd) / eqPeak) * 100 : 0;
+  state.ddPct = round(realDdPct, 2);
+
+  // ---- margin rebalance: a single position may not hold more margin than
+  // its slot share (equity / TARGET_POSITIONS). Oversized positions get a
+  // partial close releasing margin for the remaining slots.
+  const slotMargin = (equityUsd * 0.96) / TARGET_POSITIONS;
+  for (const p of posBySym.values()) {
+    try {
+      const levNow = Math.max(1, p.lev || 1);
+      const marginEst = (p.size * p.entry) / levNow;
+      const excess = marginEst - slotMargin;
+      if (excess <= Math.max(0.5, slotMargin * 0.15)) continue;
+      const c = cm[p.symbol];
+      if (!c) { state.errors.push(`${p.symbol}: no contract meta — cannot rebalance`); continue; }
+      const prec = Math.pow(10, c.sizePlace);
+      const closeSize = Math.floor(((excess * levNow) / p.entry) * prec) / prec;
+      const remain = p.size - closeSize;
+      const minSz = Math.max(c.minTradeNum, c.minTradeUSDT / p.entry);
+      if (closeSize < minSz) continue;
+      if (remain > 0 && remain < minSz) {
+        // remainder dust — close the whole slot instead of leaving an
+        // un-closeable stub
+        await closePosition(p.symbol, p.side);
+        state.actions.push(`rebalanced ${p.symbol}: closed fully (remainder under min ${minSz})`);
+      } else {
+        await api('POST', '/api/v2/mix/order/close-positions', {
+          body: { symbol: p.symbol, productType: PRODUCT, holdSide: p.side, size: String(closeSize) },
+        });
+        state.actions.push(`rebalanced ${p.symbol}: closed ${closeSize}/${p.size} — margin ~$${round(marginEst, 2)} -> slot ~$${round(slotMargin, 2)}`);
+        p.size -= closeSize;
+        p.marginFreed = (closeSize * p.entry) / levNow;
+        marginFree += p.marginFreed;
+      }
+    } catch (e) {
+      state.errors.push(`rebalance ${p.symbol}: ${e.message}`);
+    }
+  }
+
+  // ---- protection repair: EVERY open position must carry a loss plan AND
+  // a profit plan. Orphaned/manual positions get synthesized protection —
+  // stop distance is inferred from an existing loss plan, else 1.2%; the
+  // take-profit lands at 2R of that distance.
+  for (const p of posBySym.values()) {
+    try {
+      const existing = await getPlans(p.symbol).catch(() => []);
+      const lossPlan = existing.find((x) => /loss|stop/i.test(x.planType || ''));
+      const hasProfit = existing.some((x) => /profit/i.test(x.planType || ''));
+      if (lossPlan && hasProfit) continue;
+      const sgn = p.side === 'long' ? 1 : -1;
+      const pp = cm[p.symbol]?.pricePlace ?? 6;
+      const stopPct = lossPlan && +lossPlan.triggerPrice > 0
+        ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
+        : 1.2;
+      if (!lossPlan) {
+        await planOrder(p.symbol, 'pos_loss',
+          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
+        state.actions.push(`repaired ${p.symbol}: added pos_loss @ ${round(p.entry * (1 - (sgn * stopPct) / 100), pp)}`);
+      }
+      if (!hasProfit) {
+        const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
+        try {
+          await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
+        } catch {
+          await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side);
+        }
+        state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
+      }
+    } catch (e) {
+      state.errors.push(`protect ${p.symbol}: ${e.message}`);
+    }
+  }
+
+  // ---- entries: only when the real drawdown guard is clear and capacity
+  // allows — plan.killSwitch is sim-derived and logged for reference only ----
+  if (realDdPct >= 8) {
+    state.actions.push(`kill-switch active (real equity dd ${state.ddPct}%) — no new entries`);
   } else {
     let opened = 0;
     for (const o of plan.orders) {

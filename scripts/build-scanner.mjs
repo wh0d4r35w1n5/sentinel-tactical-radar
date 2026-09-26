@@ -1506,6 +1506,15 @@ async function main() {
   // read. Recovery re-arms automatically when the equity path heals.
   const ddKillPct = 8;
   const ddNow = (() => {
+    // real-account drawdown first — the executor persists the real equity
+    // peak each run (state/equity-peak.json); the sim ledger's equity curve
+    // is only the fallback when no real equity has been observed yet
+    try {
+      const live = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'equity-peak.json'), 'utf8'));
+      if (peakFile.peak > 0 && live.equityUsd > 0)
+        return ((peakFile.peak - live.equityUsd) / peakFile.peak) * 100;
+    } catch {}
     let eq = 1, peak = 1;
     for (const e of [...ledger.entries]
       .filter((x) => x.status !== 'open')
