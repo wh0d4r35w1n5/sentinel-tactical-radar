@@ -906,7 +906,10 @@ async function main() {
       const FEE_RT = 0.0012; // 0.06% taker x2 sides of notional
       const marginUsd = Math.min(
         (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT),
-        equityUsd * 0.5 // single-position margin cap — no all-in one-dice-roll
+        // single-position margin cap — 85%: near-full aggression on a
+        // qualifying shot while still banking one reload. Ruin is the only
+        // unrecoverable outcome; every other loss is tuition.
+        equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85)
       );
       const notional = marginUsd * lev;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
