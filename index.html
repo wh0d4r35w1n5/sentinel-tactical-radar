@@ -554,8 +554,10 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         lp.style.display='block';
         $('liveMode').innerHTML=`<b style="color:var(--red);letter-spacing:.12em;font-size:10px">LIVE</b>`;
         const pos=(src.positionsAfter||src.positions||[]);
+        const audRate=(scan&&scan.fx&&scan.fx.audPerUsd)||null;
+        const eqAud=src.equityUsd!=null&&audRate?'A$'+(src.equityUsd*audRate).toFixed(2)+' AUD':null;
         $('liveStats').innerHTML=[
-          ['Equity',src.equityUsd!=null?'$'+src.equityUsd+' USD':'—',src.mode],
+          ['Equity',eqAud?eqAud:(src.equityUsd!=null?'$'+src.equityUsd+' USD':'—'),src.mode+(src.equityUsd!=null?' · $'+src.equityUsd+' USD':'')],
           ['Positions',pos.length,'from the exchange, not the model'],
           ['Actions',(src.actions||[]).length,'this execution run'],
           ['Errors',(src.errors||[]).length,'any failure is listed, not hidden'],

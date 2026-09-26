@@ -64,7 +64,7 @@ jobs:
           # VPS-owned artifacts: the live VPS pushes authoritative versions of
           # these every ~2min via sentinel-push.timer. CI builds from repo
           # state that lags the exchange — it must never overwrite them.
-          git checkout -- api/god.json api/live-plan.json api/live-ledger.json api/health.json api/exec-catalog.json 2>/dev/null || true
+          git checkout -- api/god.json api/live-plan.json api/live-ledger.json api/health.json api/exec-catalog.json api/market-scanner.json api/coin-detail.json api/signal-ledger.json api/signal-eval.json api/signal-archive.json api/prices.json api/funding.json api/sentiment.json api/news.json api/hypotheses.json api/correlation.json api/benchmark.json api/pulse-history.json 2>/dev/null || true
           git add api/
           if git diff --cached --quiet; then
             echo "no changes"
