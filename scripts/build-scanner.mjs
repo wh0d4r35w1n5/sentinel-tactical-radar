@@ -780,6 +780,36 @@ async function main() {
     })
   );
 
+  // ---- prospective-evidence gate: signal-eval.json grades every emitted
+  // signal's real forward returns at 1h/4h/24h. A strategy with a
+  // meaningful record and negative alpha, or a hit rate under ~12% (the
+  // R-multiple floor our capped targets need), is blocked at the ORDER
+  // level — it keeps emitting board signals for evidence but can't take
+  // real positions until its record recovers. Positive-alpha strategies
+  // earn a bounded score lift. Bayesian n/(n+10) shrinkage damps small
+  // samples. (The ledger-fed stratAdj above is legacy reporting — the
+  // ledger entries array is empty post-purge, so it outputs zeros.)
+  let evalByStrat = {};
+  try {
+    evalByStrat =
+      JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
+        .stats?.byStrategy || {};
+  } catch {}
+  const EVAL_MIN_N = 20;
+  const stratBlock = new Set();
+  const stratBoost = {};
+  for (const [k, v] of Object.entries(evalByStrat)) {
+    const n = v.n || 0;
+    if (n < EVAL_MIN_N) { stratBoost[k] = 0; continue; }
+    const shrunkAlpha = (v.avgAlpha24h ?? 0) * (n / (n + 10));
+    if (shrunkAlpha < -0.6 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
+      stratBlock.add(k);
+      stratBoost[k] = 0;
+    } else {
+      stratBoost[k] = Math.min(6, Math.round(clamp(shrunkAlpha * 3, -4, 6) * 10) / 10);
+    }
+  }
+
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
     if (k && k.volRatio > 1.8 && r.changePct > 0) return 'Volume Surge';
@@ -873,6 +903,7 @@ async function main() {
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
+            (stratBoost[strategy] || 0) +
             derivBoost +
             newsBoost +
             mcapBoost +
@@ -1439,7 +1470,16 @@ async function main() {
   // so the trade score is what adjusts. Shared by the gate + freshDir.
   const carryPenaltyOf = (s) =>
     s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
-  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s);
+  // prospective record: SHORTs as a class hit 7% of targets (n=167) — a
+  // sideways/bull short is the bleed. +10 surcharge vs floor outside bear
+  // tapes; Liquidity Sweep is exempt so the new doctrine earns its own record.
+  const shortPenaltyOf = (s) =>
+    s.direction === 'SHORT' &&
+    s.strategy !== 'Liquidity Sweep' &&
+    !mktType.startsWith('bear')
+      ? 10
+      : 0;
+  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s) - shortPenaltyOf(s);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   // taker slippage beyond the half-spread already priced on entry — market
   // exits (stops, trails, time-outs, reversals, liq) never fill the level.
@@ -1631,6 +1671,7 @@ async function main() {
       s.entryPrice > 0 &&
       ddNow < ddKillPct &&
       mktAllows(s) &&
+      !stratBlock.has(s.strategy) &&
       !openFor(s.asset, s.direction) &&
       !proxyBlocked(s) &&
       !untradeable.has(s.asset.toUpperCase()) &&
@@ -1666,7 +1707,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s))
+      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s) && !stratBlock.has(s.strategy))
       .map((s) => [s.asset, s.direction])
   );
 
@@ -2191,6 +2232,14 @@ async function main() {
   // DORMANT until the sample is large enough to distinguish edge from luck
   ledger.model = {
     stratAdj,
+    // evidence-driven adaptation — sourced from prospective signal-eval,
+    // not the (purged) paper ledger. Blocked strategies can't open real
+    // positions; positive-alpha strategies earn a bounded score lift.
+    evalGate: {
+      source: 'signal-eval.json byStrategy · min n=20',
+      blocked: [...stratBlock],
+      boosts: stratBoost,
+    },
     learning: {
       active: learnActive,
       closedN: closedTotal,

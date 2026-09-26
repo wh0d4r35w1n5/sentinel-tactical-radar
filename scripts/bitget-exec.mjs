@@ -352,7 +352,7 @@ async function main() {
   state.positions = rawPos.map((p) => ({
     symbol: p.symbol, side: p.holdSide, size: +p.total,
     entry: +p.openPriceAvg, upl: +p.unrealizedPL, lev: +p.leverage,
-    marginMode: p.marginMode,
+    marginMode: p.marginMode, cTime: +(p.cTime || 0),
   }));
   // hedge-mode accounts can hold both directions on one symbol — a
   // symbol-keyed map would silently pick one and close the wrong side
@@ -465,6 +465,31 @@ async function main() {
       }
     } catch (e) {
       state.errors.push(`rebalance ${p.symbol}: ${e.message}`);
+    }
+  }
+
+  // ---- thesis-decay exit: prospective eval shows direction accuracy
+  // decays 62%@1h -> 48%@24h — a position still underwater DECAY_HOURS in
+  // has a dead thesis. Closing it converts an expected -1R stop-out into a
+  // smaller realized loss AND frees margin for fresher signals. This is
+  // not a trailing stop: TP/SL plans stay exactly as placed on every
+  // position that hasn't gone stale.
+  const DECAY_MS = (+(process.env.EXEC_DECAY_HOURS || 5)) * 3600e3;
+  for (const p of posBySym.values()) {
+    try {
+      if (!p.cTime) continue;
+      const ageMs = Date.now() - p.cTime;
+      if (ageMs < DECAY_MS) continue;
+      const notionalUsd = p.size * p.entry;
+      const pnlPct = notionalUsd > 0 ? (p.upl / notionalUsd) * 100 : 0;
+      if (pnlPct >= 0) continue; // profitable = thesis working, leave it
+      await closePosition(p.symbol, p.side);
+      state.actions.push(
+        `decay-exit ${p.symbol}: age ${(ageMs / 36e5).toFixed(1)}h uPnL ${round(pnlPct, 2)}% — thesis stale, margin recycled`
+      );
+      posBySym.delete(p.symbol);
+    } catch (e) {
+      state.errors.push(`decay-exit ${p.symbol}: ${e.message}`);
     }
   }
 
