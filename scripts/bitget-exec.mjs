@@ -552,10 +552,11 @@ async function main() {
     }
   } catch {}
 
-  // ---- daily entry cap — CWT doctrine 'overtrading' (16/22 episodes):
-  // a book that opens unbounded entries every 15s is churn, not trading.
-  // Cap new entries at 12 per UTC day — selectivity IS the edge.
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  // ---- entry rate cap — rolling 1h window, not a calendar cliff: a scalp
+  // regime turns positions over fast, so the guard limits RATE not daily
+  // total. Max 3 new entries per rolling hour stops fee-churn sprays while
+  // the book never sits dead waiting for a window to drain.
+  const windowStart = Date.now() - 3600e3;
   let entriesToday = 0;
   try {
     const fj =
@@ -563,12 +564,10 @@ async function main() {
         fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
       ).fills || [];
     for (const f of fj)
-      if ((f.tradeSide === 'open' || (f.profit || 0) === 0) && f.ts >= +dayStart)
+      if ((f.tradeSide === 'open' || (f.profit || 0) === 0) && f.ts >= windowStart)
         entriesToday++;
   } catch {}
-  // fee-burn cap: at this account scale each entry donates ~1.5% of its
-  // notional to fees+spread — volume IS the leak. 4 entries/day max.
-  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 4);
+  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a profit plan. Orphaned/manual positions get synthesized protection —
@@ -731,7 +730,7 @@ async function main() {
         continue;
       }
       if (entriesToday >= MAX_ENTRIES_DAY) {
-        state.actions.push(`daily entry cap reached (${MAX_ENTRIES_DAY}) — no new opens until tomorrow`);
+        state.actions.push(`entry rate cap (${MAX_ENTRIES_DAY}/h) — too soon, standing down`);
         break;
       }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
@@ -739,6 +738,17 @@ async function main() {
           !Number.isFinite(o.leverage) || (o.direction !== 'LONG' && o.direction !== 'SHORT')) {
         state.errors.push(`${o.symbol || '?'}: malformed order fields — skipped`);
         continue;
+      }
+      // ≥3:1 net R:R defense — the scanner stamps netRR/costPct; recompute
+      // here with a conservative cost floor (0.12% RT fees + 0.08 slip +
+      // 0.1 spread = 0.30%) so a stale/noncompliant plan can never route.
+      {
+        const cost = Math.max(Number.isFinite(o.costPct) ? o.costPct : 0, 0.30);
+        const netRR = (o.targetPct - cost) / (o.stopPct + cost);
+        if (!(netRR >= 3)) {
+          state.actions.push(`${o.symbol}: net R:R ${netRR.toFixed(2)} < 3:1 after costs — rejected`);
+          continue;
+        }
       }
       // not in this environment's catalog = unroutable here — record it so
       // the scanner stops emitting entries the executor can never fill

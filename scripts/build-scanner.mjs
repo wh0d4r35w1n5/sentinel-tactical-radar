@@ -1726,13 +1726,26 @@ async function main() {
       s.stopPct ?? Math.max(4, s.targetPct || 4),
       atrFloor
     );
-    const levMax = Math.max(3, Math.floor(80 / (stopWant + 0.64)));
+    // ≥3:1 net R:R gate — user directive: only take setups whose reward,
+    // net of ALL costs, is at least 3x the risk including costs.
+    //   netReward = targetPct - costPct   (costs eat the win)
+    //   netRisk   = stopPct  + costPct   (costs deepen the loss)
+    // The maximum stop the geometry can carry is (netReward/3) - costPct.
+    // When the noise-floor stop fits inside it, tighten the stop to that
+    // boundary — the setup then trades at exactly ≥3:1 net. When even the
+    // ATR-floor stop is wider, 3:1 is impossible without a noise-clipping
+    // stop — stand down, don't fake the ratio.
+    const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2;
+    const rrMaxStop = (s.targetPct - rrCostPct) / 3 - rrCostPct;
+    const rrStop = Math.min(stopWant, rrMaxStop);
+    const rrOk = rrMaxStop >= Math.max(atrFloor, 0.6);
+    const levMax = Math.max(3, Math.floor(80 / (rrStop + 0.64)));
     const lev = Math.max(3, Math.min(levTarget, levMax, s.maxLever ?? 20));
     const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
     // the stop must fire INSIDE the liquidation band — a stop wider than
     // ~80% of the band is fiction (liq executes first), so clamp it there
     const stopPct = Math.min(
-      stopWant,
+      rrStop,
       Math.max(1, Math.round(liqPct * 0.8 * 10) / 10)
     );
     const stopFrac = stopPct / 100;
@@ -1757,10 +1770,16 @@ async function main() {
       // costs is a donation, not a trade. taker fees (0.12% RT notional) +
       // half the quoted spread + modeled exit slippage + a 1.2% net-edge
       // minimum. Funding drag when paying is charged separately above.
-      // net-of-cost floor: volatile tapes have wider real costs (spread +
-      // slip) — raise the required net edge there, not just the score bar
-      s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >=
-        (mktType.endsWith('volatile') ? 2.5 : 2.0) &&
+      // net-of-cost floor, proportional: costs can't eat more than 60% of
+      // the target AND the net must still be worth taking. An absolute 2%
+      // floor banned every 2% target by construction — fees scale with
+      // the move, so the bar must too. Volatile tape keeps a higher share.
+      (() => {
+        const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
+        return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
+      })() &&
+      // only ≥3:1 net R:R setups trade — everything thinner is a donation
+      rrOk &&
       // noise cap: a symbol whose 1h ATR exceeds ~3.5% of price moves
       // faster than a sized position can be protected — clip, don't trade
       (s.ta?.atrPct ?? 0) <= 3.5 &&
@@ -1807,6 +1826,8 @@ async function main() {
         refEntry: fillPx,
         targetPct: s.targetPct,
         stopPct,
+        netRR: pct((s.targetPct - rrCostPct) / (stopPct + rrCostPct)),
+        costPct: rrCostPct,
         // runner distance scales with confluence — a high-confluence setup
         // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
         runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
