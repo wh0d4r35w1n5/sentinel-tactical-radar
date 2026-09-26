@@ -110,16 +110,21 @@ if (!ledger) {
   // the real kill rail lives on live-ledger.json (real equity DD); the
   // ledger-side check only applies if a maxDrawdownPct is still published
   const ddBad = fin(s.ddKill?.thresholdPct ?? s.ddKill) && fin(s.maxDrawdownPct) && s.maxDrawdownPct >= (s.ddKill?.thresholdPct ?? s.ddKill);
-  const riskBad = fin(s.openRiskPct) && s.openRiskPct > 25;
+  // the 25% cap was the old book policy — the mandate now allows an 85%
+  // margin single-shot (a stop ~1% on ~90x-margin notional ≈ 45% of equity).
+  // WARN at the old line, FAIL only where even a max shot can't explain it.
+  const riskHot = fin(s.openRiskPct) && s.openRiskPct > 60;
+  const riskWarm = fin(s.openRiskPct) && s.openRiskPct > 25;
   const killThresh = s.ddKill?.thresholdPct ?? s.ddKill;
   const killCur = s.ddKill?.currentPct ?? s.maxDrawdownPct;
   add('risk-rails',
-    ddBad || riskBad ? 'FAIL' : 'PASS',
+    ddBad || riskHot ? 'FAIL' : riskWarm ? 'WARN' : 'PASS',
     ddBad
       ? `drawdown ${s.maxDrawdownPct}% >= kill ${killThresh}% — switch should have fired`
-      : riskBad
-        ? `open risk ${s.openRiskPct}% exceeds 25% cap`
-        : `dd ${killCur ?? '—'}%/${killThresh ?? '—'}% kill · open risk ${s.openRiskPct ?? 0}%`);
+      : riskHot
+        ? `open risk ${s.openRiskPct}% exceeds even the max single-position mandate`
+        : `dd ${killCur ?? '—'}%/${killThresh ?? '—'}% kill · open risk ${s.openRiskPct ?? 0}%` +
+          (riskWarm ? ' (above 25% — inside the 85%-margin mandate)' : ''));
 }
 
 // ---------- 5. plan freshness ----------
