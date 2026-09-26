@@ -21,6 +21,9 @@ const CONTRACTS_URL =
 const TICKERS_URL =
   'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
 const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
+// every public fetch gets a hard timeout — one stalled kline request used
+// to freeze the whole cycle with the book unprotected on the exchange
+const TF = () => AbortSignal.timeout(12000);
 const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
 const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: skips third-party intel feeds + RSS
@@ -168,7 +171,8 @@ function rsi(closes, period = 14) {
 
 async function fetchKlines(symbol, light = false) {
   const res = await fetch(
-    `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`
+    `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`,
+    { signal: TF() }
   );
   if (!res.ok) return null;
   const { data } = await res.json();
@@ -194,7 +198,8 @@ async function fetchKlines(symbol, light = false) {
   let candles5m = null;
   try {
     const r5 = light ? { ok: false } : await fetch(
-      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`
+      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`,
+      { signal: TF() }
     );
     if (r5.ok) {
       const d5 = await r5.json();
@@ -223,7 +228,8 @@ async function fetchEntryCandles(e) {
   let start = e.ts;
   for (let page = 0; page < 3; page++) {
     const res = await fetch(
-      `${CANDLES_URL}?symbol=${e.asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${Date.now()}&limit=200`
+      `${CANDLES_URL}?symbol=${e.asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${Date.now()}&limit=200`,
+      { signal: TF() }
     );
     if (!res.ok) return null;
     const { data } = await res.json();
@@ -270,8 +276,8 @@ async function fetch5mRange(asset, fromMs, toMs) {
 async function main() {
   const now = Date.now();
   const [symbolsRes, tickersRes] = await Promise.all([
-    fetch(CONTRACTS_URL),
-    fetch(TICKERS_URL),
+    fetch(CONTRACTS_URL, { signal: TF() }),
+    fetch(TICKERS_URL, { signal: TF() }),
   ]);
   if (!symbolsRes.ok || !tickersRes.ok)
     throw new Error(`bitget http ${symbolsRes.status}/${tickersRes.status}`);
@@ -1111,6 +1117,17 @@ async function main() {
         rangePosition: round(r.rangePosition),
         reversalScore: r.surgeScore,
         liquidityScore: r.liquidityScore,
+        // speed-to-TP1 estimate (hours) — computed at build time so it
+        // serializes into the artifact AND drives entry ordering later:
+        // TP1 distance (0.55x target) / per-bar ATR velocity, discounted
+        // when a breakout is already running in the trade direction.
+        etaH: (() => {
+          const vel = Math.max(0.05, ta?.atrPct ?? 0.5);
+          const runMul =
+            ta?.ignition?.dir === direction ? 0.5 :
+            (r.momentumScore ?? 0) >= 70 ? 0.75 : 1;
+          return +(((targetPct ?? 2) * 0.55) / vel * runMul).toFixed(2);
+        })(),
       };
     });
 
@@ -1497,25 +1514,57 @@ async function main() {
   // lacks kline data. This is the governor Will described: fifteen crypto
   // longs stop being fifteen risks the moment the tape says they're one.
   const SAME_BET_CORR = 0.6;
+  // REAL-book heat — the paper ledger retired; heat now measures the live
+  // exchange positions: stop distance comes from the executor's own plan
+  // dump (live-ledger.plans), sized against real equity. A ratcheted stop
+  // above entry = locked profit = zero heat. A position whose stop can't
+  // be read prices a conservative 1.2% tail so it still counts.
+  const livePlans = (() => {
+    try {
+      return (
+        JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).plans || {}
+      );
+    } catch { return {}; }
+  })();
+  const liveEquityUsd = (() => {
+    try {
+      const q = +JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).equityUsd;
+      return q > 0 ? q : EQUITY;
+    } catch { return EQUITY; }
+  })();
+  const liveStopRiskUsd = (p) => {
+    const notional = Math.abs(+p.size || 0) * (+p.entry || 0);
+    if (!(notional > 0) || !(p.entry > 0)) return 0;
+    const sgn = p.side === 'long' ? 1 : -1;
+    const stop = (livePlans[p.symbol] || []).find(
+      (x) => /loss|stop|moving/i.test(x.planType || '') && +x.triggerPrice > 0
+    );
+    const riskPct = stop
+      ? Math.max(0, (sgn * (p.entry - +stop.triggerPrice)) / p.entry)
+      : 0.012;
+    return notional * riskPct;
+  };
+  const clusterOfSym = (a) =>
+    clusterOf({
+      asset: a,
+      cls:
+        assetClass(
+          a.toUpperCase(),
+          contractBySymbol.get(`${a}USDT`.toUpperCase())?.isRwa === 'YES'
+        ),
+    });
   const openRiskByCluster = (candidate) =>
-    (ledger.entries
-      .filter((e) => {
-        if (e.status !== 'open') return false;
+    (livePosNow
+      .filter((p) => {
         // same-direction only: a +0.9-correlated SHORT against an open LONG
         // is a hedge, not a stacked bet — counting it as heat double-charges
         // the cluster for risk that nets out
-        if (e.direction !== candidate.direction) return false;
-        const c = corrTo(candidate.asset, e.asset);
-        return c != null ? c >= SAME_BET_CORR : clusterOf(e) === clusterOf(candidate);
+        const pDir = p.side === 'long' ? 'LONG' : 'SHORT';
+        if (pDir !== candidate.direction) return false;
+        const c = corrTo(candidate.asset, liveSymOf(p));
+        return c != null ? c >= SAME_BET_CORR : clusterOfSym(liveSymOf(p)) === clusterOfSym(candidate.asset);
       })
-      .reduce((a, e) => {
-        const stopPnl = e.tps
-          ? (e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
-          : -(e.stopPct ?? Math.max(4, e.targetPct ?? 8));
-        return (
-          a + (Math.max(0, -stopPnl) / 100) * remFracOf(e) * (e.notional ?? NOTIONAL)
-        );
-      }, 0) / EQUITY) * 100;
+      .reduce((a, p) => a + liveStopRiskUsd(p), 0) / liveEquityUsd) * 100;
   // no-trade floor: below BBB the board is noise — signals still emit and
   // archive (the eval engine grades them) but no position opens. Standing
   // down is a legitimate output.
@@ -1693,31 +1742,11 @@ async function main() {
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
   const openRiskPct = () =>
-    (ledger.entries
-      .filter((e) => e.status === 'open')
-      .reduce((a, e) => {
-        const stopPnl = e.tps
-          ? (e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct ?? 8)))
-          : -(e.stopPct ?? Math.max(4, e.targetPct ?? 8));
-        return (
-          a +
-          (Math.max(0, -stopPnl) / 100) * remFracOf(e) * (e.notional ?? NOTIONAL)
-        );
-      }, 0) /
-      EQUITY) *
-    100;
-  // speed-to-TP1 ranking — "a quick game is a good game". Among qualifying
-  // setups, pursue whichever reaches TP1 first in TIME, not just space:
-  // etaH ~= TP1 distance (0.55x target) / per-bar ATR velocity, discounted
-  // when a breakout is already running (aligned ignition candle or strong
-  // momentum score compress the wait).
-  for (const s of signals) {
-    const vel = Math.max(0.05, s.ta?.atrPct ?? 0.5);
-    const runMul =
-      s.ta?.ignition?.dir === s.direction ? 0.5 :
-      (s.momentumScore ?? 0) >= 70 ? 0.75 : 1;
-    s.etaH = +(((s.targetPct ?? 2) * 0.55) / vel * runMul).toFixed(2);
-  }
+    (livePosNow.reduce((a, p) => a + liveStopRiskUsd(p), 0) / liveEquityUsd) * 100;
+  // speed-to-TP1 ordering — "a quick game is a good game". etaH is stamped
+  // at signal build time (TP1 distance / ATR velocity, discounted when a
+  // breakout is already running) — pursue whichever reaches TP1 first in
+  // TIME, not just space.
   const rankedByEta = [...signals].sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
   for (const s of rankedByEta) {
     // dynamic leverage — scales with MEASURED regime alignment and
@@ -1750,7 +1779,14 @@ async function main() {
     // boundary — the setup then trades at exactly ≥3:1 net. When even the
     // ATR-floor stop is wider, 3:1 is impossible without a noise-clipping
     // stop — stand down, don't fake the ratio.
-    const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2;
+    // "after ALL fees" includes funding — a carry-pay position bleeds every
+    // 8h it's held. Charge the expected drag over the etaH hold window
+    // (capped at one interval — a scalp rarely crosses two timestamps).
+    const fundDrag =
+      s.carry === 'pay'
+        ? Math.abs(s.funding?.ratePct ?? 0) * Math.min(s.etaH ?? 1, 8) / 8
+        : 0;
+    const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2 + fundDrag;
     const rrMaxStop = (s.targetPct - rrCostPct) / 3 - rrCostPct;
     const rrStop = Math.min(stopWant, rrMaxStop);
     const rrOk = rrMaxStop >= Math.max(atrFloor, 0.6);

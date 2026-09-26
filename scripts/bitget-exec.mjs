@@ -13,10 +13,12 @@
 // LIVE_TARGET_POSITIONS (default 4) gives ~25% of balance per trade, up to
 // LIVE_MAX_POSITIONS (default 10) concurrent. Leverage = contract maxLever
 // bounded by the liquidation band (lev <= 80/(stopPct+0.64)) so the stop
-// always fires before liquidation. Exactly ONE take-profit + ONE stop-loss
-// per position; no trailing, no TP ladder, no notional cap. Existing
-// positions missing either leg get it repaired; positions exceeding their
-// slot margin get partially closed to free balance for the other slots.
+// always fires before liquidation. Exits run a staggered TP ladder
+// (40/30/15 banks at 0.55x/1.0x/runnerMult of target) with the ~15% moon
+// bag left unplanned to ride a trailing stop; the stop ratchets up as each
+// bank level approaches. Positions missing protection legs get them
+// repaired; positions exceeding their slot margin get partially closed to
+// free balance for the other slots.
 //
 // Failure discipline: if an entry fills but its TP/SL plan orders fail, the
 // position is closed immediately — a naked position is a worse error than a
@@ -96,15 +98,26 @@ function signHeaders(method, reqPath, qs, bodyStr) {
 }
 async function api(method, reqPath, { qs = '', body = null } = {}) {
   const bodyStr = body ? JSON.stringify(body) : '';
-  const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
-    method,
-    headers: signHeaders(method, reqPath, qs, bodyStr),
-    body: bodyStr || undefined,
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || (j.code && j.code !== '00000'))
-    throw new Error(`${reqPath} ${method} -> ${j.code || res.status} ${j.msg || ''}`);
-  return j.data;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
+        method,
+        headers: signHeaders(method, reqPath, qs, bodyStr),
+        body: bodyStr || undefined,
+        signal: AbortSignal.timeout(15000), // a hung call must not stall the cycle
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || (j.code && j.code !== '00000'))
+        throw new Error(`${reqPath} ${method} -> ${j.code || res.status} ${j.msg || ''}`);
+      return j.data;
+    } catch (e) {
+      // retry only transport failures on GETs — API rejections carry the
+      // '->' marker, and a retried POST could double-fill an order that
+      // actually executed before its response was lost
+      if (attempt === 1 || e.message.includes('->') || method !== 'GET') throw e;
+      await new Promise((r) => setTimeout(r, 700));
+    }
+  }
 }
 const getPos = () =>
   api('GET', '/api/v2/mix/position/all-position', {
@@ -213,10 +226,12 @@ const cancelByType = async (symbol, pred) => {
   return n;
 };
 const cancelPlans = (symbol) => cancelByType(symbol, () => true);
-// cancel ONLY loss plans — a blanket cancel was wiping the TP ladder off
-// the exchange every time a trail ratcheted
+// cancel ONLY loss-side plans — a blanket cancel was wiping the TP ladder
+// off the exchange every time a trail ratcheted. 'moving_plan' is Bitget's
+// trailing-stop type — it stops the same side a loss plan does, so it must
+// match too (a /loss|stop/ regex alone leaves it orphaned).
 const cancelLossPlans = (symbol) =>
-  cancelByType(symbol, (p) => (p.planType || '').includes('loss') || (p.planType || '').includes('stop'));
+  cancelByType(symbol, (p) => /loss|stop|moving/i.test(p.planType || ''));
 
 // ---------- contracts: size rounding + minimums ----------
 async function contractMap() {
@@ -573,7 +588,9 @@ async function main() {
         fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
       ).fills || [];
     for (const f of fj)
-      if ((f.tradeSide === 'open' || (f.profit || 0) === 0) && f.ts >= windowStart)
+      // opens only — a scratch close (profit 0, tradeSide missing) must not
+      // eat the rate budget the same way a real entry does
+      if ((f.tradeSide === 'open' || (f.tradeSide == null && (f.profit || 0) === 0)) && f.ts >= windowStart)
         entriesToday++;
   } catch {}
   const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
@@ -597,6 +614,31 @@ async function main() {
       // upside runs to 1.8x target. Legacy single-TP positions ratchet at
       // ~90% to their only target.
       const profitPlans = existing.filter((x) => /profit/i.test(x.planType || ''));
+      // plan-size drift: after a rebalance or TP-tranche bank, a fixed-size
+      // loss_plan can exceed the remaining position — the exchange rejects
+      // it at trigger (43023). Resync it to the current size (place-then-
+      // cancel keeps the position covered through the swap).
+      if (
+        lossPlan && p.size > 0 &&
+        /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
+        Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size
+      ) {
+        const pid = lossPlan.orderId || lossPlan.planId || lossPlan.id;
+        const trig = +lossPlan.triggerPrice;
+        try {
+          await planOrder(p.symbol, lossPlan.planType, trig, String(p.size), p.side);
+          if (pid) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(pid)]);
+          state.actions.push(`resynced ${p.symbol} stop size ${+lossPlan.size} -> ${p.size}`);
+        } catch {
+          try {
+            if (pid) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(pid)]);
+            await planOrder(p.symbol, lossPlan.planType, trig, String(p.size), p.side);
+            state.actions.push(`resynced ${p.symbol} stop size -> ${p.size} (cancel-first)`);
+          } catch (e2) {
+            state.errors.push(`resync ${p.symbol} stop: ${e2.message}`);
+          }
+        }
+      }
       if (lossPlan && p.size > 0 && !manualHold) {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
@@ -630,12 +672,17 @@ async function main() {
           (sgn === 1 ? wantPx > slTrig : wantPx < slTrig);
         if (wantPx != null && slBetter) {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
-          if (planId)
-            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
-          await planOrder(
-            p.symbol, lossPlan.planType, wantPx,
-            /pos_/.test(lossPlan.planType) ? '0' : String(p.size), p.side
-          );
+          const newSize = /pos_/.test(lossPlan.planType) ? '0' : String(p.size);
+          // place-then-cancel — cancel-first leaves the position naked for
+          // ~200ms every ratchet. If the exchange refuses a second stop on
+          // the same side, fall back to the old order (cancel then place).
+          try {
+            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side);
+            if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
+          } catch {
+            if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
+            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side);
+          }
           state.actions.push(why);
         }
         // scalp ladder — verdict deadlines ~50x tighter than the old clock:
@@ -644,14 +691,24 @@ async function main() {
         //   45min : <65% progress and not meaningfully green -> deadline, cut
         // Anything that clears all three gates is a live runner the
         // ladder/moon-bag trail manages. Losers and laggards die in minutes.
+        // scalp ladder — verdict deadlines ~50x tighter than the old clock:
+        //   216s  : red at all -> cut (loser dies in ~4min, not 2h)
+        //   15min : <35% to next TP AND not meaningfully green -> stall, cut
+        //   45min : <65% progress and not meaningfully green -> deadline, cut
+        // Runner exemption: once tranches start banking, progress-to-next-TP
+        // resets and a moon bag carries prog=0 — gates that only read prog
+        // would murder winners. The upl guard spares anything actually green;
+        // a position with NO remaining profit plans (all banked) answers to
+        // the trail, not the stall clock.
         const uplPct = (p.upl / (p.size * p.entry)) * 100;
         const ageMs = p.cTime ? Date.now() - p.cTime : 0;
+        const runnerMode = !profitPlans.length;
         const scalpDead =
           ageMs > 216e3 && uplPct < 0
             ? `red ${round(uplPct, 2)}% at ${(ageMs / 1e3).toFixed(0)}s`
-            : ageMs > 15 * 60e3 && prog < 0.35
+            : !runnerMode && ageMs > 15 * 60e3 && prog < 0.35 && uplPct < 0.3
             ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
-            : ageMs > 45 * 60e3 && prog < 0.65 && uplPct < 0.8
+            : !runnerMode && ageMs > 45 * 60e3 && prog < 0.65 && uplPct < 0.8
             ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
             : null;
         if (scalpDead) {
@@ -725,16 +782,46 @@ async function main() {
     }
   }
 
+  // ambiguous (dual-sided hedge) positions get NO auto-management — no
+  // exits, no ratchets — but they still deserve protection: repair missing
+  // TP/SL legs so they can't sit naked on the exchange.
+  for (const p of state.positions) {
+    if (!ambiguous.has(p.symbol)) continue;
+    try {
+      const existing = await getPlans(p.symbol).catch(() => []);
+      const sgn = p.side === 'long' ? 1 : -1;
+      const pp = cm[p.symbol]?.pricePlace ?? 6;
+      const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+      const hasProfit = existing.some((x) => /profit/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+      const stopPct = lossPlan && +lossPlan.triggerPrice > 0
+        ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
+        : 1.2;
+      if (!lossPlan) {
+        await planOrder(p.symbol, 'pos_loss',
+          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
+        state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_loss`);
+      }
+      if (!hasProfit) {
+        await planOrder(p.symbol, 'pos_profit',
+          round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side);
+        state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
+      }
+    } catch (e) {
+      state.errors.push(`protect ${p.symbol} ${p.side} (hedged): ${e.message}`);
+    }
+  }
+
   // ---- entries: only when the real drawdown guards are clear and capacity
   // allows — plan.killSwitch is sim-derived and logged for reference only ----
   if (entriesBlocked) {
     state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
     let opened = 0;
+    const openedSym = new Set(); // a dup symbol in the plan must not stack
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
-      if (posBySym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
+      if (posBySym.has(o.symbol) || openedSym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
       if (cooledSym.has(o.symbol)) {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
@@ -760,6 +847,20 @@ async function main() {
           continue;
         }
       }
+      // drift guard — the plan can be up to 15min old; a market order at a
+      // price that already ran past the modeled entry breaks the 3:1
+      // geometry the scanner certified. Chase-fade tolerance: 0.6%.
+      try {
+        const tk = await api('GET', '/api/v2/mix/market/ticker', {
+          qs: `symbol=${o.symbol}&productType=${PRODUCT}`,
+        });
+        const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
+        const drift = (o.direction === 'LONG' ? last - o.refEntry : o.refEntry - last) / o.refEntry;
+        if (last > 0 && drift > 0.006) {
+          state.actions.push(`${o.symbol}: price ran ${round(drift * 100, 2)}% past ref entry — skipped (chasing = worse R:R)`);
+          continue;
+        }
+      } catch {} // ticker unreadable — proceed on the plan's own staleness TTL
       // not in this environment's catalog = unroutable here — record it so
       // the scanner stops emitting entries the executor can never fill
       if (!cm[o.symbol]) {
@@ -927,6 +1028,7 @@ async function main() {
         marginFree = Math.max(0, marginFree - usedMargin);
         state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
         opened++;
+        openedSym.add(o.symbol);
         entriesToday++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting
@@ -1007,16 +1109,22 @@ async function main() {
     // carry realized profit; net-of-fee win rate is the number that matters
     const closes = store.fills.filter((f) => f.tradeSide === 'close' || (f.profit || 0) !== 0);
     const netCloses = closes.filter((f) => f.profit != null);
-    const wins = netCloses.filter((f) => f.profit - (f.fee || 0) > 0);
-    const grossW = wins.reduce((a, f) => a + f.profit - (f.fee || 0), 0);
+    const allFees = store.fills.reduce((a, f) => a + (f.fee || 0), 0);
+    // a fill's true cost = its own fee + the ~0.06% taker on its entry side —
+    // close-side-only accounting was flattering the record by ~40% of costs
+    const netOfFee = (f) => f.profit - (f.fee || 0) - (f.notionalUsd || 0) * 0.0006;
+    const wins = netCloses.filter((f) => netOfFee(f) > 0);
+    const grossW = wins.reduce((a, f) => a + netOfFee(f), 0);
     const grossL = Math.abs(
-      netCloses.filter((f) => f.profit - (f.fee || 0) <= 0).reduce((a, f) => a + f.profit - (f.fee || 0), 0)
+      netCloses.filter((f) => netOfFee(f) <= 0).reduce((a, f) => a + netOfFee(f), 0)
     );
     state.realizedStats = {
       closes: netCloses.length,
       winRatePct: netCloses.length ? round((wins.length / netCloses.length) * 100, 1) : null,
-      netUsd: round(netCloses.reduce((a, f) => a + f.profit - (f.fee || 0), 0), 4),
-      feesUsd: round(store.fills.reduce((a, f) => a + (f.fee || 0), 0), 4),
+      // bottom line = realized profit minus EVERY fee on record — the old
+      // netUsd only deducted close-side fees, hiding the entry toll
+      netUsd: round(netCloses.reduce((a, f) => a + f.profit, 0) - allFees, 4),
+      feesUsd: round(allFees, 4),
       profitFactor: grossL > 0 ? round(grossW / grossL, 2) : null,
     };
   } catch (e) {
