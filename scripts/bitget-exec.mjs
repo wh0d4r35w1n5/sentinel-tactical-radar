@@ -718,26 +718,43 @@ async function main() {
     try { store = JSON.parse(fs.readFileSync(fillsPath, 'utf8')); } catch {}
     if (!Array.isArray(store.fills)) store.fills = [];
     const seen = new Set(store.fills.map((f) => f.tradeId));
+    const byId = new Map(store.fills.map((f) => [f.tradeId, f]));
     let added = 0;
+    let repaired = 0;
     for (const f of await getFills().catch(() => [])) {
       const id = f.tradeId || f.fillId || `${f.orderId}:${f.cTime}`;
-      if (!id || seen.has(id)) continue;
+      if (!id) continue;
+      const fee = Math.abs(+((f.feeDetail || [])[0]?.totalFee ?? f.fee ?? f.totalFee ?? 0));
+      const size = +(f.baseVolume ?? f.size ?? f.volume ?? f.qty ?? 0);
+      // backfill: entries recorded before the feeDetail/baseVolume fix
+      // carry fee=0/size=0 — patch them from the exchange record
+      if (seen.has(id)) {
+        const old = byId.get(id);
+        if (old && (!old.fee || !old.size)) {
+          if (!old.fee) old.fee = fee;
+          if (!old.size) old.size = size;
+          if (f.quoteVolume) old.notionalUsd = +f.quoteVolume;
+          if (f.tradeSide) old.tradeSide = f.tradeSide;
+          repaired++;
+        }
+        continue;
+      }
       seen.add(id);
       store.fills.unshift({
         tradeId: id,
         symbol: f.symbol,
         side: f.side,
         price: +f.price,
-        size: +(f.baseVolume ?? f.size ?? f.volume ?? f.qty ?? 0),
+        size,
         notionalUsd: +(f.quoteVolume ?? 0),
-        fee: Math.abs(+((f.feeDetail || [])[0]?.totalFee ?? f.fee ?? f.totalFee ?? 0)),
+        fee,
         profit: +(f.profit ?? 0),
         tradeSide: f.tradeSide || null,
         ts: +(f.cTime ?? f.uTime ?? Date.now()),
       });
       added++;
     }
-    if (added) {
+    if (added || repaired) {
       store.fills = store.fills.slice(0, 400);
       fs.writeFileSync(fillsPath, JSON.stringify(store));
     }
