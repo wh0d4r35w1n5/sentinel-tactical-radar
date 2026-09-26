@@ -547,6 +547,22 @@ async function main() {
     }
   } catch {}
 
+  // ---- daily entry cap — CWT doctrine 'overtrading' (16/22 episodes):
+  // a book that opens unbounded entries every 15s is churn, not trading.
+  // Cap new entries at 12 per UTC day — selectivity IS the edge.
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  let entriesToday = 0;
+  try {
+    const fj =
+      JSON.parse(
+        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
+      ).fills || [];
+    for (const f of fj)
+      if ((f.tradeSide === 'open' || (f.profit || 0) === 0) && f.ts >= +dayStart)
+        entriesToday++;
+  } catch {}
+  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 12);
+
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a profit plan. Orphaned/manual positions get synthesized protection —
   // stop distance is inferred from an existing loss plan, else 1.2%; the
@@ -701,6 +717,10 @@ async function main() {
       if (cooledSym.has(o.symbol)) {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
+      }
+      if (entriesToday >= MAX_ENTRIES_DAY) {
+        state.actions.push(`daily entry cap reached (${MAX_ENTRIES_DAY}) — no new opens until tomorrow`);
+        break;
       }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
           !Number.isFinite(o.stopPct) || !Number.isFinite(o.targetPct) ||
@@ -864,6 +884,7 @@ async function main() {
         marginFree = Math.max(0, marginFree - usedMargin);
         state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
         opened++;
+        entriesToday++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting
         // entries the exchange can't hold: 40805 'Unsupported operation'

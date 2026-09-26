@@ -2337,6 +2337,45 @@ async function main() {
       shortGate: 'SHORTs blocked outside bear/risk-off tape except Liquidity Sweep + Key Level SFP',
       atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
     },
+    // Chat With Traders corpus — transcripts distilled into doctrine themes;
+    // each theme records how many episodes argued it and where it's encoded
+    // in this codebase. Evidence, not decoration.
+    wisdom: (() => {
+      try {
+        const w = JSON.parse(
+          fs.readFileSync(path.join(API, 'cwt-wisdom.json'), 'utf8')
+        );
+        const impl = {
+          cut_losers_fast: 'stall-exit 2h / thesis-flip / decay 5h',
+          let_winners_run: 'TP ladder 40/30/15 + 15% moon-bag trail',
+          position_sizing: 'RISK_PCT × conv × stratMul / stopFrac',
+          survival_first: `${ddKillPct}% DD kill / ${RISK_MAX ? 25 : 6}% daily halt / never-naked`,
+          edge_evidence: 'prospective eval gates (n>=20, shrunk hit/alpha)',
+          discipline_process: 'score floors + heat caps + profile rails',
+          journal_review: 'real-fills journal + net-of-fee scoreboard',
+          overtrading: 'daily entry cap + per-symbol cooldown + MIN_SCORE',
+          loss_streak_size: '2-loss symbol cooldown + DD throttle on riskMul',
+          avoid_leverage: 'lev <= 80/(stop+0.64) — stop inside liq band',
+          dont_average_losers: 'one position per symbol — no adding',
+          risk_reward: 'net-of-cost floor + ladder R:R geometry',
+          regime_adapt: 'regime/mktType gates + SHORT class rule',
+          emotion_control: 'rules are code — no discretion in the loop',
+          know_why: 'strategy + reasons provenance on every signal',
+        };
+        return {
+          source: w.source,
+          episodes: w.episodes,
+          themes: Object.fromEntries(
+            Object.entries(impl).map(([k, v]) => [
+              k,
+              { episodes: w.themeHits?.[k] ?? 0, impl: v },
+            ])
+          ),
+        };
+      } catch {
+        return null;
+      }
+    })(),
     learning: {
       active: learnActive,
       closedN: closedTotal,
