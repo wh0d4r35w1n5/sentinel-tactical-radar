@@ -511,21 +511,29 @@ async function main() {
       const lossPlan = existing.find((x) => /loss|stop/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
       const hasProfit = !!profitPlan;
-      // breakeven ratchet — "no one went broke taking profit": once a
-      // position is >=55% of the way to its profit target, the stop moves
-      // up to entry + ~0.2% (covers round-trip taker fees). From there the
-      // trade cannot lose — worst case is a scratch, upside runs to TP.
-      if (lossPlan && profitPlan && p.size > 0) {
+      // breakeven ratchet — "no one went broke taking profit": with the TP
+      // ladder live, progress is measured against the NEAREST profit
+      // trigger, so the tranche-1 fill (0.55x target) is the ratchet point.
+      // After TP1 banks, the stop moves to entry + ~0.2% (covers round-trip
+      // fees) — tranches 2-3 are then free runners: worst case scratch,
+      // upside runs to 1.8x target. Legacy single-TP positions ratchet at
+      // ~90% to their only target.
+      const profitPlans = existing.filter((x) => /profit/i.test(x.planType || ''));
+      if (lossPlan && profitPlans.length && p.size > 0) {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
-        const tpTrig = +profitPlan.triggerPrice;
+        // nearest profit trigger in the trade direction = next bank level
+        const nearTp = profitPlans
+          .map((x) => +x.triggerPrice)
+          .filter((t) => t > 0 && (sgn === 1 ? t > p.entry : t < p.entry))
+          .sort((a, b) => (sgn === 1 ? a - b : b - a))[0];
         const slTrig = +lossPlan.triggerPrice;
-        const dist = Math.abs(tpTrig - p.entry);
+        const dist = nearTp ? Math.abs(nearTp - p.entry) : 0;
         const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
         const pp = cm[p.symbol]?.pricePlace ?? 6;
         const bePx = round(p.entry * (1 + (sgn * 0.2) / 100), pp);
         const slSubBE = sgn === 1 ? slTrig < p.entry : slTrig > p.entry;
-        if (prog >= 0.55 && slTrig > 0 && slSubBE) {
+        if (prog >= 0.9 && slTrig > 0 && slSubBE) {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
           if (planId)
             await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
@@ -667,20 +675,62 @@ async function main() {
           const pp = (await getPos()).find((x) => x.symbol === o.symbol && +x.total > 0);
           if (pp && +pp.openPriceAvg > 0) fill = +pp.openPriceAvg;
         } catch {}
-        // ONE take-profit at the plan target covering the full size; ONE
-        // loss plan at the stop covering the full size. No ladder, no trail.
+        // staggered TP ladder (reinstated): 45% banks at 0.55x target —
+        // first-passage probability of a nearer level is strictly higher,
+        // and once it fills the breakeven ratchet makes tranches 2-3 free
+        // runners — 35% at the original target, 20% runner at 1.8x target
+        // captures the tail a single TP forfeits. EV = sum over tranches of
+        // P(reach)*size*dist; the ratchet zeroes post-TP1 downside, so the
+        // ladder dominates single-TP for any distribution with a tail.
         const pp = cm[o.symbol]?.pricePlace ?? 6;
-        const tpPlan = planOrder(
-          o.symbol, 'profit_plan',
-          round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-          size, holdSide
+        const sp = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
+        const minQty = Math.max(
+          cm[o.symbol]?.minTradeNum || 0,
+          (cm[o.symbol]?.minTradeUSDT || 0) / fill
         );
-        const slPlan = planOrder(
-          o.symbol, 'loss_plan',
-          round(fill * (1 - sgn * (o.stopPct / 100)), pp),
-          size, holdSide
+        const ladder = size >= 3 * minQty;
+        const plans = [];
+        if (ladder) {
+          const tranches = [
+            { frac: 0.45, mult: 0.55 },
+            { frac: 0.35, mult: 1.0 },
+            { frac: 0.20, mult: 1.8 },
+          ];
+          let placed = 0;
+          for (let ti = 0; ti < tranches.length; ti++) {
+            const t = tranches[ti];
+            // last tranche takes the remainder so rounding never oversells
+            const tsize =
+              ti === tranches.length - 1
+                ? Math.floor((size - placed) * sp) / sp
+                : Math.floor(size * t.frac * sp) / sp;
+            if (tsize < minQty) continue;
+            placed += tsize;
+            plans.push(
+              planOrder(
+                o.symbol, 'profit_plan',
+                round(fill * (1 + sgn * (o.targetPct * t.mult) / 100), pp),
+                String(tsize), holdSide
+              )
+            );
+          }
+        } else {
+          plans.push(
+            planOrder(
+              o.symbol, 'profit_plan',
+              round(fill * (1 + sgn * (o.targetPct / 100)), pp),
+              size, holdSide
+            )
+          );
+        }
+        plans.push(
+          planOrder(
+            o.symbol, 'loss_plan',
+            round(fill * (1 - sgn * (o.stopPct / 100)), pp),
+            size, holdSide
+          )
         );
-        await Promise.all([tpPlan, slPlan]);
+        await Promise.all(plans);
         const usedMargin = (size * fill) / lev;
         marginFree = Math.max(0, marginFree - usedMargin);
         state.actions.push(`opened ${o.symbol} ${o.direction} ${size} @~${round(fill, 6)} lev ${lev}x margin $${round(usedMargin, 2)} notional $${round(size * fill, 2)}`);
