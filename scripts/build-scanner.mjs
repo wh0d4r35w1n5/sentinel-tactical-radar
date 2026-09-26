@@ -1098,9 +1098,11 @@ async function main() {
               fibClusters: ta.fib?.clusters ?? 0,
               trend: ta.structure?.trend ?? null,
               vwap: ta.vwap ? { z: ta.vwap.z, devPct: ta.vwap.devPct, fade: ta.vwap.fade } : null,
+              atrPct: ta.atrPct ?? null,
+              ignition: ta.ignition ?? null,
               eng: ta.eng
                 ? Object.fromEntries(
-                    Object.entries(ta.eng).map(([k, x]) => [k, x ? { dir: x.dir, label: x.label } : null])
+                    Object.entries(ta.eng).map(([k, x]) => [k, x ? { dir: x.dir, label: x.label, confirmed: x.confirmed } : null])
                   )
                 : null,
             }
@@ -1704,7 +1706,20 @@ async function main() {
       }, 0) /
       EQUITY) *
     100;
+  // speed-to-TP1 ranking — "a quick game is a good game". Among qualifying
+  // setups, pursue whichever reaches TP1 first in TIME, not just space:
+  // etaH ~= TP1 distance (0.55x target) / per-bar ATR velocity, discounted
+  // when a breakout is already running (aligned ignition candle or strong
+  // momentum score compress the wait).
   for (const s of signals) {
+    const vel = Math.max(0.05, s.ta?.atrPct ?? 0.5);
+    const runMul =
+      s.ta?.ignition?.dir === s.direction ? 0.5 :
+      (s.momentumScore ?? 0) >= 70 ? 0.75 : 1;
+    s.etaH = +(((s.targetPct ?? 2) * 0.55) / vel * runMul).toFixed(2);
+  }
+  const rankedByEta = [...signals].sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
+  for (const s of rankedByEta) {
     // dynamic leverage — scales with MEASURED regime alignment and
     // conviction, never with narrative. Under 1%-risk sizing leverage
     // doesn't multiply profit; it sets margin efficiency and liquidation
@@ -1780,6 +1795,17 @@ async function main() {
       })() &&
       // only ≥3:1 net R:R setups trade — everything thinner is a donation
       rrOk &&
+      // real-vs-fake move (OBV / Dow Theory): a breakout the volume trend
+      // doesn't sponsor is fake — price extends while participation
+      // disagrees. Require volume alignment: OBV trending our way, or a
+      // Dow-confirmed trend in our direction, or the ignition candle that
+      // IS this signal. Missing OBV data doesn't block (can't fake-check
+      // what doesn't exist).
+      ((s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
+        (s.ta?.eng?.dow?.confirmed === true &&
+          s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
+        s.ta?.ignition?.dir === s.direction ||
+        !s.ta?.eng?.obv) &&
       // noise cap: a symbol whose 1h ATR exceeds ~3.5% of price moves
       // faster than a sized position can be protected — clip, don't trade
       (s.ta?.atrPct ?? 0) <= 3.5 &&
@@ -1828,6 +1854,7 @@ async function main() {
         stopPct,
         netRR: pct((s.targetPct - rrCostPct) / (stopPct + rrCostPct)),
         costPct: rrCostPct,
+        etaH: s.etaH ?? null,
         // runner distance scales with confluence — a high-confluence setup
         // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
         runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
