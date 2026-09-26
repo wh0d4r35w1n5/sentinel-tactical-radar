@@ -67,6 +67,12 @@ const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6))
 // floor up to the exchange minimum instead of skipping — for tiny real
 // accounts proving the pipeline. Requires LIVE_FLOOR_MIN=1; never default.
 const FLOOR_MIN = process.env.LIVE_FLOOR_MIN === '1';
+// manually-placed positions the executor must NOT auto-manage — no
+// rebalance, decay, flip, or scalp-timeout exits. Exchange-side TP/SL
+// still protect them; the ledger still reports them.
+const MANUAL = new Set(
+  (process.env.SENTINEL_MANUAL_HOLD || '').split(',').map((s) => s.trim()).filter(Boolean)
+);
 const PAPER_EQUITY = 10000; // plan notional is denominated in the $10k model
 
 const log = (...a) => console.log('[exec]', ...a);
@@ -450,6 +456,7 @@ async function main() {
   // partial close releasing margin for the remaining slots.
   const slotMargin = (equityUsd * 0.96) / TARGET_POSITIONS;
   for (const p of posBySym.values()) {
+    if (MANUAL.has(p.symbol)) continue;
     try {
       const levNow = Math.max(1, p.lev || 1);
       const marginEst = (p.size * p.entry) / levNow;
@@ -489,6 +496,7 @@ async function main() {
   // position that hasn't gone stale.
   const DECAY_MS = (+(process.env.EXEC_DECAY_HOURS || 5)) * 3600e3;
   for (const p of posBySym.values()) {
+    if (MANUAL.has(p.symbol)) continue;
     try {
       if (!p.cTime) continue;
       const ageMs = Date.now() - p.cTime;
@@ -515,6 +523,7 @@ async function main() {
       (plan.thesisFlips || []).map((f) => [f.symbol, f.direction])
     );
     for (const p of posBySym.values()) {
+      if (MANUAL.has(p.symbol)) continue;
       const flip = flips.get(p.symbol);
       const posDir = p.side === 'long' ? 'LONG' : 'SHORT';
       if (!flip || flip === posDir) continue;
@@ -575,6 +584,7 @@ async function main() {
   // take-profit lands at 2R of that distance.
   for (const p of posBySym.values()) {
     try {
+      const manualHold = MANUAL.has(p.symbol);
       const existing = await getPlans(p.symbol).catch(() => []);
       const lossPlan = existing.find((x) => /loss|stop/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
@@ -587,7 +597,7 @@ async function main() {
       // upside runs to 1.8x target. Legacy single-TP positions ratchet at
       // ~90% to their only target.
       const profitPlans = existing.filter((x) => /profit/i.test(x.planType || ''));
-      if (lossPlan && p.size > 0) {
+      if (lossPlan && p.size > 0 && !manualHold) {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
         // nearest profit trigger in the trade direction = next bank level
@@ -655,7 +665,7 @@ async function main() {
       // gets the staggered ladder — cancel the single TP, replace with
       // 45/35/20 tranches at 0.55x/1.0x/1.8x of its original target distance.
       // Too-small positions (<3x contract min) keep their single TP.
-      if (profitPlans.length === 1 && p.size > 0) {
+      if (profitPlans.length === 1 && p.size > 0 && !manualHold) {
         const sgn0 = p.side === 'long' ? 1 : -1;
         const tpTrig = +profitPlans[0].triggerPrice;
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
