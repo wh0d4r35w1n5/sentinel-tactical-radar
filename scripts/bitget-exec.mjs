@@ -587,15 +587,26 @@ async function main() {
         const minQty = Math.max(c.minTradeNum, c.minTradeUSDT / o.refEntry);
         const minNotional = minQty * o.refEntry;
         const marginNeeded = minNotional / lev;
-        // margin must cover size AND the open taker fee on that notional
+        // margin must cover size AND the open taker fee on that notional —
+        // out of FREE margin, not equity: comparing against equity*0.8 while
+        // marginFree was ~0 was the recurring 40762 'exceeds the balance'
+        // spam. Reserve 20% of equity in the default profile; max profile
+        // spends down to fees-only.
         const feeNeeded = minNotional * 0.0006;
-        if (marginNeeded + feeNeeded <= Math.max(equityUsd * 0.8, marginFree)) {
+        const budget = marginFree - (RISK_MAX ? 0 : equityUsd * 0.2);
+        if (marginNeeded + feeNeeded <= budget) {
           const p = Math.pow(10, c.sizePlace);
           size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
           state.actions.push(`${o.symbol}: scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
         }
       }
-      if (!size) { state.errors.push(`${o.symbol}: size below contract minimum`); continue; }
+      if (!size) {
+        // fully deployed isn't an error — only flag it when there was real
+        // free margin that still couldn't cover the contract minimum
+        const msg = `${o.symbol}: ${marginFree <= 0.01 ? 'no free margin — skipped' : 'size below contract minimum'}`;
+        (marginFree <= 0.01 ? state.actions : state.errors).push(msg);
+        continue;
+      }
       const sgn = o.direction === 'LONG' ? 1 : -1;
       const holdSide = o.direction === 'LONG' ? 'long' : 'short';
       const coid = `s${plan.ts}${o.symbol}`.slice(0, 38);
