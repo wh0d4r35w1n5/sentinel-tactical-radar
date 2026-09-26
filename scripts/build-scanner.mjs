@@ -1517,7 +1517,10 @@ async function main() {
     !mktType.startsWith('bear')
       ? 10
       : 0;
-  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s) - shortPenaltyOf(s);
+  // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
+  // stack needs extra score to justify the entry (confirmation layer)
+  const mtfPenaltyOf = (s) => (s.ta?.eng?.mtf && s.ta.eng.mtf.aligned === false ? 4 : 0);
+  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s) - shortPenaltyOf(s) - mtfPenaltyOf(s);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   // taker slippage beyond the half-spread already priced on entry — market
   // exits (stops, trails, time-outs, reversals, liq) never fill the level.
@@ -1723,7 +1726,19 @@ async function main() {
       // costs is a donation, not a trade. taker fees (0.12% RT notional) +
       // half the quoted spread + modeled exit slippage + a 1.2% net-edge
       // minimum. Funding drag when paying is charged separately above.
-      s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >= 1.2 &&
+      // net-of-cost floor: volatile tapes have wider real costs (spread +
+      // slip) — raise the required net edge there, not just the score bar
+      s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2 >=
+        (mktType.endsWith('volatile') ? 1.6 : 1.2) &&
+      // noise cap: a symbol whose 1h ATR exceeds ~3.5% of price moves
+      // faster than a sized position can be protected — clip, don't trade
+      (s.ta?.atrPct ?? 0) <= 3.5 &&
+      // spread cap: >0.4% quoted spread = half the target eaten before
+      // the trade starts — the exchange's toll, not our edge
+      (s.spreadPct ?? 0) <= 0.4 &&
+      // funding hard block: paying >0.10%/8h to hold is a structural leak
+      // a 2% target can't repay — carry cost beats the entry
+      !(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1) &&
       ddNow < ddKillPct &&
       mktAllows(s) &&
       // SHORT class gate: 7.19% hit rate over n=167 — a sideways/bull-tape
@@ -1761,10 +1776,26 @@ async function main() {
         refEntry: fillPx,
         targetPct: s.targetPct,
         stopPct,
+        // runner distance scales with confluence — a high-confluence setup
+        // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
+        runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
+        reason: s.ta?.reasons?.[0] || null,
         ver: s.ver ?? ENGINE_VERSION,
       });
     }
   }
+  // thesis-flip signals for the executor: a graded liquidity sweep or SFP
+  // against an OPEN position's direction means its thesis just died —
+  // emitted for every signal regardless of the order gates, so positions
+  // can be exited on evidence the book can't act on as an entry.
+  livePlan.thesisFlips = signals
+    .filter(
+      (s) =>
+        s.ta &&
+        (s.ta.reasons?.[0] === 'liq-sweep' || s.ta.sfp) &&
+        s.ta.liquidity?.setup?.grade !== 'C'
+    )
+    .map((s) => ({ symbol: s.asset + 'USDT', direction: s.direction }));
   // reversal triggers only from signals that would actually trade — a
   // sub-floor or market-type-gated opposite signal was force-closing open
   // positions the engine itself would never enter on

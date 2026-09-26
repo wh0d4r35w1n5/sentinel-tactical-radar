@@ -501,6 +501,52 @@ async function main() {
     }
   }
 
+  // ---- thesis-flip exit: if the freshest scan emitted a graded liquidity
+  // sweep or SFP AGAINST an open position's direction, the thesis is dead —
+  // exit now rather than donating the full stop distance. The scanner emits
+  // plan.thesisFlips from its signal set regardless of the order gates.
+  try {
+    const flips = new Map(
+      (plan.thesisFlips || []).map((f) => [f.symbol, f.direction])
+    );
+    for (const p of posBySym.values()) {
+      const flip = flips.get(p.symbol);
+      const posDir = p.side === 'long' ? 'LONG' : 'SHORT';
+      if (!flip || flip === posDir) continue;
+      await closePosition(p.symbol, p.side);
+      state.actions.push(
+        `thesis-flip ${p.symbol}: fresh ${flip} signal vs open ${posDir} — exited before stop`
+      );
+      posBySym.delete(p.symbol);
+    }
+  } catch (e) {
+    state.errors.push(`thesis-flip: ${e.message}`);
+  }
+
+  // ---- loss-streak cooldown: a symbol whose last two closed trades were
+  // losers goes on a 6h entry timeout — repeated bleed on one name is a
+  // signal the engine's model of that market is wrong right now.
+  const cooledSym = new Set();
+  try {
+    const fj =
+      JSON.parse(
+        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
+      ).fills || [];
+    const bySym = {};
+    for (const f of fj)
+      if (f.tradeSide === 'close' || (f.profit || 0) !== 0)
+        (bySym[f.symbol] = bySym[f.symbol] || []).push(f);
+    for (const [s, arr] of Object.entries(bySym)) {
+      const last2 = arr.slice(0, 2);
+      if (
+        last2.length === 2 &&
+        last2.every((x) => (x.profit || 0) < 0) &&
+        Date.now() - last2[0].ts < 6 * 3600e3
+      )
+        cooledSym.add(s);
+    }
+  } catch {}
+
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a profit plan. Orphaned/manual positions get synthesized protection —
   // stop distance is inferred from an existing loss plan, else 1.2%; the
@@ -531,9 +577,16 @@ async function main() {
         const dist = nearTp ? Math.abs(nearTp - p.entry) : 0;
         const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
         const pp = cm[p.symbol]?.pricePlace ?? 6;
-        const bePx = round(p.entry * (1 + (sgn * 0.2) / 100), pp);
-        const slSubBE = sgn === 1 ? slTrig < p.entry : slTrig > p.entry;
-        if (prog >= 0.9 && slTrig > 0 && slSubBE) {
+        // ratchet tiers — the stop locks ~55% of the NEXT bank level once
+        // price is within 10% of it, then keeps climbing: near TP1 the stop
+        // lands at entry+0.30xT (covered by the 0.25% fee floor); near TP2
+        // it locks the TP1 price; near TP3 it locks TP2. The ladder itself
+        // banks the tranches — this keeps the still-open size protected as
+        // a free-and-improving runner. Only ever moves in the trade's favor.
+        const lockPct = Math.max(0.25, 0.55 * ((dist / p.entry) * 100));
+        const bePx = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
+        const slBetter = sgn === 1 ? bePx > slTrig : bePx < slTrig;
+        if (prog >= 0.9 && slTrig > 0 && slBetter) {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
           if (planId)
             await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
@@ -542,7 +595,7 @@ async function main() {
             /pos_/.test(lossPlan.planType) ? '0' : String(p.size), p.side
           );
           state.actions.push(
-            `breakeven ${p.symbol}: ${round(prog * 100, 0)}% to TP — stop ratcheted to entry+fees @ ${bePx}, trade is now a free runner`
+            `ratchet ${p.symbol}: ${round(prog * 100, 0)}% to next TP — stop locked at +${round(lockPct, 2)}% (${bePx})`
           );
         }
       }
@@ -622,6 +675,10 @@ async function main() {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
       if (posBySym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
+      if (cooledSym.has(o.symbol)) {
+        state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
+        continue;
+      }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
           !Number.isFinite(o.stopPct) || !Number.isFinite(o.targetPct) ||
           !Number.isFinite(o.leverage) || (o.direction !== 'LONG' && o.direction !== 'SHORT')) {
@@ -652,7 +709,12 @@ async function main() {
       // risk multiplier: max profile (or SENTINEL_RISK_MUL) puts 3x the
       // per-slot share on each order — same slot logic, triple the slice.
       // Capped at the full free margin after the fee reserve either way.
-      const riskMul = +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1));
+      // Equity-curve throttle: while the book runs >10% below its real
+      // peak the multiplier halves — protect capital during a bleed, press
+      // it during equity highs. Sizing still uses whatever margin is free.
+      const riskMul =
+        +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)) *
+        ((state.ddPct ?? 0) > 10 ? 0.5 : 1);
       // leverage: contract max, bounded so the designed stop still sits
       // inside the liquidation band — lev <= 80/(stopPct + 0.64) keeps the
       // stop at <=80% of the band edge, otherwise liquidation fires first.
@@ -729,13 +791,18 @@ async function main() {
           cm[o.symbol]?.minTradeNum || 0,
           (cm[o.symbol]?.minTradeUSDT || 0) / fill
         );
-        const ladder = size >= 3 * minQty;
+        // ladder only when tranche-1's distance still clears round-trip
+        // fees (~0.25%) with room — a sub-fee TP1 banks dust, not profit
+        const ladder = size >= 3 * minQty && o.targetPct * 0.55 >= 0.9;
+        // runner distance scales with signal confluence — strong setups
+        // earn a longer tail (1.6x..2.4x), weak ones bank sooner
+        const runnerMult = Math.max(1.2, +(o.runnerMult || 1.8));
         const plans = [];
         if (ladder) {
           const tranches = [
             { frac: 0.45, mult: 0.55 },
             { frac: 0.35, mult: 1.0 },
-            { frac: 0.20, mult: 1.8 },
+            { frac: 0.20, mult: runnerMult },
           ];
           let placed = 0;
           for (let ti = 0; ti < tranches.length; ti++) {
@@ -851,6 +918,22 @@ async function main() {
     }
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
+    // realized scoreboard from the exchange's own record — close fills
+    // carry realized profit; net-of-fee win rate is the number that matters
+    const closes = store.fills.filter((f) => f.tradeSide === 'close' || (f.profit || 0) !== 0);
+    const netCloses = closes.filter((f) => f.profit != null);
+    const wins = netCloses.filter((f) => f.profit - (f.fee || 0) > 0);
+    const grossW = wins.reduce((a, f) => a + f.profit - (f.fee || 0), 0);
+    const grossL = Math.abs(
+      netCloses.filter((f) => f.profit - (f.fee || 0) <= 0).reduce((a, f) => a + f.profit - (f.fee || 0), 0)
+    );
+    state.realizedStats = {
+      closes: netCloses.length,
+      winRatePct: netCloses.length ? round((wins.length / netCloses.length) * 100, 1) : null,
+      netUsd: round(netCloses.reduce((a, f) => a + f.profit - (f.fee || 0), 0), 4),
+      feesUsd: round(store.fills.reduce((a, f) => a + (f.fee || 0), 0), 4),
+      profitFactor: grossL > 0 ? round(grossW / grossL, 2) : null,
+    };
   } catch (e) {
     state.errors.push(`fills journal: ${e.message}`);
   }
