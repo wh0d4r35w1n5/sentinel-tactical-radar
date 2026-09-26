@@ -1254,9 +1254,23 @@ async function main() {
   // authored by two producers (VPS rapid + GH shadow) whose coin-detail files
   // disagree; a spark living on the signal row renders correctly no matter
   // which producer's coin-detail the browser pairs it with
+  // prev detail loads BEFORE the signal embed — a signal that missed this
+  // cycle's klines still carries its persisted spark rather than going blank
+  let prevDetail = { refreshedAt: null, coins: {} };
+  try {
+    prevDetail = JSON.parse(
+      fs.readFileSync(path.join(API, 'coin-detail.json'), 'utf8')
+    );
+  } catch {}
+  const prevFresh =
+    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 6 * 3600e3;
   for (const s of signals) {
     const k = enriched.get(s.asset);
     if (k && k.closes && k.closes.length > 1) s.spark = k.closes;
+    if (!s.spark || s.spark.length < 2) {
+      const prev = prevFresh && prevDetail.coins && prevDetail.coins[s.asset];
+      if (prev && prev.spark && prev.spark.length > 1) s.spark = prev.spark;
+    }
   }
   fs.writeFileSync(path.join(API, 'market-scanner.json'), JSON.stringify(snap));
 
@@ -1267,18 +1281,6 @@ async function main() {
     ...rows.slice(0, KLINE_CANDIDATES).map((r) => r.asset),
     ...signals.map((s) => s.asset),
   ]);
-  // spark persistence: a transient fetch failure must not blank the chart —
-  // carry the previous spark (up to 6h old — 42 of 48 hourly bars still
-  // correct, flagged stale) for any asset that missed klines this round.
-  // Fresh data always wins.
-  let prevDetail = { refreshedAt: null, coins: {} };
-  try {
-    prevDetail = JSON.parse(
-      fs.readFileSync(path.join(API, 'coin-detail.json'), 'utf8')
-    );
-  } catch {}
-  const prevFresh =
-    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 6 * 3600e3;
   for (const asset of detailAssets) {
     const r = rows.find((x) => x.asset === asset);
     const k = enriched.get(asset);
