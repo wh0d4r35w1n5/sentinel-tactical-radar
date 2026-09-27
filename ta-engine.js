@@ -905,7 +905,8 @@
   }
 
   // ---------- chart patterns from zigzag pivots — the named geometry:
-  // double tops/bottoms, head & shoulders, triangle/wedge coils, flags ----------
+  // double/triple tops+bottoms, head & shoulders, triangles, wedges,
+  // channels, rectangles, broadening formations, flags ----------
   function chartPats(cs) {
     var piv = zigzag(cs, 0.015);
     if (!piv || piv.length < 4) return [];
@@ -913,35 +914,51 @@
     var H = piv.filter(function (p) { return p.type === 'H'; }).slice(-4);
     var L = piv.filter(function (p) { return p.type === 'L'; }).slice(-4);
     var out = [];
+    // triple-tops AND triple-bottoms coexisting = a rectangle, not two
+    // reversals — demote both to plain doubles and let the box carry it
+    var topFlat = H.length >= 3 && Math.abs(H[H.length - 3].p - H[H.length - 2].p) / H[H.length - 2].p <= 0.02;
+    var botFlat = L.length >= 3 && Math.abs(L[L.length - 3].p - L[L.length - 2].p) / L[L.length - 2].p <= 0.02;
+    var dHv = H.length >= 2 ? Math.abs(H[H.length - 1].p - H[H.length - 2].p) / H[H.length - 2].p : 9;
+    var dLv = L.length >= 2 ? Math.abs(L[L.length - 1].p - L[L.length - 2].p) / L[L.length - 2].p : 9;
+    var bothTrip = topFlat && botFlat && dHv <= 0.03 && dLv <= 0.03;
     if (H.length >= 2) {
-      var h1 = H[H.length - 1], h2 = H[H.length - 2], dH = Math.abs(h1.p - h2.p) / h2.p;
-      if (dH <= 0.02) out.push({ name: 'double top', dir: 'SHORT', conf: dH <= 0.01 ? 'B' : 'C', s: 'twin highs ~' + px(h2.p) });
+      var h1 = H[H.length - 1], h2 = H[H.length - 2], dH = dHv;
+      var tr3 = topFlat && !bothTrip;
+      if (dH <= 0.03) out.push({ name: tr3 ? 'triple top' : 'double top', dir: 'SHORT', conf: dH <= 0.01 ? 'B' : 'C', s: (tr3 ? 'triple' : 'twin') + ' highs ~' + px(h2.p) });
     }
     if (L.length >= 2) {
-      var l1 = L[L.length - 1], l2 = L[L.length - 2], dL = Math.abs(l1.p - l2.p) / l2.p;
-      if (dL <= 0.02) out.push({ name: 'double bottom', dir: 'LONG', conf: dL <= 0.01 ? 'B' : 'C', s: 'twin lows ~' + px(l2.p) });
+      var l1 = L[L.length - 1], l2 = L[L.length - 2], dL = dLv;
+      var trB = botFlat && !bothTrip;
+      if (dL <= 0.03) out.push({ name: trB ? 'triple bottom' : 'double bottom', dir: 'LONG', conf: dL <= 0.01 ? 'B' : 'C', s: (trB ? 'triple' : 'twin') + ' lows ~' + px(l2.p) });
     }
     if (H.length >= 3) {
       var a = H[H.length - 3], b = H[H.length - 2], c = H[H.length - 1];
-      if (b.p > a.p && b.p > c.p && Math.abs(a.p - c.p) / a.p <= 0.04)
+      if (b.p > a.p && b.p > c.p && Math.abs(a.p - c.p) / a.p <= 0.06)
         out.push({ name: 'head & shoulders', dir: 'SHORT', conf: 'B', s: 'head ' + px(b.p) + ' shoulders ' + px(a.p) + '/' + px(c.p) });
     }
     if (L.length >= 3) {
       var a2 = L[L.length - 3], b2 = L[L.length - 2], c2 = L[L.length - 1];
-      if (b2.p < a2.p && b2.p < c2.p && Math.abs(a2.p - c2.p) / a2.p <= 0.04)
+      if (b2.p < a2.p && b2.p < c2.p && Math.abs(a2.p - c2.p) / a2.p <= 0.06)
         out.push({ name: 'inverse H&S', dir: 'LONG', conf: 'B', s: 'head ' + px(b2.p) + ' shoulders ' + px(a2.p) + '/' + px(c2.p) });
     }
     if (H.length >= 2 && L.length >= 2) {
-      var hDn = H[H.length - 1].p < H[H.length - 2].p, lUp = L[L.length - 1].p > L[L.length - 2].p;
-      if (hDn && lUp) out.push({ name: 'sym triangle', dir: null, conf: 'C', s: 'coiling — apex break pending' });
+      var hh2 = H[H.length - 2], hh1 = H[H.length - 1], ll2 = L[L.length - 2], ll1 = L[L.length - 1];
+      var hFlat = Math.abs(hh1.p - hh2.p) / hh2.p <= 0.012, lFlat = Math.abs(ll1.p - ll2.p) / ll2.p <= 0.012;
+      var hDn = hh1.p < hh2.p && !hFlat, lUp = ll1.p > ll2.p && !lFlat;
+      var hUp = hh1.p > hh2.p && !hFlat, lDn = ll1.p < ll2.p && !lFlat;
+      if (hFlat && lFlat) out.push({ name: 'rectangle range', dir: null, conf: 'C', s: 'box ' + px(ll1.p) + '–' + px(hh1.p) });
+      else if (hDn && lUp) out.push({ name: 'sym triangle', dir: null, conf: 'C', s: 'coiling — apex break pending' });
+      else if (hUp && lUp) out.push({ name: 'rising channel', dir: 'LONG', conf: 'C', s: 'parallel rising structure' });
+      else if (hDn && lDn) out.push({ name: 'falling channel', dir: 'SHORT', conf: 'C', s: 'parallel falling structure' });
+      else if (hUp && lDn) out.push({ name: 'broadening', dir: null, conf: 'C', s: 'expanding volatility — megaphone' });
       else if (!hDn && lUp) out.push({ name: 'rising wedge', dir: 'SHORT', conf: 'C', s: 'rising compression — bearish lean' });
       else if (hDn && !lUp) out.push({ name: 'falling wedge', dir: 'LONG', conf: 'C', s: 'falling compression — bullish lean' });
     }
-    var n6 = cs.slice(-6), p6 = cs.slice(-12, -6);
-    if (p6.length === 6 && n6.length === 6) {
-      var imp = (p6[5].c - p6[0].o) / p6[0].o, drift = (n6[5].c - n6[0].o) / n6[0].o;
-      if (imp > 0.03 && Math.abs(drift) < 0.01) out.push({ name: 'bull flag', dir: 'LONG', conf: 'B', s: '+' + (imp * 100).toFixed(1) + '% impulse then coil' });
-      else if (imp < -0.03 && Math.abs(drift) < 0.01) out.push({ name: 'bear flag', dir: 'SHORT', conf: 'B', s: (imp * 100).toFixed(1) + '% impulse then coil' });
+    var n6 = cs.slice(-6), p6 = cs.slice(-14, -6);
+    if (p6.length === 8 && n6.length === 6) {
+      var imp = (p6[7].c - p6[0].o) / p6[0].o, drift = (n6[5].c - n6[0].o) / n6[0].o;
+      if (imp > 0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bull flag', dir: 'LONG', conf: 'B', s: '+' + (imp * 100).toFixed(1) + '% impulse then coil' });
+      else if (imp < -0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bear flag', dir: 'SHORT', conf: 'B', s: (imp * 100).toFixed(1) + '% impulse then coil' });
     }
     return out;
   }

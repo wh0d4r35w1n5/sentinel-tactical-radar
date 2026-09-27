@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="harmonics.js"></script>
+<script src="cps-detect.js"></script>
 <style>
 :root{--bg:#07090f;--bg2:#0d1117;--panel:#10141d;--line:rgba(140,120,255,.16);--txt:#e6f2ff;--mut:#8b93a8;
 --grn:#4dffa6;--red:#ff4d7d;--cyan:#3ddcff;--vio:#8a5bff;--mag:#ff2ec4;--gold:#ffd750;--amb:#ffb454}
@@ -158,6 +159,19 @@ function drawChart(el,e,cs,after){
       legs.setData(pts.map(p=>({time:p.t/1000,value:p.p})));
       'XABCD'.split('').forEach((nm,i)=>{const p=pts[i];if(p)marks.push({time:snap(p.t),position:p.ty==='H'?'aboveBar':'belowBar',color:'#6ee7ff',shape:'circle',text:nm})});
       if(pat.dPrice!=null)ls(pat.dPrice,'#6ee7ff',2,'PRZ '+pat.type);
+    }
+    // named chart-pattern geometry — drawn where it lives on the tape
+    if(window.CPDetect){
+      for(const p of CPDetect.detect(cs)){
+        const pc=p.dir==='bear'?'rgba(255,77,109,.8)':p.dir==='bull'?'rgba(46,230,168,.8)':'rgba(255,215,80,.75)';
+        for(const seg of p.lines)
+          chart.addLineSeries({color:pc,lineWidth:1,lineStyle:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false})
+            .setData(seg.map(q=>({time:q.t/1000,value:q.p})));
+        for(const lv of p.levels)
+          s.createPriceLine({price:lv.p,color:pc,lineWidth:1,lineStyle:3,axisLabelVisible:false,title:lv.t});
+        if(p.labelAt)
+          marks.push({time:snap(p.labelAt.t),position:p.labelAt.ty==='H'?'aboveBar':'belowBar',color:pc,shape:'circle',text:p.name});
+      }
     }
   }
   s.setMarkers(marks.sort((a,b)=>a.time-b.time));

@@ -12,6 +12,7 @@
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
 <script src="/sentinel-tactical-radar/live-feed.js"></script>
 <script src="/sentinel-tactical-radar/harmonics.js"></script>
+<script src="/sentinel-tactical-radar/cps-detect.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 @property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
@@ -586,7 +587,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       <td class="num">${jf(r.fwd1h)}</td><td class="num">${jf(r.fwd4h)}</td><td class="num">${jf(r.fwd24h)}</td>
       <td class="num">${jf(r.alpha24h)}</td><td class="sub">${ago(r.runTs)}</td></tr>`+
     `<tr class="jsyn" data-js="${r.key}" hidden><td colspan="12">
-      <div class="sub" style="margin-bottom:8px">${r.asset} ${r.direction} · ${r.strategy||''} · score ${r.score??'—'} · ${r.regime||'?'} / ${r.mktType||'?'} · RSI ${r.rsi??'—'}${r.targetPct==null?' · <i>bracket reconstructed</i>':''} — <b>BEFORE:</b> the tape the engine read (zigzag · dealing range · fibs · EMA20/50) &nbsp;·&nbsp; <b>AFTER:</b> the graded path (entry-vs-price shading · MFE/MAE excursions)</div>
+      <div class="sub" style="margin-bottom:8px">${r.asset} ${r.direction} · ${r.strategy||''} · score ${r.score??'—'} · ${r.regime||'?'} / ${r.mktType||'?'} · RSI ${r.rsi??'—'}${r.targetPct==null?' · <i>bracket reconstructed</i>':''} — <b>BEFORE:</b> the tape the engine read (named chart patterns · zigzag · dealing range · fibs · EMA20/50 · XABCD harmonics) &nbsp;·&nbsp; <b>AFTER:</b> the graded path (entry-vs-price shading · MFE/MAE excursions)</div>
+      ${(()=>{const fs=r.confl||(confl&&confl.coins&&confl.coins[r.asset]&&confl.coins[r.asset].factors)||[];const ps=fs.filter(f=>f.k==='pattern');return ps.length?`<div class="engrow">${ps.map(p=>`<span class="echip ${p.dir==='bull'?'bull':p.dir==='bear'?'bear':'flat'}" title="${esc(p.s)}"><b>${esc(p.s.split(' (')[0].toUpperCase())}</b> ${p.dir||'coil'}</span>`).join('')}</div>`:''})()}
       ${facTable(r.confl||(confl&&confl.coins&&confl.coins[r.asset]&&confl.coins[r.asset].factors),r.confl?'SIGNAL DNA · snapshotted at emission':'SIGNAL DNA · emitted pre-engine — showing current read')}
       <div style="display:flex;gap:12px;flex-wrap:wrap"><div data-chb style="flex:1;min-width:340px;min-height:230px"></div><div data-cha style="flex:1;min-width:340px;min-height:230px"></div></div>
     </td></tr>`}).join('')||'<tr><td colspan="12" class="sub">no graded signals yet — the book writes itself each cycle</td></tr>';
@@ -1026,6 +1028,20 @@ function drawChart(el,e,cs,after){
         marks.push({time:snap(p.t),position:p.ty==='H'?'aboveBar':'belowBar',color:'#6ee7ff',shape:'circle',text:nm});
       });
       if(hp.dPrice)ls(hp.dPrice,'#6ee7ff',2,'PRZ '+hp.type);
+    }
+    // named chart-pattern geometry — drawn where it lives on the tape:
+    // twin-high lines, necklines, channel/wedge walls extended to now
+    if(window.CPDetect){
+      for(const p of CPDetect.detect(cs)){
+        const pc=p.dir==='bear'?'rgba(255,77,109,.8)':p.dir==='bull'?'rgba(46,230,168,.8)':'rgba(255,215,80,.75)';
+        for(const seg of p.lines)
+          chart.addLineSeries({color:pc,lineWidth:1,lineStyle:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false})
+            .setData(seg.map(q=>({time:q.t/1000,value:q.p})));
+        for(const lv of p.levels)
+          s.createPriceLine({price:lv.p,color:pc,lineWidth:1,lineStyle:3,axisLabelVisible:false,title:lv.t});
+        if(p.labelAt)
+          marks.push({time:snap(p.labelAt.t),position:p.labelAt.ty==='H'?'aboveBar':'belowBar',color:pc,shape:'circle',text:p.name});
+      }
     }
   }
   s.setMarkers(marks.sort((a,b)=>a.time-b.time));
