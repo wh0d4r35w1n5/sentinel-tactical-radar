@@ -194,6 +194,42 @@ footer a{color:var(--cyan)}
 body.simple .pro{display:none!important}
 body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
 @media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before,.godchip .eye,.wrap .panel,.tape{animation:none}}
+
+/* ============ aesthetics layer — Zyzz presence · Apple restraint · Fluent depth ============ */
+/* APPLE: numbers as typography — every figure snaps into its column */
+.num,td,.tape span,.ledger-row,.chips,.drvr .nm,.ml .r{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+/* APPLE: render quality — the invisible 5% that reads as expensive */
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+/* FLUENT: light-edge — every surface catches a top rim-light; shadows layered soft-deep */
+.panel{border-top:1px solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 0 34px rgba(138,91,255,.05),0 1px 2px rgba(0,0,0,.45),0 10px 32px rgba(0,0,0,.38)}
+.panel:hover{transition-timing-function:cubic-bezier(.16,1,.3,1)}
+.stat{border-top:1px solid rgba(255,255,255,.06)}
+.tape,.cht,.pressbar,.drvr .bar{border-top:1px solid rgba(255,255,255,.05)}
+/* APPLE: expo easing everywhere the finger touches */
+a,.btn,.stat,.tag,.st,.echip,.vtog a,tbody tr.sig,tr.jrow{transition-timing-function:cubic-bezier(.16,1,.3,1)}
+/* ZYZZ: presence — the hero number owns the room */
+.big{font-size:44px;letter-spacing:-.015em;line-height:1.05}
+.stat .v{letter-spacing:.005em}
+/* APPLE: labels read tighter, quieter, more engineered */
+.ptitle{letter-spacing:.22em}
+.stat .k,.ml .h,th{letter-spacing:.15em}
+/* MICRO-POLISH: selection, focus, scrollbar */
+::selection{background:rgba(138,91,255,.5);color:#fff}
+a:focus-visible,.btn:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+::-webkit-scrollbar{width:7px;height:7px}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--vio),var(--mag));border-radius:99px}
+::-webkit-scrollbar-thumb:hover{box-shadow:0 0 12px rgba(138,91,255,.6)}
+::-webkit-scrollbar-track{background:transparent}
+/* FLUENT: data rows lift instead of snap */
+tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
+.ledger-row{transition:background .2s cubic-bezier(.16,1,.3,1)}
+.ledger-row:hover{background:rgba(138,91,255,.05)}
+.ml .r{transition:background .2s}
+.ml .r:hover{background:rgba(140,120,255,.06)}
+/* ZYZZ: gains flex, losses brood — glow scaled to confidence */
+.up{text-shadow:0 0 12px rgba(77,255,166,.55)}
+.dn{text-shadow:0 0 12px rgba(255,77,125,.55)}
+.grade{letter-spacing:.04em}
 </style>
 </head>
 <body>
