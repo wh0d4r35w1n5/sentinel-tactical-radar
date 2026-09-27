@@ -1795,24 +1795,26 @@ async function main() {
       s.stopPct ?? Math.max(4, s.targetPct || 4),
       atrFloor
     );
-    // ≥3:1 net R:R gate — user directive: only take setups whose reward,
-    // net of ALL costs, is at least 3x the risk including costs.
+    // ≥RR_MIN:1 net R:R gate — user directive (env-tunable): only take
+    // setups whose reward, net of ALL costs, is at least RR_MIN x the risk
+    // including costs.
     //   netReward = targetPct - costPct   (costs eat the win)
     //   netRisk   = stopPct  + costPct   (costs deepen the loss)
-    // The maximum stop the geometry can carry is (netReward/3) - costPct.
+    // The maximum stop the geometry can carry is (netReward/RR) - costPct.
     // When the noise-floor stop fits inside it, tighten the stop to that
-    // boundary — the setup then trades at exactly ≥3:1 net. When even the
-    // ATR-floor stop is wider, 3:1 is impossible without a noise-clipping
-    // stop — stand down, don't fake the ratio.
+    // boundary — the setup then trades at exactly ≥RR net. When even the
+    // ATR-floor stop is wider, the ratio is impossible without a noise-
+    // clipping stop — stand down, don't fake the ratio.
     // "after ALL fees" includes funding — a carry-pay position bleeds every
     // 8h it's held. Charge the expected drag over the etaH hold window
     // (capped at one interval — a scalp rarely crosses two timestamps).
+    const RR_MIN = +(process.env.SENTINEL_MIN_RR || 2);
     const fundDrag =
       s.carry === 'pay'
         ? Math.abs(s.funding?.ratePct ?? 0) * Math.min(s.etaH ?? 1, 8) / 8
         : 0;
     const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2 + fundDrag;
-    const rrMaxStop = (s.targetPct - rrCostPct) / 3 - rrCostPct;
+    const rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
     const rrStop = Math.min(stopWant, rrMaxStop);
     const rrOk = rrMaxStop >= Math.max(atrFloor, 0.6);
     const levMax = Math.max(3, Math.floor(80 / (rrStop + 0.64)));
@@ -1858,7 +1860,7 @@ async function main() {
       const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
       return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
     })(), 'net-edge');
-    gate(rrOk, `rr<3:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
+    gate(rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
     gate(
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||

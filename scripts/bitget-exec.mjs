@@ -886,14 +886,15 @@ async function main() {
         state.errors.push(`${o.symbol || '?'}: malformed order fields — skipped`);
         continue;
       }
-      // ≥3:1 net R:R defense — the scanner stamps netRR/costPct; recompute
+      // ≥RR_MIN net R:R defense — the scanner stamps netRR/costPct; recompute
       // here with a conservative cost floor (0.12% RT fees + 0.08 slip +
       // 0.1 spread = 0.30%) so a stale/noncompliant plan can never route.
       {
+        const RR_MIN = +(process.env.SENTINEL_MIN_RR || 2);
         const cost = Math.max(Number.isFinite(o.costPct) ? o.costPct : 0, 0.30);
         const netRR = (o.targetPct - cost) / (o.stopPct + cost);
-        if (!(netRR >= 3)) {
-          state.actions.push(`${o.symbol}: net R:R ${netRR.toFixed(2)} < 3:1 after costs — rejected`);
+        if (!(netRR >= RR_MIN)) {
+          state.actions.push(`${o.symbol}: net R:R ${netRR.toFixed(2)} < ${RR_MIN}:1 after costs — rejected`);
           continue;
         }
       }

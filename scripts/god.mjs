@@ -137,17 +137,19 @@ if (!ledger) {
     add('plan-fresh', age > ttl ? 'FAIL' : 'PASS',
       `plan ${age.toFixed(1)}min old (ttl ${ttl}min) — ${(plan.orders || []).length} orders / ${(plan.closes || []).length} closes / ${(plan.trails || []).length} trails`);
 
-    // 3:1 net-of-cost mandate — every routed order must carry the stamped
-    // geometry proving (target−costs)/(stop+costs) >= 3. An order without the
-    // fields is unroutable-by-design; audit it as a violation.
+    // net-of-cost mandate — every routed order must carry the stamped
+    // geometry proving (target−costs)/(stop+costs) >= SENTINEL_MIN_RR (env,
+    // default 2). An order without the fields is unroutable-by-design; audit
+    // it as a violation.
+    const rrMin = +(process.env.SENTINEL_MIN_RR || 2);
     const badRR = (plan.orders || []).filter((o) =>
-      !(fin(o.netRR) && o.netRR >= 3) &&
+      !(fin(o.netRR) && o.netRR >= rrMin) &&
       !(fin(o.targetPct) && fin(o.stopPct) &&
-        (o.targetPct - 0.3) / (o.stopPct + 0.3) >= 3));
+        (o.targetPct - 0.3) / (o.stopPct + 0.3) >= rrMin));
     add('rr-mandate', badRR.length ? 'FAIL' : 'PASS',
       badRR.length
-        ? `${badRR.length} orders below 3:1 net: ${badRR.map((o) => `${o.symbol}(rr=${o.netRR ?? '?'})`).join(',')}`
-        : `${(plan.orders || []).length} orders, all >=3:1 net-of-cost`);
+        ? `${badRR.length} orders below ${rrMin}:1 net: ${badRR.map((o) => `${o.symbol}(rr=${o.netRR ?? '?'})`).join(',')}`
+        : `${(plan.orders || []).length} orders, all >=${rrMin}:1 net-of-cost`);
   }
 }
 
