@@ -1,7 +1,8 @@
 name: Sentinel watchdog
-# Dead-man's switch: the live VPS pushes "vps: live state" commits every ~2min
-# and serves the dashboard on the Oracle box. If either heartbeat stops, this
-# workflow fails (owner gets email) and files/updates a SENTINEL DOWN issue.
+# Dead-man's switch + auto-failover: the live VPS pushes "vps: live state"
+# commits every ~2min. If the heartbeat or dashboard stops, this workflow
+# alarms (issue + email) AND promotes the warm standby — unless the standby
+# itself can still see the primary (split-brain guard inside standby-arm.sh).
 
 on:
   schedule:
@@ -20,6 +21,8 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Check live heartbeats
         id: check
         env:
@@ -28,20 +31,34 @@ jobs:
         run: |
           set +e
           FAIL=""
-          # 1) dashboard reachable
-          # any HTTP response (200/301/404) proves nginx alive; only silence fails
+          # 1) dashboard reachable — any HTTP reply (incl. 301/404) = nginx alive
           CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://168.138.102.53/ || echo 000)
           [ "$CODE" = "000" ] && FAIL="$FAIL dashboard_unreachable" || true
           # 2) pushbot commit freshness — last api/ commit must be <15min old
           TS=$(gh api "repos/$REPO/commits?path=api/live-ledger.json&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null)
           NOW=$(date -u +%s); AGE=$(( NOW - $(date -u -d "$TS" +%s 2>/dev/null || echo 0) ))
           [ "$AGE" -lt 900 ] || FAIL="$FAIL pushbot_stale=${AGE}s"
-          # 3) ledger itself fresh (executor loop alive)
-          L=$(curl -s --max-time 20 http://168.138.102.53/api/live-ledger.json)
-          LTS=$(echo "$L" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log(j.updatedAt||j.ts||j.time||'')}catch(e){console.log('')}})")
-          echo "dashboard=$CODE pushbot_age=${AGE}s ledger_ts=$LTS"
+          # 3) GOD verdict — the pushed artifact must not carry a hard fail
+          GJ=$(cat api/god.json 2>/dev/null)
+          VERDICT=$(echo "$GJ" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);const v=j.verdict||j.status||'';const f=(j.failures||j.fails||[]);console.log((/fail/i.test(v)||(f.length&&f.length>0))?'FAIL':'pass')}catch(e){console.log('unknown')}})")
+          [ "$VERDICT" = "FAIL" ] && FAIL="$FAIL god_fail" || true
+          echo "dashboard=$CODE pushbot_age=${AGE}s god=$VERDICT"
           echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
           exit 0
+
+      - name: Auto-promote standby (dead box only)
+        if: contains(steps.check.outputs.fail, 'unreachable') || contains(steps.check.outputs.fail, 'stale')
+        env:
+          STANDBY_HOST: ${{ secrets.STANDBY_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.STANDBY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan "$STANDBY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # standby-arm.sh independently refuses if primary is alive — double guard
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@"$STANDBY_HOST" 'bash ~/standby-arm.sh' || echo "standby refused or unreachable"
+          sleep 20
+          CODE2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "http://$STANDBY_HOST/" || echo 000)
+          echo "standby_http=$CODE2"
 
       - name: Raise the alarm
         if: steps.check.outputs.fail != ''
@@ -49,13 +66,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           FAIL: ${{ steps.check.outputs.fail }}
+          STANDBY_HOST: ${{ secrets.STANDBY_HOST }}
         run: |
           OPEN=$(gh issue list -R "$REPO" --state open --search "SENTINEL DOWN in:title" --json number --jq '.[0].number' 2>/dev/null)
           if [ -n "$OPEN" ]; then
             gh issue comment "$OPEN" -R "$REPO" -b "Still down: $FAIL ($(date -u +%FT%TZ))" || true
           else
             gh issue create -R "$REPO" --title "SENTINEL DOWN" \
-              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — check https://168-138-102-53.sslip.io and the Oracle VM." || true
+              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — standby auto-promotion attempted; check https://168-138-102-53.sslip.io and http://$STANDBY_HOST/" || true
           fi
           echo "::error::SENTINEL DOWN: $FAIL"
           exit 1
