@@ -3380,6 +3380,106 @@ async function main() {
       });
   } catch {}
 
+  // ---- EINSTEIN · Head of R&D (IT/DevOps) — autonomous research layer ----
+  // Reads every artifact each cycle, measures which engines actually predict
+  // alpha (per-factor lift from the confl ledger), audits the pipeline,
+  // watches structural clustering, and publishes findings + improvement
+  // proposals to a persistent lab notebook. Authority: full write access to
+  // the intelligence surface; execution & risk rails stay GOD-gated.
+  try {
+    const EIN_FILE = path.join(API, '..', 'state', 'einstein.json');
+    let ein = { log: [], proposals: [] };
+    try { ein = JSON.parse(fs.readFileSync(EIN_FILE, 'utf8')); } catch {}
+    ein.log = Array.isArray(ein.log) ? ein.log.slice(-60) : [];
+    ein.proposals = Array.isArray(ein.proposals) ? ein.proposals.slice(-30) : [];
+    const findings = [];
+    const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+    // factor effectiveness — alpha when a factor's vote aligned with the
+    // signal vs when it sat flat vs counter. The per-engine P&L of opinion.
+    const fac = {};
+    for (const r of allComplete) {
+      if (r.alpha24h == null || !Array.isArray(r.confl)) continue;
+      const sgn = r.direction === 'LONG' ? 'bull' : 'bear';
+      const seen = new Set();
+      for (const f of r.confl) {
+        if (!f || !f.k || f.k === 'BIAS' || f.k === 'confluence' || seen.has(f.k)) continue;
+        seen.add(f.k);
+        const g = (fac[f.k] ??= { n: 0, aligned: [], flat: [], counter: [] });
+        g.n++;
+        g[f.dir === 'flat' ? 'flat' : f.dir === sgn ? 'aligned' : 'counter'].push(r.alpha24h);
+      }
+    }
+    const factorIC = Object.entries(fac)
+      .map(([k, g]) => {
+        const a = mean(g.aligned), c = mean(g.counter), fl = mean(g.flat);
+        return {
+          k, n: g.n, na: g.aligned.length, nc: g.counter.length,
+          alignedAlpha: a != null ? +a.toFixed(2) : null,
+          flatAlpha: fl != null ? +fl.toFixed(2) : null,
+          counterAlpha: c != null ? +c.toFixed(2) : null,
+          lift: a != null && fl != null ? +(a - fl).toFixed(2) : null,
+        };
+      })
+      .sort((a, b) => (b.lift ?? -9) - (a.lift ?? -9));
+    for (const f of factorIC) {
+      if (f.n >= 10 && f.lift != null && f.lift >= 0.5)
+        findings.push({ key: 'fac-' + f.k, type: 'edge', txt: f.k + ' votes carry +' + f.lift + '% alpha lift when aligned (n=' + f.n + ') — engine earns its seat' });
+      else if (f.n >= 10 && f.lift != null && f.lift <= -0.5)
+        findings.push({ key: 'fac-' + f.k, type: 'decay', txt: f.k + ' votes anti-predictive (' + f.lift + '% lift, n=' + f.n + ') — proposal filed to downweight' });
+    }
+
+    // structural clustering across the breakout board
+    const coils = brkEvents.filter((e) => e.state === 'COMPRESSION').length;
+    const fails = brkEvents.filter((e) => e.state === 'FAILED').length;
+    const rts = brkEvents.filter((e) => e.state === 'RETEST').length;
+    if (coils >= 5) findings.push({ key: 'coil-cluster', type: 'watch', txt: coils + ' assets coiled — sector-wide expansion pressure building' });
+    if (fails >= 4) findings.push({ key: 'trap-cluster', type: 'risk', txt: fails + ' failed breaks on the board — fakeout regime, chase risk elevated' });
+    if (rts >= 3) findings.push({ key: 'retest-cluster', type: 'edge', txt: rts + ' live retests — the highest-quality entry pattern is on the board' });
+
+    // diagnostics — pipeline health is R&D telemetry too
+    if (klineMiss.length)
+      findings.push({ key: 'kline-miss', type: 'diag', txt: 'klines missing for ' + klineMiss.length + ' candidate(s): ' + klineMiss.slice(0, 5).join(', ') });
+    const pend = [...evalMap.values()].filter((r) => !r.complete).length;
+    if (pend > 60)
+      findings.push({ key: 'eval-backlog', type: 'diag', txt: pend + ' signals inside grading windows — evidence pipeline busy' });
+    try {
+      const god = JSON.parse(fs.readFileSync(path.join(API, 'god.json'), 'utf8'));
+      const gf = (god.checks || []).filter((c) => c.status === 'FAIL' || c.ok === false);
+      if (gf.length)
+        findings.push({ key: 'god-fail', type: 'critical', txt: 'GOD audit failing: ' + gf.map((c) => c.name || c.id || c.k).slice(0, 4).join(', ') });
+    } catch {}
+
+    // proposals — filed with honest scope tags; advisory until applied
+    // through the deploy path (execution changes never auto-apply)
+    const want = [];
+    for (const f of factorIC)
+      if (f.n >= 15 && f.lift != null && f.lift <= -0.5)
+        want.push({ id: 'downweight-' + f.k, txt: 'remove or cap "' + f.k + '" from the confluence vote pool — measured ' + f.lift + '% lift across ' + f.n + ' graded signals', scope: 'scanner', auto: false, ts: now });
+    const seenP = new Set(ein.proposals.map((p) => p.id));
+    for (const w of want) if (!seenP.has(w.id)) ein.proposals.push(w);
+
+    // lab notebook — upsert by key; repeated findings accrue a seen-count
+    const seenL = new Map(ein.log.map((e) => [e.key, e]));
+    for (const f of findings) {
+      const p = seenL.get(f.key);
+      if (p) { p.txt = f.txt; p.lastTs = now; p.seen = (p.seen || 1) + 1; }
+      else ein.log.push({ ...f, firstTs: now, lastTs: now, seen: 1 });
+    }
+    ein.log.sort((a, b) => b.lastTs - a.lastTs);
+    writeJson(EIN_FILE, { log: ein.log.slice(0, 60), proposals: ein.proposals });
+    writeJson(path.join(API, 'einstein.json'), {
+      refreshedAt: snap.refreshedAt,
+      role: 'Head of R&D · autonomous research, diagnostics & improvement',
+      authority: 'full write access to the intelligence surface; execution & risk rails remain GOD-gated by design',
+      scanned: enriched.size,
+      evalPool: allComplete.length,
+      factorIC,
+      findings: ein.log.slice(0, 30),
+      proposals: ein.proposals.slice(-15).reverse(),
+    });
+  } catch {}
+
 
   // vault retired — it compounded gains from simulated (paper) trades.
   // Real-account accounting lives in live-ledger.json only.

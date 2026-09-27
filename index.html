@@ -300,6 +300,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div class="ptitle">Hypothesis engine · what the evidence currently supports <span class="sub">— claims escalate with sample: UNTESTED &lt;10 · EARLY &lt;30 · SUGGESTIVE &lt;100 · then SUPPORTED/REFUTED</span></div>
     <div id="hypoBody"></div>
   </div>
+  <div class="panel pro" style="margin-bottom:16px">
+    <div class="ptitle">Einstein lab · Head of R&amp;D — IT/DevOps <span class="sub">— autonomous research: per-factor alpha lift, pipeline diagnostics, structural clustering, improvement proposals · intelligence-surface authority, execution stays GOD-gated</span><span id="einSub" class="sub" style="float:right"></span></div>
+    <div id="einBody"><div class="sub">lab initialising…</div></div>
+  </div>
   <div class="panel" style="margin-bottom:16px">
     <div class="ptitle">Intelligence wire · live headlines <span class="sub">— public RSS, asset-tagged · context only, never a score input</span></div>
     <div id="wireBody" style="max-height:220px;overflow-y:auto"></div>
@@ -483,8 +487,8 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -841,6 +845,17 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     <div class="vc-x num" style="color:${SC[e.state]||'var(--mut)'}">${e.state==='COMPRESSION'?Math.round(e.coil*100)+'%':e.volX?e.volX+'×':'—'}</div>
     <div class="sub vc-s">${e.state==='COMPRESSION'?'coil tightness · 55b range '+fmtP(e.dcL||0)+'–'+fmtP(e.dcH||0):(e.age!=null?e.age+'b ago':'')+' · lvl '+fmtP(e.level)+(e.target?' · tgt '+fmtP(e.target):'')+(e.volX?' · '+e.volX+'× vol':'')}</div></a>`).join('')||'<div class="sub">no breaks or coils on the 1h board — range-bound tape</div>';
   if($('brkSub'))$('brkSub').textContent=brkR&&brkR.counts?`${brkR.counts.retest} retest · ${brkR.counts.breakout} break · ${brkR.counts.failed} failed · ${brkR.counts.compression} coiled · ${brkR.scanned||0} scanned · ${ago(Date.parse(brkR.refreshedAt))}`:'';
+  // Einstein lab: factor effectiveness, lab notebook, proposal queue
+  {
+    const ic=((ein&&ein.factorIC)||[]).filter(f=>f.n>=5);
+    const fin=(ein&&ein.findings)||[];const prop=(ein&&ein.proposals)||[];
+    const rows=[];
+    if(ic.length)rows.push(`<div class="sub" style="font-size:9px;letter-spacing:.14em;font-weight:700;margin-bottom:4px">FACTOR EFFECTIVENESS · alpha lift when the vote aligned (n≥5)</div><div class="ftab">${ic.slice(0,16).map(f=>`<div class="frow"><span class="fk">${esc(f.k)}</span><span class="fd ${f.lift>0?'up':f.lift<0?'dn':'sub'}">${f.lift!=null?(f.lift>=0?'+':'')+f.lift+'%':'—'}</span><span class="fv" title="aligned α ${f.alignedAlpha??'—'}% · flat α ${f.flatAlpha??'—'}% · counter α ${f.counterAlpha??'—'}%">${f.na??0} aligned / ${f.nc??0} counter · n=${f.n}</span></div>`).join('')}</div>`);
+    if(fin.length)rows.push(`<div class="sub" style="font-size:9px;letter-spacing:.14em;font-weight:700;margin:10px 0 4px">LAB NOTEBOOK</div><div>${fin.slice(0,10).map(f=>`<div class="frow"><span class="fk">${esc(f.type||'')}</span><span class="fv" title="${esc(f.txt)}">${esc(f.txt)}</span><span class="fd sub">${f.seen>1?'×'+f.seen:''}</span></div>`).join('')}</div>`);
+    if(prop.length)rows.push(`<div class="sub" style="font-size:9px;letter-spacing:.14em;font-weight:700;margin:10px 0 4px">PROPOSAL QUEUE · advisory — applied through deploy, never auto-executed</div><div>${prop.slice(0,6).map(p=>`<div class="frow"><span class="fk">${esc(p.scope||'sys')}</span><span class="fv" title="${esc(p.txt)}">${esc(p.txt)}</span><span class="fd sub">${p.auto?'auto':'adv'}</span></div>`).join('')}</div>`);
+    $('einBody').innerHTML=rows.join('')||`<div class="sub">lab warming up — needs graded signals carrying factor ledgers (confl snapshots accrue from new emissions)</div>`;
+    if($('einSub'))$('einSub').textContent=ein&&ein.refreshedAt?`${ein.scanned||0} pairs · ${ein.evalPool||0} graded signals · ${ago(Date.parse(ein.refreshedAt))}`:'';
+  }
   if(health&&health.scanner){
     const h=health.scanner;
     $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(h.klineMiss?` · charts missing: ${h.klineMiss.join(',')}`:'');
