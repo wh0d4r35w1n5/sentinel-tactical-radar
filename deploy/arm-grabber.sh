@@ -23,6 +23,10 @@ for attempt in $(seq 1 2000); do
       --subnet-id "$SUB" --assign-public-ip true \
       --ssh-authorized-keys-file "$KEYFILE" 2>&1)
     INST=$(echo "$OUT" | grep -oE 'ocid1\.instance\.[^"]+' | head -1)
+    if echo "$OUT" | grep -qiE "session has expired|NotAuthenticated|cannot be refreshed"; then
+      echo "$(date -u +%FT%TZ) AUTH_EXPIRED — run: oci session authenticate --profile-name ORACLE-LIVE --region ap-sydney-1" >> "$LOG"
+      sleep 300; continue
+    fi
     if [ -n "$INST" ]; then
       echo "$(date -u +%FT%TZ) SUCCESS cfg=$CFG inst=$INST" | tee -a "$LOG"
       # wait for RUNNING + grab public IP
