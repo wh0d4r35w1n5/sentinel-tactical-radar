@@ -285,7 +285,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
   <div class="hero">
     <div class="panel">
       <div class="ptitle">Composite market pulse · 24h breadth index</div>
-      <div class="big" id="pulseVal">—</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <div class="big" id="pulseVal">—</div>
+        <div id="acctBal" style="text-align:right;display:none;flex-shrink:0"></div>
+      </div>
       <svg id="pulseSvg" viewBox="0 0 560 120" width="100%" height="110" preserveAspectRatio="none"></svg>
       <div class="sub" id="pulseSub"></div>
     </div>
@@ -611,6 +614,18 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   $('pulseVal').textContent=(p.series&&p.series.length?p.series.at(-1).value:'—')+(p.delta!=null?` (${p.delta>=0?'+':''}${p.delta})`:'');
   pulseSVG(p.series);
   $('pulseSub').textContent=`median 24h Δ ${scan.overview.medianChangePct}% · breadth ${scan.overview.breadthPct}% · window ${(scan.scanWindowSeconds||0)/60}min`;
+  // account balance rides alongside the pulse — one glance: market mood + money
+  {
+    const src=liveLedger,ab=$('acctBal');
+    if(src&&src.equityUsd!=null&&(src.mode==='live'||src.mode==='demo')){
+      const aud=(scan&&scan.fx&&scan.fx.audPerUsd)?' · A$'+(src.equityUsd*scan.fx.audPerUsd).toFixed(2):'';
+      const n=(src.positionsAfter||src.positions||[]).length;
+      ab.style.display='block';
+      ab.innerHTML=`<div class="sub" style="letter-spacing:.14em;font-size:9px">ACCOUNT · ${src.mode==='demo'?'DEMO':'LIVE'}</div>
+        <div class="num" style="font-size:26px;font-weight:800;line-height:1.1">$${(+src.equityUsd).toLocaleString(void 0,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div class="sub" style="font-size:9px">${n} pos${src.marginFreeUsd!=null?' · free $'+(+src.marginFreeUsd).toFixed(2):''}${aud}</div>`;
+    }else ab.style.display='none';
+  }
   const o=scan.overview;
   const adv=o.advancing||0, dec=o.declining||0, aPct=(adv+dec)?(100*adv/(adv+dec)):50;
   $('stats').innerHTML=[
