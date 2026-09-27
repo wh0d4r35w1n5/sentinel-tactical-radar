@@ -320,6 +320,11 @@ async function main() {
   // for the dashboard.
   const catPath = path.join(API_DIR, 'exec-catalog.json');
   const priorPlanSyms = new Set();
+  // engine-managed symbols: positions THIS executor entered (persisted in
+  // the ledger across restarts). A symbol not in the set is a foreign
+  // position — opened manually on the app/exchange — which we arm with
+  // protection but never expose to scanner-driven exits.
+  const managed = new Set();
   try {
     for (const f of [outPath, catPath]) {
       const prior = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -344,6 +349,8 @@ async function main() {
       // uses this to find triggers still live on symbols now flat
       if (prior.mode === MODE && prior.plans)
         for (const s of Object.keys(prior.plans)) priorPlanSyms.add(s);
+      if (prior.mode === MODE && Array.isArray(prior.managed))
+        for (const s of prior.managed) managed.add(s);
     }
   } catch {}
   if (MODE === 'off') {
@@ -450,7 +457,7 @@ async function main() {
   state.positions = rawPos.map((p) => ({
     symbol: p.symbol, side: p.holdSide, size: +p.total,
     entry: +p.openPriceAvg, upl: +p.unrealizedPL, lev: +p.leverage,
-    marginMode: p.marginMode, cTime: +(p.cTime || 0),
+    marginMode: p.marginMode, cTime: +(p.cTime || 0), liq: +p.liquidationPrice || 0,
   }));
   // hedge-mode accounts can hold both directions on one symbol — a
   // symbol-keyed map would silently pick one and close the wrong side
@@ -466,13 +473,22 @@ async function main() {
   for (const s of ambiguous) state.errors.push(`${s}: both long AND short open — refusing to guess, close manually`);
   log(`${MODE}: equity $${equityUsd.toFixed(2)} | ${state.positions.length} open | scale ${scale.toFixed(3)}`);
 
+  // prune managed to still-open symbols — if the engine's position is flat
+  // and the user re-opens the same symbol by hand, the new one is foreign
+  // and must not inherit engine exits. Publish for the ledger persist.
+  for (const s of [...managed]) if (!posBySym.has(s)) managed.delete(s);
+  // foreign = open on the exchange but not engine-entered and not
+  // MANUAL-whitelisted — protection synthesis applies, scanner exits do not.
+  const foreign = (sym) => !managed.has(sym) && !MANUAL.has(sym);
+
   // ---- closes first: freeing margin and killing contradicted exposure is
   // always the priority ----
   for (const c of plan.closes) {
-    // manual-hold positions are exempt from scanner-driven exits — a paper
-    // ledger expiry/reversal must not kill a deliberately held position
-    if (MANUAL.has(c.symbol)) {
-      state.actions.push(`close ${c.symbol} skipped — manual hold`);
+    // manual-hold and foreign positions are exempt from scanner-driven
+    // exits — a paper ledger expiry/reversal must not kill a deliberately
+    // held position, nor one the user opened outside the engine
+    if (MANUAL.has(c.symbol) || foreign(c.symbol)) {
+      state.actions.push(`close ${c.symbol} skipped — ${MANUAL.has(c.symbol) ? 'manual hold' : 'foreign position'}`);
       continue;
     }
     const pos = posBySym.get(c.symbol);
@@ -556,7 +572,7 @@ async function main() {
   // the sizing mandate; rebalance only enforces it.
   const slotMargin = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
   for (const p of posBySym.values()) {
-    if (MANUAL.has(p.symbol)) continue;
+    if (MANUAL.has(p.symbol) || foreign(p.symbol)) continue;
     try {
       const levNow = Math.max(1, p.lev || 1);
       const marginEst = (p.size * p.entry) / levNow;
@@ -596,7 +612,7 @@ async function main() {
   // position that hasn't gone stale.
   const DECAY_MS = (+(process.env.EXEC_DECAY_HOURS || 5)) * 3600e3;
   for (const p of posBySym.values()) {
-    if (MANUAL.has(p.symbol)) continue;
+    if (MANUAL.has(p.symbol) || foreign(p.symbol)) continue;
     try {
       if (!p.cTime) continue;
       const ageMs = Date.now() - p.cTime;
@@ -626,7 +642,7 @@ async function main() {
       (plan.thesisFlips || []).map((f) => [f.symbol, f.direction])
     );
     for (const p of posBySym.values()) {
-      if (MANUAL.has(p.symbol)) continue;
+      if (MANUAL.has(p.symbol) || foreign(p.symbol)) continue;
       const flip = flips.get(p.symbol);
       const posDir = p.side === 'long' ? 'LONG' : 'SHORT';
       if (!flip || flip === posDir) continue;
@@ -730,7 +746,11 @@ async function main() {
   }
   for (const p of posBySym.values()) {
     try {
-      const manualHold = MANUAL.has(p.symbol);
+      // foreign positions (app/exchange/manual opens) get the same hands-off
+      // treatment as MANUAL_HOLD: armed with synthesized protection, but no
+      // ratchets, ladders, time-cuts, or scanner-driven exits. The user's
+      // trade is the user's trade — the engine guards it, it doesn't manage it.
+      const manualHold = MANUAL.has(p.symbol) || foreign(p.symbol);
       const existing = plansOf(p.symbol);
       // 'moving_plan' (trailing stop) IS loss protection — without it in the
       // regex the repair loop would stack a second stop on a trailed position
@@ -763,10 +783,17 @@ async function main() {
             /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
             Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size));
       if (planDrift) {
-        const trig = lossPlan && +lossPlan.triggerPrice > 0 ? +lossPlan.triggerPrice : null;
+        let trig = lossPlan && +lossPlan.triggerPrice > 0 ? +lossPlan.triggerPrice : null;
         const sgn = p.side === 'long' ? 1 : -1;
         const pp0 = cm[p.symbol]?.pricePlace ?? 6;
-        const stopPct = trig ? (Math.abs(p.entry - trig) / p.entry) * 100 : 1.2;
+        let stopPct = trig ? (Math.abs(p.entry - trig) / p.entry) * 100 : 1.2;
+        // a drifted stop parked past the liquidation band protects nothing —
+        // the rebuild must clamp it inside the band, not re-place the defect
+        const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+        if (liqPct > 0 && stopPct >= liqPct * 0.8) {
+          stopPct = Math.max(liqPct * 0.75, 0.05);
+          trig = round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
+        }
         try {
           await cancelPlans(p.symbol);
           await planWithRetry(() =>
@@ -922,9 +949,18 @@ async function main() {
       if (lossPlan && hasProfit) continue;
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
-      const stopPct = lossPlan && +lossPlan.triggerPrice > 0
+      let stopPct = lossPlan && +lossPlan.triggerPrice > 0
         ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
         : 1.2;
+      // the synthesized stop must fire BEFORE liquidation or it protects
+      // nothing — 100x liq sits ~0.9% out, under the 1.2% default. Clamp to
+      // 80% of the entry→liq distance (same bound entry sizing uses).
+      const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+      if (liqPct > 0 && stopPct >= liqPct * 0.8) {
+        const raw = stopPct;
+        stopPct = Math.max(liqPct * 0.75, 0.05); // never tighter than 0.05%
+        state.actions.push(`clamped ${p.symbol} synth stop ${round(raw, 2)}% -> ${round(stopPct, 2)}% (liq ${round(liqPct, 2)}% away)`);
+      }
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
           round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
@@ -955,9 +991,11 @@ async function main() {
       const pp = cm[p.symbol]?.pricePlace ?? 6;
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
       const hasProfit = existing.some((x) => /profit/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
-      const stopPct = lossPlan && +lossPlan.triggerPrice > 0
+      let stopPct = lossPlan && +lossPlan.triggerPrice > 0
         ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
         : 1.2;
+      const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+      if (liqPct > 0 && stopPct >= liqPct * 0.8) stopPct = Math.max(liqPct * 0.75, 0.05);
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
           round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
@@ -1178,6 +1216,7 @@ async function main() {
         (state.entriesLog = state.entriesLog || []).push({
           ts: Date.now(), symbol: o.symbol, direction: o.direction,
         });
+        managed.add(o.symbol); // engine-entered — exits apply to managed only
         entriesThisHour++;
         // protective levels anchor to the ACTUAL fill, not the plan's ref
         // price — market orders slip, and a stop quoted off an unfilled
@@ -1439,6 +1478,7 @@ async function main() {
   } catch {}
   state.cycleMs = Date.now() - tRun;
   state.refreshedAt = new Date().toISOString(); // freshness = write time, not run start
+  state.managed = [...managed]; // materialize at write time — entries late in the cycle count
   writeJson(outPath, state);
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);
   if (state.errors.length) console.log(state.errors.join('\n'));

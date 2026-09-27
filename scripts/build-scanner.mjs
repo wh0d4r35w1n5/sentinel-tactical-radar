@@ -1591,7 +1591,13 @@ async function main() {
   // portfolio heat cap — regime-scaled: the book is allowed to carry more
   // total risk when the measured tape supports the traded direction, less
   // for counter-trend trades in a hostile regime
+  // SENTINEL_HEAT_CAP / SENTINEL_CLUSTER_HEAT: absolute %-of-equity ceilings.
+  // Needed on dust accounts — one 85%-margin position at breakout leverage
+  // carries ~40% stop-risk, so the conservative 4-6% defaults can never
+  // pass a mandated deployment. Unset = regime defaults below.
+  const HEAT_OVR = +(process.env.SENTINEL_HEAT_CAP || 0);
   const heatCapFor = (dir) => {
+    if (HEAT_OVR > 0) return HEAT_OVR;
     const aligned =
       (dir === 'LONG' && regime === 'risk-on') ||
       (dir === 'SHORT' && regime === 'risk-off');
@@ -1603,7 +1609,7 @@ async function main() {
   // correlation governor: BTC+ETH+SOL+alts aren't independent bets — during
   // a shock they're the same crypto risk. Cap heat per correlated cluster
   // so the book can't stack 15 disguised copies of one bet.
-  const CLUSTER_HEAT_CAP = RISK_MAX ? 8 : 2.5; // % of equity at risk per correlated cluster
+  const CLUSTER_HEAT_CAP = +(process.env.SENTINEL_CLUSTER_HEAT || 0) || (RISK_MAX ? 8 : 2.5); // % of equity at risk per correlated cluster
   // measured-corr heat: an open position counts against the candidate's
   // cluster when their realized 48h correlation is ≥0.6 — the "same bet"
   // test. Falls back to the static asset-class cluster when either side
@@ -1665,6 +1671,7 @@ async function main() {
   // archive (the eval engine grades them) but no position opens. Standing
   // down is a legitimate output.
   const MIN_ENTRY_SCORE = +(process.env.SENTINEL_MIN_SCORE || (RISK_MAX ? 55 : 70));
+  const STRAT_OVERRIDE = +(process.env.SENTINEL_STRAT_OVERRIDE || 75);
   // ---- Tharp's core law enforced: no system works in every market type.
   // bear tape → only reversal-family LONGs trade; bull tape → only
   // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
@@ -1999,7 +2006,11 @@ async function main() {
     gate(s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
-    gate(!stratBlock.has(s.strategy), 'strat-blocked');
+    // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
+    // the eval block — the strategy's record stays on the board for
+    // evidence, but exceptional confluence may still route. Default 75;
+    // set high to restore the strict block.
+    gate(!stratBlock.has(s.strategy) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
@@ -2062,7 +2073,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s) && !stratBlock.has(s.strategy))
+      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s) && (!stratBlock.has(s.strategy) || tradeScoreOf(s) >= STRAT_OVERRIDE))
       .map((s) => [s.asset, s.direction])
   );
 
