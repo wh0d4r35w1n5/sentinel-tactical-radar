@@ -426,8 +426,10 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   pulseSVG(p.series);
   $('pulseSub').textContent=`median 24h Δ ${scan.overview.medianChangePct}% · breadth ${scan.overview.breadthPct}% · window ${(scan.scanWindowSeconds||0)/60}min`;
   const o=scan.overview;
+  const adv=o.advancing||0, dec=o.declining||0, aPct=(adv+dec)?(100*adv/(adv+dec)):50;
   $('stats').innerHTML=[
-    ['Pairs scanned',o.scannedPairs],['Breadth',o.breadthPct+'%'],['Median Δ24h',o.medianChangePct+'%'],
+    ['Up vs Down · 24h',`<span class="up">▲ ${adv}</span> <span class="sub">/</span> <span class="dn">▼ ${dec}</span><div style="display:flex;height:4px;border-radius:2px;overflow:hidden;margin-top:7px"><i style="width:${aPct}%;background:var(--grn)"></i><i style="flex:1;background:var(--red)"></i></div>`],
+    ['Pairs scanned',o.scannedPairs],['Breadth',o.breadthPct+'%'],
     ['Long / Short',`${o.longSignals} / ${o.shortSignals}`],['Quote vol','$'+(o.totalVolume/1e9).toFixed(2)+'B USD'],['Avg spread',o.averageSpreadPct+'%']
   ].map(([k,v])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k}</div></div>`).join('');
   const sigByAsset={};(scan.signals||[]).forEach(s=>sigByAsset[s.asset]=s);
