@@ -246,6 +246,17 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .frow .fk{min-width:62px;font-weight:800;letter-spacing:.08em;color:var(--txt);font-size:9px}
 .frow .fd{font-size:9px;width:10px;flex-shrink:0}
 .frow .fv{color:var(--mut);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.mtfrow{display:grid;grid-template-columns:66px repeat(4,1fr) 158px;gap:4px;align-items:stretch;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.045)}
+.mtfc{border-radius:6px;padding:4px 6px;font-size:10px;text-align:center;border:1px solid transparent;min-width:0}
+.mtfc.bull{background:rgba(46,230,168,.11);border-color:rgba(46,230,168,.28);color:#2ee6a8}
+.mtfc.bear{background:rgba(255,77,109,.11);border-color:rgba(255,77,109,.28);color:#ff4d6d}
+.mtfc.flat{background:rgba(255,255,255,.03);color:#8b93b0}
+.mtfc .tf{opacity:.55;font-size:8px;letter-spacing:.1em;display:block}
+.mtfstack{font-size:9.5px;font-weight:800;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;border-radius:6px;padding:0 6px;text-align:center}
+.mtfstack.bull{background:rgba(46,230,168,.14);color:#2ee6a8;border:1px solid rgba(46,230,168,.35)}
+.mtfstack.bear{background:rgba(255,77,109,.14);color:#ff4d6d;border:1px solid rgba(255,77,109,.35)}
+.mtfstack.pull{background:rgba(186,104,255,.13);color:#ba68ff;border:1px solid rgba(186,104,255,.35)}
+.mtfstack.flat{color:#8b93b0;border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -286,6 +297,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
   <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Breakout core · coil → break → retest <span class="sub">— 55-bar Donchian close-confirmed · retests rank highest, failed breaks flag the trap · intelligence layer</span><span id="brkSub" class="sub" style="float:right"></span></div>
     <div id="brkCore" class="vrow"><div class="sub">scanning breakouts…</div></div>
+  </div>
+  <div class="panel pro" style="margin-bottom:16px">
+    <div class="ptitle">Multi-timeframe matrix · 15m → 1D alignment <span class="sub">— every frame votes trend + RSI + MACD + EMA posture · STACKED = all frames agree · HTF-LEAD + LTF-pullback = the elite dip/rip context</span><span id="mtfSub" class="sub" style="float:right"></span></div>
+    <div id="mtfBody" style="overflow-x:auto"><div class="sub">reading frames…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Signal pressure · how close the engine is to firing</div>
@@ -449,6 +464,7 @@ function sigDetail(s,i){
       ${s.ta.liquidity.inducement?`<span class="echip flat" title="minor pool in the trade's path — likely raided before the real target"><b>IND</b> ${fmtP(s.ta.liquidity.inducement.px)}</span>`:''}
     </div>`:''}
     ${s.ta&&s.ta.cps&&s.ta.cps.length?`<div class="engrow">${s.ta.cps.map(p=>`<span class="echip ${p.dir==='LONG'?'bull':p.dir==='SHORT'?'bear':'flat'}" title="${esc(p.s)}"><b>${esc(p.name)}</b> ${p.dir||'coil'}</span>`).join('')}</div>`:''}
+    ${s.ta&&s.ta.mtf?`<div class="engrow">${['15m','1H','4H','1D'].map(tf=>{const c=s.ta.mtf.cells&&s.ta.mtf.cells[tf];return c?`<span class="echip ${c.dir||'flat'}" title="${tf}: ${esc(c.label||c.trend||'')}"><b>${tf}</b> ${c.dir==='bull'?'▲':c.dir==='bear'?'▼':'·'}${c.rsi!=null?' RSI '+Math.round(c.rsi):''}</span>`:`<span class="echip flat"><b>${tf}</b> —</span>`}).join('')}<span class="echip ${s.ta.mtf.dir||'flat'}" title="${s.ta.mtf.agree}/${s.ta.mtf.n} frames agree"><b>${esc(s.ta.mtf.stack)}</b></span></div>`:''}
     ${s.ta?facTable(s.ta.factors,'SIGNAL DNA · every engine vote behind '+s.direction):''}
     <div data-spark data-sym="${s.symbol}">${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':''}</div>
     <div class="dmeta">
@@ -493,8 +509,8 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -852,6 +868,16 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     <div class="vc-x num" style="color:${SC[e.state]||'var(--mut)'}">${e.state==='COMPRESSION'?Math.round(e.coil*100)+'%':e.volX?e.volX+'×':'—'}</div>
     <div class="sub vc-s">${e.state==='COMPRESSION'?'coil tightness · 55b range '+fmtP(e.dcL||0)+'–'+fmtP(e.dcH||0):(e.age!=null?e.age+'b ago':'')+' · lvl '+fmtP(e.level)+(e.target?' · tgt '+fmtP(e.target):'')+(e.volX?' · '+e.volX+'× vol':'')}</div></a>`).join('')||'<div class="sub">no breaks or coils on the 1h board — range-bound tape</div>';
   if($('brkSub'))$('brkSub').textContent=brkR&&brkR.counts?`${brkR.counts.retest} retest · ${brkR.counts.breakout} break · ${brkR.counts.failed} failed · ${brkR.counts.compression} coiled · ${brkR.scanned||0} scanned · ${ago(Date.parse(brkR.refreshedAt))}`:'';
+  // ---- multi-timeframe matrix ----
+  const mtfRows=(mtfM&&mtfM.rows)||{},mtfFr=mtfM&&mtfM.frames||['15m','1H','4H','1D'];
+  const mtfArr=Object.entries(mtfRows);
+  const mtfPrio={stacked:0,pullback:1,mixed:2};
+  mtfArr.sort((a,b)=>(mtfPrio[a[1].kind]??3)-(mtfPrio[b[1].kind]??3)||(b[1].agree-a[1].agree));
+  if($('mtfSub'))$('mtfSub').textContent=mtfM?`${mtfArr.length} assets · ${mtfFr.length} frames · ${ago(Date.parse(mtfM.t))}`:'';
+  const mtfCell=(c,tf)=>c?`<div class="mtfc ${c.dir||'flat'}" title="${tf}: ${esc(c.trend||'?')} trend · MACD ${esc(c.macd||'?')} ${esc(c.macdTurn||'')} · ${c.vsE20!=null?(c.vsE20>=0?'+':'')+c.vsE20+'% vs E20':''}"><span class="tf">${tf}</span>${c.dir==='bull'?'▲':c.dir==='bear'?'▼':'·'} ${c.rsi!=null?'RSI '+Math.round(c.rsi):'—'}<span class="tf">${esc(c.trend||'')}</span></div>`:`<div class="mtfc flat"><span class="tf">${tf}</span>·</div>`;
+  $('mtfBody').innerHTML=mtfArr.length?`<div class="mtfrow" style="border-bottom-color:var(--line)"><div></div>${mtfFr.map(t=>`<div class="sub" style="text-align:center;font-weight:800;letter-spacing:.1em">${t}</div>`).join('')}<div class="sub" style="text-align:center;font-weight:800;letter-spacing:.1em">STACK</div></div>`+
+    mtfArr.slice(0,28).map(([a,r])=>`<div class="mtfrow"><div style="display:flex;align-items:center;font-weight:800;font-size:11px"><a href="${BG(a)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a)}</a></div>${mtfFr.map(tf=>mtfCell(r.cells&&r.cells[tf],tf)).join('')}<div class="mtfstack ${r.kind==='stacked'?(r.dir==='bull'?'bull':'bear'):r.kind==='pullback'?'pull':'flat'}" title="${r.agree}/${r.n} frames">${esc(r.stack)}</div></div>`).join('')
+    :'<div class="sub">frames loading — first MTF cycle warming up</div>';
   // Einstein lab: factor effectiveness, lab notebook, proposal queue
   {
     const ic=((ein&&ein.factorIC)||[]).filter(f=>f.n>=5);

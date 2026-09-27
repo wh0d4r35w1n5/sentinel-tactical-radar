@@ -637,6 +637,67 @@
              + (aligned ? ' — fully aligned' : ' — mixed/transition') };
   }
 
+  // ---------- ENGINE: multi-timeframe deep read ----------
+  // Each timeframe gets a real mini-analysis — pivot structure, RSI zone,
+  // MACD histogram direction, price-vs-EMA20 posture — then the stack read:
+  // full agreement (STACKED), HTF leading while LTF pulls back (the elite
+  // buy-the-dip / sell-the-rip context), or a conflicted market (MIXED).
+  // frames: { '15m': cs, '1H': cs, '4H': cs, '1D': cs } — any subset ≥2 works.
+  function mtfDeep(frames) {
+    if (!frames) return null;
+    var order = ['15m', '1H', '4H', '1D'];
+    var cells = {}, n = 0, votes = { bull: 0, bear: 0 };
+    order.forEach(function (tf) {
+      var cs = frames[tf];
+      if (!cs || cs.length < 20) return;
+      var cl = cs.map(function (c) { return c.c; });
+      var tr = trendOf(cs, 0.015);
+      var r = rsiSeries(cl), rv = r[r.length - 1];
+      var e12 = emaSeries(cl, 12), e26 = emaSeries(cl, 26);
+      var m = e12[cl.length - 1] - e26[cl.length - 1];
+      var mPrev = e12[cl.length - 2] - e26[cl.length - 2];
+      var e20 = emaSeries(cl, 20), e50 = cl.length >= 50 ? emaSeries(cl, 50) : null;
+      var px = cl[cl.length - 1];
+      var vsE20 = +((px / e20[e20.length - 1] - 1) * 100).toFixed(2);
+      var vsE50 = e50 ? +((px / e50[e50.length - 1] - 1) * 100).toFixed(2) : null;
+      // three votes: structure trend, momentum (RSI tilt + MACD above zero),
+      // posture (price vs EMA20/50)
+      var v = 0;
+      if (tr && tr.dir) v += tr.dir === 'bull' ? 1 : -1;
+      if (rv != null) v += rv >= 55 ? 1 : rv <= 45 ? -1 : 0;
+      if (m > 0 || (mPrev <= 0 && m > mPrev)) v += 1; else if (m < 0 || (mPrev >= 0 && m < mPrev)) v -= 1;
+      var dir = v >= 2 ? 'bull' : v <= -2 ? 'bear' : v > 0 ? 'bull' : v < 0 ? 'bear' : null;
+      if (dir) votes[dir]++;
+      cells[tf] = {
+        dir: dir, str: Math.round(Math.abs(v) / 3 * 100),
+        trend: tr ? tr.trend : null, rsi: rv != null ? +rv.toFixed(1) : null,
+        macd: m > 0 ? 'above' : 'below', macdTurn: m > mPrev ? 'rising' : 'falling',
+        vsE20: vsE20, vsE50: vsE50,
+        label: (tr ? tr.trend : '?') + ' · RSI ' + (rv != null ? rv.toFixed(0) : '—')
+               + ' · MACD ' + (m > 0 ? 'above' : 'below') + ' zero/' + (m > mPrev ? 'rising' : 'falling')
+               + ' · ' + (vsE20 >= 0 ? '+' : '') + vsE20 + '% vs E20',
+      };
+      n++;
+    });
+    if (n < 2) return null;
+    var dir = votes.bull > votes.bear ? 'bull' : votes.bear > votes.bull ? 'bear' : null;
+    var htf = cells['1D'] || cells['4H'], ltf = cells['15m'] || cells['1H'];
+    var stack, kind;
+    var agree = Math.max(votes.bull, votes.bear);
+    if (dir && agree === n) { stack = 'STACKED ' + dir.toUpperCase(); kind = 'stacked'; }
+    else if (htf && ltf && htf.dir && ltf.dir && htf.dir !== ltf.dir) {
+      stack = 'HTF ' + htf.dir.toUpperCase() + ' · LTF pullback'; kind = 'pullback';
+    } else { stack = 'MIXED ' + votes.bull + '/' + votes.bear; kind = 'mixed'; }
+    // direction for the vote pool: stacked/pullback follow the HTF read;
+    // mixed contributes nothing
+    var vdir = kind === 'pullback' ? htf.dir : dir;
+    return {
+      cells: cells, frames: order.filter(function (tf) { return cells[tf]; }),
+      dir: vdir, stack: stack, kind: kind, agree: agree, n: n,
+      label: 'MTF ' + stack + ' — ' + agree + '/' + n + ' frames ' + (dir || 'split'),
+    };
+  }
+
   // ---------- Liquidity Levels (TTC doctrine — Anni Snelleksz) ----------
   // Liquidity = resting stop orders. Pools stack above equal/swing/session
   // highs (buy-side: short stops + breakout buys) and below equal/swing/
@@ -1027,7 +1088,7 @@
     };
   }
 
-  function analyze(cs, cs5m) {
+  function analyze(cs, cs5m, extra) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
@@ -1129,6 +1190,16 @@
       F('candles', cb.length > cr.length ? 'bull' : cr.length > cb.length ? 'bear' : 'flat', cd.join(', '));
     }
     if (cps && cps.length) cps.forEach(function (p) { F('pattern', LD(p.dir) , p.name + ' (' + p.conf + ') — ' + p.s); });
+    // deep MTF frames — per-timeframe factor rows so each TF's vote is
+    // individually auditable (and Einstein can IC-test them separately)
+    var mtd = extra && extra.mtf;
+    if (mtd && mtd.cells) {
+      (mtd.frames || []).forEach(function (tf) {
+        var c = mtd.cells[tf];
+        if (c) F('MTF ' + tf, c.dir || 'flat', c.label);
+      });
+      F('MTF stack', mtd.dir || 'flat', mtd.stack + ' — ' + mtd.agree + '/' + mtd.n + ' frames agree');
+    }
     var EG = { rsi: 'RSI', macd: 'MACD', obv: 'OBV', dow: 'Dow', ichi: 'Ichimoku', mas: 'MA stack', brk: 'breakout', rev: 'reversal', mtf: 'MTF' };
     for (var ek in EG) { var x2 = eng[ek]; if (x2) F(EG[ek], x2.dir || 'flat', x2.label || ''); }
     if (eng.minor) F('minor tr', eng.minor.trend === 'up' ? 'bull' : eng.minor.trend === 'down' ? 'bear' : 'flat', eng.minor.trend);
@@ -1139,6 +1210,7 @@
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
+             mtf: mtd,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
@@ -1147,6 +1219,6 @@
                  structure: structure, ignition: ignition, keyLevels: keyLevels,
                  vwap: vwap, smc: smc, eqLevels: eqLevels, liquidity: liquidity,
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
-                 mtfEng: mtfEng, revEng: revEng };
+                 mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

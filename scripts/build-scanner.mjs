@@ -213,6 +213,42 @@ function klineCacheSave() {
 }
 const KLINE_TTL = 5 * 60e3;
 
+// --- multi-timeframe klines: TTL-gated caches per granularity.
+// 4H/1D bars barely move — fetching them on every 15s cycle is pure waste
+// and rate-limit bait. Steady-state cost of the MTF engine ≈ zero requests.
+const TF_TTLS = { '15m': 10 * 60e3, '4H': 20 * 60e3, '1D': 4 * 3600e3 };
+const TF_BARMS = { '15m': 900e3, '4H': 14400e3, '1D': 86400e3 };
+const tfCache = {};
+async function fetchTF(symbol, gran) {
+  const file = path.join(API, '..', 'state', 'klines-' + gran + '.json');
+  if (!tfCache[gran]) {
+    try { tfCache[gran] = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch { tfCache[gran] = {}; }
+  }
+  const cache = tfCache[gran], hit = cache[symbol], ttl = TF_TTLS[gran] || 600e3;
+  if (hit && hit.rows && Date.now() - hit.at < ttl) return hit.rows;
+  try {
+    const res = await fetch(
+      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=${gran}&limit=120`,
+      { signal: TF() }
+    );
+    if (!res.ok) return hit?.rows ?? null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || data.length < 20) return hit?.rows ?? null;
+    const rows = data
+      .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+      .sort((a, b) => a.t - b.t);
+    const barMs = TF_BARMS[gran] || 0;
+    if (rows.length && rows[rows.length - 1].t + barMs > Date.now()) rows.pop();
+    cache[symbol] = { at: Date.now(), rows };
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      writeJson(file, cache);
+    } catch {}
+    return rows;
+  } catch { return hit?.rows ?? null; }
+}
+
 async function fetchKlines(symbol, light = false) {
   const cache = klineCacheLoad();
   const hit = cache[symbol];
@@ -472,6 +508,56 @@ async function main() {
   const klineMiss = candidates
     .filter((r) => !enriched.has(r.asset))
     .map((r) => r.asset);
+
+  // ---- multi-timeframe deep read: 15m/1H/4H/1D frames per enriched asset.
+  // TTL caches make this near-free on steady-state cycles; each asset's
+  // stack (agreement count + HTF-lead/pullback classification) feeds the
+  // artifact, the signal payload, and the factor ledger.
+  const mtfFrames = new Map();
+  {
+    const assets = [...enriched.keys()];
+    for (const gran of ['15m', '4H', '1D']) {
+      for (let i = 0; i < assets.length; i += 6) {
+        const batch = assets.slice(i, i + 6);
+        const got = await Promise.all(
+          batch.map((a) => fetchTF(a + 'USDT', gran).catch(() => null))
+        );
+        got.forEach((rws, j) => {
+          if (!rws) return;
+          const m = mtfFrames.get(batch[j]) || {};
+          m[gran] = rws;
+          mtfFrames.set(batch[j], m);
+        });
+        if (i + 6 < assets.length) await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+  }
+  for (const [asset, k] of enriched) {
+    const m = mtfFrames.get(asset) || {};
+    k.mtf = TAEngine.mtfDeep({ '15m': m['15m'], '1H': k.candles, '4H': m['4H'], '1D': m['1D'] });
+    // recompute TA with the MTF ledger rows folded in — pure CPU, ~ms/asset
+    if (k.mtf && k.candles)
+      k.ta = TAEngine.analyze(k.candles, k.candles5m, { mtf: k.mtf });
+  }
+  writeJson(path.join(API, 'mtf.json'), {
+    t: new Date().toISOString(),
+    frames: ['15m', '1H', '4H', '1D'],
+    rows: Object.fromEntries(
+      [...enriched.entries()]
+        .filter(([, k]) => k.mtf)
+        .map(([a, k]) => [a, {
+          stack: k.mtf.stack, dir: k.mtf.dir, kind: k.mtf.kind,
+          agree: k.mtf.agree, n: k.mtf.n,
+          cells: Object.fromEntries(
+            Object.entries(k.mtf.cells).map(([tf, c]) => [tf, {
+              dir: c.dir, str: c.str, trend: c.trend, rsi: c.rsi,
+              macd: c.macd, macdTurn: c.macdTurn, vsE20: c.vsE20,
+            }])
+          ),
+        }])
+    ),
+    scanned: enriched.size,
+  });
 
   // ---- volume-spike core: relative-volume events on closed 1h candles.
   // Order-flow doctrine (51% school): volume precedes price, but effort is
@@ -1263,6 +1349,13 @@ async function main() {
               atrPct: ta.atrPct ?? null,
               ignition: ta.ignition ?? null,
               cps: ta.cps ?? null,
+              mtf: ta.mtf
+                ? {
+                    stack: ta.mtf.stack, dir: ta.mtf.dir, kind: ta.mtf.kind,
+                    agree: ta.mtf.agree, n: ta.mtf.n,
+                    cells: ta.mtf.cells,
+                  }
+                : null,
               brk: ta.brk
                 ? { state: ta.brk.state, dir: ta.brk.dir, level: ta.brk.level, age: ta.brk.age, volX: ta.brk.volX, coil: ta.brk.coil, target: ta.brk.target }
                 : null,
