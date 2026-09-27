@@ -896,6 +896,129 @@ async function main() {
       } catch {}
     }
     } // end !RAPID intel gather — rapid mode leaves deriv/social/news/mcaps/events empty
+    // ---- SOCIAL SENTIMENT ENGINE — the crowd-attention layer.
+    // TTL-gated (20min) like the news wire: the VPS daemon is permanently
+    // rapid, so keyless social sources refresh on cadence, not per-cycle.
+    // Sources: CoinGecko trending (attention spikes), Fear & Greed (market
+    // mood), the RSS wire's per-asset tone, and LunarCrush galaxy/altrank/
+    // social-volume when a key exists. Heat (attention) and direction are
+    // kept separate — trending ≠ bullish; a coin can trend on FUD.
+    try {
+      const SOC_FILE = path.join(API, '..', 'state', 'social-cache.json');
+      const SOC_TTL = 20 * 60e3;
+      let socCache = null;
+      try { socCache = JSON.parse(fs.readFileSync(SOC_FILE, 'utf8')); } catch {}
+      const socDue = !socCache || !socCache.at || Date.now() - socCache.at > SOC_TTL;
+      if (socDue) {
+        const fresh = { at: Date.now(), market: {}, assets: {} };
+        // Fear & Greed — market mood (alternative.me, keyless)
+        try {
+          const fg = await fetch('https://api.alternative.me/fng/?limit=2', { signal: TF() });
+          if (fg.ok) {
+            const fd = (await fg.json()).data || [];
+            if (fd[0]) fresh.market.fg = { v: +fd[0].value, c: fd[0].value_classification };
+          }
+        } catch {}
+        // CoinGecko trending — retail attention spikes (keyless)
+        try {
+          const tr = await fetch('https://api.coingecko.com/api/v3/search/trending', { signal: TF() });
+          if (tr.ok) {
+            const td = await tr.json();
+            fresh.market.trending = (td.coins || []).slice(0, 15).map((c, i) => ({
+              sym: ((c.item || {}).symbol || '').toUpperCase(), rank: i + 1,
+              mcapRank: c.item?.market_cap_rank ?? null,
+            }));
+          }
+        } catch {}
+        // news-wire tone — the RSS wire already tags assets + tone; fold
+        // the last 48h of tagged headlines into a per-asset sentiment read
+        try {
+          const nw = JSON.parse(fs.readFileSync(path.join(API, 'news.json'), 'utf8'));
+          const cut = Date.now() - 48 * 3600e3;
+          for (const it of nw.items || []) {
+            if (!it.ts || it.ts < cut) continue;
+            for (const a of it.tags || []) {
+              const n = (fresh.assets[a] ??= { pos: 0, neg: 0, n: 0, heads: [] });
+              n.n++;
+              if (it.tone === 'bull') n.pos++; else if (it.tone === 'bear') n.neg++;
+              if (n.heads.length < 3 && it.title) n.heads.push(it.title.slice(0, 90));
+            }
+          }
+        } catch {}
+        // LunarCrush — key-gated; when present this is the real galaxy /
+        // alt-rank / social-volume feed, fetched per-asset (top 40 crypto)
+        if (LC_KEY) {
+          const lcSyms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40);
+          for (let i = 0; i < lcSyms.length; i += 8) {
+            await Promise.all(lcSyms.slice(i, i + 8).map(async (a) => {
+              try {
+                const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${a.toLowerCase()}/v1`,
+                  { headers: { Authorization: `Bearer ${LC_KEY}` }, signal: TF() });
+                if (lc.ok) {
+                  const ld = (await lc.json()).data;
+                  if (ld) (fresh.assets[a] ??= { pos: 0, neg: 0, n: 0, heads: [] }).lc = {
+                    galaxy: ld.galaxy_score ?? null, altRank: ld.alt_rank ?? null,
+                    sentiment: ld.sentiment ?? null, socialVol: ld.social_volume_24h ?? null,
+                    interactions: ld.interactions_24h ?? null,
+                  };
+                }
+              } catch {}
+            }));
+            if (i + 8 < lcSyms.length) await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+        socCache = fresh;
+        try { fs.mkdirSync(path.dirname(SOC_FILE), { recursive: true }); writeJson(SOC_FILE, fresh); } catch {}
+      }
+      // composite per-asset read — dirScore = mean of directional sources
+      // (galaxy/sentiment/news-tone); heat = attention (trending rank,
+      // headline count, interaction volume). score blends both.
+      const socAssets = {}, trRanks = {};
+      (socCache.market.trending || []).forEach((x) => { if (x.sym) trRanks[x.sym] = x.rank; });
+      for (const a of new Set([...Object.keys(socCache.assets), ...Object.keys(trRanks)])) {
+        const x = socCache.assets[a] || {}, tr = trRanks[a];
+        const tone = (x.pos + x.neg) > 0 ? Math.round(50 + (50 * (x.pos - x.neg)) / (x.pos + x.neg)) : null;
+        const dv2 = [];
+        if (x.lc?.galaxy != null) dv2.push(x.lc.galaxy);
+        if (x.lc?.sentiment != null) dv2.push(x.lc.sentiment);
+        if (tone != null) dv2.push(tone);
+        const dirScore = dv2.length ? Math.round(dv2.reduce((p, c) => p + c, 0) / dv2.length) : null;
+        const heat = Math.min(100, Math.round(
+          (tr ? Math.max(20, 105 - tr * 6) : 0) * 0.5 +
+          Math.min(100, (x.n || 0) * 22) * 0.3 +
+          Math.min(100, Math.log10(1 + (x.lc?.interactions || 0) / 1000) * 40) * 0.2));
+        socAssets[a] = {
+          score: Math.round(Math.min(100, (dirScore ?? 50) * 0.6 + heat * 0.4)),
+          heat, dirScore,
+          dir: dirScore != null ? (dirScore >= 62 ? 'bull' : dirScore <= 38 ? 'bear' : null) : null,
+          trending: tr ?? null, galaxy: x.lc?.galaxy ?? null, altRank: x.lc?.altRank ?? null,
+          sentiment: x.lc?.sentiment ?? null, socialVol: x.lc?.socialVol ?? null,
+          interactions: x.lc?.interactions ?? null,
+          newsTone: tone, newsN: x.n || 0, heads: (x.heads || []).slice(0, 2),
+        };
+      }
+      for (const [a, v] of Object.entries(socAssets)) social[a] = { ...(social[a] || {}), ...v };
+      globalThis.__social = social;
+      writeJson(path.join(API, 'social.json'), {
+        t: new Date().toISOString(),
+        market: socCache.market,
+        feeds: { lunarcrush: LC_KEY ? 'live' : 'no-key', 'coingecko-trending': 'live', feargreed: 'live', 'news-tone': 'live' },
+        assets: socAssets,
+      });
+      // social factor row on every TA'd asset — lands in the SIGNAL DNA
+      // ledger (confluence.json + journal snapshots) for IC research
+      for (const [a, k] of enriched) {
+        const sc = socAssets[a];
+        if (k.ta && k.ta.factors && sc)
+          k.ta.factors.push({
+            k: 'social', dir: sc.dir || 'flat',
+            s: 'score ' + sc.score + ' · heat ' + sc.heat
+              + (sc.trending ? ' · trending #' + sc.trending : '')
+              + (sc.galaxy != null ? ' · galaxy ' + sc.galaxy : '')
+              + (sc.newsTone != null ? ' · news ' + (sc.newsTone - 50 >= 0 ? '+' : '') + (sc.newsTone - 50) + '%' : ''),
+          });
+      }
+    } catch {}
     deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
     mcaps._feeds = feedStatus; events._feeds = feedStatus;
     globalThis.__deriv = deriv; globalThis.__social = social; globalThis.__news = news;
@@ -1268,7 +1391,7 @@ async function main() {
         updatedAt: new Date().toISOString(),
         entryPrice: r.lastPrice,
         quoteVolume: Math.round(r.quoteVolume),
-        socialScore: 0,
+        socialScore: (globalThis.__social || {})[r.asset]?.score ?? 0,
         targetPrice:
           direction === 'LONG'
             ? r.lastPrice * (1 + targetPct / 100)

@@ -303,6 +303,11 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="mtfBody" style="overflow-x:auto"><div class="sub">reading frames…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
+    <div class="ptitle">Social radar · crowd attention + sentiment <span class="sub">— LunarCrush galaxy/altrank when keyed · CoinGecko trending + Fear &amp; Greed + news-wire tone, keyless · heat = attention, dir = directional read — a coin can trend on FUD</span><span id="socSub" class="sub" style="float:right"></span></div>
+    <div id="socFg"></div>
+    <div id="socBody" class="vrow"><div class="sub">reading the crowd…</div></div>
+  </div>
+  <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Signal pressure · how close the engine is to firing</div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
     <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
@@ -465,6 +470,7 @@ function sigDetail(s,i){
     </div>`:''}
     ${s.ta&&s.ta.cps&&s.ta.cps.length?`<div class="engrow">${s.ta.cps.map(p=>`<span class="echip ${p.dir==='LONG'?'bull':p.dir==='SHORT'?'bear':'flat'}" title="${esc(p.s)}"><b>${esc(p.name)}</b> ${p.dir||'coil'}</span>`).join('')}</div>`:''}
     ${s.ta&&s.ta.mtf?`<div class="engrow">${['15m','1H','4H','1D'].map(tf=>{const c=s.ta.mtf.cells&&s.ta.mtf.cells[tf];return c?`<span class="echip ${c.dir||'flat'}" title="${tf}: ${esc(c.label||c.trend||'')}"><b>${tf}</b> ${c.dir==='bull'?'▲':c.dir==='bear'?'▼':'·'}${c.rsi!=null?' RSI '+Math.round(c.rsi):''}</span>`:`<span class="echip flat"><b>${tf}</b> —</span>`}).join('')}<span class="echip ${s.ta.mtf.dir||'flat'}" title="${s.ta.mtf.agree}/${s.ta.mtf.n} frames agree"><b>${esc(s.ta.mtf.stack)}</b></span></div>`:''}
+    ${s.social?`<div class="engrow"><span class="echip ${s.social.dir||'flat'}" title="social composite — attention (heat) + directional reads"><b>SOC</b> ${s.social.dir==='bull'?'▲':s.social.dir==='bear'?'▼':'·'} score ${s.social.score??'—'} · heat ${s.social.heat??'—'}</span>${s.social.trending?`<span class="echip" style="border-color:rgba(186,104,255,.45);color:#ba68ff"><b>TRENDING #${s.social.trending}</b></span>`:''}${s.social.galaxy!=null?`<span class="echip ${s.social.galaxy>=65?'bull':s.social.galaxy<=35?'bear':'flat'}" title="LunarCrush galaxy score"><b>GALAXY</b> ${s.social.galaxy}</span>`:''}${s.social.altRank!=null?`<span class="echip" title="LunarCrush alt rank — lower = stronger vs the field"><b>ALTRANK</b> #${s.social.altRank}</span>`:''}${s.social.socialVol!=null?`<span class="echip flat" title="24h social posts"><b>VOL</b> ${(s.social.socialVol/1e3).toFixed(0)}k</span>`:''}${s.social.newsTone!=null?`<span class="echip ${s.social.newsTone>=62?'bull':s.social.newsTone<=38?'bear':'flat'}" title="news-wire tone, last 48h tagged headlines"><b>NEWS</b> ${s.social.newsTone-50>=0?'+':''}${s.social.newsTone-50}%</span>`:''}</div>`:''}
     ${s.ta?facTable(s.ta.factors,'SIGNAL DNA · every engine vote behind '+s.direction):''}
     <div data-spark data-sym="${s.symbol}">${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':''}</div>
     <div class="dmeta">
@@ -509,8 +515,8 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -878,6 +884,24 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   $('mtfBody').innerHTML=mtfArr.length?`<div class="mtfrow" style="border-bottom-color:var(--line)"><div></div>${mtfFr.map(t=>`<div class="sub" style="text-align:center;font-weight:800;letter-spacing:.1em">${t}</div>`).join('')}<div class="sub" style="text-align:center;font-weight:800;letter-spacing:.1em">STACK</div></div>`+
     mtfArr.slice(0,28).map(([a,r])=>`<div class="mtfrow"><div style="display:flex;align-items:center;font-weight:800;font-size:11px"><a href="${BG(a)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a)}</a></div>${mtfFr.map(tf=>mtfCell(r.cells&&r.cells[tf],tf)).join('')}<div class="mtfstack ${r.kind==='stacked'?(r.dir==='bull'?'bull':'bear'):r.kind==='pullback'?'pull':'flat'}" title="${r.agree}/${r.n} frames">${esc(r.stack)}</div></div>`).join('')
     :'<div class="sub">frames loading — first MTF cycle warming up</div>';
+  // ---- social radar: crowd attention + sentiment ----
+  const socAssets=(socR&&socR.assets)||{},socMkt=(socR&&socR.market)||{};
+  const fg=socMkt.fg;
+  if($('socSub'))$('socSub').textContent=socR?`${Object.keys(socAssets).length} assets · ${(socR.feeds&&Object.entries(socR.feeds).filter(([k,v])=>v==='live').map(([k])=>k).join(' + '))||'no feeds'} · ${ago(Date.parse(socR.t))}`:'';
+  $('socFg').innerHTML=fg?`<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+    <div class="sub" style="letter-spacing:.1em;font-weight:800">FEAR &amp; GREED</div>
+    <div style="flex:1;max-width:320px;height:7px;border-radius:4px;background:linear-gradient(90deg,#ff4d6d,#ffd750,#2ee6a8);position:relative">
+      <i style="position:absolute;left:${fg.v}%;top:-3px;width:13px;height:13px;border-radius:50%;background:#f0f5ff;border:2px solid #0b0e1a;transform:translateX(-50%);box-shadow:0 0 8px rgba(240,245,255,.6)"></i>
+    </div>
+    <b class="num" style="color:${fg.v>=60?'#2ee6a8':fg.v<=40?'#ff4d6d':'#ffd750'}">${fg.v} ${fg.c.toUpperCase()}</b>
+    ${(socMkt.trending||[]).length?`<span class="sub">· trending: ${socMkt.trending.slice(0,5).map(x=>x.sym).join(' · ')}</span>`:''}
+  </div>`:'';
+  const socArr=Object.entries(socAssets).sort((a,b)=>(b[1].heat-b[1].heat)||(b[1].score-a[1].score)).slice(0,18);
+  $('socBody').innerHTML=socArr.length?socArr.map(([a,s])=>`<a class="vcard" href="${BG(a)}" target="_blank" rel="noopener" title="${esc((s.heads||[]).join(' | ')||'no headline detail')}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">${esc(a)}</b><b class="num" style="color:${s.dir==='bull'?'#2ee6a8':s.dir==='bear'?'#ff4d6d':'#8b93b0'}">${s.dir==='bull'?'▲':s.dir==='bear'?'▼':'·'} ${s.score}</b></div>
+    <div style="margin:5px 0;height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><i style="display:block;height:100%;width:${s.heat}%;background:linear-gradient(90deg,#6ee7ff,#ba68ff);border-radius:2px"></i></div>
+    <div class="sub" style="font-size:9px;line-height:1.5">heat ${s.heat}${s.trending?` · <b style="color:#ba68ff">trending #${s.trending}</b>`:''}${s.galaxy!=null?` · galaxy ${s.galaxy}`:''}${s.altRank!=null?` · altrank ${s.altRank}`:''}${s.socialVol!=null?` · ${(s.socialVol/1e3).toFixed(0)}k posts`:''}${s.newsTone!=null?` · news ${s.newsTone-50>=0?'+':''}${s.newsTone-50}%`:''}</div>
+  </a>`).join(''):'<div class="sub">social feeds quiet — LunarCrush key or trending cycle pending</div>';
   // Einstein lab: factor effectiveness, lab notebook, proposal queue
   {
     const ic=((ein&&ein.factorIC)||[]).filter(f=>f.n>=5);
