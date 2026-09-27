@@ -14,6 +14,17 @@ const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
+// zero-dep .env loader — values only populate env vars not already set.
+// REQUIRED here: only bitget-exec loaded .env, so every SENTINEL_* knob in
+// .env was invisible to the scanner (dd-kill silently used the 35% profile
+// default instead of the configured 99.9 — gated every entry after the
+// drawdown despite the operator disabling it).
+try {
+  for (const line of fs.readFileSync(path.join(API, '..', '.env'), 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch {}
 // atomic artifact writes — a killed process mid-write hands consumers a
 // truncated JSON (executor reads live-plan.json; god audits all of api/).
 // tmp+rename is atomic on POSIX and Windows-over-CIFS alike.
@@ -39,6 +50,9 @@ const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: ski
 // floor. Structural protections (TP/SL, liq-band leverage, fee reserve) are
 // mechanics — they apply in every profile.
 const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
+// user mandate: SENTINEL_LONG_ONLY=1 — short signals still render on the
+// board but are gated out of every order with a named 'shorts-banned' reject.
+const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
 const KLINE_CANDIDATES = RAPID ? 16 : 48; // top-volume pairs get 1h momentum metrics
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
@@ -202,7 +216,10 @@ const KLINE_TTL = 5 * 60e3;
 async function fetchKlines(symbol, light = false) {
   const cache = klineCacheLoad();
   const hit = cache[symbol];
-  if (hit && Date.now() - hit.at < KLINE_TTL && hit.payload) return hit.payload;
+  const fresh = hit && hit.payload && Date.now() - hit.at < KLINE_TTL;
+  // a light caller needs only the 1h payload; a full caller also needs the
+  // 5m tape — a cached light payload can't serve TA, so full callers refetch
+  if (fresh && (light || hit.payload.candles5m)) return hit.payload;
   const res = await fetch(
     `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`,
     { signal: TF() }
@@ -211,7 +228,40 @@ async function fetchKlines(symbol, light = false) {
   // TA that was valid 6 minutes ago
   if (!res.ok) return hit?.payload ?? null;
   const { data } = await res.json();
-  if (!Array.isArray(data) || data.length < 20) return hit?.payload ?? null;
+  if (!Array.isArray(data) || data.length < 20) {
+    // thin/absent 1h history (fresh listing like 🦞, or a transient 1h
+    // failure) — fall back to the 5m tape so the spark still renders
+    // (48 × 5m ≈ 4h window). sparkTf marks the swap so nothing pretends
+    // it's looking at 48h.
+    try {
+      const r5 = await fetch(
+        `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`,
+        { signal: TF() }
+      );
+      const d5 = r5.ok ? await r5.json() : null;
+      if (Array.isArray(d5?.data) && d5.data.length >= 20) {
+        const r5rows = d5.data
+          .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+          .sort((a, b) => a.t - b.t)
+          .filter((c) => Number.isFinite(c.c) && c.t + 300e3 <= Date.now());
+        const c5 = r5rows.map((r) => r.c);
+        const payload = {
+          rsi14: rsi(c5),
+          volRatio: 1,
+          closes: c5.slice(-48),
+          candles: r5rows.slice(-60),
+          candles5m: r5rows,
+          harmonic: Harmonics.active(r5rows.slice(-60), 8),
+          ta: TAEngine.analyze(r5rows.slice(-60), r5rows),
+          sparkTf: '5m',
+        };
+        cache[symbol] = { at: Date.now(), payload };
+        klineCacheSave();
+        return payload;
+      }
+    } catch {}
+    return hit?.payload ?? null;
+  }
   const rows = data
     .map((c) => ({
       t: Number(c[0]),
@@ -225,7 +275,10 @@ async function fetchKlines(symbol, light = false) {
   // drop the still-forming candle — TA on an unclosed bar paints patterns
   // that evaporate when the hour settles
   if (rows.length && rows[rows.length - 1].t + 3600e3 > Date.now()) rows.pop();
-  const closes = rows.map((r) => r.c);
+  // a single malformed candle field (null/undefined/NaN) poisons the whole
+  // sparkline — Math.min(...vals) → NaN → every path coord "NaN" → SVG
+  // renders blank with no error. Filter non-finite at the source.
+  const closes = rows.map((r) => r.c).filter((v) => Number.isFinite(v));
   const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
   const prior = rows.slice(0, -6);
   const priorAvg = prior.reduce((a, r) => a + r.qv, 0) / (prior.length || 1);
@@ -253,12 +306,12 @@ async function fetchKlines(symbol, light = false) {
     harmonic: Harmonics.active(candles, 8),
     ta: TAEngine.analyze(candles, candles5m),
   };
-  // only cache full fetches — a light pass has candles5m:null and would
-  // poison the cache for callers that need the 5m tape
-  if (!light) {
-    cache[symbol] = { at: Date.now(), payload };
-    klineCacheSave();
-  }
+  // light fetches cache too — without it the board pass refetches ~10
+  // symbols every 15s forever: the exact burst load that rate-limits the
+  // board blank. Reaching here means no usable fresh payload exists (a
+  // fresh full hit returned above), so a light write can't downgrade it.
+  cache[symbol] = { at: Date.now(), payload };
+  klineCacheSave();
   return payload;
 }
 
@@ -1328,10 +1381,17 @@ async function main() {
     prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 6 * 3600e3;
   for (const s of signals) {
     const k = enriched.get(s.asset);
-    if (k && k.closes && k.closes.length > 1) s.spark = k.closes;
+    if (k && k.closes && k.closes.length > 1) {
+      s.spark = k.closes;
+      if (k.sparkTf) s.sparkTf = k.sparkTf;
+      else delete s.sparkTf;
+    }
     if (!s.spark || s.spark.length < 2) {
       const prev = prevFresh && prevDetail.coins && prevDetail.coins[s.asset];
-      if (prev && prev.spark && prev.spark.length > 1) s.spark = prev.spark;
+      if (prev && prev.spark && prev.spark.length > 1) {
+        s.spark = prev.spark;
+        if (prev.sparkTf) s.sparkTf = prev.sparkTf;
+      }
     }
   }
   writeJson(path.join(API, 'market-scanner.json'), snap);
@@ -1366,6 +1426,7 @@ async function main() {
       rsi14: Math.round(k.rsi14),
       volRatio: round(k.volRatio, 2),
       spark: k.closes,
+      ...(k.sparkTf ? { sparkTf: k.sparkTf } : {}),
       sparkAt: Date.now(), // fresh-enrich stamp — carries age carried coins
     };
   }
@@ -1445,7 +1506,17 @@ async function main() {
   // Key-free public feeds. Headlines are tagged to universe assets and a
   // keyword tone estimate — display context, deliberately NOT a score input
   // (headline sentiment is noise until the eval engine proves otherwise).
-  if (!RAPID)
+  // rapid mode skips RSS per-cycle but must still refresh on a slow cadence —
+  // the VPS daemon runs EVERY cycle rapid, so !RAPID meant the wire froze
+  // permanently (god warned 'items older than 24h' forever). Refresh when the
+  // existing wire is >15min old: ~4 RSS fetches/hour, not per-cycle spam.
+  const newsDue = (() => {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(API, 'news.json'), 'utf8'));
+      return Date.now() - Date.parse(j.refreshedAt || 0) > 15 * 60e3;
+    } catch { return true; }
+  })();
+  if (!RAPID || newsDue)
   try {
     const FEEDS = [
       { src: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
@@ -1604,8 +1675,14 @@ async function main() {
   const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
   const mktAllows = (s) => {
     if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
-    if (mktType.startsWith('bull')) return s.direction === 'LONG' || EXH_SHORT.has(s.strategy);
-    return s.score >= MIN_ENTRY_SCORE + 8 || MEANREV.has(s.strategy);
+    // evidence (signal-eval, n=1584): SHORT class avgFwd24h −0.44 / alpha
+    // −0.35 on n=826 — bull tape is where they bleed (the demo pair of ETH
+    // shorts was exactly this). Verified 1h public strats (TrendRider)
+    // run can_short=false in bull tape. Sideways/mixed chops everything
+    // (10.2% hit, −1.03 alpha on n=960) — only the mean-reversion family
+    // earns entry; momentum-in-chop was the forensic bleeder.
+    if (mktType.startsWith('bull')) return s.direction === 'LONG';
+    return MEANREV.has(s.strategy);
   };
   const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
   const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
@@ -1615,13 +1692,13 @@ async function main() {
   // so the trade score is what adjusts. Shared by the gate + freshDir.
   const carryPenaltyOf = (s) =>
     s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
-  // prospective record: SHORTs as a class hit 7% of targets (n=167) — a
-  // sideways/bull short is the bleed. +10 surcharge vs floor outside bear
-  // tapes; Liquidity Sweep is exempt so the new doctrine earns its own record.
+  // prospective record: SHORTs as a class hit 7-11% of targets (n=826,
+  // avgFwd −0.44) — a sideways/bull short is the bleed. +10 surcharge vs
+  // floor outside bear tapes. Liquidity Sweep's exemption removed — its
+  // n=10 record (40% hit) is a small sample, not a rebuttal of the class
+  // record, and its exempted bull-tape shorts were the live bleed vector.
   const shortPenaltyOf = (s) =>
-    s.direction === 'SHORT' &&
-    s.strategy !== 'Liquidity Sweep' &&
-    !mktType.startsWith('bear')
+    s.direction === 'SHORT' && !mktType.startsWith('bear')
       ? 10
       : 0;
   // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
@@ -1712,10 +1789,55 @@ async function main() {
       livePosNow.some((p) => proxyOf(liveSymOf(p)) === g)
     );
   };
-  // paper-ledger cooldowns are gone with the paper ledger — a still-valid
-  // signal may re-enter a symbol the exchange just stopped out.
-  const recentClosed = () => false;
-  const recentReversed = () => false;
+  // exchange-truth cooldowns (paper ledger is retired — key off real fills).
+  // A same-direction close inside the window blocks re-entry: re-firing a
+  // still-valid signal 30s after a stop-out is the fee-churn vector. An
+  // opposite-direction close inside the window means whipsaw — don't flip.
+  let recentFills = [];
+  try {
+    recentFills =
+      JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', 'real-fills.json'), 'utf8')
+      ).fills || [];
+  } catch {}
+  const RECENT_CLOSED_MS = +(process.env.SENTINEL_RECENT_CLOSED_MS || 15 * 60e3);
+  // a close fill's `side` is the closed POSITION's side ('sell' = was short)
+  const fillDir = (f) => (f.side === 'sell' ? 'SHORT' : 'LONG');
+  const recentClosed = (asset, direction) =>
+    recentFills.some(
+      (f) =>
+        (f.tradeSide || '').includes('close') && f.symbol === asset + 'USDT' &&
+        fillDir(f) === direction && Date.now() - f.ts < RECENT_CLOSED_MS
+    );
+  const recentReversed = (asset, direction) =>
+    recentFills.some(
+      (f) =>
+        (f.tradeSide || '').includes('close') && f.symbol === asset + 'USDT' &&
+        fillDir(f) !== direction && Date.now() - f.ts < RECENT_CLOSED_MS
+    );
+  // LowProfitPairs (freqtrade's canonical protection, absent here): a symbol
+  // whose trailing-24h net-of-fee record is a proven bleed gets locked out.
+  // Class-level gates catch bad strategies; this catches bad SYMBOLS — the
+  // demo ETH pair (−$362 then −$913 in 30min) is the case study. Needs >=2
+  // closes so a single unlucky fill doesn't ban a symbol.
+  const LOW_PROFIT_MS = 24 * 3600e3;
+  const lowProfitPair = (() => {
+    const bySym = {};
+    for (const f of recentFills) {
+      if (!(f.tradeSide || '').includes('close')) continue;
+      if (Date.now() - f.ts >= LOW_PROFIT_MS) continue;
+      const net = (f.profit || 0) - (f.fee || 0) - (f.notionalUsd || 0) * 0.0006;
+      (bySym[f.symbol] ??= { net: 0, closes: 0 });
+      bySym[f.symbol].net += net;
+      bySym[f.symbol].closes++;
+    }
+    const banLine = -Math.max(1, (liveEquityUsd || 0) * 0.01);
+    return new Set(
+      Object.keys(bySym).filter(
+        (k) => bySym[k].closes >= 2 && bySym[k].net < banLine
+      )
+    );
+  })();
   // portfolio cap: total open notional can't exceed 400% of equity (= 40%
   // margin posted at 10x) — signals are score-sorted so the best setups get
   // slots first.
@@ -1743,11 +1865,13 @@ async function main() {
   const ddKillPct = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
   const ddNow = (() => {
     // real-account drawdown first — the executor persists the real equity
-    // peak each run (state/equity-peak.json); the sim ledger's equity curve
+    // peak each run (state/equity-peak-<mode>.json); the sim ledger's equity
     // is only the fallback when no real equity has been observed yet
     try {
       const live = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
-      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'equity-peak.json'), 'utf8'));
+      // the executor scopes its DD tape by mode — read the tape matching the
+      // ledger's mode so demo equity can't read as a live wipeout
+      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', `equity-peak-${live.mode || 'live'}.json`), 'utf8'));
       if (peakFile.peak > 0 && live.equityUsd > 0)
         return ((peakFile.peak - live.equityUsd) / peakFile.peak) * 100;
     } catch {}
@@ -1874,12 +1998,14 @@ async function main() {
     gate(mktAllows(s), 'mkt-type');
     gate(s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
+    gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
     gate(!stratBlock.has(s.strategy), 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
     gate(!recentClosed(s.asset, s.direction), 'recent-closed');
     gate(!recentReversed(s.asset), 'recent-reversed');
+    gate(!lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
     gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
     gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
     gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
@@ -2486,7 +2612,7 @@ async function main() {
       blocked: [...stratBlock],
       boosts: stratBoost,
       hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
-      shortGate: 'SHORTs blocked outside bear/risk-off tape except Liquidity Sweep + Key Level SFP',
+      shortGate: 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape',
       atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
     },
     // Chat With Traders corpus — transcripts distilled into doctrine themes;
@@ -2802,6 +2928,11 @@ async function main() {
         momScore: s.momScore ?? null,
         boardRank: s.boardRank ?? null,
         entry,
+        // bracket the signal designed — journal charts need it to draw the
+        // actual risk geometry, not a post-hoc guess
+        targetPct: s.targetPct ?? null,
+        stopPct: s.stopPct ?? null,
+        targetPrice: s.targetPrice ?? null,
       };
       const closeAt = (T) => {
         let c1 = null;
@@ -3207,6 +3338,98 @@ async function main() {
     ledgerOpen: ledger.stats.open,
     rejects: livePlan.rejects.length || undefined,
   };
+  // The Holy Secret — the ouroboros. The system consumes its own record to
+  // regenerate: every emitted signal is labeled by its real forward outcome,
+  // the labels gate the next cycle's strategies and symbols, the fills
+  // journal feeds cooldowns and the per-symbol ban, and the hypothesis
+  // engine escalates or kills beliefs on sample size. Red serpent (losses)
+  // and green serpent (wins) are one body — both feed the regeneration.
+  // The loop is only closed if every stage's bite mark is non-zero, so
+  // they're emitted here — auditable, not claimed.
+  try {
+    const evS =
+      JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
+        .stats || {};
+    health.scanner.ouroboros = {
+      doctrine:
+        'the serpent eats its tail — today\'s outcomes are tomorrow\'s gates',
+      loop: 'emit → execute → journal → label → adapt → emit',
+      emittedThisCycle: signals.length,
+      journaledFills: recentFills.length || 0,
+      labelsGraded: evS.n || 0,
+      stratsBlocked: [...stratBlock],
+      stratsBoosted: Object.fromEntries(
+        Object.entries(stratBoost).filter(([, b]) => b > 0)
+      ),
+      symbolsBanned: [...lowProfitPair],
+    };
+  } catch {}
+  // Neptune Book Logic — Logic Driver weights: which book's doctrine steered
+  // THIS cycle, measured from real gate firings and decisions, not prose.
+  // Every reject gate belongs to a book's domain; the active side adds
+  // conviction (Hill), executed risk-sizing (Tharp), pattern adjudication
+  // (Bulkowski via the eval gate), and treasury guards (Clason).
+  try {
+    const GATE_BOOK = [
+      [/rr<|net-edge|dd-kill|heat-cap|cluster-heat|deployed-cap|^score |equity-floor/, 'tharp'],
+      [/fake-move|noise-cap|spread|mkt-type|carry/, 'murphy'],
+      [/strat-blocked/, 'bulkowski'],
+      [/low-profit-pair|recent-closed|recent-reversed|funding-drag|untradeable/, 'clason'],
+      [/already-open|proxy-dup/, 'pape'],
+    ];
+    const w = { tharp: 1, murphy: 1, pape: 1, bulkowski: 1, kiyosaki: 1, hill: 1, clason: 1 };
+    for (const r of livePlan.rejects || []) {
+      for (const g of r.gates || []) {
+        const hit = GATE_BOOK.find(([re]) => re.test(g));
+        if (hit) w[hit[1]]++;
+      }
+    }
+    // active-side weights: orders routed = conviction expressed (Hill) under
+    // risk rails (Tharp); eval adjudication running = Bulkowski; per-symbol
+    // bans armed = Clason; banked winners in the journal = Kiyosaki.
+    const ordersN = (livePlan.orders || []).length;
+    w.tharp += ordersN;
+    w.hill += ordersN;
+    w.bulkowski += stratBlock.size;
+    w.hill += Object.values(stratBoost).filter((b) => b > 0).length;
+    w.clason += lowProfitPair.size;
+    w.kiyosaki += recentFills.filter(
+      (f) => (f.tradeSide || '').includes('close') && (f.profit || 0) - (f.fee || 0) > 0
+    ).length;
+    // barefoot floor: the safety net is always on (margin reserve + equity
+    // floor armed) — a standing pulse, stronger when the floor is live.
+    w.pape += (process.env.SENTINEL_MIN_EQUITY && +process.env.SENTINEL_MIN_EQUITY > 0) ? 2 : 0;
+    const tot = Object.values(w).reduce((a, b) => a + b, 0);
+    const BOOK_NAME = {
+      tharp: 'Super Trader — Van Tharp',
+      murphy: 'Technical Analysis — Murphy',
+      pape: 'Barefoot Investor — Pape',
+      bulkowski: 'Encyclopedia of Chart Patterns — Bulkowski',
+      kiyosaki: 'Rich Dad Poor Dad — Kiyosaki',
+      hill: 'Think and Grow Rich — Hill',
+      clason: 'Richest Man in Babylon — Clason',
+    };
+    const weights = Object.fromEntries(
+      Object.entries(w).map(([k, v]) => [k, Math.round((v / tot) * 100)])
+    );
+    const dominant = Object.keys(w).reduce((a, b) => (w[b] > w[a] ? b : a));
+    health.scanner.logicDrivers = {
+      doctrine: 'seven books, weighted by what actually gated or steered decisions this cycle',
+      weights,
+      dominant,
+      dominantName: BOOK_NAME[dominant],
+      names: BOOK_NAME,
+      modules: {
+        tharp: 'risk sizing · RR gate · expectancy · DD rails',
+        murphy: 'TA sponsorship · regime mapping · noise floor',
+        pape: 'margin reserve · equity floor · allocation buffers',
+        bulkowski: 'pattern statistics · eval gate adjudication',
+        kiyosaki: 'PnL retention · banked winners · runner trails',
+        hill: 'conviction scoring · boost amplifiers',
+        clason: 'treasury guard · per-symbol ban · cooldown jaws',
+      },
+    };
+  } catch {}
   writeJson(path.join(API, 'health.json'), health);
 
   console.log(
