@@ -230,6 +230,15 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .up{text-shadow:0 0 12px rgba(77,255,166,.55)}
 .dn{text-shadow:0 0 12px rgba(255,77,125,.55)}
 .grade{letter-spacing:.04em}
+/* VOLCORE: order-flow event cards */
+.vrow{display:flex;flex-wrap:wrap;gap:8px}
+.vcard{flex:1 1 150px;min-width:150px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);text-decoration:none;transition:transform .25s cubic-bezier(.16,1,.3,1),border-color .25s,box-shadow .25s}
+.vcard:hover{transform:translateY(-2px);border-color:var(--cyan);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.vc-t{display:flex;align-items:center;gap:6px;font-size:11px}
+.vc-t b{color:#fff}
+.vc-k{margin-left:auto;font-size:8px;font-weight:800;letter-spacing:.1em;font-style:normal}
+.vc-x{font-size:20px;font-weight:800;line-height:1.15}
+.vc-s{font-size:9px;opacity:.7}
 </style>
 </head>
 <body>
@@ -262,6 +271,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
+  <div class="panel pro" style="margin-bottom:16px">
+    <div class="ptitle">Vol spike core · order-flow radar <span class="sub">— relative volume × effort/result on closed 1h candles · intelligence layer, never an order trigger</span><span id="volCoreSub" class="sub" style="float:right"></span></div>
+    <div id="volCore" class="vrow"><div class="sub">scanning for abnormal prints…</div></div>
+  </div>
   <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Signal pressure · how close the engine is to firing</div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
@@ -455,8 +468,8 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -794,6 +807,15 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   const cd=(detail&&detail.coins)||{};
   $('volLead').innerHTML=Object.entries(cd).filter(([,v])=>v&&v.quoteVolume>0).sort((a,b)=>b[1].quoteVolume-a[1].quoteVolume).slice(0,8)
     .map(([k,v])=>`<div class="r"><span>${LK(BG(k),k)}</span><b class="num">$${v.quoteVolume>=1e9?(v.quoteVolume/1e9).toFixed(2)+'B':(v.quoteVolume/1e6).toFixed(0)+'M'}</b></div>`).join('')||'<div class="sub">—</div>';
+  // vol spike core: order-flow events from closed-candle relative volume
+  const ve=(volCore&&volCore.events)||[];
+  const KC={IGNITION:'var(--cyan)',ABSORPTION:'var(--vio)',CLIMAX:'var(--red)',PRINT:'var(--amb)'};
+  const KT={IGNITION:'volume + range expansion — breakout fuel',ABSORPTION:'huge volume, compressed range — smart-money absorption',CLIMAX:'extreme print at range edge — exhaustion risk',PRINT:'elevated volume, no clean read'};
+  $('volCore').innerHTML=ve.map(e=>`<a class="vcard" href="${BG(e.sym)}" target="_blank" rel="noopener" title="${KT[e.kind]||''}">
+    <div class="vc-t"><b>${e.asset}</b><span class="tag ${e.dir==='LONG'?'long':e.dir==='SHORT'?'short':''}">${e.dir}</span><i class="vc-k" style="color:${KC[e.kind]||'var(--amb)'}">${e.kind}</i></div>
+    <div class="vc-x num" style="color:${KC[e.kind]||'var(--amb)'}">${e.spikeX}×</div>
+    <div class="sub vc-s">move ${e.movePct>=0?'+':''}${e.movePct}% · e/r ${e.effRes}× · ${Math.round(e.rangePos*100)}% range</div></a>`).join('')||'<div class="sub">no abnormal prints this cycle — tape is quiet</div>';
+  if($('volCoreSub'))$('volCoreSub').textContent=volCore&&volCore.counts?`${volCore.counts.ignition} ignition · ${volCore.counts.absorption} absorption · ${volCore.counts.climax} climax · ${volCore.counts.print} prints · ${volCore.scanned||0} scanned · ${ago(Date.parse(volCore.refreshedAt))}`:'';
   if(health&&health.scanner){
     const h=health.scanner;
     $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(h.klineMiss?` · charts missing: ${h.klineMiss.join(',')}`:'');

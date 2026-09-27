@@ -473,6 +473,66 @@ async function main() {
     .filter((r) => !enriched.has(r.asset))
     .map((r) => r.asset);
 
+  // ---- volume-spike core: relative-volume events on closed 1h candles.
+  // Order-flow doctrine (51% school): volume precedes price, but effort is
+  // only readable against result — huge volume + expansion = ignition,
+  // huge volume + compression = absorption, extremes at range edge = climax.
+  const volEvents = [];
+  for (const [asset, k] of enriched) {
+    const cs = k.candles;
+    if (!cs || cs.length < 26) continue;
+    const last = cs[cs.length - 1];
+    const base = cs.slice(-25, -1);
+    const avgVol = base.reduce((a, c) => a + c.qv, 0) / base.length;
+    if (!(avgVol > 0) || !(last.qv > 0)) continue;
+    const spikeX = last.qv / avgVol;
+    if (spikeX < 1.8) continue;
+    const atr =
+      base.reduce((a, c, i) => {
+        const p = base[i - 1];
+        return (
+          a +
+          (p
+            ? Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c))
+            : c.h - c.l)
+        );
+      }, 0) / base.length || 1e-9;
+    const range = last.h - last.l;
+    const effRes = range / atr;
+    const loc = range > 0 ? (last.c - last.l) / range : 0.5;
+    const hi = Math.max(...base.map((c) => c.h), last.h);
+    const lo = Math.min(...base.map((c) => c.l), last.l);
+    const rangePos = hi > lo ? (last.c - lo) / (hi - lo) : 0.5;
+    let kind = 'PRINT';
+    if (spikeX >= 3 && effRes >= 2 && (rangePos >= 0.92 || rangePos <= 0.08))
+      kind = 'CLIMAX';
+    else if (spikeX >= 2.4 && effRes <= 0.55) kind = 'ABSORPTION';
+    else if (spikeX >= 2 && effRes >= 1.5) kind = 'IGNITION';
+    const dir =
+      kind === 'ABSORPTION'
+        ? loc >= 0.6
+          ? 'LONG'
+          : loc <= 0.4
+            ? 'SHORT'
+            : 'NEUTRAL'
+        : last.c >= last.o
+          ? 'LONG'
+          : 'SHORT';
+    volEvents.push({
+      asset,
+      sym: asset + 'USDT',
+      kind,
+      dir,
+      spikeX: +spikeX.toFixed(2),
+      movePct: +(((last.c - last.o) / last.o) * 100).toFixed(2),
+      effRes: +effRes.toFixed(2),
+      rangePos: +rangePos.toFixed(2),
+      price: last.c,
+      ts: last.t,
+    });
+  }
+  volEvents.sort((a, b) => b.spikeX - a.spikeX);
+
   // ---- funding intelligence: perp funding rates + spot/perp basis ----
   const funding = {};
   try {
@@ -1395,6 +1455,17 @@ async function main() {
     }
   }
   writeJson(path.join(API, 'market-scanner.json'), snap);
+  writeJson(path.join(API, 'volcore.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    counts: {
+      ignition: volEvents.filter((e) => e.kind === 'IGNITION').length,
+      absorption: volEvents.filter((e) => e.kind === 'ABSORPTION').length,
+      climax: volEvents.filter((e) => e.kind === 'CLIMAX').length,
+      print: volEvents.filter((e) => e.kind === 'PRINT').length,
+    },
+    events: volEvents.slice(0, 24),
+  });
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
   const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
