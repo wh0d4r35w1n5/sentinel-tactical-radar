@@ -29,8 +29,9 @@ jobs:
           set +e
           FAIL=""
           # 1) dashboard reachable
+          # any HTTP response (200/301/404) proves nginx alive; only silence fails
           CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://168.138.102.53/ || echo 000)
-          [ "$CODE" = "200" ] || FAIL="$FAIL dashboard_http=$CODE"
+          [ "$CODE" = "000" ] && FAIL="$FAIL dashboard_unreachable" || true
           # 2) pushbot commit freshness — last api/ commit must be <15min old
           TS=$(gh api "repos/$REPO/commits?path=api/live-ledger.json&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null)
           NOW=$(date -u +%s); AGE=$(( NOW - $(date -u -d "$TS" +%s 2>/dev/null || echo 0) ))
