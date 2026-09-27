@@ -799,9 +799,12 @@ async function main() {
           await planWithRetry(() =>
             planOrder(p.symbol, 'pos_loss',
               trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0), '0', p.side));
+          // preserve the trader's own TP trigger if one was armed — the
+          // rebuild fixes SIZE drift, it doesn't get to rewrite the target
+          const keepTp = profitPlan && +profitPlan.triggerPrice > 0 ? +profitPlan.triggerPrice : null;
           await planWithRetry(() =>
             planOrder(p.symbol, 'pos_profit',
-              round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side));
+              keepTp || round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side));
           state.actions.push(
             `resynced ${p.symbol}: rebuilt whole-position protection (pending plan qty ${round(planQty, 4)} > size ${p.size})`
           );
@@ -946,6 +949,28 @@ async function main() {
           }
         }
       }
+      // band re-check — runs even on fully-armed positions: isolated-margin
+      // liq creeps toward entry as funding/fees accrue, so a stop that was
+      // inside the band at placement can end up past it and never fire. A
+      // stop that can't beat liquidation protects nothing — rebuild it.
+      const bandPct = p.liq > 0
+        ? (Math.abs(p.entry - p.liq) / p.entry) * 100
+        : (p.lev > 0 ? Math.max(0.2, 90 / p.lev) : 0); // liq field absent → estimate band from leverage
+      if (lossPlan && bandPct > 0) {
+        const armedStopPct = (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100;
+        if (armedStopPct >= bandPct * 0.8) {
+          const sgn0 = p.side === 'long' ? 1 : -1;
+          const pp0 = cm[p.symbol]?.pricePlace ?? 6;
+          const newStop = round(p.entry * (1 - (sgn0 * Math.max(bandPct * 0.75, 0.05)) / 100), pp0);
+          try {
+            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
+            await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side));
+            state.actions.push(`re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
+          } catch (e) {
+            state.errors.push(`re-band ${p.symbol}: ${e.message}`);
+          }
+        }
+      }
       if (lossPlan && hasProfit) continue;
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
@@ -955,7 +980,7 @@ async function main() {
       // the synthesized stop must fire BEFORE liquidation or it protects
       // nothing — 100x liq sits ~0.9% out, under the 1.2% default. Clamp to
       // 80% of the entry→liq distance (same bound entry sizing uses).
-      const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+      const liqPct = bandPct;
       if (liqPct > 0 && stopPct >= liqPct * 0.8) {
         const raw = stopPct;
         stopPct = Math.max(liqPct * 0.75, 0.05); // never tighter than 0.05%
@@ -994,7 +1019,9 @@ async function main() {
       let stopPct = lossPlan && +lossPlan.triggerPrice > 0
         ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
         : 1.2;
-      const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+      const liqPct = p.liq > 0
+        ? (Math.abs(p.entry - p.liq) / p.entry) * 100
+        : (p.lev > 0 ? Math.max(0.2, 90 / p.lev) : 0);
       if (liqPct > 0 && stopPct >= liqPct * 0.8) stopPct = Math.max(liqPct * 0.75, 0.05);
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',

@@ -222,6 +222,23 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
         : 'book flat — nothing requires protection');
   }
 
+  // ---------- 8b. band-integrity: an armed stop past the liquidation band
+  // edge can never fire — protection that exists on paper but loses to liq
+  // is decoration. Verify each loss trigger sits inside the band. ----------
+  const bandBad = exPos.filter((p) => {
+    if (!(p.liq > 0) || !(p.entry > 0)) return false; // unverifiable without both
+    const stop = (ll.plans?.[p.symbol] || [])
+      .find((x) => /loss|stop|moving/i.test(x.planType || '') && +x.triggerPrice > 0);
+    if (!stop) return false; // naked case is the protection check's job
+    const bandPct = (Math.abs(p.entry - p.liq) / p.entry) * 100;
+    const stopPct = (Math.abs(p.entry - +stop.triggerPrice) / p.entry) * 100;
+    return stopPct >= bandPct * 0.8;
+  });
+  add('band-integrity', bandBad.length ? 'FAIL' : 'PASS',
+    bandBad.length
+      ? `${bandBad.map((p) => p.symbol).join(',')} stop at/past liq band edge — cannot fire before liquidation`
+      : 'every armed stop sits inside its liquidation band');
+
   // ---------- 9. untradeable-list hygiene ----------
   const ut = ll.untradeable || [];
   const bad = ut.filter((s) => !/^[A-Z0-9]+USDT$/.test(s));
