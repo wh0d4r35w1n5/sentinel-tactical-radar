@@ -76,6 +76,12 @@ const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6))
 // floor up to the exchange minimum instead of skipping — for tiny real
 // accounts proving the pipeline. Requires LIVE_FLOOR_MIN=1; never default.
 const FLOOR_MIN = process.env.LIVE_FLOOR_MIN === '1';
+// user mandate: longs only — SENTINEL_LONG_ONLY=1 refuses every SHORT order
+// at routing time (defense-in-depth under the scanner's shorts-banned gate).
+const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
+// idempotent-order window: a signal that already produced an entry attempt
+// inside this horizon is a replay, not a new opportunity — skip it.
+const ENTRY_DEDUP_MS = +(process.env.SENTINEL_ENTRY_DEDUP_MS || 10 * 60e3);
 // manually-placed positions the executor must NOT auto-manage — no
 // rebalance, decay, flip, or scalp-timeout exits. Exchange-side TP/SL
 // still protect them; the ledger still reports them.
@@ -191,9 +197,31 @@ const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
     body: {
       symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
       planType, triggerPrice: String(triggerPrice), executePrice: '0',
-      triggerType: 'mark_price', size: String(size), holdSide,
+      triggerType: 'mark_price', holdSide,
+      // pos_profit/pos_loss cover the whole position — the API wants size
+      // OMITTED for those, not a literal '0' (a zero-size param can read as
+      // an invalid order, not "full position")
+      ...(size === '0' || size == null ? {} : { size: String(size) }),
     },
   });
+// Transient placement errors: 43023 'Insufficient position' fires when the
+// position index hasn't caught up to a fresh fill; 43059 'Request failed'
+// is Bitget's generic transient. Retry up to 2x with backoff before
+// declaring protection failed (the emergency-close path relies on this
+// being a real failure, not an indexing race or endpoint blip).
+const planWithRetry = async (fn) => {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (!/43023|43059/.test(e.message)) throw e;
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+};
 // recent fills — the REAL trade journal: every actual fill the exchange
 // recorded, deduped into state/real-fills.json so the public ledger shows
 // real entries/exits with real fees, not just the sim's paper model
@@ -291,11 +319,31 @@ async function main() {
   // exec-catalog.json (survives ledger rewrites); live-ledger kept in sync
   // for the dashboard.
   const catPath = path.join(API_DIR, 'exec-catalog.json');
+  const priorPlanSyms = new Set();
   try {
     for (const f of [outPath, catPath]) {
       const prior = JSON.parse(fs.readFileSync(f, 'utf8'));
       if (prior.mode === MODE && prior.untradeable?.length)
         state.untradeable = [...new Set([...(state.untradeable || []), ...prior.untradeable])];
+      // protection-failure circuit breaker rides in the ledger: after a
+      // TPSL placement failure that forced an emergency close, entries halt
+      // until the timestamp — one 30min probe costs a fee, a 15s probe loop
+      // drains the account on retries that can't succeed
+      if (prior.mode === MODE && Number.isFinite(prior.protectionHaltUntil))
+        state.protectionHaltUntil = Math.max(state.protectionHaltUntil || 0, prior.protectionHaltUntil);
+      // entry-attempt log rides the ledger too — the fills journal lags
+      // ~30s behind live order routing, so a probe loop can slip extra
+      // opens under the rate cap before the fills ever record. Attempts
+      // (not fills) are what cost fees; count them locally.
+      if (prior.mode === MODE && Array.isArray(prior.entriesLog))
+        state.entriesLog = prior.entriesLog.filter(
+          // entries may be bare timestamps (legacy) or {ts,symbol,direction}
+          (e) => Number.isFinite(e.ts ?? e) && Date.now() - (e.ts ?? e) < 3600e3
+        );
+      // symbols that carried pending plans last cycle — orphan-plan sweep
+      // uses this to find triggers still live on symbols now flat
+      if (prior.mode === MODE && prior.plans)
+        for (const s of Object.keys(prior.plans)) priorPlanSyms.add(s);
     }
   } catch {}
   if (MODE === 'off') {
@@ -451,7 +499,10 @@ async function main() {
   // sim bookkeeping diverges from exchange truth and must not gate money.
   // The same file keeps a rolling equity tape so a rolling-24h loss halt
   // exists too — max daily drawdown is the rail the teardown flagged missing.
-  const peakPath = path.join(__dirname, '..', 'state', 'equity-peak.json');
+  // mode-scoped DD tape: demo equity must never contaminate the live
+  // drawdown series — a $10k demo peak against a $6 live book reads as a
+  // permanent ~99.9% wipeout and trips every DD rail on return to live.
+  const peakPath = path.join(__dirname, '..', 'state', `equity-peak-${MODE}.json`);
   let eqTrack = { peak: equityUsd, samples: [] };
   try {
     const prior = JSON.parse(fs.readFileSync(peakPath, 'utf8'));
@@ -498,9 +549,12 @@ async function main() {
   };
 
   // ---- margin rebalance: a single position may not hold more margin than
-  // its slot share (equity / TARGET_POSITIONS). Oversized positions get a
-  // partial close releasing margin for the remaining slots.
-  const slotMargin = (equityUsd * 0.96) / TARGET_POSITIONS;
+  // the per-position cap. Slot-share trimming (equity/TARGET_POSITIONS)
+  // fought the entry sizer — it deployed at the 85% cap, then rebalance
+  // burned a reduce-fee cutting it to 24% AND orphaned the plan sizes
+  // (the drift that left the stop oversized and unfireable). The cap IS
+  // the sizing mandate; rebalance only enforces it.
+  const slotMargin = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
   for (const p of posBySym.values()) {
     if (MANUAL.has(p.symbol)) continue;
     try {
@@ -564,6 +618,9 @@ async function main() {
   // sweep or SFP AGAINST an open position's direction, the thesis is dead —
   // exit now rather than donating the full stop distance. The scanner emits
   // plan.thesisFlips from its signal set regardless of the order gates.
+  // Minimum age: a position younger than this is still within the entry
+  // candle's noise — signal whipsaw between scans is not thesis death.
+  const FLIP_MIN_AGE_MS = (+(process.env.EXEC_FLIP_MIN_MIN || 15)) * 60e3;
   try {
     const flips = new Map(
       (plan.thesisFlips || []).map((f) => [f.symbol, f.direction])
@@ -573,6 +630,10 @@ async function main() {
       const flip = flips.get(p.symbol);
       const posDir = p.side === 'long' ? 'LONG' : 'SHORT';
       if (!flip || flip === posDir) continue;
+      // Young positions are managed by their stop — a flip signal that
+      // whipsaws within minutes is noise, not thesis death. Only an
+      // opposing signal against a mature position counts as a flip.
+      if (Date.now() - Number(p.cTime) < FLIP_MIN_AGE_MS) continue;
       await closePosition(p.symbol, p.side);
       state.actions.push(
         `thesis-flip ${p.symbol}: fresh ${flip} signal vs open ${posDir} — exited before stop`
@@ -593,9 +654,17 @@ async function main() {
         fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
       ).fills || [];
     const bySym = {};
-    for (const f of fj)
-      if (f.tradeSide === 'close' || (f.profit || 0) !== 0)
-        (bySym[f.symbol] = bySym[f.symbol] || []).push(f);
+    for (const f of fj) {
+      if (!(f.tradeSide === 'close' || (f.profit || 0) !== 0)) continue;
+      // a close within ±0.1% of notional is a scratch (fee drag on a
+      // near-breakeven exit — e.g. an emergency close after a protection
+      // placement failure), not a market verdict. Neither a loser nor a
+      // streak-breaker: it carries no information about direction, so it
+      // must not arm — or reset — the loss-streak cooldown.
+      const notional = (+f.price || 0) * (+f.size || 0);
+      if (notional > 0 && Math.abs(f.profit || 0) <= 0.001 * notional) continue;
+      (bySym[f.symbol] = bySym[f.symbol] || []).push(f);
+    }
     for (const [s, arr] of Object.entries(bySym)) {
       const last2 = arr.slice(0, 2);
       if (
@@ -623,6 +692,9 @@ async function main() {
       // eat the rate budget the same way a real entry does
       if ((f.tradeSide === 'open' || (f.tradeSide == null && (f.profit || 0) === 0)) && f.ts >= windowStart)
         entriesThisHour++;
+    // journaled fills lag live opens by up to ~30s; the local attempt log
+    // (persisted via ledger) sees them immediately — take the higher count
+    entriesThisHour = Math.max(entriesThisHour, (state.entriesLog || []).length);
   } catch {}
   // env kept for compat; the name lies (it's a rolling 1h cap, not a day cap)
   const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
@@ -640,6 +712,22 @@ async function main() {
     )
   );
   const plansOf = (sym) => planCache.get(sym) || [];
+  // ---- orphan-plan sweep: triggers left live on a symbol that went flat
+  // (emergency close, stop fill, manual close between cycles) either
+  // trigger-reject forever or — worse — fire a close-side order into a
+  // NEW unrelated position on that symbol. Cancel them.
+  for (const sym of priorPlanSyms) {
+    if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym)) continue;
+    try {
+      const stale = await getPlans(sym).catch(() => []);
+      if (stale.length) {
+        await cancelPlans(sym);
+        state.actions.push(`swept ${stale.length} orphan plan(s) on flat ${sym}`);
+      }
+    } catch (e) {
+      state.errors.push(`orphan-sweep ${sym}: ${e.message}`);
+    }
+  }
   for (const p of posBySym.values()) {
     try {
       const manualHold = MANUAL.has(p.symbol);
@@ -657,30 +745,43 @@ async function main() {
       // upside runs to 1.8x target. Legacy single-TP positions ratchet at
       // ~90% to their only target.
       const profitPlans = existing.filter((x) => /profit/i.test(x.planType || ''));
-      // plan-size drift: after a rebalance or TP-tranche bank, a fixed-size
-      // loss_plan can exceed the remaining position — the exchange rejects
-      // it at trigger (43023). Resync it to the current size (place-then-
-      // cancel keeps the position covered through the swap).
-      if (
-        lossPlan && p.size > 0 &&
-        /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
-        Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size
-      ) {
-        const pid = lossPlan.orderId || lossPlan.planId || lossPlan.id;
-        const trig = +lossPlan.triggerPrice;
+      // plan-size drift: after a rebalance or TP-tranche bank the pending
+      // plans still quote the OLD size — and Bitget counts CUMULATIVE
+      // pending plan qty against the position, so any oversized leftover
+      // 43023-blocks every new placement (observed live: 0.55 of plans on
+      // a 0.09 position). Only a full teardown rebuilds capacity: cancel
+      // every pending plan, then re-place whole-position protection
+      // (pos_loss/pos_profit omit size = cover all). The retrofit ladder
+      // re-splits the TP next cycle.
+      const sp = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
+      const sizeStr = String(Math.floor(p.size * sp) / sp);
+      const planQty = existing.reduce((a, x) => a + (+x.size || 0), 0);
+      const planDrift =
+        p.size > 0 &&
+        (planQty > p.size * 1.001 ||
+          (lossPlan &&
+            /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
+            Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size));
+      if (planDrift) {
+        const trig = lossPlan && +lossPlan.triggerPrice > 0 ? +lossPlan.triggerPrice : null;
+        const sgn = p.side === 'long' ? 1 : -1;
+        const pp0 = cm[p.symbol]?.pricePlace ?? 6;
+        const stopPct = trig ? (Math.abs(p.entry - trig) / p.entry) * 100 : 1.2;
         try {
-          await planOrder(p.symbol, lossPlan.planType, trig, String(p.size), p.side);
-          if (pid) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(pid)]);
-          state.actions.push(`resynced ${p.symbol} stop size ${+lossPlan.size} -> ${p.size}`);
-        } catch {
-          try {
-            if (pid) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(pid)]);
-            await planOrder(p.symbol, lossPlan.planType, trig, String(p.size), p.side);
-            state.actions.push(`resynced ${p.symbol} stop size -> ${p.size} (cancel-first)`);
-          } catch (e2) {
-            state.errors.push(`resync ${p.symbol} stop: ${e2.message}`);
-          }
+          await cancelPlans(p.symbol);
+          await planWithRetry(() =>
+            planOrder(p.symbol, 'pos_loss',
+              trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0), '0', p.side));
+          await planWithRetry(() =>
+            planOrder(p.symbol, 'pos_profit',
+              round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side));
+          state.actions.push(
+            `resynced ${p.symbol}: rebuilt whole-position protection (pending plan qty ${round(planQty, 4)} > size ${p.size})`
+          );
+        } catch (e) {
+          state.errors.push(`resync ${p.symbol}: ${e.message}`);
         }
+        continue;
       }
       if (lossPlan && p.size > 0 && !manualHold) {
         const sgn = p.side === 'long' ? 1 : -1;
@@ -715,7 +816,7 @@ async function main() {
           (sgn === 1 ? wantPx > slTrig : wantPx < slTrig);
         if (wantPx != null && slBetter) {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
-          const newSize = /pos_/.test(lossPlan.planType) ? '0' : String(p.size);
+          const newSize = /pos_/.test(lossPlan.planType) ? '0' : sizeStr;
           // place-then-cancel — cancel-first leaves the position naked for
           // ~200ms every ratchet. If the exchange refuses a second stop on
           // the same side, fall back to the old order (cancel then place).
@@ -728,16 +829,15 @@ async function main() {
           }
           state.actions.push(why);
         }
-        // scalp ladder — verdict deadlines ~50x tighter than the old clock:
-        //   216s  : red at all -> cut (loser dies in ~4min, not 2h)
-        //   15min : <35% of the way to TP1 -> stall, cut
-        //   45min : <65% progress and not meaningfully green -> deadline, cut
-        // Anything that clears all three gates is a live runner the
-        // ladder/moon-bag trail manages. Losers and laggards die in minutes.
-        // scalp ladder — verdict deadlines ~50x tighter than the old clock:
-        //   216s  : red at all -> cut (loser dies in ~4min, not 2h)
-        //   15min : <35% to next TP AND not meaningfully green -> stall, cut
-        //   45min : <65% progress and not meaningfully green -> deadline, cut
+        // verdict ladder — hours-scale to match the 1h signal horizon:
+        //   216s : genuinely adverse (>0.4% on notional) -> thesis instantly
+        //          wrong, cut before the chop even develops
+        //   2h   : still >60% of stop depth underwater -> early loss cut
+        //   4h   : still >35% of stop depth underwater -> early loss cut
+        //   90m  : <35% to next TP and not green -> stall, cut
+        //   4h   : <65% progress and not meaningfully green -> deadline, cut
+        // Anything that clears all five is a live runner the
+        // ladder/moon-bag trail manages.
         // Runner exemption: once tranches start banking, progress-to-next-TP
         // resets and a moon bag carries prog=0 — gates that only read prog
         // would murder winners. The upl guard spares anything actually green;
@@ -746,12 +846,31 @@ async function main() {
         const uplPct = (p.upl / (p.size * p.entry)) * 100;
         const ageMs = p.cTime ? Date.now() - p.cTime : 0;
         const runnerMode = !profitPlans.length;
+        // the 216s gate must clear the FEE-NOISE band, not any redness: a
+        // 59x taker fill opens ~-0.12% red on notional instantly, so 'red
+        // at all' auto-executed every chop market entry at +4min — the
+        // scalp-churn loop that burned the account on fees (observed live).
+        // Cut only when the move against us is genuine: >0.4% adverse on
+        // notional — past halfway to a typical 0.7% stop. Anything less is
+        // noise the exchange-side SL already manages.
+        // Time×loss cascade (TrendRider's verified mechanic — PF 1.03→1.41,
+        // maxDD −6.1%→−1.4% in their A/B): kill positions STILL deep-red
+        // hours after entry. Depth thresholds scale to this position's own
+        // stop distance (60% at 2h, 35% at 4h) — a 1h-candle thesis needs
+        // hours to work, so progress deadlines run at hours scale, not the
+        // old 15/45-minute churn window that killed developing winners.
+        const slDepthPct =
+          slTrig > 0 ? (Math.abs(slTrig - p.entry) / p.entry) * 100 : 0;
         const scalpDead =
-          ageMs > 216e3 && uplPct < 0
+          ageMs > 216e3 && uplPct < -0.4
             ? `red ${round(uplPct, 2)}% at ${(ageMs / 1e3).toFixed(0)}s`
-            : !runnerMode && ageMs > 15 * 60e3 && prog < 0.35 && uplPct < 0.3
+            : slDepthPct > 0 && ageMs > 2 * 3600e3 && uplPct < -slDepthPct * 0.6
+            ? `still ${round(uplPct, 2)}% past 60% of stop depth at 2h — early loss cut`
+            : slDepthPct > 0 && ageMs > 4 * 3600e3 && uplPct < -slDepthPct * 0.35
+            ? `still ${round(uplPct, 2)}% past 35% of stop depth at 4h — early loss cut`
+            : !runnerMode && ageMs > 90 * 60e3 && prog < 0.35 && uplPct < 0.3
             ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
-            : !runnerMode && ageMs > 45 * 60e3 && prog < 0.65 && uplPct < 0.8
+            : !runnerMode && ageMs > 4 * 3600e3 && prog < 0.65 && uplPct < 0.8
             ? `${round(prog * 100, 0)}% progress at ${(ageMs / 60e3).toFixed(0)}m`
             : null;
         if (scalpDead) {
@@ -856,8 +975,15 @@ async function main() {
 
   // ---- entries: only when the real drawdown guards are clear and capacity
   // allows — plan.killSwitch is sim-derived and logged for reference only ----
-  if (entriesBlocked) {
-    state.actions.push(`${entriesBlocked} — no new entries`);
+  const protectionHalted =
+    Number.isFinite(state.protectionHaltUntil) && Date.now() < state.protectionHaltUntil;
+  if (protectionHalted) {
+    state.actions.push(
+      `protection-halt until ${new Date(state.protectionHaltUntil).toISOString().slice(11, 19)}Z — TPSL placement failed earlier, entries paused (no naked probes)`
+    );
+  }
+  if (protectionHalted || entriesBlocked) {
+    if (entriesBlocked) state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
     let opened = 0;
     const openedSym = new Set(); // a dup symbol in the plan must not stack
@@ -886,12 +1012,33 @@ async function main() {
         state.errors.push(`${o.symbol || '?'}: malformed order fields — skipped`);
         continue;
       }
+      // user mandate: no shorts — hard refusal independent of scanner gating,
+      // so a stale or hand-built plan can never route a short entry.
+      if (LONG_ONLY && o.direction === 'SHORT') {
+        state.actions.push(`${o.symbol}: SHORT blocked — longs-only mandate`);
+        continue;
+      }
+      // idempotent execution: the same signal must physically be unable to
+      // fire twice. A prior attempt on this symbol+direction inside the
+      // dedup window means this order is a replay (fill-index lag, plan
+      // re-emission, loop restart) — skip it.
+      if ((state.entriesLog || []).some(
+        (e) => e.symbol === o.symbol && e.direction === o.direction &&
+               Date.now() - e.ts < ENTRY_DEDUP_MS
+      )) {
+        state.actions.push(`${o.symbol} ${o.direction}: duplicate signal — idempotent skip`);
+        continue;
+      }
       // ≥RR_MIN net R:R defense — the scanner stamps netRR/costPct; recompute
       // here with a conservative cost floor (0.12% RT fees + 0.08 slip +
       // 0.1 spread = 0.30%) so a stale/noncompliant plan can never route.
       {
         const RR_MIN = +(process.env.SENTINEL_MIN_RR || 2);
-        const cost = Math.max(Number.isFinite(o.costPct) ? o.costPct : 0, 0.30);
+        // floor at UNAVOIDABLE cost only: taker RT 0.12 + modeled slip 0.08 =
+        // 0.20%. The 0.30% floor invented a spread the scanner measured as
+        // ~0 on liquid majors — every marginal plan died at ~2.4:1 effective.
+        // Scanner-stamped costPct (spread + funding) rides on top.
+        const cost = Math.max(Number.isFinite(o.costPct) ? o.costPct : 0, 0.20);
         const netRR = (o.targetPct - cost) / (o.stopPct + cost);
         if (!(netRR >= RR_MIN)) {
           state.actions.push(`${o.symbol}: net R:R ${netRR.toFixed(2)} < ${RR_MIN}:1 after costs — rejected`);
@@ -909,6 +1056,21 @@ async function main() {
         const drift = (o.direction === 'LONG' ? last - o.refEntry : o.refEntry - last) / o.refEntry;
         if (last > 0 && drift > 0.006) {
           state.actions.push(`${o.symbol}: price ran ${round(drift * 100, 2)}% past ref entry — skipped (chasing = worse R:R)`);
+          continue;
+        }
+        // trigger-side sanity: if mark already sits beyond the modeled stop,
+        // the SL trigger is wrong-side the instant it lands (Bitget 43023 /
+        // instant trigger) — the position is born dead; if it's already past
+        // the target there's nothing left to capture. Either way: skip.
+        const sgn0 = o.direction === 'LONG' ? 1 : -1;
+        const slTrig = o.refEntry * (1 - sgn0 * (o.stopPct / 100));
+        const tpTrig = o.refEntry * (1 + sgn0 * (o.targetPct / 100));
+        if (last > 0 && (sgn0 === 1 ? last <= slTrig : last >= slTrig)) {
+          state.actions.push(`${o.symbol}: mark already through modeled stop (${last} vs ${round(slTrig, 6)}) — skipped`);
+          continue;
+        }
+        if (last > 0 && (sgn0 === 1 ? last >= tpTrig : last <= tpTrig)) {
+          state.actions.push(`${o.symbol}: mark already through modeled target (${last} vs ${round(tpTrig, 6)}) — skipped`);
           continue;
         }
       } catch {} // ticker unreadable — proceed on the plan's own staleness TTL
@@ -955,14 +1117,23 @@ async function main() {
       // the source of the 40762 'order amount exceeds the balance'
       // rejections — the fee landed on top of a fully-deployed balance.
       const FEE_RT = 0.0012; // 0.06% taker x2 sides of notional
+      // over-reserve fees 30% — exact-fit sizing still produced 40762
+      // 'order amount exceeds the balance' rejections (rate-tier and
+      // rounding slop land the fee on top of a fully-deployed balance)
       const marginUsd = Math.min(
-        (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT),
+        (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3),
         // single-position margin cap — 85%: near-full aggression on a
         // qualifying shot while still banking one reload. Ruin is the only
         // unrecoverable outcome; every other loss is tuition.
         equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85)
       );
-      const notional = marginUsd * lev;
+      // effective-notional cap: margin_cap × lev ≈ 50x equity → the 0.12%
+      // round-trip eats ~6% of equity per trade while measured signal
+      // expectancy is +0.05%/trade — structurally unbeatable. Every
+      // live-verified public strategy runs <=5x effective notional for
+      // exactly this reason. Cap is env-tunable (0/absent = legacy uncapped).
+      const NOTIONAL_MULT_CAP = +(process.env.SENTINEL_MAX_NOTIONAL_MULT || 0) || Infinity;
+      const notional = Math.min(marginUsd * lev, equityUsd * NOTIONAL_MULT_CAP);
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       let minMarginNeeded = null;
       if (!size && FLOOR_MIN) {
@@ -1001,19 +1172,40 @@ async function main() {
         await setIsolated(o.symbol);
         await setLeverage(o.symbol, lev);
         await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid });
+        // record the attempt immediately — the fills journal won't see this
+        // for ~30s, and the rate cap must count it now (probe loops burn
+        // fees per attempt, not per recorded fill)
+        (state.entriesLog = state.entriesLog || []).push({
+          ts: Date.now(), symbol: o.symbol, direction: o.direction,
+        });
+        entriesThisHour++;
         // protective levels anchor to the ACTUAL fill, not the plan's ref
         // price — market orders slip, and a stop quoted off an unfilled
         // reference can sit on the wrong side of price. Same for SIZE: a
         // partial fill must not leave plans quoting the intended size (they
         // trigger-reject 43023) — size protection off what actually filled.
         let fill = o.refEntry, filledSize = size;
-        const pp2 = await getPos().catch(() => [])
-          .then((ps) => ps.find((x) => x.symbol === o.symbol && +x.total > 0));
+        // Bitget's position index trails the fill by seconds — TPSL placed
+        // on a not-yet-indexed position returns 43023 and trips the
+        // emergency close at full round-trip fees (observed live). Poll
+        // until the position is visible before placing protection.
+        let pp2 = null;
+        for (let i = 0; i < 9 && !pp2; i++) {
+          const ps = await getPos().catch(() => []);
+          pp2 = ps.find(
+            (x) =>
+              x.symbol === o.symbol && +x.total > 0 &&
+              (!x.holdSide || x.holdSide === (o.direction === 'LONG' ? 'long' : 'short'))
+          );
+          if (!pp2) await new Promise((r) => setTimeout(r, 1000));
+        }
         if (pp2) {
           if (+pp2.openPriceAvg > 0) fill = +pp2.openPriceAvg;
           filledSize = Math.min(size, +pp2.total);
           if (filledSize < size)
             state.actions.push(`partial fill ${o.symbol}: ${filledSize}/${size}`);
+        } else {
+          state.actions.push(`${o.symbol}: position not visible after 8s — protecting on intended size`);
         }
         // query failed silently (network blip) — proceed on intended size;
         // a confirmed zero-position is handled below when plans land on
@@ -1039,7 +1231,21 @@ async function main() {
         // runner distance scales with signal confluence — strong setups
         // earn a longer tail (1.6x..2.4x), weak ones bank sooner
         const runnerMult = Math.max(1.2, +(o.runnerMult || 1.8));
+        // plan thunks — executed SEQUENTIALLY below. Concurrent
+        // place-tpsl-order calls on one fresh position race Bitget's
+        // position index (43023/43059 observed live) and the loss plan
+        // goes FIRST: if ordering ever constrains placement, the stop is
+        // already on the exchange before any TP exists.
         const plans = [];
+        plans.push(() =>
+          planWithRetry(() =>
+            planOrder(
+              o.symbol, 'loss_plan',
+              round(fill * (1 - sgn * (o.stopPct / 100)), pp),
+              filledSize, holdSide
+            )
+          )
+        );
         if (ladder) {
           // 40/30/15 staggered banks — the leftover ~15% is the moon bag:
           // deliberately given NO profit plan so it rides the trailing stop
@@ -1056,39 +1262,38 @@ async function main() {
           // position — fall back to one full-size TP instead
           if (trancheSizes.length >= 2) {
             for (const tr of trancheSizes)
-              plans.push(
-                planOrder(
-                  o.symbol, 'profit_plan',
-                  round(fill * (1 + sgn * (o.targetPct * tr.mult) / 100), pp),
-                  String(tr.tsize), holdSide
+              plans.push(() =>
+                planWithRetry(() =>
+                  planOrder(
+                    o.symbol, 'profit_plan',
+                    round(fill * (1 + sgn * (o.targetPct * tr.mult) / 100), pp),
+                    String(tr.tsize), holdSide
+                  )
                 )
               );
           } else {
-            plans.push(
+            plans.push(() =>
+              planWithRetry(() =>
+                planOrder(
+                  o.symbol, 'profit_plan',
+                  round(fill * (1 + sgn * (o.targetPct / 100)), pp),
+                  filledSize, holdSide
+                )
+              )
+            );
+          }
+        } else {
+          plans.push(() =>
+            planWithRetry(() =>
               planOrder(
                 o.symbol, 'profit_plan',
                 round(fill * (1 + sgn * (o.targetPct / 100)), pp),
                 filledSize, holdSide
               )
-            );
-          }
-        } else {
-          plans.push(
-            planOrder(
-              o.symbol, 'profit_plan',
-              round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-              filledSize, holdSide
             )
           );
         }
-        plans.push(
-          planOrder(
-            o.symbol, 'loss_plan',
-            round(fill * (1 - sgn * (o.stopPct / 100)), pp),
-            filledSize, holdSide
-          )
-        );
-        await Promise.all(plans);
+        for (const fn of plans) await fn();
         const usedMargin = (filledSize * fill) / lev;
         marginFree = Math.max(0, marginFree - usedMargin);
         // observable execution quality: slippage vs the scanner's reference
@@ -1100,7 +1305,6 @@ async function main() {
         );
         opened++;
         openedSym.add(o.symbol);
-        entriesThisHour++;
       } catch (e) {
         // unroutable symbols get recorded so the scanner stops emitting
         // entries the exchange can't hold: 40805 'Unsupported operation'
@@ -1109,18 +1313,27 @@ async function main() {
         if (/40805|40034|unsupported|does not exist/i.test(e.message)) {
           state.untradeable = [...new Set([...(state.untradeable || []), o.symbol])];
         }
-        // entry filled but protection failed -> close immediately, never naked
+        // Two distinct failures share this catch: the market order rejected
+        // (40762 et al — NO position exists, nothing to protect, don't arm
+        // the halt) vs a fill followed by protection failure (naked on the
+        // exchange — emergency close + 30min entry halt so the next cycle
+        // doesn't re-probe at full round-trip fees).
+        const p = posBySym.get(o.symbol) ||
+          (await getPos().catch(() => [])).find((x) => x.symbol === o.symbol && +x.total > 0);
+        if (!p) {
+          state.errors.push(`open ${o.symbol}: ${e.message}`);
+          continue;
+        }
+        state.protectionHaltUntil = Date.now() + 30 * 60e3;
         state.errors.push(`open ${o.symbol}: ${e.message} — attempting emergency close`);
         try {
-          const p = posBySym.get(o.symbol) || (await getPos()).find((x) => x.symbol === o.symbol && +x.total > 0);
-          if (p) {
-            await cancelPlans(o.symbol);
-            await closePosition(o.symbol, p.holdSide || p.side);
-            state.actions.push(`emergency-closed ${o.symbol} (protection failed)`);
-          }
+          await cancelPlans(o.symbol);
+          await closePosition(o.symbol, p.holdSide || p.side);
+          state.actions.push(`emergency-closed ${o.symbol} (protection failed)`);
         } catch (e2) {
           state.errors.push(`EMERGENCY CLOSE FAILED ${o.symbol}: ${e2.message}`);
         }
+        break; // one failed probe is enough — don't burn fees probing the rest
       }
     }
   }

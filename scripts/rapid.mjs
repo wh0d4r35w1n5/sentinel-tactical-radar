@@ -3,8 +3,9 @@
 //   lean scan (Bitget-only intel, 16 candidates) → executor → sleep ~30s
 // Same plan format, same executor, same risk rails — just not waiting on cron.
 //
-//   node scripts/rapid.mjs            # live mode (default)
-//   RAPID_MODE=demo node rapid.mjs    # dry-run on Bitget demo
+//   node scripts/rapid.mjs            # inert (RAPID_MODE unset -> off)
+//   RAPID_MODE=demo node rapid.mjs    # paper trading on Bitget demo
+//   RAPID_MODE=live node rapid.mjs    # real orders — VPS only
 //   RAPID_MS=15000 node rapid.mjs     # custom cycle (min 5s enforced)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,7 +32,10 @@ const spawnTg = () => {
 spawnTg();
 
 const MS = Math.max(5_000, +(process.env.RAPID_MS || 30_000));
-const MODE = (process.env.RAPID_MODE || 'live').toLowerCase();
+// default 'off', never 'live': an unconfigured spawn (stale autostart, a
+// second box, a debugging run) must be inert — the VPS is the only
+// component authorized to place orders, and it sets RAPID_MODE explicitly.
+const MODE = (process.env.RAPID_MODE || 'off').toLowerCase();
 const env = {
   ...process.env,
   SENTINEL_RAPID: '1',
