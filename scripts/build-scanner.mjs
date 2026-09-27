@@ -382,11 +382,16 @@ async function fetchEntryCandles(e) {
 // 5m candles over an arbitrary closed range — used by the forward-outcome
 // evaluator. Paginates to cover multi-day windows; unclosed tail dropped.
 async function fetch5mRange(asset, fromMs, toMs) {
-  const out = [];
-  let start = fromMs;
-  for (let page = 0; page < 8; page++) {
+  // Bitget serves the LAST `limit` bars inside [startTime, endTime] — startTime
+  // does not position the page. Paging forward therefore refetches the same
+  // terminal 200 bars and never reaches back; a 24h eval window silently lost
+  // its first ~7h and every horizon label failed. Page BACKWARD by endTime
+  // instead: each page ends just before the oldest bar already held.
+  const pages = [];
+  let end = toMs;
+  for (let page = 0; page < 12; page++) {
     const res = await fetch(
-      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${toMs}&limit=200`,
+      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${fromMs}&endTime=${end}&limit=200`,
       { signal: TF() }
     );
     if (!res.ok) return null;
@@ -394,13 +399,16 @@ async function fetch5mRange(asset, fromMs, toMs) {
     if (!Array.isArray(data) || !data.length) break;
     const rows = data
       .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4] }))
-      .sort((a, b) => a.t - b.t);
-    for (const c of rows)
-      if (!out.length || c.t > out[out.length - 1].t) out.push(c);
-    const last = out[out.length - 1];
-    if (data.length < 200 || !last || last.t >= toMs - 300e3) break;
-    start = last.t + 300e3;
+      .filter((c) => c.t >= fromMs && c.t <= end);
+    if (!rows.length) break;
+    pages.push(rows);
+    const first = Math.min(...rows.map((c) => c.t));
+    if (data.length < 200 || first <= fromMs + 300e3) break;
+    end = first - 1;
   }
+  const out = [...new Map(pages.flat().map((c) => [c.t, c])).values()].sort(
+    (a, b) => a.t - b.t
+  );
   if (out.length && out[out.length - 1].t + 300e3 > Date.now()) out.pop();
   return out;
 }
@@ -3130,6 +3138,10 @@ async function main() {
       volRatio: s.volRatio ?? null,
       momScore: s.momScore ?? null,
       changePct: s.changePct ?? null,
+      // factor ledger at emission — the eval engine reads this back to freeze
+      // each signal's DNA into its journal record (ta itself is too heavy to
+      // archive; factors are the evidence that matters)
+      confl: s.ta?.factors ?? null,
     })),
   });
   // permanent record: every run also lands in its monthly history file
@@ -3297,7 +3309,7 @@ async function main() {
         targetPrice: s.targetPrice ?? null,
         // evidence ledger snapshotted at emission — what led to the signal,
         // frozen so the journal grades the read, not a retrofitted story
-        confl: s.ta?.factors ?? null,
+        confl: s.confl ?? s.ta?.factors ?? null,
       };
       const closeAt = (T) => {
         let c1 = null;
