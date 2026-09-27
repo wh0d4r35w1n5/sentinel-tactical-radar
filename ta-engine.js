@@ -833,11 +833,125 @@
   }
 
   // ---------- composite ----------
+  // ---------- Ichimoku Kinko Hyo (9/26/52) — trend, equilibrium, momentum
+  // in one read. Cloud projected "now" uses the values computed 26 bars ago;
+  // chikou compares current close vs the close 26 bars back. ----------
+  function ichimoku(cs) {
+    var n = cs.length; if (n < 60) return null;
+    var mid = function (i, p) {
+      var h = -Infinity, l = Infinity;
+      for (var j = Math.max(0, i - p + 1); j <= i; j++) {
+        if (cs[j].h > h) h = cs[j].h; if (cs[j].l < l) l = cs[j].l;
+      }
+      return (h + l) / 2;
+    };
+    var i = n - 1, px = cs[i].c;
+    var tenkan = mid(i, 9), kijun = mid(i, 26);
+    var j26 = Math.max(0, i - 26);
+    var cA = (mid(j26, 9) + mid(j26, 26)) / 2, cB = mid(j26, 52);
+    var cTop = Math.max(cA, cB), cBot = Math.min(cA, cB);
+    var vs = px > cTop ? 'above' : px < cBot ? 'below' : 'inside';
+    var cross = null;
+    for (var k = i; k > i - 12 && k > 0; k--) {
+      var t0 = mid(k, 9), k0 = mid(k, 26), t1 = mid(k - 1, 9), k1 = mid(k - 1, 26);
+      if ((t0 > k0) !== (t1 > k1)) { cross = { dir: t0 > k0 ? 'bull' : 'bear', age: i - k }; break; }
+    }
+    var chikou = i >= 26 ? (px > cs[i - 26].c ? 'bull' : px < cs[i - 26].c ? 'bear' : null) : null;
+    var dir = vs === 'above' && tenkan > kijun ? 'bull' : vs === 'below' && tenkan < kijun ? 'bear' : null;
+    return {
+      dir: dir, vs: vs, tenkan: tenkan, kijun: kijun, cloudTop: cTop, cloudBot: cBot,
+      cross: cross, chikou: chikou,
+      label: 'price ' + vs + ' cloud · T' + (tenkan > kijun ? '>' : '<') + 'K'
+        + (cross ? ' · ' + cross.dir + ' TK cross ' + cross.age + 'b ago' : '')
+        + (chikou ? ' · chikou ' + chikou : '')
+    };
+  }
+
+  // ---------- MA stack: EMA20/50/200 + SMA50/200 — alignment order and the
+  // crossovers (golden/death, E20/50) that mark regime flips ----------
+  function maStack(cs) {
+    var n = cs.length; if (n < 60) return null;
+    var cl = cs.map(function (c) { return c.c; });
+    var smaWin = function (i, p) {
+      if (i - p + 1 < 0) return null;
+      var s = 0; for (var j = i - p + 1; j <= i; j++) s += cl[j]; return s / p;
+    };
+    var e20 = emaSeries(cl, 20), e50 = emaSeries(cl, 50), e200 = emaSeries(cl, Math.min(200, n - 1));
+    var s50 = [], s200 = [];
+    for (var m = 0; m < n; m++) { s50[m] = smaWin(m, 50); s200[m] = smaWin(m, 200); }
+    var i = n - 1, px = cl[i];
+    var crossOf = function (A, B, span) {
+      for (var k = i; k > i - span && k > 0; k--) {
+        if (A[k] == null || B[k] == null || A[k - 1] == null || B[k - 1] == null) return null;
+        if ((A[k] > B[k]) !== (A[k - 1] > B[k - 1])) return { dir: A[k] > B[k] ? 'bull' : 'bear', age: i - k };
+      }
+      return null;
+    };
+    var gc = crossOf(s50, s200, 60);
+    if (gc) gc.name = gc.dir === 'bull' ? 'golden cross' : 'death cross';
+    var ec = crossOf(e20, e50, 30);
+    var bull = px > e20[i] && e20[i] > e50[i] && (e200[i] == null || e50[i] > e200[i]);
+    var bear = px < e20[i] && e20[i] < e50[i] && (e200[i] == null || e50[i] < e200[i]);
+    return {
+      dir: bull ? 'bull' : bear ? 'bear' : null, aligned: bull || bear,
+      ema20: e20[i], ema50: e50[i], ema200: e200[i] != null ? e200[i] : null,
+      sma50: s50[i], sma200: s200[i],
+      golden: gc, eCross: ec,
+      label: (bull ? 'bull stack' : bear ? 'bear stack' : 'mixed stack')
+        + ' · px ' + (px > e20[i] ? '>' : '<') + ' E20 ' + (e20[i] > e50[i] ? '>' : '<') + ' E50'
+        + (ec ? ' · ' + ec.dir + ' E20/50 cross ' + ec.age + 'b' : '')
+        + (gc ? ' · ' + gc.name + ' ' + gc.age + 'b' : '')
+    };
+  }
+
+  // ---------- chart patterns from zigzag pivots — the named geometry:
+  // double tops/bottoms, head & shoulders, triangle/wedge coils, flags ----------
+  function chartPats(cs) {
+    var piv = zigzag(cs, 0.015);
+    if (!piv || piv.length < 4) return [];
+    var px = function (x) { return x >= 100 ? x.toFixed(1) : x >= 1 ? x.toFixed(3) : x.toPrecision(3); };
+    var H = piv.filter(function (p) { return p.type === 'H'; }).slice(-4);
+    var L = piv.filter(function (p) { return p.type === 'L'; }).slice(-4);
+    var out = [];
+    if (H.length >= 2) {
+      var h1 = H[H.length - 1], h2 = H[H.length - 2], dH = Math.abs(h1.p - h2.p) / h2.p;
+      if (dH <= 0.02) out.push({ name: 'double top', dir: 'SHORT', conf: dH <= 0.01 ? 'B' : 'C', s: 'twin highs ~' + px(h2.p) });
+    }
+    if (L.length >= 2) {
+      var l1 = L[L.length - 1], l2 = L[L.length - 2], dL = Math.abs(l1.p - l2.p) / l2.p;
+      if (dL <= 0.02) out.push({ name: 'double bottom', dir: 'LONG', conf: dL <= 0.01 ? 'B' : 'C', s: 'twin lows ~' + px(l2.p) });
+    }
+    if (H.length >= 3) {
+      var a = H[H.length - 3], b = H[H.length - 2], c = H[H.length - 1];
+      if (b.p > a.p && b.p > c.p && Math.abs(a.p - c.p) / a.p <= 0.04)
+        out.push({ name: 'head & shoulders', dir: 'SHORT', conf: 'B', s: 'head ' + px(b.p) + ' shoulders ' + px(a.p) + '/' + px(c.p) });
+    }
+    if (L.length >= 3) {
+      var a2 = L[L.length - 3], b2 = L[L.length - 2], c2 = L[L.length - 1];
+      if (b2.p < a2.p && b2.p < c2.p && Math.abs(a2.p - c2.p) / a2.p <= 0.04)
+        out.push({ name: 'inverse H&S', dir: 'LONG', conf: 'B', s: 'head ' + px(b2.p) + ' shoulders ' + px(a2.p) + '/' + px(c2.p) });
+    }
+    if (H.length >= 2 && L.length >= 2) {
+      var hDn = H[H.length - 1].p < H[H.length - 2].p, lUp = L[L.length - 1].p > L[L.length - 2].p;
+      if (hDn && lUp) out.push({ name: 'sym triangle', dir: null, conf: 'C', s: 'coiling — apex break pending' });
+      else if (!hDn && lUp) out.push({ name: 'rising wedge', dir: 'SHORT', conf: 'C', s: 'rising compression — bearish lean' });
+      else if (hDn && !lUp) out.push({ name: 'falling wedge', dir: 'LONG', conf: 'C', s: 'falling compression — bullish lean' });
+    }
+    var n6 = cs.slice(-6), p6 = cs.slice(-12, -6);
+    if (p6.length === 6 && n6.length === 6) {
+      var imp = (p6[5].c - p6[0].o) / p6[0].o, drift = (n6[5].c - n6[0].o) / n6[0].o;
+      if (imp > 0.03 && Math.abs(drift) < 0.01) out.push({ name: 'bull flag', dir: 'LONG', conf: 'B', s: '+' + (imp * 100).toFixed(1) + '% impulse then coil' });
+      else if (imp < -0.03 && Math.abs(drift) < 0.01) out.push({ name: 'bear flag', dir: 'SHORT', conf: 'B', s: (imp * 100).toFixed(1) + '% impulse then coil' });
+    }
+    return out;
+  }
+
   function analyze(cs, cs5m) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
+        ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
@@ -860,7 +974,7 @@
       rsi: rsiEng(cs), macd: macdEng(cs), obv: obvEng(cs), dow: dowEng(cs),
       minor: trendOf(cs.slice(-18), 0.008), major: trendOf(cs, 0.02),
       macro: trendOf(agg(cs, 4), 0.02), superMacro: trendOf(agg(cs, 8), 0.025),
-      mtf: mtfEng(cs),
+      mtf: mtfEng(cs), ichi: ichi, mas: mas,
     };
     eng.rev = revEng(cs, { sfp: s, mc: mc, w: w, eng: eng });
     if (eng.minor) eng.minor.label = 'minor trend (18b): ' + eng.minor.trend;
@@ -890,11 +1004,13 @@
       if (cd.some(function (x) { return (x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star') === L; })) confluence++;
       // engine votes — bounded so confirmations can't swamp primary signals
       var ev = 0;
-      ['rsi', 'macd', 'obv', 'dow', 'rev'].forEach(function (k) {
+      ['rsi', 'macd', 'obv', 'dow', 'rev', 'ichi', 'mas'].forEach(function (k) {
         var x = eng[k]; if (x && x.dir && (x.dir === 'bull') === L) ev++;
       });
       if (eng.mtf && eng.mtf.aligned && eng.mtf.dir === (L ? 'bull' : 'bear')) ev++;
       confluence += Math.min(4, ev);
+      // named chart geometry aligning with the primary bias
+      if (cps && cps.some(function (x) { return x.dir === bias; })) confluence++;
     }
     // 14-period true-range % of price — the noise floor a stop must clear
     var atrSum = 0, atrN = 0;
@@ -904,9 +1020,43 @@
       atrN++;
     }
     var atrPct = atrN ? +(atrSum / atrN / cs[cs.length - 1].c * 100).toFixed(3) : null;
+    // ---- factors ledger: every input, its direction vote, and the evidence
+    // string — this is the "what led to the signal" trail the dashboard and
+    // journal render. dir: bull | bear | flat (no directional read)
+    var factors = [];
+    var F = function (k, d, s) { factors.push({ k: k, dir: d, s: s }); };
+    var LD = function (x) { return x === 'LONG' ? 'bull' : x === 'SHORT' ? 'bear' : 'flat'; };
+    F('BIAS', LD(bias), reasons.join(' + ') || 'no primary trigger — standalone engine reads only');
+    if (lq) F('liquidity', lq.setup ? LD(lq.setup.dir) : lq.zone === 'discount' ? 'bull' : lq.zone === 'premium' ? 'bear' : 'flat',
+      (lq.setup ? lq.setup.grade + '-grade sweep → ' : '') + (lq.zone || '?') + ' zone' + (lq.targetDistPct ? ' · draw ' + lq.targetDistPct + '% away' : ''));
+    if (s) F('SFP', s.type === 'bullish' ? 'bull' : 'bear', s.type + ' sweep of ' + (s.level != null ? s.level : '?') + ' · str ' + s.strength);
+    if (e && e.complete) F('elliott', e.shortTop ? 'bear' : e.longBottom ? 'bull' : 'flat', 'wave-5 complete · q' + (e.quality ?? '?'));
+    if (w && w.event) F('wyckoff', LD(w.bias), (w.event || '?') + ' · phase ' + (w.phase || '?') + ' · q' + w.quality);
+    if (mc && (mc.bos || mc.choch)) F('SMC', mc.choch === 'bullish' || mc.bos === 'bullish' ? 'bull' : mc.choch === 'bearish' || mc.bos === 'bearish' ? 'bear' : 'flat',
+      (mc.choch ? 'CHoCH ' + mc.choch : 'BOS ' + mc.bos) + ' · ' + (mc.zone || '?'));
+    if (eq && (eq.lean || eq.rangeQ)) F('EQ', LD(eq.lean), (eq.rangeQ || '?') + ' · pos ' + Math.round((eq.rangePos || 0) * 100) + '%');
+    if (ig) F('ignition', LD(ig.dir), 'range ' + ig.rangeX + '× · vol ' + ig.volX + '×');
+    if (vw && vw.stretched) F('VWAP', LD(vw.fade), 'z ' + vw.z + ' · dev ' + vw.devPct + '%');
+    F('structure', st.trend === 'up' ? 'bull' : st.trend === 'down' ? 'bear' : 'flat',
+      st.trend + ' · ' + st.hh + 'H ' + st.hl + 'HL / ' + st.lh + 'LH ' + st.ll + 'LL');
+    if (fb && fb.goldenPocket) F('fib', 'bull', 'golden pocket · ' + fb.clusters + ' cluster(s)');
+    else if (fb && fb.clusters) F('fib', 'flat', fb.clusters + ' fib cluster(s) nearby');
+    if (cd && cd.length) {
+      var cb = cd.filter(function (x) { return x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star'; }),
+          cr = cd.filter(function (x) { return x.indexOf('bull') !== 0 && x !== 'hammer' && x !== 'morning star'; });
+      F('candles', cb.length > cr.length ? 'bull' : cr.length > cb.length ? 'bear' : 'flat', cd.join(', '));
+    }
+    if (cps && cps.length) cps.forEach(function (p) { F('pattern', LD(p.dir) , p.name + ' (' + p.conf + ') — ' + p.s); });
+    var EG = { rsi: 'RSI', macd: 'MACD', obv: 'OBV', dow: 'Dow', ichi: 'Ichimoku', mas: 'MA stack', rev: 'reversal', mtf: 'MTF' };
+    for (var ek in EG) { var x2 = eng[ek]; if (x2) F(EG[ek], x2.dir || 'flat', x2.label || ''); }
+    if (eng.minor) F('minor tr', eng.minor.trend === 'up' ? 'bull' : eng.minor.trend === 'down' ? 'bear' : 'flat', eng.minor.trend);
+    if (eng.macro) F('macro tr', eng.macro.trend === 'up' ? 'bull' : eng.macro.trend === 'down' ? 'bear' : 'flat', eng.macro.trend);
+    if (eng.superMacro) F('smacro', eng.superMacro.trend === 'up' ? 'bull' : eng.superMacro.trend === 'down' ? 'bear' : 'flat', eng.superMacro.trend);
+    F('confluence', 'flat', confluence + ' aligned votes');
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
+             ichi: ichi, mas: mas, cps: cps, factors: factors,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 

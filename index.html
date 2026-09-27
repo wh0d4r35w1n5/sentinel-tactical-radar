@@ -239,6 +239,12 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .vc-k{margin-left:auto;font-size:8px;font-weight:800;letter-spacing:.1em;font-style:normal}
 .vc-x{font-size:20px;font-weight:800;line-height:1.15}
 .vc-s{font-size:9px;opacity:.7}
+/* CONFLUENCE: per-signal evidence ledger */
+.ftab{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:2px 16px;margin-top:6px}
+.frow{display:flex;gap:7px;align-items:baseline;border-bottom:1px dotted rgba(140,120,255,.12);padding:2px 0;min-width:0}
+.frow .fk{min-width:62px;font-weight:800;letter-spacing:.08em;color:var(--txt);font-size:9px}
+.frow .fd{font-size:9px;width:10px;flex-shrink:0}
+.frow .fv{color:var(--mut);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
 </style>
 </head>
 <body>
@@ -402,6 +408,9 @@ function ledgerEntryFor(asset){
   return ((LAST.ledger&&LAST.ledger.entries)||[]).find(e=>e.asset===asset&&e.status==='open');
 }
 const OPEN=new Set();
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// factor ledger — every engine vote that produced the read, direction-tagged
+const facTable=(fs,title)=>fs&&fs.length?`<div class="sub" style="margin-top:8px;font-size:9px;letter-spacing:.14em;font-weight:700">${esc(title||'SIGNAL DNA · what led to this read')}</div><div class="ftab">${fs.map(f=>`<div class="frow"><span class="fk">${esc(f.k)}</span><span class="fd ${f.dir==='bull'?'up':f.dir==='bear'?'dn':'sub'}">${f.dir==='bull'?'▲':f.dir==='bear'?'▼':'·'}</span><span class="fv" title="${esc(f.s)}">${esc(f.s)}</span></div>`).join('')}</div>`:'';
 function sigDetail(s,i){
   const c=(LAST.detail&&LAST.detail.coins||{})[s.asset]||{};
   const e=ledgerEntryFor(s.asset);
@@ -416,7 +425,7 @@ function sigDetail(s,i){
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
     <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
     <ul class="ddrv">${drv}</ul>
-    ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${x.label||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
+    ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','ichi','mas','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${esc(x.label)||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',ichi:'ICHI',mas:'MA',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
     ${s.ta&&s.ta.liquidity?`<div class="engrow" title="Liquidity Levels — resting stop pools above highs (BSL) and below lows (SSL). Sweeps that fail to hold reverse toward the opposing pool.">
       <span class="echip ${s.ta.liquidity.zone==='premium'?'bear':s.ta.liquidity.zone==='discount'?'bull':'flat'}"><b>LIQ ZONE</b> ${s.ta.liquidity.zone}</span>
       ${s.ta.liquidity.bsl?`<span class="echip bear" title="buy-side liquidity pool ${(s.ta.liquidity.bsl.src||[]).join('+')} · str ${s.ta.liquidity.bsl.str}"><b>BSL</b> ${fmtP(s.ta.liquidity.bsl.px)} +${s.ta.liquidity.bsl.distPct}%</span>`:''}
@@ -425,6 +434,8 @@ function sigDetail(s,i){
       ${s.ta.liquidity.setup?`<span class="echip ${s.ta.liquidity.setup.dir==='LONG'?'bull':'bear'}"><b>SETUP ${s.ta.liquidity.setup.grade}</b> ${s.ta.liquidity.setup.dir}${s.ta.liquidity.targetPx?` → ${fmtP(s.ta.liquidity.targetPx)}`:''}</span>`:''}
       ${s.ta.liquidity.inducement?`<span class="echip flat" title="minor pool in the trade's path — likely raided before the real target"><b>IND</b> ${fmtP(s.ta.liquidity.inducement.px)}</span>`:''}
     </div>`:''}
+    ${s.ta&&s.ta.cps&&s.ta.cps.length?`<div class="engrow">${s.ta.cps.map(p=>`<span class="echip ${p.dir==='LONG'?'bull':p.dir==='SHORT'?'bear':'flat'}" title="${esc(p.s)}"><b>${esc(p.name)}</b> ${p.dir||'coil'}</span>`).join('')}</div>`:''}
+    ${s.ta?facTable(s.ta.factors,'SIGNAL DNA · every engine vote behind '+s.direction):''}
     <div data-spark data-sym="${s.symbol}">${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':''}</div>
     <div class="dmeta">
       <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M USD</b></span>
@@ -468,10 +479,10 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
-  LAST={scan,detail,ledger,evals};
+  LAST={scan,detail,ledger,evals,confl};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
   const isLive=scan.source==='bitget-live';
   const next=Math.max(0,Math.round((t+600e3-Date.now())/6e4));
@@ -563,6 +574,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       <td class="num">${jf(r.alpha24h)}</td><td class="sub">${ago(r.runTs)}</td></tr>`+
     `<tr class="jsyn" data-js="${r.key}" hidden><td colspan="12">
       <div class="sub" style="margin-bottom:8px">${r.asset} ${r.direction} · ${r.strategy||''} · score ${r.score??'—'} · ${r.regime||'?'} / ${r.mktType||'?'} · RSI ${r.rsi??'—'}${r.targetPct==null?' · <i>bracket reconstructed</i>':''} — <b>BEFORE:</b> the tape the engine read (zigzag · dealing range · fibs · EMA20/50) &nbsp;·&nbsp; <b>AFTER:</b> the graded path (entry-vs-price shading · MFE/MAE excursions)</div>
+      ${facTable(r.confl||(confl&&confl.coins&&confl.coins[r.asset]&&confl.coins[r.asset].factors),r.confl?'SIGNAL DNA · snapshotted at emission':'SIGNAL DNA · emitted pre-engine — showing current read')}
       <div style="display:flex;gap:12px;flex-wrap:wrap"><div data-chb style="flex:1;min-width:340px;min-height:230px"></div><div data-cha style="flex:1;min-width:340px;min-height:230px"></div></div>
     </td></tr>`}).join('')||'<tr><td colspan="12" class="sub">no graded signals yet — the book writes itself each cycle</td></tr>';
   // re-render rebuilds the tbody — restore open rows and remount their charts

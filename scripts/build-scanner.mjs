@@ -1262,6 +1262,8 @@ async function main() {
               vwap: ta.vwap ? { z: ta.vwap.z, devPct: ta.vwap.devPct, fade: ta.vwap.fade } : null,
               atrPct: ta.atrPct ?? null,
               ignition: ta.ignition ?? null,
+              cps: ta.cps ?? null,
+              factors: ta.factors ?? null,
               eng: ta.eng
                 ? Object.fromEntries(
                     Object.entries(ta.eng).map(([k, x]) => [k, x ? { dir: x.dir, label: x.label, confirmed: x.confirmed } : null])
@@ -1465,6 +1467,27 @@ async function main() {
       print: volEvents.filter((e) => e.kind === 'PRINT').length,
     },
     events: volEvents.slice(0, 24),
+  });
+
+  // ---- confluence core: full factor ledger per enriched asset — the
+  // "what led to the read" evidence trail (ichimoku, MAs+crosses, RSI+divs,
+  // MACD, fibs, chart patterns, harmonics, SMC/wyckoff, liquidity) ----
+  const confl = {};
+  for (const [asset, k] of enriched) {
+    const t = k.ta;
+    if (!t) continue;
+    confl[asset] = {
+      bias: t.bias ?? null,
+      confluence: t.confluence ?? 0,
+      reasons: t.reasons ?? [],
+      harmonic: k.harmonic ?? null,
+      factors: (t.factors ?? []).slice(0, 40),
+    };
+  }
+  writeJson(path.join(API, 'confluence.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    coins: confl,
   });
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
@@ -3015,6 +3038,9 @@ async function main() {
         targetPct: s.targetPct ?? null,
         stopPct: s.stopPct ?? null,
         targetPrice: s.targetPrice ?? null,
+        // evidence ledger snapshotted at emission — what led to the signal,
+        // frozen so the journal grades the read, not a retrofitted story
+        confl: s.ta?.factors ?? null,
       };
       const closeAt = (T) => {
         let c1 = null;
