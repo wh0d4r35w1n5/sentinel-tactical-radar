@@ -282,6 +282,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="volCore" class="vrow"><div class="sub">scanning for abnormal prints…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
+    <div class="ptitle">Breakout core · coil → break → retest <span class="sub">— 55-bar Donchian close-confirmed · retests rank highest, failed breaks flag the trap · intelligence layer</span><span id="brkSub" class="sub" style="float:right"></span></div>
+    <div id="brkCore" class="vrow"><div class="sub">scanning breakouts…</div></div>
+  </div>
+  <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Signal pressure · how close the engine is to firing</div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
     <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
@@ -425,7 +429,7 @@ function sigDetail(s,i){
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
     <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
     <ul class="ddrv">${drv}</ul>
-    ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','ichi','mas','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${esc(x.label)||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',ichi:'ICHI',mas:'MA',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
+    ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','ichi','mas','brk','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${esc(x.label)||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',ichi:'ICHI',mas:'MA',brk:'BRK',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
     ${s.ta&&s.ta.liquidity?`<div class="engrow" title="Liquidity Levels — resting stop pools above highs (BSL) and below lows (SSL). Sweeps that fail to hold reverse toward the opposing pool.">
       <span class="echip ${s.ta.liquidity.zone==='premium'?'bear':s.ta.liquidity.zone==='discount'?'bull':'flat'}"><b>LIQ ZONE</b> ${s.ta.liquidity.zone}</span>
       ${s.ta.liquidity.bsl?`<span class="echip bear" title="buy-side liquidity pool ${(s.ta.liquidity.bsl.src||[]).join('+')} · str ${s.ta.liquidity.bsl.str}"><b>BSL</b> ${fmtP(s.ta.liquidity.bsl.px)} +${s.ta.liquidity.bsl.distPct}%</span>`:''}
@@ -479,8 +483,8 @@ const SUPPORT=[
 // Direction-aware confluence map — renders ONLY measured evidence (null fields omitted, nothing forced)
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -828,6 +832,15 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     <div class="vc-x num" style="color:${KC[e.kind]||'var(--amb)'}">${e.spikeX}×</div>
     <div class="sub vc-s">move ${e.movePct>=0?'+':''}${e.movePct}% · e/r ${e.effRes}× · ${Math.round(e.rangePos*100)}% range</div></a>`).join('')||'<div class="sub">no abnormal prints this cycle — tape is quiet</div>';
   if($('volCoreSub'))$('volCoreSub').textContent=volCore&&volCore.counts?`${volCore.counts.ignition} ignition · ${volCore.counts.absorption} absorption · ${volCore.counts.climax} climax · ${volCore.counts.print} prints · ${volCore.scanned||0} scanned · ${ago(Date.parse(volCore.refreshedAt))}`:'';
+  // breakout core: compression→break→retest lifecycle across all enriched pairs
+  const be=(brkR&&brkR.events)||[];
+  const SC={RETEST:'var(--grn)',BREAKOUT:'var(--cyan)',FAILED:'var(--red)',COMPRESSION:'var(--amb)'};
+  const ST={RETEST:'level held — strongest entry zone',BREAKOUT:'fresh close beyond the 55b level',FAILED:'break failed — trapped flow fuels the other side',COMPRESSION:'coiled — range '};
+  $('brkCore').innerHTML=be.map(e=>`<a class="vcard" href="${BG(e.sym)}" target="_blank" rel="noopener" title="${e.state} ${e.dir||''} ${e.level?'@ '+fmtP(e.level):''}">
+    <div class="vc-t"><b>${e.asset}</b>${e.dir?`<span class="tag ${e.dir==='bull'?'long':'short'}">${e.dir==='bull'?'LONG':'SHORT'}</span>`:''}<i class="vc-k" style="color:${SC[e.state]||'var(--mut)'}">${e.state}</i></div>
+    <div class="vc-x num" style="color:${SC[e.state]||'var(--mut)'}">${e.state==='COMPRESSION'?Math.round(e.coil*100)+'%':e.volX?e.volX+'×':'—'}</div>
+    <div class="sub vc-s">${e.state==='COMPRESSION'?'coil tightness · 55b range '+fmtP(e.dcL||0)+'–'+fmtP(e.dcH||0):(e.age!=null?e.age+'b ago':'')+' · lvl '+fmtP(e.level)+(e.target?' · tgt '+fmtP(e.target):'')+(e.volX?' · '+e.volX+'× vol':'')}</div></a>`).join('')||'<div class="sub">no breaks or coils on the 1h board — range-bound tape</div>';
+  if($('brkSub'))$('brkSub').textContent=brkR&&brkR.counts?`${brkR.counts.retest} retest · ${brkR.counts.breakout} break · ${brkR.counts.failed} failed · ${brkR.counts.compression} coiled · ${brkR.scanned||0} scanned · ${ago(Date.parse(brkR.refreshedAt))}`:'';
   if(health&&health.scanner){
     const h=health.scanner;
     $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(h.klineMiss?` · charts missing: ${h.klineMiss.join(',')}`:'');

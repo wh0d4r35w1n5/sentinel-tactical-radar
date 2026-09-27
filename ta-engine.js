@@ -946,12 +946,77 @@
     return out;
   }
 
+  // ---------- breakout core: compression → expansion → retest lifecycle.
+  // Levels are the 55-bar Donchian channel recomputed per bar; a break only
+  // counts on a CLOSE beyond the level. Post-break bars tagging the broken
+  // level (within 0.35 ATR) while price holds direction = retest — the
+  // strongest entry pattern. Closing back inside = trap; the signal flips
+  // because the failed break becomes fuel the other way. ----------
+  function breakout(cs) {
+    var n = cs.length; if (n < 60) return null;
+    var atr = function (upto) {
+      var s = 0, c = 0;
+      for (var j = Math.max(1, upto - 13); j <= upto; j++) {
+        var p = cs[j - 1];
+        s += Math.max(cs[j].h - cs[j].l, Math.abs(cs[j].h - p.c), Math.abs(cs[j].l - p.c)); c++;
+      }
+      return c ? s / c : 1e-9;
+    };
+    var A = atr(n - 1);
+    var dc = function (i) {
+      var h = -Infinity, l = Infinity;
+      for (var j = Math.max(0, i - 55); j < i; j++) { if (cs[j].h > h) h = cs[j].h; if (cs[j].l < l) l = cs[j].l; }
+      return { h: h, l: l };
+    };
+    var now = dc(n - 1);
+    var h8 = -Infinity, l8 = Infinity;
+    for (var j = n - 8; j < n; j++) { if (cs[j].h > h8) h8 = cs[j].h; if (cs[j].l < l8) l8 = cs[j].l; }
+    var coil = now.h - now.l > 0 ? (h8 - l8) / (now.h - now.l) : 1;
+    var avgV = 0, vc = 0;
+    for (var j = n - 25; j < n - 1; j++) if (cs[j].qv > 0) { avgV += cs[j].qv; vc++; }
+    avgV = vc ? avgV / vc : 0;
+    var brk = null;
+    for (var i = n - 1; i > n - 15 && i > 0; i--) {
+      var d = dc(i);
+      if (cs[i].c > d.h) { brk = { i: i, dir: 'bull', level: d.h }; break; }
+      if (cs[i].c < d.l) { brk = { i: i, dir: 'bear', level: d.l }; break; }
+    }
+    var state = null, volX = null, failed = false;
+    if (brk) {
+      var age = n - 1 - brk.i;
+      volX = avgV > 0 && cs[brk.i].qv ? +(cs[brk.i].qv / avgV).toFixed(2) : null;
+      var beyond = brk.dir === 'bull' ? cs[n - 1].c > brk.level : cs[n - 1].c < brk.level;
+      var touched = false;
+      for (var j2 = brk.i + 1; j2 < n; j2++) {
+        var px2 = brk.dir === 'bull' ? cs[j2].l : cs[j2].h;
+        if (Math.abs(px2 - brk.level) <= 0.35 * A) touched = true;
+      }
+      if (!beyond) { state = 'FAILED'; failed = true; }
+      else if (touched && age > 0) state = 'RETEST';
+      else state = 'BREAKOUT';
+      if (failed) brk.dir = brk.dir === 'bull' ? 'bear' : 'bull';
+    } else if (coil <= 0.35) state = 'COMPRESSION';
+    var rangeH = now.h - now.l;
+    var target = brk ? (brk.dir === 'bull' ? brk.level + rangeH : brk.level - rangeH) : null;
+    var pv = function (x) { return x >= 100 ? x.toFixed(1) : x >= 1 ? x.toFixed(3) : x.toPrecision(3); };
+    return {
+      dir: brk ? brk.dir : null, state: state, level: brk ? brk.level : null,
+      age: brk ? n - 1 - brk.i : null, volX: volX, coil: +coil.toFixed(2),
+      dcH: now.h, dcL: now.l, target: target, failed: failed,
+      label: brk
+        ? state + ' ' + brk.dir.toUpperCase() + ' @ ' + pv(brk.level) + ' · ' + (n - 1 - brk.i) + 'b ago'
+          + (volX ? ' · ' + volX + '× vol' : '') + (target ? ' · tgt ' + pv(target) : '')
+        : state === 'COMPRESSION' ? 'coiled — last-8 range ' + Math.round(coil * 100) + '% of 55b' : 'no break, no coil'
+    };
+  }
+
   function analyze(cs, cs5m) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
+        brk = breakout(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
@@ -974,7 +1039,7 @@
       rsi: rsiEng(cs), macd: macdEng(cs), obv: obvEng(cs), dow: dowEng(cs),
       minor: trendOf(cs.slice(-18), 0.008), major: trendOf(cs, 0.02),
       macro: trendOf(agg(cs, 4), 0.02), superMacro: trendOf(agg(cs, 8), 0.025),
-      mtf: mtfEng(cs), ichi: ichi, mas: mas,
+      mtf: mtfEng(cs), ichi: ichi, mas: mas, brk: brk,
     };
     eng.rev = revEng(cs, { sfp: s, mc: mc, w: w, eng: eng });
     if (eng.minor) eng.minor.label = 'minor trend (18b): ' + eng.minor.trend;
@@ -1004,7 +1069,7 @@
       if (cd.some(function (x) { return (x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star') === L; })) confluence++;
       // engine votes — bounded so confirmations can't swamp primary signals
       var ev = 0;
-      ['rsi', 'macd', 'obv', 'dow', 'rev', 'ichi', 'mas'].forEach(function (k) {
+      ['rsi', 'macd', 'obv', 'dow', 'rev', 'ichi', 'mas', 'brk'].forEach(function (k) {
         var x = eng[k]; if (x && x.dir && (x.dir === 'bull') === L) ev++;
       });
       if (eng.mtf && eng.mtf.aligned && eng.mtf.dir === (L ? 'bull' : 'bear')) ev++;
@@ -1047,7 +1112,7 @@
       F('candles', cb.length > cr.length ? 'bull' : cr.length > cb.length ? 'bear' : 'flat', cd.join(', '));
     }
     if (cps && cps.length) cps.forEach(function (p) { F('pattern', LD(p.dir) , p.name + ' (' + p.conf + ') — ' + p.s); });
-    var EG = { rsi: 'RSI', macd: 'MACD', obv: 'OBV', dow: 'Dow', ichi: 'Ichimoku', mas: 'MA stack', rev: 'reversal', mtf: 'MTF' };
+    var EG = { rsi: 'RSI', macd: 'MACD', obv: 'OBV', dow: 'Dow', ichi: 'Ichimoku', mas: 'MA stack', brk: 'breakout', rev: 'reversal', mtf: 'MTF' };
     for (var ek in EG) { var x2 = eng[ek]; if (x2) F(EG[ek], x2.dir || 'flat', x2.label || ''); }
     if (eng.minor) F('minor tr', eng.minor.trend === 'up' ? 'bull' : eng.minor.trend === 'down' ? 'bear' : 'flat', eng.minor.trend);
     if (eng.macro) F('macro tr', eng.macro.trend === 'up' ? 'bull' : eng.macro.trend === 'down' ? 'bear' : 'flat', eng.macro.trend);
@@ -1056,7 +1121,7 @@
     return { sfp: s, fvgs: f.slice(0, 4), elliott: e, wyckoff: w,
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
-             ichi: ichi, mas: mas, cps: cps, factors: factors,
+             ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 

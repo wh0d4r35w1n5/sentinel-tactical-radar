@@ -1263,6 +1263,9 @@ async function main() {
               atrPct: ta.atrPct ?? null,
               ignition: ta.ignition ?? null,
               cps: ta.cps ?? null,
+              brk: ta.brk
+                ? { state: ta.brk.state, dir: ta.brk.dir, level: ta.brk.level, age: ta.brk.age, volX: ta.brk.volX, coil: ta.brk.coil, target: ta.brk.target }
+                : null,
               factors: ta.factors ?? null,
               eng: ta.eng
                 ? Object.fromEntries(
@@ -1488,6 +1491,44 @@ async function main() {
     refreshedAt: snap.refreshedAt,
     scanned: enriched.size,
     coins: confl,
+  });
+
+  // ---- breakout radar: every enriched asset's lifecycle state — coils are
+  // the watchlist (pre-break ammo), breaks/retests the live events, fails
+  // the trap ledger ----
+  const brkEvents = [];
+  for (const [asset, k] of enriched) {
+    const b = k.ta && k.ta.brk;
+    if (!b || !b.state) continue;
+    brkEvents.push({
+      asset,
+      sym: asset + 'USDT',
+      state: b.state,
+      dir: b.dir ?? null,
+      level: b.level ?? null,
+      age: b.age ?? null,
+      volX: b.volX ?? null,
+      coil: b.coil ?? null,
+      dcH: b.dcH ?? null,
+      dcL: b.dcL ?? null,
+      target: b.target ?? null,
+      px: k.candles?.at(-1)?.c ?? null,
+    });
+  }
+  const brkRank = { RETEST: 0, BREAKOUT: 1, FAILED: 2, COMPRESSION: 3 };
+  brkEvents.sort(
+    (a, b) => (brkRank[a.state] ?? 9) - (brkRank[b.state] ?? 9) || (b.volX ?? 0) - (a.volX ?? 0)
+  );
+  writeJson(path.join(API, 'breakouts.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    counts: {
+      compression: brkEvents.filter((e) => e.state === 'COMPRESSION').length,
+      breakout: brkEvents.filter((e) => e.state === 'BREAKOUT').length,
+      retest: brkEvents.filter((e) => e.state === 'RETEST').length,
+      failed: brkEvents.filter((e) => e.state === 'FAILED').length,
+    },
+    events: brkEvents.slice(0, 30),
   });
 
   // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
