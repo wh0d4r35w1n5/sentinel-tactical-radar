@@ -369,7 +369,7 @@ function sigDetail(s,i){
       ${s.ta.liquidity.setup?`<span class="echip ${s.ta.liquidity.setup.dir==='LONG'?'bull':'bear'}"><b>SETUP ${s.ta.liquidity.setup.grade}</b> ${s.ta.liquidity.setup.dir}${s.ta.liquidity.targetPx?` → ${fmtP(s.ta.liquidity.targetPx)}`:''}</span>`:''}
       ${s.ta.liquidity.inducement?`<span class="echip flat" title="minor pool in the trade's path — likely raided before the real target"><b>IND</b> ${fmtP(s.ta.liquidity.inducement.px)}</span>`:''}
     </div>`:''}
-    <div>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':''}</div>
+    <div data-spark data-sym="${s.symbol}">${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark,520,64)}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':''}</div>
     <div class="dmeta">
       <span>vol 24h <b>$${(s.quoteVolume/1e6).toFixed(1)}M USD</b></span>
       <span>range <b>${s.rangePct}%</b> (${fmtP(s.lowPrice)} USD–${fmtP(s.highPrice)} USD)</span>
@@ -450,13 +450,41 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   const coins=(detail&&detail.coins)||{};
   $('sigBody').innerHTML=(scan.signals||[]).map((s,i)=>{
     const c=coins[s.asset]||{};
-    return `<tr class="sig" data-a="${s.asset}" tabindex="0"><td>${LK(BG(s.symbol||s.asset),'<b>'+s.asset+'</b>')}${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''} <span class="sub">${(BOOKS[s.strategy]&&BOOKS[s.strategy].u)?LK(BOOKS[s.strategy].u,s.strategy):s.strategy||''}</span></td>
+    return `<tr class="sig" data-a="${s.asset}" data-sym="${s.symbol}" tabindex="0"><td>${LK(BG(s.symbol||s.asset),'<b>'+s.asset+'</b>')}${s.cls&&s.cls!=='crypto'?` <span class="mbadge cls-${s.cls}" title="USDT-M ${s.cls} perpetual">${s.cls.toUpperCase()}</span>`:''} <span class="sub">${(BOOKS[s.strategy]&&BOOKS[s.strategy].u)?LK(BOOKS[s.strategy].u,s.strategy):s.strategy||''}</span></td>
     <td><span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction}</span></td>
     <td class="grade">${s.grade}</td><td class="num">${s.score}</td>
     <td class="num ${s.changePct>=0?'up':'dn'}" data-chg="${s.symbol}">${s.changePct>=0?'+':''}${s.changePct}%</td>
     <td class="num">${c.rsi14??'—'}</td><td class="num" data-px="${s.symbol}">$${fmtP(s.lastPrice)} USD</td>
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
-    <td>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark)||'<span class="sub" style="opacity:.4">—</span>'}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:8px;opacity:.55;letter-spacing:.06em">≈4h · 5m tape</div>':''}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
+    <td data-spark>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark)||'<span class="sub" style="opacity:.4">—</span>'}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:8px;opacity:.55;letter-spacing:.06em">≈4h · 5m tape</div>':''}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
+  // ---- lazy spark backfill: a row the artifact left chartless pulls its own
+  // tape from Bitget public klines — 1h first, 5m fallback for thin history.
+  // Writes land in the DATA model (s.spark / coin spark), not just the DOM —
+  // the 30s re-render would wipe a DOM-only injection and discard in-flight
+  // fetches into detached nodes. A cached spark survives every render.
+  const SPARK_INFLIGHT=window._sparkInflight=window._sparkInflight||new Set();
+  (scan.signals||[]).forEach(async s=>{
+    const c=coins[s.asset]||{};
+    if((s.spark&&s.spark.length>1)||(c.spark&&c.spark.length>1))return;
+    // board symbols are spot-style (XRPUSD) — the futures symbol is built
+    // from the base asset exactly like candlesFor does: asset + 'USDT'
+    const sym=SYM(s.asset||s.symbol);
+    if(!sym||SPARK_INFLIGHT.has(sym))return;
+    SPARK_INFLIGHT.add(sym);
+    try{
+      const pull=g=>fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=${g}&limit=48`).then(r=>r.json()).then(j=>(j.data||[]).map(k=>+k[4]).reverse());
+      let cl=await pull('1H'),tf='1h';
+      if(cl.length<20){const c5=await pull('5m');if(c5.length>cl.length){cl=c5;tf='5m';}}
+      if(cl.length>1){
+        if(!(s.spark&&s.spark.length>1)){s.spark=cl;s.sparkTf=tf;}
+        if(c.spark==null){c.spark=cl;c.sparkTf=tf;}
+        const row=document.querySelector(`tr.sig[data-sym="${s.symbol}"] td[data-spark]`);
+        if(row&&!row.querySelector('svg'))row.innerHTML=sparkSVG(cl)+(tf==='5m'?'<div class="sub" style="font-size:8px;opacity:.55;letter-spacing:.06em">≈4h · 5m tape</div>':'');
+        const card=document.querySelector(`div[data-spark][data-sym="${s.symbol}"]`);
+        if(card&&!card.querySelector('svg'))card.innerHTML=sparkSVG(cl,520,64)+(tf==='5m'?'<div class="sub" style="font-size:9px;opacity:.55">5m tape — ≈4h window (thin 1h history)</div>':'');
+      }
+    }catch{}finally{SPARK_INFLIGHT.delete(sym);}
+  });
   // ---- trade journal: every emitted signal, graded — the prospective book.
   // Pending rows (still inside their 24h grading window) head the list in a
   // small block; the graded record — the data with verdicts — fills the rest
