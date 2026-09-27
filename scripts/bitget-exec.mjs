@@ -481,6 +481,27 @@ async function main() {
   // MANUAL-whitelisted — protection synthesis applies, scanner exits do not.
   const foreign = (sym) => !managed.has(sym) && !MANUAL.has(sym);
 
+  // ---- operator panic flatten: state/cmd-flatten.json (telegram C2,
+  // CONFIRM-gated at the source) closes EVERY open position — engine,
+  // manual, foreign — at market. One-shot: the flag self-clears after the
+  // sweep so a stale file can't flatten a future book.
+  const flatPath = path.join(__dirname, '..', 'state', 'cmd-flatten.json');
+  let cmdFlat = null;
+  try { const c = JSON.parse(fs.readFileSync(flatPath, 'utf8')); if (c.flatten) cmdFlat = c; } catch {}
+  if (cmdFlat) {
+    try {
+      fs.writeFileSync(flatPath, JSON.stringify({ flatten: false, doneAt: new Date().toISOString(), positions: posBySym.size }));
+    } catch {}
+    for (const [sym, p] of posBySym) {
+      try {
+        await cancelPlans(sym);
+        await closePosition(sym, p.side);
+        state.actions.push(`flatten: closed ${sym} ${p.side} ${p.size}`);
+        posBySym.delete(sym);
+      } catch (e) { state.errors.push(`flatten ${sym}: ${e.message}`); }
+    }
+  }
+
   // ---- closes first: freeing margin and killing contradicted exposure is
   // always the priority ----
   for (const c of plan.closes) {
@@ -537,8 +558,16 @@ async function main() {
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
   const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
+  // ---- operator halt: state/cmd-halt.json written by the telegram C2 —
+  // joins the same rail as the kill-switch: entries only, existing
+  // positions keep their stops/management
+  const cmdHalt = (() => {
+    try { const c = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cmd-halt.json'), 'utf8')); return c.halted ? c : null; }
+    catch { return null; }
+  })();
   const entriesBlocked =
-    realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
+    cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
+    : realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
     : dd24 >= DAILY_HALT ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= ${DAILY_HALT}%)`
     // Buffett rule #1 enforced mechanically: below the survival floor the
     // account can't post margin for even two contract-min positions —

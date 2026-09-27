@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""tg-watch.py — VIP signal-group watcher.
+"""tg-watch.py — VIP signal-group watcher + Telegram command & control centre.
 
 Reads the user's Telegram group (via Telethon user account), parses signal
 messages, and writes state/tg-confluence.json for the scanner. Signals are
 CONFLUENCE ONLY — the engine still scores them itself.
+
+C2 layer: the operator messages their own Saved Messages with /commands —
+those land as outgoing events from this account (unreachable by anyone
+else, zero bot-token needed). Answers are sent back to Saved Messages.
+Control commands write state/cmd-*.json files the executor consumes.
 
 Config: scripts/tg-config.json  { "api_id": int, "api_hash": str, "group": str|int }
 First run needs phone + login code once; session persists in tg-session.session.
@@ -157,6 +162,293 @@ async def main():
             print(f"[tg] handler error (ignored): {type(e).__name__}: {e}", flush=True)
 
     print("[tg] live — listening for new messages")
+
+    # ================= COMMAND & CONTROL CENTRE =================
+    # Private channel: Saved Messages. Messages the operator sends to
+    # themselves arrive as OUTGOING events from this account — nobody else
+    # can inject a command, no bot token required.
+    me = await client.get_me()
+    API_DIR = ROOT / "api"
+    STATE_DIR = ROOT / "state"
+    LINKS = "https://168-138-102-53.sslip.io"
+
+    def api(name):
+        try:
+            return json.loads((API_DIR / f"{name}.json").read_text())
+        except Exception:
+            return None
+
+    def statef(name):
+        try:
+            return json.loads((STATE_DIR / f"{name}.json").read_text())
+        except Exception:
+            return None
+
+    def wstate(name, obj):
+        try:
+            STATE_DIR.mkdir(exist_ok=True)
+            (STATE_DIR / f"{name}.json").write_text(json.dumps(obj))
+        except Exception:
+            pass
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def fmtp(x):
+        if x is None: return "—"
+        x = float(x)
+        return f"{x:,.1f}" if x >= 100 else f"{x:,.3f}" if x >= 1 else f"{x:.4g}"
+
+    def ago(ms):
+        try:
+            s = max(0, (time.time() * 1000 - ms) / 1000)
+            return f"{int(s)}s" if s < 90 else f"{int(s/60)}m" if s < 5400 else f"{int(s/3600)}h"
+        except Exception:
+            return "?"
+
+    def say(text):
+        return client.send_message("me", text, parse_mode="html", link_preview=False)
+
+    # ---- command handlers -------------------------------------------------
+    def c_status():
+        ll, sc, hp = api("live-ledger"), api("market-scanner"), api("health")
+        hl = statef("cmd-halt") or {}
+        halt = "⛔ OPERATOR HALT" if hl.get("halted") else "🟢 armed"
+        eq = (ll or {}).get("equityUsd")
+        return (f"<b>◈ SENTINEL COMMAND</b>\n"
+                f"─────────────────────\n"
+                f"Mode: <code>{(ll or {}).get('mode','?')}</code> · {halt}\n"
+                f"Equity: <b>${fmtp(eq)}</b> · DD {(ll or {}).get('ddPct','—')}% · 24h {(ll or {}).get('dd24Pct','—')}%\n"
+                f"Positions: <b>{len((ll or {}).get('positions') or [])}</b> open · margin free ${fmtp((ll or {}).get('marginFreeUsd'))}\n"
+                f"Scanner: {ago(time.mktime(time.strptime(sc['refreshedAt'][:19],'%Y-%m-%dT%H:%M:%S'))*1000 if sc and sc.get('refreshedAt') else 0)} ago · {len((sc or {}).get('signals',[]))} signals · {(sc or {}).get('pairsScanned','?')} pairs\n"
+                f"Ledger: {(ll or {}).get('realFillCount',0)} real fills · cycle {round(((ll or {}).get('cycleMs') or 0)/1000,1)}s\n"
+                f"─────────────────────\n<i>/help for the full command card</i>")
+
+    def c_pos():
+        ll = api("live-ledger") or {}
+        pos = ll.get("positions") or []
+        if not pos:
+            return "📭 <b>No open positions</b>"
+        out = ["<b>◈ OPEN POSITIONS</b>", "─────────────────────"]
+        for p in pos:
+            mk = p.get("entry", 0) + (p.get("upl") or 0) / max(p.get("size") or 1e-9, 1e-9)
+            liqd = abs(mk - (p.get("liq") or mk)) / mk * 100 if mk else 0
+            arrow = "▲" if (p.get("upl") or 0) >= 0 else "▼"
+            out.append(f"{arrow} <b>{p.get('symbol','?')}</b> {p.get('side','?').upper()} ×{p.get('size','?')}"
+                       f" · {p.get('lev','?')}x {p.get('marginMode','')}\n"
+                       f"   entry {fmtp(p.get('entry'))} → mark {fmtp(mk)}\n"
+                       f"   upl <b>${(p.get('upl') or 0):+.3f}</b> · liq {fmtp(p.get('liq'))} ({liqd:.1f}% away)")
+        return "\n".join(out)
+
+    def c_eq():
+        ll = api("live-ledger") or {}
+        pk = statef(f"equity-peak-{ll.get('mode','live')}") or {}
+        r = ll.get("risk") or {}
+        return (f"<b>◈ EQUITY &amp; RISK RAILS</b>\n─────────────────────\n"
+                f"Equity: <b>${fmtp(ll.get('equityUsd'))}</b> (peak ${fmtp(pk.get('peak'))})\n"
+                f"Drawdown: {ll.get('ddPct','—')}% all-time · {ll.get('dd24Pct','—')}% rolling-24h\n"
+                f"Free margin: ${fmtp(ll.get('marginFreeUsd'))}\n"
+                f"Profile: <code>{r.get('riskProfile','?')}</code> ×{r.get('riskMultiplier','?')} · "
+                f"kill at {r.get('killSwitchPct','?')}% DD · daily halt {r.get('dailyHaltPct','?')}%\n"
+                f"Realized: {ll.get('realizedStats','—')}\n"
+                f"<i>Rails are mechanical — they fire regardless of conviction.</i>")
+
+    def c_sig():
+        sc = api("market-scanner") or {}
+        sigs = (sc.get("signals") or [])[:6]
+        if not sigs:
+            return "📡 <b>No signals on the board</b>"
+        out = ["<b>◈ SIGNAL BOARD — top</b>", "─────────────────────"]
+        for s in sigs:
+            mtf = (s.get("ta") or {}).get("mtf") or {}
+            out.append(f"<b>{s.get('asset','?')}</b> {s.get('direction','?')} · <code>{s.get('score','?')}</code> · {s.get('grade','?')} · tgt {s.get('targetPct','?')}%"
+                       + (f"\n   <i>{esc(mtf.get('stack',''))}</i>" if mtf.get("stack") else ""))
+        return "\n".join(out)
+
+    def c_radar():
+        v, b = api("volcore") or {}, api("breakouts") or {}
+        out = ["<b>◈ ORDER-FLOW RADAR</b>", "─────────────────────"]
+        ev = (v.get("events") or [])[:5]
+        out += [f"• {e.get('kind','?')} {e.get('asset','?')} — {e.get('spikeX','?')}× vol" for e in ev] or ["• prints quiet"]
+        be = [e for e in (b.get("events") or []) if e.get("state") in ("RETEST", "BREAKOUT")][:5]
+        out += ["", "<b>Breakouts</b>"] + [f"• {e.get('state','?')} {e.get('asset','?')} {e.get('dir','')} @ {fmtp(e.get('level'))}" for e in be] or ["• none live"]
+        return "\n".join(out)
+
+    def c_mtf(arg):
+        m = api("mtf") or {}
+        rows = m.get("rows") or {}
+        if arg:
+            r = rows.get(arg.upper())
+            if not r: return f"no MTF data for {esc(arg.upper())}"
+            lines = [f"<b>◈ MTF — {esc(arg.upper())}</b>", "─────────────────────", f"<b>{esc(r.get('stack','?'))}</b>"]
+            for tf in m.get("frames", []):
+                c = (r.get("cells") or {}).get(tf)
+                if c: lines.append(f"{tf:>4}: {'▲' if c.get('dir')=='bull' else '▼' if c.get('dir')=='bear' else '·'} {c.get('trend','?')} · RSI {round(c.get('rsi') or 0)} · MACD {c.get('macd','?')}")
+            return "\n".join(lines)
+        st = [a for a, r in rows.items() if r.get("kind") == "stacked"]
+        pb = [a for a, r in rows.items() if r.get("kind") == "pullback"]
+        return (f"<b>◈ MTF MATRIX</b>\n─────────────────────\n"
+                f"Stacked: <b>{len(st)}</b> · Pullback: <b>{len(pb)}</b> · Mixed: {len(rows)-len(st)-len(pb)}\n"
+                f"Stacked: {', '.join(f'{a}({rows[a].get('dir','?')})' for a in st[:8]) or '—'}\n"
+                f"Pullback: {', '.join(pb[:8]) or '—'}\n<i>/mtf BTC for per-asset detail</i>")
+
+    def c_soc():
+        s = api("social") or {}
+        mk, assets = s.get("market") or {}, s.get("assets") or {}
+        fg = mk.get("fg") or {}
+        top = sorted(assets.items(), key=lambda kv: -(kv[1].get("heat") or 0))[:8]
+        return (f"<b>◈ SOCIAL RADAR</b>\n─────────────────────\n"
+                f"Fear &amp; Greed: <b>{fg.get('v','—')} {esc(fg.get('c',''))}</b>\n"
+                f"Trending: {', '.join(x.get('sym','') for x in (mk.get('trending') or [])[:6]) or '—'}\n─────────────────────\n"
+                + "\n".join(f"{a}: score {v.get('score','—')} · heat {v.get('heat','—')}"
+                          + (f" · trend#{v['trending']}" if v.get("trending") else "") for a, v in top)
+                or "quiet")
+
+    def c_ein():
+        e = api("einstein") or {}
+        f = (e.get("findings") or [])[:6]
+        if not f: return "🧠 <b>Einstein:</b> lab warming — needs graded confl snapshots"
+        return "<b>◈ EINSTEIN LAB</b>\n─────────────────────\n" + "\n".join(
+            f"• <code>{x.get('key','?')}</code> {esc(x.get('txt',''))[:110]}" for x in f)
+
+    def c_j():
+        ev = api("signal-eval") or {}
+        rec = (ev.get("records") or [])[-8:]
+        done = [r for r in rec if r.get("outcome")]
+        wins = sum(1 for r in done if (r.get("outcomePct") or 0) > 0)
+        out = [f"<b>◈ TRADE JOURNAL</b>\n─────────────────────\n{len(done)} graded · {wins}W/{len(done)-wins}L shown"]
+        for r in reversed(rec[-6:]):
+            oc = r.get("outcome") or "open"
+            p = r.get("outcomePct")
+            out.append(f"{r.get('asset','?')} {r.get('direction','?')} — {oc} {f'{p:+.1f}%' if isinstance(p,(int,float)) else ''}")
+        return "\n".join(out)
+
+    def c_pulse():
+        sc = api("market-scanner") or {}
+        p, ov = sc.get("pulse") or {}, sc.get("overview") or {}
+        return (f"<b>◈ MARKET PULSE</b>\n─────────────────────\n"
+                f"▲ {ov.get('advancing','—')} / ▼ {ov.get('declining','—')} · breadth {p.get('breadthPct','—')}%\n"
+                f"median Δ24h {p.get('medianDelta','—')}% · regime {esc(sc.get('regime','—'))}\n"
+                f"boards: {len(sc.get('signals',[]))} signals · median score {sc.get('medianScore','—')}")
+
+    def c_pause(arg):
+        wstate("cmd-halt", {"halted": True, "reason": arg or "operator pause", "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        return "⛔ <b>ENTRIES HALTED</b> — existing positions still managed. /resume to re-arm."
+
+    def c_resume():
+        wstate("cmd-halt", {"halted": False, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        return "🟢 <b>RE-ARMED</b> — entry gates live on next cycle."
+
+    PENDING = {}
+    def c_flatten(arg, chat_key):
+        if arg.strip().upper() != "CONFIRM":
+            PENDING[chat_key] = "flatten"
+            return ("⚠️ <b>PANIC FLATTEN</b> — closes EVERY open position at market, "
+                    "manual and engine alike. Irreversible.\nReply <code>/flatten CONFIRM</code> within 60s to execute.")
+        if PENDING.pop(chat_key, None) != "flatten":
+            return "no flatten armed — send /flatten first."
+        wstate("cmd-flatten", {"flatten": True, "by": "telegram", "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        return "🚨 <b>FLATTEN EXECUTING</b> — executor closes all positions next cycle."
+
+    def c_help():
+        return ("<b>◈ SENTINEL COMMAND CENTRE</b>\n─────────────────────\n"
+                "<b>Intel</b>\n"
+                "/status — godhead: equity, halt state, cycle health\n"
+                "/pos — open positions: entry→mark, upl, liq distance\n"
+                "/eq — equity curve + risk rails\n"
+                "/sig — top signals + MTF stack\n"
+                "/radar — volume prints + breakouts\n"
+                "/mtf [ASSET] — timeframe matrix\n"
+                "/soc — social radar + Fear&amp;Greed\n"
+                "/ein — Einstein lab findings\n"
+                "/j — journal recent + record\n"
+                "/pulse — breadth / regime\n"
+                "<b>Control</b>\n"
+                "/pause [reason] — halt new entries\n"
+                "/resume — re-arm entry gates\n"
+                "/flatten — panic close ALL (CONFIRM-gated)\n"
+                "<b>Nav</b>\n"
+                "/links — dashboard URLs\n"
+                "/ping — liveness")
+
+    def c_links():
+        return (f"<b>◈ SURFACES</b>\n─────────────────────\n"
+                f"🌐 <a href='{LINKS}'>Command deck</a>\n"
+                f"🖼 <a href='{LINKS}/gallery.html'>Evidence gallery</a>\n"
+                f"📄 <a href='https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/'>GitHub Pages mirror</a>")
+
+    CMDS = {"status": c_status, "pos": c_pos, "positions": c_pos, "eq": c_eq, "equity": c_eq,
+            "sig": c_sig, "signals": c_sig, "radar": c_radar, "mtf": c_mtf, "soc": c_soc,
+            "social": c_soc, "ein": c_ein, "einstein": c_ein, "j": c_j, "journal": c_j,
+            "pulse": c_pulse, "pause": c_pause, "resume": c_resume, "links": c_links,
+            "help": c_help, "menu": c_help, "start": c_help, "ping": lambda a: "🏓 sentinel live — " + time.strftime("%H:%M:%SZ", time.gmtime())}
+
+    @client.on(events.NewMessage(outgoing=True))
+    async def on_cmd(ev):
+        m = ev.message
+        try:
+            if not m or not m.raw_text or not m.out:
+                return
+            if getattr(m.peer_id, "user_id", None) != me.id:
+                return  # only Saved Messages (self) — spoof-proof by construction
+            txt = m.raw_text.strip()
+            if not txt.startswith("/"):
+                return
+            parts = txt.split(None, 1)
+            cmd = parts[0].lstrip("/").lower().split("@")[0]
+            arg = parts[1] if len(parts) > 1 else ""
+            if cmd == "flatten":
+                reply = c_flatten(arg, "me")
+            elif cmd in CMDS:
+                reply = CMDS[cmd](arg)
+            else:
+                reply = f"unknown command <code>{esc(cmd)}</code> — /help"
+            await say(reply)
+            print(f"[tg-c2] /{cmd} answered", flush=True)
+        except Exception as e:
+            print(f"[tg-c2] handler error: {type(e).__name__}: {e}", flush=True)
+
+    # ---- proactive alert loop — pushes intel to Saved Messages ------------
+    async def alert_loop():
+        alerted_path = STATE_DIR / "tg-alerted.json"
+        try:
+            alerted = set(json.loads(alerted_path.read_text()))
+        except Exception:
+            alerted = set()
+        prev_pos, prev_halt = None, None
+        while True:
+            try:
+                scan = api("market-scanner") or {}
+                for s in scan.get("signals", [])[-10:]:
+                    k = f"sig:{s.get('asset')}:{s.get('direction')}:{s.get('emittedAt', s.get('updatedAt',''))[:13]}"
+                    if k not in alerted and s.get("key"):
+                        alerted.add(k)
+                        mtf = ((s.get("ta") or {}).get("mtf") or {}).get("stack", "")
+                        await say(f"⚡ <b>NEW SIGNAL</b> — <code>{s.get('asset')}</code> {s.get('direction')} · "
+                                  f"score {s.get('score','?')} · {s.get('grade','?')}\n"
+                                  f"tgt {s.get('targetPct','?')}%"
+                                  + (f" · {esc(mtf)}" if mtf else ""))
+                ll = api("live-ledger") or {}
+                pos = {(p.get("symbol"), p.get("side")) for p in (ll.get("positions") or [])}
+                if prev_pos is not None and pos != prev_pos:
+                    for sym, side in pos - prev_pos:
+                        p = next((x for x in ll["positions"] if x.get("symbol") == sym), {})
+                        await say(f"📍 <b>OPENED</b> {sym} {side.upper()} ×{p.get('size','?')} @ {fmtp(p.get('entry'))} · {p.get('lev','?')}x")
+                    for sym, side in prev_pos - pos:
+                        await say(f"📕 <b>CLOSED</b> {sym} {side.upper()}")
+                prev_pos = pos
+                hl = (statef("cmd-halt") or {}).get("halted", False)
+                if prev_halt is not None and hl != prev_halt:
+                    await say("⛔ <b>ENTRIES HALTED</b> by operator" if hl else "🟢 <b>ENTRIES RE-ARMED</b>")
+                prev_halt = hl
+                alerted_path.parent.mkdir(exist_ok=True)
+                alerted_path.write_text(json.dumps(list(alerted)[-400:]))
+            except Exception as e:
+                print(f"[tg-c2] alert loop: {type(e).__name__}: {e}", flush=True)
+            await asyncio.sleep(30)
+
+    asyncio.create_task(alert_loop())
+    await say("<b>◈ SENTINEL C2 ONLINE</b>\nCommand surface live — /help for the card\nAlerts armed: signals · positions · halts")
     await client.run_until_disconnected()
 
 
