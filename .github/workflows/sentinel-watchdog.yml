@@ -1,0 +1,71 @@
+name: Sentinel watchdog
+# Dead-man's switch: the live VPS pushes "vps: live state" commits every ~2min
+# and serves the dashboard on the Oracle box. If either heartbeat stops, this
+# workflow fails (owner gets email) and files/updates a SENTINEL DOWN issue.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: sentinel-watchdog
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check live heartbeats
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          FAIL=""
+          # 1) dashboard reachable
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://168.138.102.53/ || echo 000)
+          [ "$CODE" = "200" ] || FAIL="$FAIL dashboard_http=$CODE"
+          # 2) pushbot commit freshness — last api/ commit must be <15min old
+          TS=$(gh api "repos/$REPO/commits?path=api/live-ledger.json&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null)
+          NOW=$(date -u +%s); AGE=$(( NOW - $(date -u -d "$TS" +%s 2>/dev/null || echo 0) ))
+          [ "$AGE" -lt 900 ] || FAIL="$FAIL pushbot_stale=${AGE}s"
+          # 3) ledger itself fresh (executor loop alive)
+          L=$(curl -s --max-time 20 http://168.138.102.53/api/live-ledger.json)
+          LTS=$(echo "$L" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log(j.updatedAt||j.ts||j.time||'')}catch(e){console.log('')}})")
+          echo "dashboard=$CODE pushbot_age=${AGE}s ledger_ts=$LTS"
+          echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Raise the alarm
+        if: steps.check.outputs.fail != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          FAIL: ${{ steps.check.outputs.fail }}
+        run: |
+          OPEN=$(gh issue list -R "$REPO" --state open --search "SENTINEL DOWN in:title" --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" -R "$REPO" -b "Still down: $FAIL ($(date -u +%FT%TZ))" || true
+          else
+            gh issue create -R "$REPO" --title "SENTINEL DOWN" \
+              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — check https://168-138-102-53.sslip.io and the Oracle VM." || true
+          fi
+          echo "::error::SENTINEL DOWN: $FAIL"
+          exit 1
+
+      - name: Clear the alarm on recovery
+        if: steps.check.outputs.fail == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          OPEN=$(gh issue list -R "$REPO" --state open --search "SENTINEL DOWN in:title" --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$OPEN" ]; then
+            gh issue close "$OPEN" -R "$REPO" -c "Heartbeat restored at $(date -u +%FT%TZ) — closed by watchdog." || true
+          fi
