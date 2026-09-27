@@ -258,6 +258,17 @@ body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
           <div><div class="h">Laggards</div><div id="lg"></div></div>
         </div>
       </div>
+      <div class="panel">
+        <div class="ptitle">Funding extremes · 8h rate</div>
+        <div class="ml">
+          <div><div class="h">Longs pay</div><div id="fundPos"></div></div>
+          <div><div class="h">Shorts pay</div><div id="fundNeg"></div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">Volume leaders · 24h turnover</div>
+        <div id="volLead" style="font-size:12px"></div>
+      </div>
     </div>
   </div>
   <div class="panel" style="margin-top:16px" id="jPanel">
@@ -741,6 +752,14 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   }
   const mini=a=>(a||[]).map(m=>`<div class="r"><span>${LK(BG(m.symbol),m.symbol)}</span><b class="num ${m.changePct>=0?'up':'dn'}">${m.changePct>=0?'+':''}${m.changePct}%</b></div>`).join('');
   $('mv').innerHTML=mini(scan.movers);$('lg').innerHTML=mini(scan.laggards);
+  // right rail fill: funding extremes (who's crowding) + turnover leaders
+  const fr=(funding&&funding.rows)||[];
+  const fmini=a=>a.map(f=>`<div class="r"><span>${LK(BG(f.asset),f.asset)}</span><b class="num ${f.ratePct>=0?'up':'dn'}">${f.ratePct>=0?'+':''}${f.ratePct}%</b></div>`).join('');
+  $('fundPos').innerHTML=fmini([...fr].sort((a,b)=>b.ratePct-a.ratePct).slice(0,5))||'<div class="sub">—</div>';
+  $('fundNeg').innerHTML=fmini([...fr].sort((a,b)=>a.ratePct-b.ratePct).slice(0,5))||'<div class="sub">—</div>';
+  const cd=(detail&&detail.coins)||{};
+  $('volLead').innerHTML=Object.entries(cd).filter(([,v])=>v&&v.quoteVolume>0).sort((a,b)=>b[1].quoteVolume-a[1].quoteVolume).slice(0,8)
+    .map(([k,v])=>`<div class="r"><span>${LK(BG(k),k)}</span><b class="num">$${v.quoteVolume>=1e9?(v.quoteVolume/1e9).toFixed(2)+'B':(v.quoteVolume/1e6).toFixed(0)+'M'}</b></div>`).join('')||'<div class="sub">—</div>';
   if(health&&health.scanner){
     const h=health.scanner;
     $('health').textContent=`pipeline ok · scanner ${ago(Date.parse(h.at))} ago (${h.pairs} pairs/${h.klineEnriched} klines)`+(h.klineMiss?` · charts missing: ${h.klineMiss.join(',')}`:'');
