@@ -28,6 +28,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API_DIR = path.join(__dirname, '..', 'api');
@@ -38,13 +39,7 @@ const writeJson = (file, obj) => {
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, file);
 };
-// zero-dep .env loader — values only populate env vars not already set
-try {
-  for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-} catch {}
+
 const HOST = 'https://api.bitget.com';
 const PRODUCT = 'USDT-FUTURES';
 const MARGIN_COIN = 'USDT';
@@ -71,6 +66,15 @@ const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || (RISK_MAX ? 12 : 10));
 const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
 const DD_KILL = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
+// EXEC_EARLY_CUTS — the verdict-ladder time/redness cuts ('scalp-timeout').
+// Operator mandate: positions exit via exchange TP/SL or manual flatten ONLY
+// — early closes pay a taker fee to second-guess a bounded plan. Set '1' to
+// re-enable the TrendRider time-cut mechanics.
+const EARLY_CUTS = process.env.EXEC_EARLY_CUTS === '1';
+// dust-floor for synthesized TP ladders — a tranche under this notional costs
+// more in fee friction than the level is worth (audit F3: HBAR was churning
+// $5-28 fills). Legs below the floor fold into the moon bag.
+const MIN_TRANCHE_USD = +(process.env.EXEC_MIN_TRANCHE_USD || 25);
 const DAILY_HALT = +(process.env.SENTINEL_DAILY_HALT_PCT || (RISK_MAX ? 25 : 6));
 // dust-account mode: when scaled notional lands under the contract minimum,
 // floor up to the exchange minimum instead of skipping — for tiny real
@@ -853,7 +857,7 @@ async function main() {
     for (let i = 0; i < 3; i++) {
       const tsize =
         (Math.floor(p.size * cum[i + 1] * sp) - Math.floor(p.size * cum[i] * sp)) / sp;
-      if (tsize > 0)
+      if (tsize > 0 && tsize * p.entry >= MIN_TRANCHE_USD)
         legs.push({
           tsize,
           px: round(p.entry * (1 + (sgn * baseDistPct * mults[i]) / 100), pp),
@@ -1038,8 +1042,8 @@ async function main() {
         // old 15/45-minute churn window that killed developing winners.
         const slDepthPct =
           slTrig > 0 ? (Math.abs(slTrig - p.entry) / p.entry) * 100 : 0;
-        const scalpDead =
-          ageMs > 216e3 && uplPct < -0.4
+        const scalpDead = !EARLY_CUTS ? null
+          : ageMs > 216e3 && uplPct < -0.4
             ? `red ${round(uplPct, 2)}% at ${(ageMs / 1e3).toFixed(0)}s`
             : slDepthPct > 0 && ageMs > 2 * 3600e3 && uplPct < -slDepthPct * 0.6
             ? `still ${round(uplPct, 2)}% past 60% of stop depth at 2h — early loss cut`
@@ -1672,6 +1676,9 @@ async function main() {
       netCloses.filter((f) => netOfFee(f) <= 0).reduce((a, f) => a + netOfFee(f), 0)
     );
     state.realizedStats = {
+      // scope: every close-side fill incl. foreign/manual fills — the raw
+      // journal total. trades-taken.json episodes aggregate differently.
+      scope: 'all close fills (incl. foreign)',
       closes: netCloses.length,
       winRatePct: netCloses.length ? round((wins.length / netCloses.length) * 100, 1) : null,
       // bottom line = realized profit minus EVERY fee on record — the old

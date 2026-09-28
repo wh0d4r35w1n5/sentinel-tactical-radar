@@ -14,17 +14,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import './load-env.mjs'; // canonical .env loader (audit F2)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = path.join(__dirname, '..', 'api');
-// zero-dep .env loader — same gap the scanner had: SENTINEL_* audit
-// thresholds must match the operator's configured values, not defaults
-try {
-  for (const line of fs.readFileSync(path.join(API, '..', '.env'), 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-} catch {}
 const NOW = Date.now();
 
 const checks = [];

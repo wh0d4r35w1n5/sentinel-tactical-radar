@@ -9,22 +9,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
 import '../ta-engine.js';  // sets globalThis.TAEngine
+import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
-// zero-dep .env loader — values only populate env vars not already set.
-// REQUIRED here: only bitget-exec loaded .env, so every SENTINEL_* knob in
-// .env was invisible to the scanner (dd-kill silently used the 35% profile
-// default instead of the configured 99.9 — gated every entry after the
-// drawdown despite the operator disabling it).
-try {
-  for (const line of fs.readFileSync(path.join(API, '..', '.env'), 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-} catch {}
+
 // atomic artifact writes — a killed process mid-write hands consumers a
 // truncated JSON (executor reads live-plan.json; god audits all of api/).
 // tmp+rename is atomic on POSIX and Windows-over-CIFS alike.
@@ -3745,7 +3736,6 @@ async function main() {
     });
   } catch {}
 
-
   // vault retired — it compounded gains from simulated (paper) trades.
   // Real-account accounting lives in live-ledger.json only.
 
@@ -4027,6 +4017,7 @@ async function main() {
       generated: new Date().toISOString(),
       trades,
       stats: {
+        scope: 'reconstructed position episodes — laddered tranches merged; foreign fills included but unattributed',
         n: closed.length,
         wins: closed.filter((t) => t.net > 0).length,
         net: pct(closed.reduce((a, t) => a + t.net, 0) * 100) / 100,
