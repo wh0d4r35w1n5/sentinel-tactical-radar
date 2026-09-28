@@ -516,6 +516,47 @@ async def main():
                         await say("\U0001F6A8 <b>DEADMAN</b> — " + esc(dk))
                     else:
                         await say("\U0001FAC0 <b>DEADMAN CLEAR</b> — services + ledger alive")
+                # outbox — other services (liq-guard etc.) drop JSONL lines
+                # here; we deliver them to Saved Messages
+                op = STATE_DIR / "tg-outbox.jsonl"
+                try:
+                    if op.exists():
+                        for l in op.read_text().splitlines():
+                            try:
+                                t = json.loads(l).get("text")
+                                if t:
+                                    await say(t)
+                            except Exception:
+                                pass
+                        op.unlink()
+                except Exception as e:
+                    print(f"[tg-c2] outbox: {type(e).__name__}: {e}", flush=True)
+
+                # daily digest — one situational report per UTC day
+                today = time.strftime("%Y-%m-%d")
+                if time.strftime("%H:%M") >= "00:05" and statef("digest-last") != today:
+                    wstate("digest-last", today)
+                    try:
+                        ll2 = api("live-ledger") or {}
+                        day0 = int(time.mktime(time.strptime(today, "%Y-%m-%d")) * 1000)
+                        fills = (statef("real-fills") or {}).get("fills", [])
+                        bf = [f for f in fills if f.get("src") == "api" and (f.get("ts") or 0) >= day0]
+                        mf = [f for f in fills if f.get("src") not in (None, "api") and (f.get("ts") or 0) >= day0]
+                        bpnl = round(sum((f.get("profit") or 0) - (f.get("fee") or 0) for f in bf), 2)
+                        mpnl = round(sum((f.get("profit") or 0) - (f.get("fee") or 0) for f in mf), 2)
+                        topg = sorted(((api("gate-stats") or {}).get("totals24h") or {}).items(), key=lambda kv: -kv[1])[:4]
+                        tops = " \u00b7 ".join(f"{k}\u00d7{v}" for k, v in topg) or "none"
+                        posl = ", ".join(f"{p.get('symbol')} {p.get('side')} upl {round(p.get('upl') or 0, 2)}" for p in (ll2.get("positions") or [])) or "flat"
+                        await say(
+                            "\U0001F4CB <b>DAILY DIGEST</b> " + today + "\n"
+                            f"equity ${ll2.get('equityUsd','?')} \u00b7 dd {ll2.get('ddPct','?')}%\n"
+                            f"today — bot {len(bf)} fills ({bpnl:+.2f}) \u00b7 manual {len(mf)} ({mpnl:+.2f})\n"
+                            f"open: {esc(posl)}\n"
+                            f"top reject gates 24h: {esc(tops)}"
+                        )
+                    except Exception as e:
+                        print(f"[tg-c2] digest: {type(e).__name__}: {e}", flush=True)
+
                 # price watches — consume-on-hit triggers from state/watchlist.json
                 wl = statef("watchlist")
                 if isinstance(wl, list):

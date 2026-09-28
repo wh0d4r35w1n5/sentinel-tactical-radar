@@ -186,6 +186,11 @@ const pickMark = async (sym) => {
 
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return {}; } };
 const writeState = (o) => { try { fs.writeFileSync(STATE + '.tmp', JSON.stringify(o)); fs.renameSync(STATE + '.tmp', STATE); } catch {} };
+// outbound alerts — tg-watch drains this JSONL into Saved Messages (~30s lag)
+const OUTBOX = path.join(__dirname, '..', 'state', 'tg-outbox.jsonl');
+const outbox = (text) => { try { fs.appendFileSync(OUTBOX, JSON.stringify({ ts: Date.now(), text }) + '\n'); } catch {} };
+// proximity ladder — alert once per tier crossed downward; reset on recovery
+const ALERT_TIERS = [4, 2.5, 1.5];
 
 // per-position trigger memory, keyed `${sym}:${side}` — survives restarts
 let gates = readState().gates || {};
@@ -219,6 +224,12 @@ async function tick() {
     if (!mark) continue;
     const distPct = p.side === 'long' ? (mark - p.liq) / p.liq * 100 : (p.liq - mark) / p.liq * 100;
     const g = (gates[key] ||= { lastTrim: 0, lastTrimMark: null });
+    // proximity ladder: alert on each tier crossed downward, re-arm above 4.5%
+    const sev = ALERT_TIERS.filter((t) => distPct <= t).length;
+    if (sev > (g.tier || 0)) {
+      g.tier = sev;
+      outbox(`⚠️ LIQ PROXIMITY — ${p.sym} ${p.side} ${distPct.toFixed(2)}% from liquidation\nmark ${mark} · liq ${p.liq} · size ${p.size} · upl $${(+p.upl).toFixed(2)}`);
+    } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
     stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
     if (distPct > ZONE_PCT) continue;                                   // outside danger zone — dormant
     if (Date.now() - g.lastTrim < SPACING_MS) continue;                 // serialization floor
@@ -250,6 +261,7 @@ async function tick() {
     g.lastTrimMark = mark;
     trims.push({ at: g.lastTrim, sym: p.sym, side: p.side, size: q, mark });
     dirty = true;
+    outbox(`✂️ LIQ-GUARD TRIM — ${p.sym} ${p.side}: closed ${q} of ${fp.size} @ ${mark} (${fdist.toFixed(2)}% from liq). Re-arms on a new low.`);
     // reset the stop deeper into the widened band — place new, then cancel old
     try {
       const np = (await getAllPos().catch(() => []))?.find((x) => x.sym === p.sym && x.side === p.side);

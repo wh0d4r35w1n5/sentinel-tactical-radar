@@ -827,6 +827,44 @@ async function main() {
   const FEE_HALT_PCT = +(process.env.SENTINEL_FEE_HALT_PCT || 0.05);
   const feeHalted = equityUsd > 0 && feesToday >= equityUsd * FEE_HALT_PCT;
 
+  // ---- regime-chop gate: trailing-4h closes running negative net means the
+  // tape is unreadable for this engine right now — stand new entries down
+  // until the window clears, instead of feeding it fees. Core-carry margin
+  // deployment is exempt (it's not a swing trade).
+  const REGIME_MIN_CLOSES = +(process.env.SENTINEL_REGIME_MIN_CLOSES || 6);
+  const REGIME_WINDOW_MS = +(process.env.SENTINEL_REGIME_WINDOW_MS || 4 * 3600e3);
+  let regimeNet = 0, regimeCloses = 0;
+  try {
+    const fj4 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills || [];
+    for (const f of fj4) {
+      if (Date.now() - (+f.ts || 0) > REGIME_WINDOW_MS) continue;
+      if (f.tradeSide === 'close') { regimeCloses++; regimeNet += (f.profit || 0) - (f.fee || 0); }
+    }
+  } catch {}
+  const regimeChop = +(process.env.SENTINEL_REGIME_GATE || 1) && regimeCloses >= REGIME_MIN_CLOSES && regimeNet < 0;
+  if (regimeChop) state.actions.push(`regime-chop armed — ${regimeCloses} closes net ${round(regimeNet, 2)} in ${Math.round(REGIME_WINDOW_MS / 3600e3)}h — new entries standing down`);
+
+  // ---- correlation cluster cap: corr>=0.6 in the same direction is ONE
+  // bet. correlation.json's own contract — nothing enforced it until now.
+  const CORR_MIN = +(process.env.SENTINEL_CORR_MIN || 0.6);
+  const corrMap = {};
+  try {
+    const cj = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'correlation.json'), 'utf8'));
+    const A = cj.boardAssets || [], Mx = cj.boardMatrix || [];
+    A.forEach((a, i) => A.forEach((b, j) => {
+      if (i !== j && Math.abs(+(Mx[i]?.[j] || 0)) >= CORR_MIN) (corrMap[a + 'USDT'] ||= {})[b + 'USDT'] = +Mx[i][j];
+    }));
+  } catch {}
+
+  // ---- funding hostility: positive rate => longs pay shorts. An entry that
+  // pays funding every 8h starts life bleeding — veto past the threshold.
+  const FUND_VETO = +(process.env.SENTINEL_FUNDING_VETO_PCT || 0.03);
+  const fundMap = {};
+  try {
+    const fj2 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'funding.json'), 'utf8'));
+    for (const r of fj2.rows || fj2.best || []) if (r.asset && Number.isFinite(+r.ratePct)) fundMap[r.asset + 'USDT'] = +r.ratePct;
+  } catch {}
+
   // ---- entry rate cap — rolling 1h window, not a calendar cliff: a scalp
   // regime turns positions over fast, so the guard limits RATE not daily
   // total. Max 3 new entries per rolling hour stops fee-churn sprays while
@@ -1316,6 +1354,29 @@ async function main() {
         state.actions.push(`${o.symbol}: SHORT blocked — longs-only mandate`);
         continue;
       }
+      if (!o.core) { // mandate roles (core-carry deploys) are exempt from tape gates
+        if (regimeChop) {
+          state.actions.push(`${o.symbol} ${o.direction}: regime-chop — entries halted this window`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['regime-chop'] });
+          continue;
+        }
+        const corrHit = Object.entries(corrMap[o.symbol] || {}).find(([s2]) => {
+          const pv = posBySym.get(s2);
+          const sd = pv?.side || pv?.holdSide;
+          return sd === (o.direction === 'LONG' ? 'long' : 'short');
+        });
+        if (corrHit) {
+          state.actions.push(`${o.symbol} ${o.direction}: corr-cluster — ${corrHit[0]} already held same direction (rho ${corrHit[1]})`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['corr-cluster'] });
+          continue;
+        }
+        const fr = fundMap[o.symbol];
+        if (fr != null && ((o.direction === 'LONG' && fr > FUND_VETO) || (o.direction === 'SHORT' && fr < -FUND_VETO))) {
+          state.actions.push(`${o.symbol} ${o.direction}: funding ${fr}%/8h hostile — vetoed`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['funding-hostile'] });
+          continue;
+        }
+      }
       // idempotent execution: the same signal must physically be unable to
       // fire twice. A prior attempt on this symbol+direction inside the
       // dedup window means this order is a replay (fill-index lag, plan
@@ -1507,6 +1568,7 @@ async function main() {
         // fees per attempt, not per recorded fill)
         (state.entriesLog = state.entriesLog || []).push({
           ts: Date.now(), symbol: o.symbol, direction: o.direction,
+          strategy: o.strategy || null,
         });
         // commit the attempt NOW — the ledger normally writes at run end;
         // a mid-run kill must still leave this entry visible to the next
@@ -1801,6 +1863,78 @@ async function main() {
   state.cycleMs = Date.now() - tRun;
   state.refreshedAt = new Date().toISOString(); // freshness = write time, not run start
   state.managed = [...managed]; // materialize at write time — entries late in the cycle count
+  // ---- gate-reject histogram: rolling 24h counts by gate name ----
+  try {
+    const gsPath = path.join(__dirname, '..', 'api', 'gate-stats.json');
+    let gs = { buckets: [] }; try { gs = JSON.parse(fs.readFileSync(gsPath, 'utf8')); } catch {}
+    const counts = {};
+    for (const r of state.rejects || []) for (const g of r.gates || []) counts[g] = (counts[g] || 0) + 1;
+    gs.buckets = (gs.buckets || []).filter((b) => Date.now() - b.ts < 24 * 3600e3);
+    gs.buckets.push({ ts: Date.now(), counts });
+    const totals = {};
+    for (const b of gs.buckets) for (const [g, n] of Object.entries(b.counts || {})) totals[g] = (totals[g] || 0) + n;
+    gs.totals24h = totals;
+    gs.refreshedAt = new Date().toISOString();
+    writeJson(gsPath, gs);
+  } catch {}
+
+  // ---- excursion tracker (MAE/MFE): peak/trough mark per open position,
+  // finalized on close -> calibration data for stop/target geometry ----
+  try {
+    const trackPath = path.join(__dirname, '..', 'state', 'mae-track.json');
+    const epiPath = path.join(__dirname, '..', 'state', 'mae-mfe.json');
+    const apiPath = path.join(__dirname, '..', 'api', 'mae-mfe.json');
+    let track = {}; try { track = JSON.parse(fs.readFileSync(trackPath, 'utf8')); } catch {}
+    const pos3 = await getPos().catch(() => []);
+    const openKeys = new Set();
+    for (const p of pos3 || []) {
+      if (!(+p.total > 0)) continue;
+      const mk = +p.markPrice || 0;
+      if (!(mk > 0)) continue;
+      const key = `${p.symbol}:${p.holdSide}`;
+      openKeys.add(key);
+      const t = (track[key] ||= { sym: p.symbol, side: p.holdSide, entry: +p.openPriceAvg, peak: mk, trough: mk, firstTs: Date.now(), strat: null });
+      t.peak = Math.max(t.peak, mk); t.trough = Math.min(t.trough, mk); t.lastMark = mk;
+      if (!t.strat) {
+        const e = (state.entriesLog || []).filter((x) => x.symbol === p.symbol).slice(-1)[0];
+        if (e?.strategy) t.strat = e.strategy;
+      }
+    }
+    const done = Object.keys(track).filter((k) => !openKeys.has(k));
+    if (done.length) {
+      let epis = []; try { epis = JSON.parse(fs.readFileSync(epiPath, 'utf8')).episodes || []; } catch {}
+      for (const k of done) {
+        const t = track[k]; delete track[k];
+        if (!t.entry || !t.lastMark) continue;
+        const mae = t.side === 'long' ? (t.entry - t.trough) / t.entry * 100 : (t.peak - t.entry) / t.entry * 100;
+        const mfe = t.side === 'long' ? (t.peak - t.entry) / t.entry * 100 : (t.entry - t.trough) / t.entry * 100;
+        epis.push({ sym: t.sym, side: t.side, entry: t.entry, exit: t.lastMark,
+          maePct: round(mae, 3), mfePct: round(mfe, 3),
+          durMin: Math.round((Date.now() - t.firstTs) / 6e4), strat: t.strat || 'unattributed', ts: Date.now() });
+      }
+      epis = epis.slice(-300);
+      writeJson(epiPath, { episodes: epis });
+      const byKey = {};
+      for (const e of epis) (byKey[`${e.sym}:${e.side}`] ||= []).push(e);
+      const med = (a) => { const q = [...a].sort((x, y) => x - y); return q.length ? q[q.length >> 1] : null; };
+      const agg = {};
+      for (const [k, arr] of Object.entries(byKey)) {
+        agg[k] = { n: arr.length, medMaePct: round(med(arr.map((e) => e.maePct)), 2), medMfePct: round(med(arr.map((e) => e.mfePct)), 2) };
+      }
+      // family rollup — the number that calibrates strategy stop floors
+      const byFam = {};
+      for (const e of epis) (byFam[e.strat] ||= []).push(e);
+      const fam = {};
+      for (const [k, arr] of Object.entries(byFam)) {
+        fam[k] = { n: arr.length, medMaePct: round(med(arr.map((e) => e.maePct)), 2), medMfePct: round(med(arr.map((e) => e.mfePct)), 2) };
+      }
+      writeJson(apiPath, { refreshedAt: new Date().toISOString(), bySymbol: agg, byFamily: fam, episodes: epis.slice(-50) });
+      state.maeMfe = fam;
+      state.actions.push(`excursion: finalized ${done.length} episode(s) — mae/mfe journal updated`);
+    }
+    writeJson(trackPath, track);
+  } catch (e) { state.errors.push(`mae/mfe: ${e.message}`); }
+
   writeJson(outPath, state);
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);
   if (state.errors.length) console.log(state.errors.join('\n'));
