@@ -92,6 +92,18 @@ const MANUAL = new Set(
   (process.env.SENTINEL_MANUAL_HOLD || '').split(',').map((s) => s.trim()).filter(Boolean)
 );
 const PAPER_EQUITY = 10000; // plan notional is denominated in the $10k model
+// core-carry: dead capital is dead capital. When the signal queue leaves
+// free margin above the floor, deploy the remainder into a protected
+// low-lev LONG on a liquid major — a carry position with its own TP/SL,
+// not an idle balance. Capped gearing (default 8x) on purpose: the core
+// exists to hold exposure, not to gamble the book.
+const CORE_LEV = +(process.env.SENTINEL_CORE_LEV || 8);
+const CORE_FLOOR_PCT = +(process.env.SENTINEL_CORE_FLOOR_PCT || 0.15);
+const CORE_FLOOR_USD = +(process.env.SENTINEL_CORE_FLOOR_USD || 8);
+const CORE_STOP_PCT = +(process.env.SENTINEL_CORE_STOP_PCT || 3);
+const CORE_TARGET_PCT = +(process.env.SENTINEL_CORE_TARGET_PCT || 5.5);
+const CORE_SYMS = (process.env.SENTINEL_CORE_SYMS || 'ETHUSDT,BTCUSDT')
+  .split(',').map((x) => x.trim()).filter(Boolean);
 
 const log = (...a) => console.log('[exec]', ...a);
 const round = (x, p = 6) => +(+x).toFixed(p);
@@ -1184,6 +1196,33 @@ async function main() {
   } else {
     let opened = 0;
     const openedSym = new Set(); // a dup symbol in the plan must not stack
+    // ---- core-carry injection: the mandate is deployment. Margin that
+    // qualifies for no signal still works — appended LAST in the queue so
+    // real signals take their share first, then the remainder deploys into
+    // a protected carry instead of sitting as dead balance. It rides every
+    // in-loop gate (dedup, cooldown, RR, drift, rate caps, catalog) like a
+    // normal order.
+    if (marginFree > Math.max(equityUsd * CORE_FLOOR_PCT, CORE_FLOOR_USD)) {
+      for (const sym of CORE_SYMS) {
+        if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || !cm[sym]) continue;
+        try {
+          const tk = await api('GET', '/api/v2/mix/market/ticker', {
+            qs: 'symbol=' + sym + '&productType=' + PRODUCT,
+          });
+          const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
+          if (!(last > 0)) continue;
+          plan.orders.push({
+            symbol: sym, direction: 'LONG', refEntry: last,
+            notionalUsd: round(marginFree, 2),
+            stopPct: CORE_STOP_PCT, targetPct: CORE_TARGET_PCT,
+            leverage: CORE_LEV, conv: 1, runnerMult: 1.8,
+            strategy: 'core-carry', core: true,
+          });
+          state.actions.push('core-carry: deploying $' + round(marginFree, 2) + ' idle margin into ' + sym + ' long @ lev<=' + CORE_LEV);
+        } catch (e) { /* ticker unreadable — try next symbol */ }
+        break; // one core order per cycle — first eligible symbol wins
+      }
+    }
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
@@ -1318,7 +1357,8 @@ async function main() {
         Math.min(
           cm[o.symbol].maxLev || 125,
           Math.floor(80 / (o.stopPct + 0.64)),
-          +(process.env.SENTINEL_MAX_LEV || 40) // account ceiling — the max-safety profile pins it lower
+          +(process.env.SENTINEL_MAX_LEV || 40), // account ceiling — the max-safety profile pins it lower
+          o.core ? CORE_LEV : Infinity // carry runs capped gearing, not signal lev
         )
       );
       // fee headroom: Bitget charges the taker fee on NOTIONAL from free
