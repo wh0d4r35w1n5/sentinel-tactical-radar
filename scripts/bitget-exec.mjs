@@ -163,6 +163,12 @@ const getAccount = async () => {
   return {
     equity: +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0),
     available: +(acc.available ?? acc.usdtEquity ?? 0),
+    // Bitget's own "max margin spendable on a new position" per mode — the
+    // same numbers its order validator uses. `available` is the flattering
+    // raw balance; these are the authoritative spendable (0 while a crossed
+    // position's upl/margin encumbrance soaks the account).
+    isoMax: +acc.isolatedMaxAvailable,
+    crossMax: +acc.crossedMaxAvailable,
   };
 };
 // pending-plan query REQUIRES planType — 'profit_loss' is the umbrella that
@@ -501,7 +507,20 @@ async function main() {
     return;
   }
   const equityUsd = acct.equity;
-  let marginFree = acct.available;
+  // `available` ignores crossed-position unrealized losses — a cross book
+  // deep in the red still reports the raw balance, while Bitget's order
+  // validator nets upl before accepting margin. Overestimating here was
+  // the recurring 40762 loop: size off equity-equivalent spendable, not
+  // the flattering balance number.
+  const crossUplNeg = (positions || []).reduce(
+    (a, p) => a + ((p.marginMode || '').toLowerCase() === 'crossed' ? Math.min(0, +p.unrealizedPL || 0) : 0), 0);
+  // entries run isolated (setIsolated) — isolatedMaxAvailable is the
+  // validator's own spendable number; trust it when present, else fall back
+  // to the upl-adjusted balance. 0 means 0 — a $26 book soaked by a crossed
+  // loser must not keep probing orders it can never fund (40762 loop).
+  let marginFree = Number.isFinite(acct.isoMax)
+    ? Math.max(0, acct.isoMax)
+    : Math.max(0, Math.min(acct.available, acct.available + crossUplNeg));
   const scale = equityUsd > 0 ? Math.min(1, equityUsd / PAPER_EQUITY) : 0;
   state.equityUsd = round(equityUsd, 2);
   state.marginFreeUsd = round(marginFree, 2);
@@ -729,6 +748,14 @@ async function main() {
       const notionalUsd = p.size * p.entry;
       const pnlPct = notionalUsd > 0 ? (p.upl / notionalUsd) * 100 : 0;
       if (pnlPct >= 0) continue; // profitable = thesis working, leave it
+      if (!EARLY_CUTS) {
+        // exit mandate: positions close via exchange TP/SL or manual flatten
+        // only. Report the stale thesis for audit — don't spend a taker fee.
+        state.actions.push(
+          `decay-note ${p.symbol}: age ${(ageMs / 36e5).toFixed(1)}h uPnL ${round(pnlPct, 2)}% — stale thesis, riding stop (early cuts disabled)`
+        );
+        continue;
+      }
       await closePosition(p.symbol, p.side);
       state.actions.push(
         `decay-exit ${p.symbol}: age ${(ageMs / 36e5).toFixed(1)}h uPnL ${round(pnlPct, 2)}% — thesis stale, margin recycled`
@@ -759,6 +786,12 @@ async function main() {
       // whipsaws within minutes is noise, not thesis death. Only an
       // opposing signal against a mature position counts as a flip.
       if (Date.now() - Number(p.cTime) < FLIP_MIN_AGE_MS) continue;
+      if (!EARLY_CUTS) {
+        // same mandate — a flip signal can veto the THESIS, not spend a
+        // taker fee cutting a position whose stop already bounds the loss
+        state.actions.push(`flip-note ${p.symbol}: fresh ${flip} vs open ${posDir} — riding stop (early cuts disabled)`);
+        continue;
+      }
       await closePosition(p.symbol, p.side);
       state.actions.push(
         `thesis-flip ${p.symbol}: fresh ${flip} signal vs open ${posDir} — exited before stop`
@@ -879,8 +912,11 @@ async function main() {
       ).fills || [];
     for (const f of fj)
       // opens only — a scratch close (profit 0, tradeSide missing) must not
-      // eat the rate budget the same way a real entry does
-      if ((f.tradeSide === 'open' || (f.tradeSide == null && (f.profit || 0) === 0)) && f.ts >= windowStart)
+      // eat the rate budget the same way a real entry does. Attribution fix:
+      // MANUAL opens (ios/web — src set and not 'api') must not starve the
+      // bot's entry budget either; they never paid the engine's planning toll
+      if ((f.tradeSide === 'open' || (f.tradeSide == null && (f.profit || 0) === 0)) && f.ts >= windowStart &&
+          (!f.src || f.src === 'api'))
         entriesThisHour++;
     // journaled fills lag live opens by up to ~30s; the local attempt log
     // (persisted via ledger) sees them immediately — take the higher count
@@ -1168,8 +1204,11 @@ async function main() {
           const pp0 = cm[p.symbol]?.pricePlace ?? 6;
           const newStop = round(p.entry * (1 - (sgn0 * Math.max(bandPct * 0.75, 0.05)) / 100), pp0);
           try {
-            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
+            // place-then-cancel, same rule as the ratchet — cancel-first
+            // leaves the position naked for the round-trip gap
+            const oldId = lossPlan.orderId || lossPlan.planId;
             await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side));
+            if (oldId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(oldId)]);
             state.actions.push(`re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
           } catch (e) {
             state.errors.push(`re-band ${p.symbol}: ${e.message}`);
@@ -1719,6 +1758,10 @@ async function main() {
           (await getPos().catch(() => [])).find((x) => x.symbol === o.symbol && +x.total > 0);
         if (!p) {
           state.errors.push(`open ${o.symbol}: ${e.message}`);
+          // 40762 = Bitget's own margin math says we're out — trust it over
+          // our estimate for the rest of this cycle or every remaining
+          // order retries the same doomed probe (fee-churn + error spam)
+          if (/40762|exceeds the balance/i.test(e.message)) { marginFree = 0; break; }
           continue;
         }
         state.protectionHaltUntil = Date.now() + 30 * 60e3;
@@ -1756,12 +1799,15 @@ async function main() {
       // carry fee=0/size=0 — patch them from the exchange record
       if (seen.has(id)) {
         const old = byId.get(id);
-        if (old && (!old.fee || !old.size)) {
+        // also patch fills missing ONLY the src tag — otherwise every
+        // pre-attribution record stays 'legacy' forever even though the
+        // exchange's own record carries enterPointSource
+        if (old && (!old.fee || !old.size || (!old.src && f.enterPointSource))) {
           if (!old.fee) old.fee = fee;
           if (!old.size) old.size = size;
           if (f.quoteVolume) old.notionalUsd = +f.quoteVolume;
           if (f.tradeSide) old.tradeSide = f.tradeSide;
-          if (f.enterPointSource) old.src = f.enterPointSource;
+          if (!old.src && f.enterPointSource) old.src = f.enterPointSource;
           repaired++;
         }
         continue;
@@ -1896,7 +1942,12 @@ async function main() {
       const t = (track[key] ||= { sym: p.symbol, side: p.holdSide, entry: +p.openPriceAvg, peak: mk, trough: mk, firstTs: Date.now(), strat: null });
       t.peak = Math.max(t.peak, mk); t.trough = Math.min(t.trough, mk); t.lastMark = mk;
       if (!t.strat) {
-        const e = (state.entriesLog || []).filter((x) => x.symbol === p.symbol).slice(-1)[0];
+        // attribute only to a SAME-DIRECTION entry attempt near this
+        // position's open time — otherwise a manual position inherits a
+        // stale bot strategy and the family medians lie
+        const dir = p.holdSide === 'long' ? 'LONG' : 'SHORT';
+        const e = (state.entriesLog || []).filter((x) => x.symbol === p.symbol &&
+          x.direction === dir && Math.abs((x.ts ?? 0) - (+p.cTime || 0)) < 30 * 60e3).slice(-1)[0];
         if (e?.strategy) t.strat = e.strategy;
       }
     }

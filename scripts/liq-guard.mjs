@@ -98,17 +98,28 @@ const planLoss = (sym, side, trigger) =>
   api('POST', '/api/v2/mix/order/place-tpsl-order', {
     body: { symbol: sym, marginCoin: COIN, productType: PRODUCT, planType: 'pos_loss', triggerPrice: String(trigger), holdSide: side, triggerType: 'mark_price', executePrice: '0' },
   });
-const closeMarket = async (sym, side, sizeStr, posMode) => {
+const closeMarket = async (sym, side, sizeStr, posMode, marginMode) => {
+  // the position's REAL margin mode — bot entries are isolated, manual
+  // positions are usually crossed. A hardcoded mode gets the emergency
+  // close rejected (40774) exactly when the guard exists to fire.
+  const mm = marginMode === 'crossed' ? 'crossed' : 'isolated';
+  const alt = mm === 'crossed' ? 'isolated' : 'crossed';
   const base = { symbol: sym, productType: PRODUCT, marginCoin: COIN, size: sizeStr, orderType: 'market' };
-  if (posMode === 'hedge')
+  if (posMode === 'hedge') {
     // hedge-mode `side` is the POSITION direction: close long = buy+close.
     // (side:'sell' asks to close a short -> 22002 'No position to close')
-    return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: 'crossed' } });
+    try {
+      return await api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: mm } });
+    } catch (e) {
+      if (!/margin ?mode|40774/i.test(e.message)) throw e;
+      return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: alt } });
+    }
+  }
   try {
-    return await api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: 'crossed' } });
+    return await api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: mm } });
   } catch (e) {
-    if (/margin ?mode|40774/i.test(e.message)) // retry isolated convention
-      return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: 'isolated' } });
+    if (/margin ?mode|40774/i.test(e.message)) // retry other convention
+      return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: alt } });
     throw e;
   }
 };
@@ -227,8 +238,19 @@ async function tick() {
     // proximity ladder: alert on each tier crossed downward, re-arm above 4.5%
     const sev = ALERT_TIERS.filter((t) => distPct <= t).length;
     if (sev > (g.tier || 0)) {
-      g.tier = sev;
-      outbox(`⚠️ LIQ PROXIMITY — ${p.sym} ${p.side} ${distPct.toFixed(2)}% from liquidation\nmark ${mark} · liq ${p.liq} · size ${p.size} · upl $${(+p.upl).toFixed(2)}`);
+      // fresh-verify before raising the alarm — posCache can sit ~30s stale
+      // when nothing is near danger, and a position the operator just closed
+      // must not cry wolf. Fetch fails -> alert anyway on cached truth (a
+      // network blip shouldn't silence a real proximity warning).
+      const fresh = await getAllPos().catch(() => null);
+      if (fresh) { posCache = fresh; posCacheAt = Date.now(); }
+      const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
+      const fpDist = fp ? (fp.side === 'long' ? (mark - fp.liq) / fp.liq * 100 : (fp.liq - mark) / fp.liq * 100) : null;
+      if (!fresh || (fp && fpDist <= ALERT_TIERS[0])) {
+        g.tier = sev;
+        const pv = fp || p, pd = fpDist ?? distPct;
+        outbox(`⚠️ LIQ PROXIMITY — ${p.sym} ${p.side} ${pd.toFixed(2)}% from liquidation\nmark ${mark} · liq ${pv.liq} · size ${pv.size} · upl $${(+pv.upl).toFixed(2)}`);
+      }
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
     stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
     if (distPct > ZONE_PCT) continue;                                   // outside danger zone — dormant
@@ -256,10 +278,11 @@ async function tick() {
     const q = Math.floor((fp.size * TRIM_PCT) / 100 * prec) / prec;
     if (!(q > 0) || q >= fp.size) continue;                 // never let a 'partial' equal the whole side
     log(`DANGER: ${key} mark ${mark} is ${fdist.toFixed(2)}% from liq ${fp.liq} — trimming ${q} of ${fp.size}`);
-    await closeMarket(p.sym, p.side, String(q), posMode);
+    await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
     g.lastTrim = Date.now();
     g.lastTrimMark = mark;
     trims.push({ at: g.lastTrim, sym: p.sym, side: p.side, size: q, mark });
+    if (trims.length > 200) trims.splice(0, trims.length - 200); // bounded history — state can't grow forever
     dirty = true;
     outbox(`✂️ LIQ-GUARD TRIM — ${p.sym} ${p.side}: closed ${q} of ${fp.size} @ ${mark} (${fdist.toFixed(2)}% from liq). Re-arms on a new low.`);
     // reset the stop deeper into the widened band — place new, then cancel old
@@ -271,7 +294,9 @@ async function tick() {
         const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(5);
         await planLoss(p.sym, p.side, trig);
         const plans = await getPlans(p.sym);
-        for (const x of plans.filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== trig))
+        // holdSide filter is mandatory in hedge mode — an unfiltered cancel
+        // would strip the OTHER side's stop while resetting this one
+        for (const x of plans.filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== trig && (!z.holdSide || z.holdSide === p.side)))
           await cancelPlan(p.sym, x.planType, x.orderId).catch(() => {});
         log(`${key} stop reset -> ${trig} (liq ${np.liq}, band ${bandPct.toFixed(2)}%)`);
       }

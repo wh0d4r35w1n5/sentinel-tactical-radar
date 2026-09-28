@@ -184,11 +184,14 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
     const plans = (ll.plans || {})[p.symbol] || [];
     // 'moving_plan' is Bitget's trailing stop — it protects the same side a
     // loss_plan does; the old /loss|stop/ regex audited it as "naked"
-    return !plans.some((x) => /loss|stop|moving/i.test(x.planType || ''));
+    // per-side match: in hedge mode a stop on the OTHER side is not cover
+    return !plans.some((x) => /loss|stop|moving/i.test(x.planType || '') &&
+      (!x.holdSide || !p.side || x.holdSide === p.side));
   });
   const unprofited = exPos.filter((p) => {
     const plans = (ll.plans || {})[p.symbol] || [];
-    return !plans.some((x) => /profit/i.test(x.planType || ''));
+    return !plans.some((x) => /profit/i.test(x.planType || '') &&
+      (!x.holdSide || !p.side || x.holdSide === p.side));
   });
   add('convergence',
     naked.length ? 'FAIL' : unprofited.length ? 'WARN' : 'PASS',
@@ -201,7 +204,8 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
   // ---------- 8. never-naked: every open position carries a loss plan ----------
   if (ll.plans && Object.keys(ll.plans).length) {
     const naked = exPos.filter((p) =>
-      !(ll.plans[p.symbol] || []).some((x) => /loss|stop|moving/i.test(x.planType || '')));
+      !(ll.plans[p.symbol] || []).some((x) => /loss|stop|moving/i.test(x.planType || '') &&
+        (!x.holdSide || !p.side || x.holdSide === p.side)));
     add('protection', naked.length ? 'FAIL' : 'PASS',
       naked.length
         ? `NAKED: ${naked.map((p) => p.symbol).join(',')} open with no stop plan`
@@ -222,7 +226,8 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
   const bandBad = exPos.filter((p) => {
     if (!(p.liq > 0) || !(p.entry > 0)) return false; // unverifiable without both
     const stop = (ll.plans?.[p.symbol] || [])
-      .find((x) => /loss|stop|moving/i.test(x.planType || '') && +x.triggerPrice > 0);
+      .find((x) => /loss|stop|moving/i.test(x.planType || '') && +x.triggerPrice > 0 &&
+        (!x.holdSide || !p.side || x.holdSide === p.side));
     if (!stop) return false; // naked case is the protection check's job
     const bandPct = (Math.abs(p.entry - p.liq) / p.entry) * 100;
     const stopPct = (Math.abs(p.entry - +stop.triggerPrice) / p.entry) * 100;
@@ -329,29 +334,50 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
           const l = d?.entrustedList || d?.orders || d;
           return Array.isArray(l) ? l : [];
         }).catch(() => []);
-        const hasLoss = plans.some((x) => /loss|moving/i.test(x.planType || ''));
-        const hasProfit = plans.some((x) => /profit/i.test(x.planType || ''));
+        // per-side matching — a hedged symbol needs a stop on EACH side; a
+        // plan on the long must not count as cover for a naked short
+        const hold = (p.holdSide || p.side || '').toLowerCase();
+        const hasLoss = plans.some((x) => /loss|moving/i.test(x.planType || '') &&
+          (!x.holdSide || (x.holdSide || '').toLowerCase() === hold));
+        const hasProfit = plans.some((x) => /profit/i.test(x.planType || '') &&
+          (!x.holdSide || (x.holdSide || '').toLowerCase() === hold));
         const entry = +(p.openPriceAvg || p.averageOpenPrice || p.entry || 0);
-        const sgn = (p.holdSide || p.side) === 'long' ? 1 : -1;
+        const sgn = hold === 'long' ? 1 : -1;
         const holdSide = sgn > 0 ? 'long' : 'short';
+        // the position's real margin mode — a hardcoded 'isolated' shield
+        // gets rejected on crossed positions, exactly the ones most in need
+        const mm = (p.marginMode || '').toLowerCase() === 'crossed' ? 'crossed' : 'isolated';
         if (!(entry > 0)) continue;
         if (!hasLoss) {
-          const trig = +(entry * (1 - sgn * 0.03)).toPrecision(6);
+          // clamp the shield INSIDE the liquidation band — a 3% stop on a
+          // 50x position sits past liq and protects nothing. 70% of the band,
+          // never wider than 3%.
+          const liq = +(p.liquidationPrice || 0);
+          const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
+          const shieldPct = Math.min(0.03, bandPct * 0.7);
+          if (!(shieldPct > 0)) continue;
+          const trig = +(entry * (1 - sgn * shieldPct)).toPrecision(6);
           const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
-            body: { symbol: p.symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MC,
+            // pos_loss covers the whole position — size must be OMITTED
+            // (a literal '0' reads as an invalid order, not "full position")
+            body: { symbol: p.symbol, productType: PRODUCT, marginMode: mm, marginCoin: MC,
               planType: 'pos_loss', triggerPrice: String(trig), triggerType: 'mark_price',
-              size: '0', holdSide },
+              holdSide },
           }).then(() => true).catch((e) => e.message);
           interv('shield ' + p.symbol, r === true ? 'pos_loss @' + trig + ' placed' : 'FAILED: ' + r);
           add('god-shield-' + p.symbol, r === true ? 'PASS' : 'FAIL',
             r === true ? 'naked position shielded — pos_loss @' + trig : 'shield failed: ' + r);
         }
         if (!hasProfit) {
-          const trig = +(entry * (1 + sgn * 0.045)).toPrecision(6);
+          const liq = +(p.liquidationPrice || 0);
+          const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
+          const tpPct = Math.min(0.045, bandPct * 0.9); // keep the target inside a reachable band too
+          if (!(tpPct > 0)) continue;
+          const trig = +(entry * (1 + sgn * tpPct)).toPrecision(6);
           const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
-            body: { symbol: p.symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MC,
+            body: { symbol: p.symbol, productType: PRODUCT, marginMode: mm, marginCoin: MC,
               planType: 'pos_profit', triggerPrice: String(trig), triggerType: 'mark_price',
-              size: '0', holdSide },
+              holdSide },
           }).then(() => true).catch((e) => e.message);
           interv('profit-leg ' + p.symbol, r === true ? 'pos_profit @' + trig + ' placed' : 'FAILED: ' + r);
         }
