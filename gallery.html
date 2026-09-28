@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sentinel — Evidence Gallery · before/after chartwork</title>
+<title>Sentinel — Evidence Gallery · real-trade chartwork</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="harmonics.js"></script>
@@ -34,10 +34,10 @@ h1 .sub{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:400;dis
 .tag{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 8px;border-radius:4px}
 .tag.long{background:rgba(77,255,166,.12);color:var(--grn);border:1px solid rgba(77,255,166,.4)}
 .tag.short{background:rgba(255,77,125,.12);color:var(--red);border:1px solid rgba(255,77,125,.4)}
+.tag.strat{background:rgba(61,220,255,.1);color:var(--cyan);border:1px solid rgba(61,220,255,.35)}
 .oc{font-size:11px;font-weight:800;letter-spacing:.06em;padding:3px 10px;border-radius:6px;margin-left:auto}
 .oc.tp{background:rgba(77,255,166,.14);color:var(--grn);border:1px solid rgba(77,255,166,.45)}
 .oc.sl{background:rgba(255,77,125,.14);color:var(--red);border:1px solid rgba(255,77,125,.45)}
-.oc.mid{background:rgba(255,180,84,.12);color:var(--amb);border:1px solid rgba(255,180,84,.4)}
 .oc.open{background:rgba(61,220,255,.1);color:var(--cyan);border:1px solid rgba(61,220,255,.35)}
 .charts{display:flex;gap:12px;flex-wrap:wrap}
 .charts .pane{flex:1;min-width:340px}
@@ -56,20 +56,22 @@ h1 .sub{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:400;dis
 <div class="wrap">
 <header>
   <span class="logo">📡</span>
-  <h1>SENTINEL EVIDENCE GALLERY<span class="sub">every emitted signal · the tape it read · the path it took — prospective, unfalsifiable-able record</span></h1>
+  <h1>SENTINEL EVIDENCE GALLERY<span class="sub">real exchange round-trips only · the tape at entry · the executed path out — nothing emitted, nothing simulated</span></h1>
   <a class="back" href="index.html">← COMMAND DECK</a>
 </header>
 <div class="stats" id="stats"></div>
 <div class="filters" id="filters"></div>
 <div id="gallery"></div>
 <button id="loadmore" style="display:none">LOAD MORE ▾</button>
-<div class="note">data: Bitget USDT-M · signal-eval.json is the append-only prospective record — nothing here is backfilled or cherry-picked</div>
+<div class="note">data: Bitget USDT-M fills · reconstructed FIFO episodes — staggered exits merge into one trade · fees included · no paper, no emitted-only signals</div>
 </div>
 <script>
 const API='api/';
 const j=u=>fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
 const fmtP=p=>p==null?'—':p>=100?p.toFixed(1):p>=1?p.toFixed(3):p.toPrecision(4);
+const fmt$=v=>v==null?'—':(v>=0?'+':'−')+'$'+Math.abs(v).toFixed(2);
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1e3);if(s<90)return Math.round(s)+'s';const m=s/60;if(m<90)return Math.round(m)+'m';const h=m/60;if(h<48)return h.toFixed(1)+'h';return Math.round(h/24)+'d'};
+const holdTxt=m=>m==null?'—':m>=60?(m/60).toFixed(1)+'h':Math.round(m)+'m';
 
 async function candlesFor(asset,fromMs,toMs,gran){
   const granMs=gran==='5m'?300e3:gran==='15m'?900e3:3600e3;
@@ -82,11 +84,6 @@ async function candlesFor(asset,fromMs,toMs,gran){
     out.push(...rows);if(raw.length<200)break;cur=rows[rows.length-1].t+granMs;
   }
   return out;
-}
-function jBracket(r){
-  const tgt=r.targetPct??(r.outcome==='tp'&&r.outcomePct>0?r.outcomePct:8);
-  const stp=r.stopPct??(r.outcome==='sl'&&r.outcomePct<0?-r.outcomePct:Math.max(4,tgt));
-  return{tgt,stp};
 }
 function drawChart(el,e,cs,after){
   if(!cs.length)return;
@@ -114,21 +111,21 @@ function drawChart(el,e,cs,after){
     mk(true).setData(cs.map(c=>({time:c.t/1000,value:Math.max(c.c,e.entry)})));
     mk(false).setData(cs.map(c=>({time:c.t/1000,value:Math.min(c.c,e.entry)})));
   }
-  const pxAt=p=>e.entry*(1+sgn*p/100);
   const snap=t=>cs.reduce((b,c)=>Math.abs(c.t-t)<Math.abs(b.t-t)?c:b).t/1000;
   const ls=(price,color,style,title)=>s.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
   ls(e.entry,'#f0f5ff',2,'ENTRY');
-  const stop0=-(e.stopPct??Math.max(4,e.targetPct));
-  ls(pxAt(stop0),'#ff4d6d',2,'SL −'+Math.abs(stop0)+'%');
-  if(e.targetPrice)ls(e.targetPrice,'#2ee6a8',0,`TGT ${sgn>0?'+':'−'}${e.targetPct}%`);
-  else if(e.targetPct)ls(pxAt(e.targetPct),'#2ee6a8',0,'TGT +'+e.targetPct+'%');
+  if(after&&e.exitPrice!=null)ls(e.exitPrice,e.net>=0?'#2ee6a8':'#ff4d6d',2,'EXIT avg');
   if(after&&e.mfe!=null&&e.mae!=null){
     ls(e.mfe,'rgba(46,230,168,.6)',1,'MFE +'+(sgn*(e.mfe/e.entry-1)*100).toFixed(2)+'%');
     ls(e.mae,'rgba(255,77,109,.6)',1,'MAE '+(sgn*(e.mae/e.entry-1)*100).toFixed(2)+'%');
   }
-  const marks=[{time:snap(e.ts),position:sgn>0?'belowBar':'aboveBar',color:'#f0f5ff',shape:sgn>0?'arrowUp':'arrowDown',text:'ENTRY '+e.direction}];
-  if(after&&e.exitTs&&e.exitPrice!=null)
-    marks.push({time:snap(e.exitTs),position:e.pnlPct>=0?'belowBar':'aboveBar',color:e.pnlPct>=0?'#2ee6a8':'#ff4d6d',shape:'circle',text:(e.status||'').toUpperCase()+' '+(e.pnlPct>=0?'+':'')+e.pnlPct+'%'});
+  const marks=[{time:snap(e.ts),position:sgn>0?'belowBar':'aboveBar',color:'#f0f5ff',shape:sgn>0?'arrowUp':'arrowDown',text:'ENTRY '+e.direction+' $'+e.notional}];
+  // real exit prints — a staggered ladder stamps one marker per tranche
+  if(after&&(e.exits||[]).length)
+    for(const x of e.exits)
+      marks.push({time:snap(x.ts),position:x.pnl>=0?'belowBar':'aboveBar',color:x.pnl>=0?'#2ee6a8':'#ff4d6d',shape:'square',text:'EXIT '+(x.pnl>=0?'+':'')+x.pnl.toFixed(2)});
+  else if(after&&e.exitTs&&e.exitPrice!=null)
+    marks.push({time:snap(e.exitTs),position:e.net>=0?'belowBar':'aboveBar',color:e.net>=0?'#2ee6a8':'#ff4d6d',shape:'circle',text:'EXIT '+fmt$(e.net)});
   if(!after){
     const ema=n=>{const k=2/(n+1);let v=null;return cs.map(c=>{v=v==null?c.c:c.c*k+v*(1-k);return{time:c.t/1000,value:v}})};
     chart.addLineSeries({color:'rgba(61,220,255,.6)',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(ema(20));
@@ -150,7 +147,7 @@ function drawChart(el,e,cs,after){
     if(rng>0)[0.382,0.5,0.618,0.786].forEach(f=>{
       s.createPriceLine({price:sgn>0?fHi-rng*f:fLo+rng*f,color:'rgba(61,220,255,.3)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'fib '+f});
     });
-    // harmonic re-detected on the setup tape — the pattern visible at emission
+    // harmonic re-detected on the setup tape — the pattern visible at entry
     const pats=(window.Harmonics&&Harmonics.detect(cs))||[];
     if(pats.length){
       const pat=pats[0];
@@ -183,26 +180,21 @@ const PAGE=6,obs=new IntersectionObserver(es=>{for(const en of es){if(en.isInter
 async function mountCard(key){
   const r=RECS.find(x=>x.key===key);const card=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
   if(!r||!card||card.dataset.done)return;card.dataset.done='1';
-  const {tgt,stp}=jBracket(r),sgn=r.direction==='LONG'?1:-1;
-  const e={asset:r.asset,direction:r.direction,ts:r.runTs,entry:r.entry,
-    stopPct:stp,targetPct:tgt,targetPrice:r.targetPrice??r.entry*(1+sgn*tgt/100),
-    status:r.outcome||'open',pnlPct:r.outcomePct};
-  const afterEnd=Math.min(r.runTs+24*3600e3,Date.now());
-  const span=afterEnd-r.runTs;
+  const sgn=r.dir==='LONG'?1:-1,asset=r.symbol.replace(/USDT$/,'');
+  const e={asset,direction:r.dir,ts:r.entryTs,entry:r.entryPx,notional:r.notional,
+    exitTs:r.exitTs,exitPrice:r.exitPx,exits:r.exits||[],
+    net:r.net,status:r.status||'closed',pnlPct:r.pnlPct};
+  const afterEnd=r.exitTs||Date.now();
+  const span=Math.max(3600e3,afterEnd-r.entryTs);
   const aGran=span<=10*3600e3?'5m':span<=72*3600e3?'15m':'1H';
   const granMs=aGran==='5m'?300e3:aGran==='15m'?900e3:3600e3;
   const aPad=Math.max(3*granMs,span*0.08);
   const [csB,csA]=await Promise.all([
-    candlesFor(r.asset,r.runTs-48*3600e3,r.runTs+2*3600e3,'1H').catch(()=>[]),
-    candlesFor(r.asset,r.runTs-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
-  if(csA.length){
-    const slPx=e.entry*(1-sgn*stp/100),tpPx=e.targetPrice;
-    for(const c of csA){if(c.t<r.runTs)continue;
-      if(sgn>0?c.l<=slPx:c.h>=slPx){e.exitTs=c.t;e.exitPrice=slPx;break}
-      if(sgn>0?c.h>=tpPx:c.l<=tpPx){e.exitTs=c.t;e.exitPrice=tpPx;break}}
-    if(e.exitTs==null){const l=csA[csA.length-1];e.exitTs=l.t;e.exitPrice=l.c}
+    candlesFor(asset,r.entryTs-48*3600e3,r.entryTs+2*3600e3,'1H').catch(()=>[]),
+    candlesFor(asset,r.entryTs-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
+  if(csA.length&&e.exitTs){
     let mfe=e.entry,mae=e.entry;
-    for(const c of csA){if(c.t<r.runTs||c.t>e.exitTs)continue;
+    for(const c of csA){if(c.t<r.entryTs||c.t>e.exitTs)continue;
       const f=sgn>0?c.h:c.l,a=sgn>0?c.l:c.h;
       if(sgn>0?f>mfe:f<mfe)mfe=f;
       if(sgn>0?a<mae:a>mae)mae=a}
@@ -213,35 +205,38 @@ async function mountCard(key){
   if(ea)drawChart(ea,e,csA,true);
 }
 function cardHTML(r){
-  const done=r.complete,oc=done?r.outcome:'open';
-  const ocCls=done?(oc==='tp'?'tp':oc==='sl'?'sl':'mid'):'open';
-  const ocTxt=done?`${oc.toUpperCase()} ${r.outcomePct>=0?'+':''}${r.outcomePct}%`:'GRADING…';
-  const jf=v=>v==null?'—':`<b class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v}%</b>`;
+  const open=r.status==='open';
+  const ocCls=open?'open':r.net>0?'tp':'sl';
+  const ocTxt=open?'OPEN '+holdTxt(r.holdMin):fmt$(r.net);
+  const xn=(r.exits||[]).length;
   return `<div class="card" data-k="${r.key}">
     <div class="chead">
-      <span class="asset">${r.asset}</span>
-      <span class="tag ${r.direction==='LONG'?'long':'short'}">${r.direction}</span>
-      <span class="sub">${r.strategy||''} · ${r.regime||'?'} / ${r.mktType||'?'}</span>
-      <span class="sub">grade <b>${r.grade||'—'}</b> · score <b class="num">${r.score??'—'}</b> · emitted ${ago(r.runTs)} ago</span>
+      <span class="asset">${r.symbol.replace(/USDT$/,'')}</span>
+      <span class="tag ${r.dir==='LONG'?'long':'short'}">${r.dir}</span>
+      ${r.strategy?`<span class="tag strat" title="linked emitted signal · score ${r.score??'—'} · grade ${r.grade||'—'}">${r.strategy}${r.score!=null?' '+r.score:''}</span>`:'<span class="sub">manual / foreign fill</span>'}
+      <span class="sub">${fmtP(r.entryPx)} → ${open?'…':fmtP(r.exitPx)} · qty <b>${r.qty}</b> · <b class="num">$${r.notional}</b>${xn>1?` · ${xn} exits`:''}</span>
       <span class="oc ${ocCls}">${ocTxt}</span>
     </div>
     <div class="charts">
-      <div class="pane"><div class="pt">BEFORE — what the engine read · zigzag · range · fibs · EMA20/50 · harmonics</div><div class="cv" data-chb></div></div>
-      <div class="pane"><div class="pt">AFTER — the graded path · entry shading · MFE/MAE · bracket</div><div class="cv" data-cha></div></div>
+      <div class="pane"><div class="pt">BEFORE — the tape at entry · zigzag · range · fibs · EMA20/50 · harmonics</div><div class="cv" data-chb></div></div>
+      <div class="pane"><div class="pt">EXECUTED — entry shading · tranche exits · MFE/MAE · net result</div><div class="cv" data-cha></div></div>
     </div>
     <div class="meta">
-      <span>entry <b class="num">$${fmtP(r.entry)}</b></span><span>+1h ${jf(r.fwd1h)}</span><span>+4h ${jf(r.fwd4h)}</span><span>+24h ${jf(r.fwd24h)}</span><span>α vs majors ${jf(r.alpha24h)}</span>
-      <a class="sub" style="margin-left:auto" href="https://www.bitget.com/futures/usdt/${r.asset}USDT" target="_blank" rel="noopener">Bitget chart →</a>
+      <span>in <b>${ago(r.entryTs)} ago</b></span><span>${open?'open '+holdTxt(r.holdMin):'held <b>'+holdTxt(r.holdMin)+'</b>'}</span>
+      <span>fees <b class="dn">$${r.fees}</b></span><span>gross <b class="${r.pnl>=0?'up':'dn'}">${fmt$(r.pnl)}</b></span>
+      <span>net <b class="${r.net>=0?'up':'dn'}">${fmt$(r.net)}</b>${r.pnlPct!=null?` (${r.pnlPct>=0?'+':''}${r.pnlPct}%)`:''}</span>
+      <a class="sub" style="margin-left:auto" href="https://www.bitget.com/futures/usdt/${r.symbol}" target="_blank" rel="noopener">Bitget chart →</a>
     </div></div>`;
 }
+const FLT={all:()=>true,win:r=>r.exitTs&&r.net>0,loss:r=>r.exitTs&&r.net<=0,open:r=>r.status==='open',LONG:r=>r.dir==='LONG',SHORT:r=>r.dir==='SHORT'};
 function applyFilter(){
   const g=document.getElementById('gallery');
-  const list=RECS.filter(r=>FILTER==='all'||(FILTER==='open'?!r.complete:FILTER==='win'?r.outcome==='tp':FILTER==='loss'?r.outcome==='sl'||r.outcome==='eol':r.direction===FILTER.toUpperCase()));
+  const list=RECS.filter(FLT[FILTER]||FLT.all);
   SHOWN=0;g.innerHTML='';
   loadMore(list);
 }
 function loadMore(list){
-  list=list||RECS.filter(r=>FILTER==='all'||(FILTER==='open'?!r.complete:FILTER==='win'?r.outcome==='tp':FILTER==='loss'?r.outcome==='sl'||r.outcome==='eol':r.direction===FILTER.toUpperCase()));
+  list=list||RECS.filter(FLT[FILTER]||FLT.all);
   const g=document.getElementById('gallery');
   const batch=list.slice(SHOWN,SHOWN+PAGE);
   g.insertAdjacentHTML('beforeend',batch.map(cardHTML).join(''));
@@ -251,18 +246,17 @@ function loadMore(list){
 }
 document.getElementById('loadmore').onclick=()=>loadMore();
 (async()=>{
-  const [ev]=await Promise.all([j(API+'signal-eval.json')]);
-  RECS=((ev&&ev.records)||[]).slice().sort((a,b)=>b.runTs-a.runTs);
-  const done=RECS.filter(r=>r.complete),wins=done.filter(r=>r.outcome==='tp');
-  const avgA=(()=>{const xs=done.map(r=>r.alpha24h).filter(v=>v!=null);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null})();
+  const [tk]=await Promise.all([j(API+'trades-taken.json')]);
+  RECS=((tk&&tk.trades)||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
+  const st=(tk&&tk.stats)||{},done=RECS.filter(r=>r.exitTs);
   document.getElementById('stats').innerHTML=[
-    ['SIGNALS',RECS.length,'all emitted · append-only'],
-    ['GRADED',done.length,'within the 24h window'],
-    ['TP-FIRST',done.length?Math.round(wins.length/done.length*100)+'%':wins.length,'hit rate'],
-    ['AVG α 24H',avgA!=null?(avgA>=0?'+':'')+avgA.toFixed(2)+'%':'—','vs BTC/ETH/SOL'],
-    ['PENDING',RECS.length-done.length,'inside the window'],
+    ['TRADES',st.n??done.length,'closed round-trips · ladder tranches merged'],
+    ['WINS',st.wins??'—',st.n!=null?Math.round(st.wins/st.n*100)+'% hit rate':''],
+    ['NET P&L',fmt$(st.net),'after all fees'],
+    ['FEES PAID','$'+(st.fees??0).toFixed(2),'the bleed line'],
+    ['OPEN',st.open??0,'positions still live'],
   ].map(s=>`<div class="stat"><div class="k">${s[0]}</div><div class="v num">${s[1]}</div><div class="sub" style="font-size:9px">${s[2]}</div></div>`).join('');
-  const fc=[['all','ALL'],['win','WINS'],['loss','LOSSES / EOL'],['open','GRADING'],['LONG','LONGS'],['SHORT','SHORTS']];
+  const fc=[['all','ALL'],['win','WINS'],['loss','LOSSES'],['open','OPEN'],['LONG','LONGS'],['SHORT','SHORTS']];
   document.getElementById('filters').innerHTML=fc.map(([k,l])=>`<span class="fchip${k===FILTER?' on':''}" data-f="${k}">${l}</span>`).join('');
   document.getElementById('filters').onclick=e=>{const c=e.target.closest('.fchip');if(!c)return;FILTER=c.dataset.f;document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===c));applyFilter()};
   applyFilter();

@@ -1330,8 +1330,13 @@ async function main() {
       // over-reserve fees 30% — exact-fit sizing still produced 40762
       // 'order amount exceeds the balance' rejections (rate-tier and
       // rounding slop land the fee on top of a fully-deployed balance)
+      // conviction-weighted deployment — the plan stamps each order with
+      // its strategy's measured forward-alpha tier: proven-edge setups take
+      // their full slot, unproven ones take a probe-size fraction. The
+      // per-position cap below stays the absolute ceiling either way.
+      const convMul = Math.min(1.1, Math.max(0.2, +(o.conv ?? 1)));
       const marginUsd = Math.min(
-        (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3),
+        (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul,
         // single-position margin cap — 85%: near-full aggression on a
         // qualifying shot while still banking one reload. Ruin is the only
         // unrecoverable outcome; every other loss is tuition.

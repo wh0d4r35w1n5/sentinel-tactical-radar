@@ -84,7 +84,7 @@ const TRADE_NOTIONAL = 1000; // dry-run $ per signal
 // group (XAU/PAXG/XAUT are one gold thesis in three tickers — the book
 // actually held short XAU + short PAXG + long XAUT, paying three spreads
 // for ~one net exposure). Dupes settle as 'clustered' and route closes.
-const ENGINE_VERSION = 'v1.6';
+const ENGINE_VERSION = 'v1.7';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
@@ -1192,7 +1192,13 @@ async function main() {
     // positions. Prior: Beta(15,15) shrunk toward 50%.
     const shrunkHit =
       v.hitRate == null ? 50 : (v.hitRate * n + 50 * 15) / (n + 15);
-    if (shrunkAlpha < -0.6 || shrunkHit < 45 || (n >= 30 && (v.hitRate ?? 100) < 12)) {
+    // expectancy-first: a strategy is a bleeder when its shrunk ALPHA is
+    // negative — hit-rate blocks only degenerate payouts (rarely reaches
+    // target AND has no expectancy cushion to justify tail risk). Verified
+    // on ~6k prospective signals: the old hit<45 gate killed every
+    // positive-alpha fat-tail family and left the book flat.
+    const degenerate = n >= 30 && shrunkHit < 20 && shrunkAlpha < 0.3;
+    if (shrunkAlpha < -0.3 || degenerate) {
       stratBlock.add(k);
       stratBoost[k] = 0;
     } else {
@@ -2052,6 +2058,10 @@ async function main() {
   };
   const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
   const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
+  // sponsorship waiver — an A-grade composite (>=80) clears the fake-move
+  // veto: OBV/Dow disagreement is one factor voting no inside a stack of
+  // yes. Below the waiver it stays a hard veto (chop-chase protection).
+  const SPONSOR_WAIVER = +(process.env.SENTINEL_SPONSOR_WAIVER || 80);
   // funding drag penalty: paying >0.05%/8h to hold is a structural cost the
   // raw confluence score doesn't see. The archive keeps the raw score (the
   // eval engine grades that); the ENTRY decision is what pays the carry,
@@ -2187,6 +2197,24 @@ async function main() {
   // demo ETH pair (−$362 then −$913 in 30min) is the case study. Needs >=2
   // closes so a single unlucky fill doesn't ban a symbol.
   const LOW_PROFIT_MS = 24 * 3600e3;
+  // SQN-optimal strategy chain — read the report the optimizer wrote last
+  // cycle (10-min TTL). Applies only to strategies with enough history to
+  // rank; a family with <20 graded signals earns probe-size routing rather
+  // than a blanket ban — otherwise no strategy could ever qualify.
+  const sqnAllowedSet = (() => {
+    try {
+      const a = JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', 'sqn-allowed.json'), 'utf8')
+      );
+      return a.ts && Date.now() - a.ts < 30 * 60e3 && Array.isArray(a.strategies) && a.strategies.length >= 2
+        ? new Set(a.strategies)
+        : null;
+    } catch { return null; }
+  })();
+  const sqnAllows = (s) =>
+    !sqnAllowedSet ||
+    !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N) ||
+    sqnAllowedSet.has(s.strategy);
   const lowProfitPair = (() => {
     const bySym = {};
     for (const f of recentFills) {
@@ -2318,7 +2346,13 @@ async function main() {
     );
     const stopFrac = stopPct / 100;
     const tradeScore = tradeScoreOf(s);
-    const conv = tradeScore >= 85 ? 1 : tradeScore >= 70 ? 0.75 : 0.5;
+    // expectancy-weighted conviction — stratBoost is the strategy's
+    // shrunk forward alpha (Wyckoff Spring +1.94/hit 57% vs momentum
+    // families under water). Capital follows measured edge, not the
+    // inverted composite: high score + negative alpha now sizes SMALL.
+    const conv = Math.round(
+      clamp(0.35 + (stratBoost[s.strategy] || 0) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
+    ) / 100;
     // strategy circuit-breaker — a doctrine that has already bled on ≥3
     // closed trades gets half-size until its record clears. Risk control,
     // not learning: the adaptation gate stays dormant.
@@ -2355,7 +2389,8 @@ async function main() {
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
       s.ta?.ignition?.dir === s.direction ||
-      !s.ta?.eng?.obv,
+      !s.ta?.eng?.obv ||
+      tradeScore >= SPONSOR_WAIVER,
       'fake-move (no OBV/Dow sponsorship)');
     gate((s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
     gate((s.spreadPct ?? 0) <= 0.4, 'spread');
@@ -2376,6 +2411,7 @@ async function main() {
     gate(!recentClosed(s.asset, s.direction), 'recent-closed');
     gate(!recentReversed(s.asset), 'recent-reversed');
     gate(!lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
+    gate(sqnAllows(s), 'sqn-chain');
     gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
     gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
     gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
@@ -2410,6 +2446,7 @@ async function main() {
         // runner distance scales with confluence — a high-confluence setup
         // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
         runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
+        conv,
         reason: s.ta?.reasons?.[0] || null,
         ver: s.ver ?? ENGINE_VERSION,
       });
@@ -3908,6 +3945,227 @@ async function main() {
     };
   } catch {}
   writeJson(path.join(API, 'health.json'), health);
+
+  // ---- taken-trades journal: FIFO-pair real fills per symbol+side into
+  // round-trips the dashboard can show beside the emitted-signal book.
+  try {
+    const fills =
+      JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', 'real-fills.json'), 'utf8')
+      ).fills || [];
+    const bySym = {};
+    for (const f of [...fills].sort((a, b) => a.ts - b.ts))
+      (bySym[f.symbol + '|' + f.side] = bySym[f.symbol + '|' + f.side] || []).push(f);
+    // signal linkage: eval records give the taken trade its provenance
+    // (strategy/score/grade at emission) — matched on symbol, direction,
+    // entry price within 1.5%, and emitted <=20min before the fill.
+    let evRecs2 = [];
+    try {
+      evRecs2 = JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8')).records || [];
+    } catch {}
+    const linkSignal = (symbol, dir, entryPx, entryTs) => {
+      const base = symbol.replace(/USDT$/, '');
+      let best = null;
+      for (const r of evRecs2) {
+        if (r.asset !== base || r.direction !== dir || !r.entry || !r.runTs) continue;
+        const dt = entryTs - r.runTs;
+        if (dt < -5 * 60e3 || dt > 20 * 60e3) continue;
+        const pd = Math.abs(r.entry - entryPx) / entryPx;
+        if (pd > 0.015) continue;
+        const score = pd * 1e6 + Math.abs(dt);
+        if (!best || score < best.score) best = { r, score };
+      }
+      return best ? { strategy: best.r.strategy, score: best.r.score, grade: best.r.grade, runTs: best.r.runTs } : null;
+    };
+    const trades = [];
+    for (const [k, list] of Object.entries(bySym)) {
+      const [symbol, side] = k.split('|');
+      let ep = null; // open episode: remaining qty + immutable open totals + tranche exits
+      const finish = (last) => {
+        const entryPx = ep.cost0 / ep.qty0;
+        const exitPx = ep.closeQty > 0 ? ep.closeCost / ep.closeQty : null;
+        const sgn = side === 'sell' ? -1 : 1;
+        const t = {
+          symbol, dir: side === 'sell' ? 'SHORT' : 'LONG',
+          entryTs: ep.ts, exitTs: last ? last.ts : null,
+          status: last ? undefined : 'open',
+          entryPx: pct(entryPx * 1000000) / 1000000,
+          exitPx: exitPx != null ? pct(exitPx * 1000000) / 1000000 : null,
+          qty: ep.qty0,
+          notional: pct(ep.notional0 * 100) / 100,
+          fees: pct(ep.fees * 1000000) / 1000000,
+          pnl: pct(ep.pnl * 10000) / 10000,
+          net: pct((ep.pnl - ep.fees) * 10000) / 10000,
+          pnlPct: entryPx > 0 && exitPx != null ? pct((exitPx - entryPx) / entryPx * sgn * 100 * 100) / 100 : null,
+          holdMin: last ? pct((last.ts - ep.ts) / 60000 * 10) / 10 : pct((Date.now() - ep.ts) / 60000 * 10) / 10,
+          exits: ep.exits,
+        };
+        const sig = linkSignal(symbol, t.dir, entryPx, ep.ts);
+        if (sig) Object.assign(t, sig);
+        trades.push(t);
+        ep = null;
+      };
+      for (const f of list) {
+        const px = +f.price || 0, qty = +f.size || 0, fee = +f.fee || 0, pnl = +f.profit || 0;
+        if (f.tradeSide === 'open') {
+          if (!ep) ep = { ts: f.ts, qty: 0, qty0: 0, cost0: 0, notional0: 0, fees: 0, pnl: 0, closeQty: 0, closeCost: 0, exits: [] };
+          ep.qty += qty; ep.qty0 += qty; ep.cost0 += px * qty; ep.fees += fee; ep.notional0 += qty * px;
+        } else if (f.tradeSide === 'close' && ep && ep.qty > 0) {
+          const portion = Math.min(qty, ep.qty);
+          ep.closeQty += portion; ep.closeCost += px * portion;
+          ep.fees += fee; ep.pnl += pnl;
+          ep.exits.push({ ts: f.ts, px, qty: portion, pnl: pct(pnl * 10000) / 10000 });
+          ep.qty -= portion;
+          if (ep.qty <= 1e-9) finish(f);
+        }
+      }
+      if (ep) finish(null);
+    }
+    trades.sort((a, b) => (b.exitTs ?? b.entryTs) - (a.exitTs ?? a.entryTs));
+    const closed = trades.filter((t) => t.exitTs);
+    writeJson(path.join(API, 'trades-taken.json'), {
+      generated: new Date().toISOString(),
+      trades,
+      stats: {
+        n: closed.length,
+        wins: closed.filter((t) => t.net > 0).length,
+        net: pct(closed.reduce((a, t) => a + t.net, 0) * 100) / 100,
+        fees: pct(closed.reduce((a, t) => a + t.fees, 0) * 100) / 100,
+        open: trades.filter((t) => t.status === 'open').length,
+      },
+    });
+  } catch (e) { console.warn('taken-trades skipped:', e.message); }
+
+  // ---- Van Tharp SQN engine: which strategy CHAIN maximizes System
+  // Quality Number on the real graded record? Every evaluated signal is an
+  // R-multiple: R = (outcomePct - round-trip cost%) / stopPct. Pools are
+  // ranked by shrunk SQN_100; a greedy pass builds the best joint chain;
+  // the finalists get a 10,000-path x 100-trade (1M roll) Monte Carlo of
+  // the equity curve — median terminal equity, median/p95 max drawdown,
+  // and ruin probability at 1%-risk fixed-fractional sizing. The winning
+  // chain writes state/sqn-allowed.json — the next cycle's sqn-chain gate.
+  try {
+    const sqnReportPath = path.join(API, 'sqn-report.json');
+    let sqnStale = true;
+    try { sqnStale = Date.now() - fs.statSync(sqnReportPath).mtimeMs > 600e3; } catch {}
+    if (sqnStale) {
+      const COST_PCT = 0.20; // 0.12 taker x2 + 0.08 exit slippage, as % of notional
+      const RISK = 0.01;     // fixed-fractional 1% equity risk per trade
+      const T = 100, PATHS = 10000; // 1M rolls on the table per finalist pool
+      const evRecs =
+        JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8')).records || [];
+      const R_of = (r) =>
+        Number.isFinite(r.outcomePct) && r.stopPct > 0
+          ? (r.outcomePct - COST_PCT) / r.stopPct
+          : null;
+      const poolStats = (rs) => {
+        const R = rs.map(R_of).filter((x) => x != null);
+        const n = R.length;
+        if (n < 20) return null;
+        const E = R.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n) || 1e-9;
+        const sqn = (E / sd) * Math.sqrt(100);
+        return {
+          n, E: pct(E * 100) / 100, sd: pct(sd * 100) / 100,
+          sqn100: pct(sqn * 100) / 100,
+          shrunkSqn: pct((sqn * n) / (n + 15) * 100) / 100,
+          hit: pct((R.filter((x) => x > 0).length / n) * 10000) / 100,
+          R,
+        };
+      };
+      const monteCarlo = (R) => {
+        const terminal = [], maxDds = [];
+        for (let p = 0; p < PATHS; p++) {
+          let eq = 1, peak = 1, dd = 0;
+          for (let t = 0; t < T; t++) {
+            eq *= 1 + R[(Math.random() * R.length) | 0] * RISK;
+            if (eq > peak) peak = eq;
+            dd = Math.max(dd, (peak - eq) / peak);
+          }
+          terminal.push(eq); maxDds.push(dd);
+        }
+        terminal.sort((a, b) => a - b); maxDds.sort((a, b) => a - b);
+        const q = (a, x) => a[Math.min(a.length - 1, Math.floor(x * a.length))];
+        return {
+          medianTerminal: pct(q(terminal, 0.5) * 100) / 100,
+          meanTerminal: pct((terminal.reduce((a, b) => a + b, 0) / PATHS) * 100) / 100,
+          medianMaxDD: pct(q(maxDds, 0.5) * 10000) / 100,
+          p95MaxDD: pct(q(maxDds, 0.95) * 10000) / 100,
+          pRuin: pct((terminal.filter((e) => e < 0.5).length / PATHS) * 10000) / 100,
+        };
+      };
+      const byStrat = {};
+      for (const r of evRecs) {
+        if (!r.strategy) continue;
+        (byStrat[r.strategy] = byStrat[r.strategy] || []).push(r);
+      }
+      const perStrategy = [];
+      for (const [strat, rs] of Object.entries(byStrat)) {
+        const base = poolStats(rs);
+        if (!base) continue;
+        const variants = {};
+        for (const [tag, f] of [
+          ['LONG', (r) => r.direction === 'LONG'],
+          ['SHORT', (r) => r.direction === 'SHORT'],
+          ['score<85', (r) => (r.score ?? 100) < 85],
+          ['score>=85', (r) => (r.score ?? 0) >= 85],
+        ]) {
+          const v = poolStats(rs.filter(f));
+          if (v) variants[tag] = { n: v.n, E: v.E, sqn100: v.sqn100, hit: v.hit };
+        }
+        perStrategy.push({ strategy: strat, ...(({ R, ...rest }) => rest)(base), variants, R: base.R });
+      }
+      // greedy optimal chain — add the pool that most raises joint shrunk
+      // SQN until nothing improves it. This is the Tharp portfolio
+      // selection step: SQN of the MIX, not of members.
+      const jointStats = (R) => {
+        const n = R.length;
+        const E = R.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n) || 1e-9;
+        const sqn = (E / sd) * Math.sqrt(100);
+        return { n, E, sd, sqn100: sqn, shrunkSqn: (sqn * n) / (n + 15), hit: R.filter((x) => x > 0).length / n };
+      };
+      const ranked = perStrategy.slice().sort((a, b) => b.shrunkSqn - a.shrunkSqn);
+      let chain = [], chainR = [], chainStat = null;
+      for (const c of ranked) {
+        const cand = chainR.concat(c.R);
+        const st = jointStats(cand);
+        if (!chain.length || st.shrunkSqn > (chainStat?.shrunkSqn ?? -9) + 0.02) {
+          chain.push(c.strategy); chainR = cand; chainStat = st;
+        }
+      }
+      const baseline = poolStats(evRecs);
+      const finalists = [
+        { name: 'optimal-chain', members: chain, R: chainR, st: chainStat },
+        { name: 'all-signals', members: null, R: evRecs.map(R_of).filter((x) => x != null), st: baseline },
+      ];
+      // overlay variants of the winning chain — direction and inversion cuts
+      const chainRecs = evRecs.filter((r) => chain.includes(r.strategy));
+      for (const [tag, f] of [
+        ['chain-longs', (r) => r.direction === 'LONG'],
+        ['chain-score<85', (r) => (r.score ?? 100) < 85],
+      ]) {
+        const v = poolStats(chainRecs.filter(f));
+        if (v && v.n >= 30) finalists.push({ name: tag, members: chain, R: chainRecs.filter(f).map(R_of).filter((x) => x != null), st: v });
+      }
+      const mc = {};
+      for (const f of finalists) mc[f.name] = { ...(f.st ? { sqn100: pct(f.st.sqn100 * 100) / 100, shrunkSqn: pct(f.st.shrunkSqn * 100) / 100, E: pct(f.st.E * 100) / 100, n: f.st.n } : {}), mc: f.R.length >= 30 ? monteCarlo(f.R) : null };
+      const best = finalists.slice(1).sort((a, b) => (b.st?.shrunkSqn ?? -9) - (a.st?.shrunkSqn ?? -9))[0] || finalists[0];
+      writeJson(sqnReportPath, {
+        generated: new Date().toISOString(),
+        model: { riskPct: 1, costPct: COST_PCT, tradesPerPath: T, paths: PATHS, totalRolls: T * PATHS },
+        perStrategy: perStrategy.map(({ R, ...rest }) => rest),
+        chain: { members: chain, n: chainStat?.n, E: pct((chainStat?.E ?? 0) * 100) / 100, sqn100: pct((chainStat?.sqn100 ?? 0) * 100) / 100, shrunkSqn: pct((chainStat?.shrunkSqn ?? 0) * 100) / 100, hit: pct((chainStat?.hit ?? 0) * 10000) / 100 },
+        baselineAll: baseline ? { n: baseline.n, E: baseline.E, sqn100: baseline.sqn100 } : null,
+        bestVariant: best.name,
+        monteCarlo: mc,
+      });
+      writeJson(path.join(API, '..', 'state', 'sqn-allowed.json'), {
+        ts: Date.now(), strategies: chain,
+        note: 'greedy max shrunk-SQN chain over graded signal R-multiples; TTL-gated sqn-chain gate',
+      });
+    }
+  } catch (e) { console.warn('sqn-optimizer skipped:', e.message); }
 
   console.log(
     `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched) | ledger ${ledger.stats.open} open, ${wins}/${closed.length} won`
