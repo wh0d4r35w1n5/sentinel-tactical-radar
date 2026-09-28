@@ -118,6 +118,12 @@ tr.detail td{background:rgba(138,91,255,.05);padding:12px 14px}
 .grade{font-weight:700;color:var(--grn);text-shadow:0 0 10px rgba(77,255,166,.4)}
 .ledger-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(140,120,255,.08);font-size:12px}
 .ledger-row:last-child{border-bottom:0}
+.thitem{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(140,120,255,.08);font-size:12px}
+.thitem:last-child{border-bottom:0}
+.thic{flex-shrink:0;width:22px;text-align:center;font-size:13px}
+.thtx{flex:1;line-height:1.55;color:var(--txt)}
+.thtm{flex-shrink:0;font-size:9px;color:var(--mut);white-space:nowrap;padding-top:3px}
+.thnow{background:rgba(138,91,255,.07);border:1px solid rgba(138,91,255,.2);border-radius:9px;padding:10px 13px;margin-bottom:7px;border-bottom:1px solid rgba(138,91,255,.2)!important}
 .pressbar{height:8px;border-radius:5px;background:rgba(138,91,255,.1);border:1px solid var(--line);overflow:hidden;margin:10px 0 6px}
 .pressbar i{display:block;height:100%;background:linear-gradient(90deg,var(--vio),var(--cyan),var(--grn));background-size:200% 100%;border-radius:5px;box-shadow:0 0 12px rgba(34,229,255,.5);animation:sheen 3s linear infinite}
 .pressrow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(140,120,255,.06);font-size:11px}
@@ -300,6 +306,12 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
+  <div class="panel neon" id="thPanel" style="margin-bottom:16px;display:none">
+    <div class="ptitle">SENTINEL MIND · what the bot is doing right now <span class="sub">— every move explained in plain english · updates live each cycle</span><span id="thMood" style="float:right"></span></div>
+    <div id="thHead" style="font-size:14px;font-weight:700;letter-spacing:.02em;margin-bottom:10px;line-height:1.45"></div>
+    <div id="thNow"></div>
+    <div id="thFeed" style="margin-top:4px"></div>
+  </div>
   <div class="panel pro" style="margin-bottom:16px">
     <div class="ptitle">Vol spike core · order-flow radar <span class="sub">— relative volume × effort/result on closed 1h candles · intelligence layer, never an order trigger</span><span id="volCoreSub" class="sub" style="float:right"></span></div>
     <div id="volCore" class="vrow"><div class="sub">scanning for abnormal prints…</div></div>
@@ -632,8 +644,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -876,6 +888,16 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         `<div class="ledger-row"><span><span style="color:${dc[c.status]||'var(--mut)'}">●</span> <b style="font-size:10px;letter-spacing:.06em">${c.name}</b> <span class="sub">${c.detail}</span></span><b class="num" style="color:${dc[c.status]||'var(--mut)'};font-size:9px">${c.status}</b></div>`
       ).join('');
       $('godAt').textContent='audit '+ago(Date.parse(god.at))+' ago · '+god.checks.length+' invariants watched';
+    }
+    // ---- SENTINEL MIND — the bot's inner voice in plain english ----
+    if(thR&&thR.headline){
+      $('thPanel').style.display='block';
+      const mc={WINNING:'var(--grn)',CALM:'var(--cyan)',WATCHING:'var(--vio)',BLEEDING:'var(--red)',FIXING:'var(--warn,#ffd166)'}[thR.mood]||'var(--mut)';
+      $('thMood').innerHTML='<b style="color:'+mc+';letter-spacing:.15em;font-size:12px">&#9679; '+thR.mood+'</b>';
+      $('thHead').textContent=thR.headline;
+      const tm=t=>{const s=Math.max(0,(Date.now()-t)/1e3);return s<90?Math.round(s)+'s ago':s<5400?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'};
+      $('thNow').innerHTML=(thR.now||[]).map(t=>'<div class="thitem thnow"><span class="thic">'+t.icon+'</span><span class="thtx">'+t.text+'</span></div>').join('');
+      $('thFeed').innerHTML=(thR.feed||[]).slice(0,12).map(t=>'<div class="thitem"><span class="thic">'+t.icon+'</span><span class="thtx">'+t.text+'</span><span class="thtm">'+(t.ts?tm(t.ts):'')+'</span></div>').join('');
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};

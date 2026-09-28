@@ -69,6 +69,7 @@ for (;;) {
     const a = Date.now(); await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;
     const b = Date.now(); await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
     await run('scripts/god.mjs').catch((e) => console.log('[rapid] god:', e.message || e));
+    await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
   } catch (e) {
     console.log(`[rapid] cycle ${cycle} error:`, e.message || e);
   }
