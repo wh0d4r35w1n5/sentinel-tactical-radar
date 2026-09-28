@@ -539,6 +539,11 @@ async function main() {
 
   // ---- closes first: freeing margin and killing contradicted exposure is
   // always the priority ----
+  // EXEC_SCANNER_CLOSES=0 (operator mandate): scanner/sim closes are OFF —
+  // a sim ledger settle is paper bookkeeping; it must not spend real taker
+  // fees cancelling a protected position. Real exits = exchange TP/SL +
+  // manual flatten only. The stop IS the exit decision, made in advance.
+  if (process.env.EXEC_SCANNER_CLOSES !== '0')
   for (const c of plan.closes) {
     // manual-hold and foreign positions are exempt from scanner-driven
     // exits — a paper ledger expiry/reversal must not kill a deliberately

@@ -10,6 +10,7 @@
 // Always exits 0 — a red God must never block the snapshot commit that
 // would show it.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -286,6 +287,107 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
     issues.length ? issues.join('; ') : 'no measured claim exceeds its evidence');
 }
 
+// ---------- 12. OVERSEER ACTIONS — elevated: full trade permissions ----------
+// Operator mandate: God holds the exchange credentials and ACTS. The audit
+// above stays pure-read; this layer enforces invariants with power. God
+// never invents directional trades — it shields naked positions, restores
+// missing protection legs, and flags dead capital. Full permission, used
+// with discipline: repairs only.
+const interventions = [];
+const interv = (what, res) => interventions.push({ what, res, at: new Date().toISOString() });
+{
+  const KEY = process.env.BITGET_API_KEY || '';
+  const SECRET = process.env.BITGET_API_SECRET || '';
+  const PASS = process.env.BITGET_PASSPHRASE || '';
+  const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', MC = 'USDT';
+  if (KEY && SECRET && PASS && process.env.GOD_INTERVENE !== '0') {
+    const gsign = (method, reqPath, qs, bodyStr) => {
+      const ts = String(Date.now());
+      const pre = ts + method.toUpperCase() + reqPath + (qs ? '?' + qs : '') + (bodyStr || '');
+      return {
+        'ACCESS-KEY': KEY,
+        'ACCESS-SIGN': crypto.createHmac('sha256', SECRET).update(pre).digest('base64'),
+        'ACCESS-PASSPHRASE': PASS, 'ACCESS-TIMESTAMP': ts,
+        'Content-Type': 'application/json', locale: 'en-US',
+      };
+    };
+    const gapi = async (method, reqPath, { qs = '', body = null } = {}) => {
+      const bodyStr = body ? JSON.stringify(body) : '';
+      const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
+        method, headers: gsign(method, reqPath, qs, bodyStr),
+        body: bodyStr || undefined, signal: AbortSignal.timeout(12000),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || (j.code && j.code !== '00000'))
+        throw new Error(reqPath + ' ' + method + ' -> ' + (j.code || res.status) + ' ' + (j.msg || ''));
+      return j.data;
+    };
+    try {
+      const positions = await gapi('GET', '/api/v2/mix/position/all-position', {
+        qs: 'productType=' + PRODUCT + '&marginCoin=' + MC,
+      });
+      const accRows = await gapi('GET', '/api/v2/mix/account/accounts', { qs: 'productType=' + PRODUCT });
+      const acct = (accRows || []).find((a) => a.marginCoin === MC) || {};
+      // --- a) shield check: every real position carries loss + profit plans
+      for (const p of positions || []) {
+        const plans = await gapi('GET', '/api/v2/mix/order/orders-plan-pending', {
+          qs: 'symbol=' + p.symbol + '&productType=' + PRODUCT + '&marginCoin=' + MC + '&planType=profit_loss',
+        }).then((d) => {
+          const l = d?.entrustedList || d?.orders || d;
+          return Array.isArray(l) ? l : [];
+        }).catch(() => []);
+        const hasLoss = plans.some((x) => /loss|moving/i.test(x.planType || ''));
+        const hasProfit = plans.some((x) => /profit/i.test(x.planType || ''));
+        const entry = +(p.openPriceAvg || p.averageOpenPrice || p.entry || 0);
+        const sgn = (p.holdSide || p.side) === 'long' ? 1 : -1;
+        const holdSide = sgn > 0 ? 'long' : 'short';
+        if (!(entry > 0)) continue;
+        if (!hasLoss) {
+          const trig = +(entry * (1 - sgn * 0.03)).toPrecision(6);
+          const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
+            body: { symbol: p.symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MC,
+              planType: 'pos_loss', triggerPrice: String(trig), triggerType: 'mark_price',
+              size: '0', holdSide },
+          }).then(() => true).catch((e) => e.message);
+          interv('shield ' + p.symbol, r === true ? 'pos_loss @' + trig + ' placed' : 'FAILED: ' + r);
+          add('god-shield-' + p.symbol, r === true ? 'PASS' : 'FAIL',
+            r === true ? 'naked position shielded — pos_loss @' + trig : 'shield failed: ' + r);
+        }
+        if (!hasProfit) {
+          const trig = +(entry * (1 + sgn * 0.045)).toPrecision(6);
+          const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
+            body: { symbol: p.symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MC,
+              planType: 'pos_profit', triggerPrice: String(trig), triggerType: 'mark_price',
+              size: '0', holdSide },
+          }).then(() => true).catch((e) => e.message);
+          interv('profit-leg ' + p.symbol, r === true ? 'pos_profit @' + trig + ' placed' : 'FAILED: ' + r);
+        }
+      }
+      // --- b) dead-capital audit: the mandate says margin works or dies
+      const eq = +(acct.usdtEquity || acct.equity || 0), av = +(acct.available || 0);
+      const idleFloor = Math.max(eq * 0.15, 8);
+      add('capital-deployed', av > idleFloor ? 'WARN' : 'PASS',
+        av > idleFloor
+          ? '$' + av.toFixed(2) + ' free margin idle (floor $' + idleFloor.toFixed(2) + ') — dead capital, deployment mandate'
+          : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+      // --- c) untracked positions: fills the ledger doesn't know
+      const llx = readJson('live-ledger.json');
+      const known = new Set((llx?.positions || llx?.positionsAfter || []).map((p) => p.symbol));
+      const unknown = (positions || []).filter((p) => !known.has(p.symbol));
+      add('position-coverage', unknown.length ? 'WARN' : 'PASS',
+        unknown.length
+          ? 'untracked positions: ' + unknown.map((p) => p.symbol).join(',')
+          : (positions || []).length + ' exchange positions all ledger-visible');
+      add('god-powers', 'PASS', 'armed — credentialed watch + repair active every cycle');
+    } catch (e) {
+      add('god-powers', 'FAIL', 'credentialed layer error: ' + (e.message || e));
+    }
+  } else {
+    add('god-powers', 'WARN',
+      !KEY ? 'no BITGET_API_KEY in env — running degraded audit-only' : 'GOD_INTERVENE=0 — powers disabled');
+  }
+}
+
 // ---------- verdict ----------
 const fails = checks.filter((c) => c.status === 'FAIL');
 const warns = checks.filter((c) => c.status === 'WARN');
@@ -298,7 +400,8 @@ const out = {
   warn: warns.length,
   fail: fails.length,
   checks,
-  note: 'overseer audit — reads api/*.json only, never mutates; FAIL = invariant violated, WARN = degraded, PASS = held',
+  interventions,
+  note: 'overseer — full trade permissions: audits then repairs. FAIL = invariant violated, WARN = degraded, PASS = held',
 };
 fs.writeFileSync(path.join(API, 'god.json'), JSON.stringify(out));
 console.log(`[god] ${verdict} — ${out.pass} pass / ${warns.length} warn / ${fails.length} fail`);
