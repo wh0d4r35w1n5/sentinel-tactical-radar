@@ -976,9 +976,17 @@
     var L = piv.filter(function (p) { return p.type === 'L'; }).slice(-4);
     var out = [];
     // triple-tops AND triple-bottoms coexisting = a rectangle, not two
-    // reversals — demote both to plain doubles and let the box carry it
-    var topFlat = H.length >= 3 && Math.abs(H[H.length - 3].p - H[H.length - 2].p) / H[H.length - 2].p <= 0.02;
-    var botFlat = L.length >= 3 && Math.abs(L[L.length - 3].p - L[L.length - 2].p) / L[L.length - 2].p <= 0.02;
+    // reversals — demote both to plain doubles and let the box carry it.
+    // Three touches = one band: the OLD check chained pairwise tolerance
+    // (h3≈h2 AND h1≈h2) which let the outer peaks sit ~2×tol apart — a
+    // sloped line still named 'triple top'.
+    var band3 = function (ps) {
+      var mn = Infinity, mx = -Infinity, sum = 0;
+      for (var k = 0; k < ps.length; k++) { mn = Math.min(mn, ps[k].p); mx = Math.max(mx, ps[k].p); sum += ps[k].p; }
+      return (mx - mn) / (sum / ps.length);
+    };
+    var topFlat = H.length >= 3 && band3(H.slice(-3)) <= 0.02;
+    var botFlat = L.length >= 3 && band3(L.slice(-3)) <= 0.02;
     var dHv = H.length >= 2 ? Math.abs(H[H.length - 1].p - H[H.length - 2].p) / H[H.length - 2].p : 9;
     var dLv = L.length >= 2 ? Math.abs(L[L.length - 1].p - L[L.length - 2].p) / L[L.length - 2].p : 9;
     var bothTrip = topFlat && botFlat && dHv <= 0.03 && dLv <= 0.03;
