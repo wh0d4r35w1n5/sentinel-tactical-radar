@@ -3956,44 +3956,70 @@ async function main() {
     const bySym = {};
     for (const f of [...fills].sort((a, b) => a.ts - b.ts))
       (bySym[f.symbol + '|' + f.side] = bySym[f.symbol + '|' + f.side] || []).push(f);
+    // signal linkage: eval records give the taken trade its provenance
+    // (strategy/score/grade at emission) — matched on symbol, direction,
+    // entry price within 1.5%, and emitted <=20min before the fill.
+    let evRecs2 = [];
+    try {
+      evRecs2 = JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8')).records || [];
+    } catch {}
+    const linkSignal = (symbol, dir, entryPx, entryTs) => {
+      const base = symbol.replace(/USDT$/, '');
+      let best = null;
+      for (const r of evRecs2) {
+        if (r.asset !== base || r.direction !== dir || !r.entry || !r.runTs) continue;
+        const dt = entryTs - r.runTs;
+        if (dt < -5 * 60e3 || dt > 20 * 60e3) continue;
+        const pd = Math.abs(r.entry - entryPx) / entryPx;
+        if (pd > 0.015) continue;
+        const score = pd * 1e6 + Math.abs(dt);
+        if (!best || score < best.score) best = { r, score };
+      }
+      return best ? { strategy: best.r.strategy, score: best.r.score, grade: best.r.grade, runTs: best.r.runTs } : null;
+    };
     const trades = [];
     for (const [k, list] of Object.entries(bySym)) {
       const [symbol, side] = k.split('|');
-      let openQty = 0, openCost = 0, openFee = 0, openTs = 0, openNotional = 0;
+      let ep = null; // open episode: remaining qty + immutable open totals + tranche exits
+      const finish = (last) => {
+        const entryPx = ep.cost0 / ep.qty0;
+        const exitPx = ep.closeQty > 0 ? ep.closeCost / ep.closeQty : null;
+        const sgn = side === 'sell' ? -1 : 1;
+        const t = {
+          symbol, dir: side === 'sell' ? 'SHORT' : 'LONG',
+          entryTs: ep.ts, exitTs: last ? last.ts : null,
+          status: last ? undefined : 'open',
+          entryPx: pct(entryPx * 1000000) / 1000000,
+          exitPx: exitPx != null ? pct(exitPx * 1000000) / 1000000 : null,
+          qty: ep.qty0,
+          notional: pct(ep.notional0 * 100) / 100,
+          fees: pct(ep.fees * 1000000) / 1000000,
+          pnl: pct(ep.pnl * 10000) / 10000,
+          net: pct((ep.pnl - ep.fees) * 10000) / 10000,
+          pnlPct: entryPx > 0 && exitPx != null ? pct((exitPx - entryPx) / entryPx * sgn * 100 * 100) / 100 : null,
+          holdMin: last ? pct((last.ts - ep.ts) / 60000 * 10) / 10 : pct((Date.now() - ep.ts) / 60000 * 10) / 10,
+          exits: ep.exits,
+        };
+        const sig = linkSignal(symbol, t.dir, entryPx, ep.ts);
+        if (sig) Object.assign(t, sig);
+        trades.push(t);
+        ep = null;
+      };
       for (const f of list) {
         const px = +f.price || 0, qty = +f.size || 0, fee = +f.fee || 0, pnl = +f.profit || 0;
         if (f.tradeSide === 'open') {
-          openQty += qty; openCost += px * qty; openFee += fee; openNotional += qty * px;
-          if (!openTs) openTs = f.ts;
-        } else if (f.tradeSide === 'close' && openQty > 0) {
-          const portion = Math.min(qty, openQty);
-          const entryPx = openCost / openQty;
-          trades.push({
-            symbol, dir: side === 'sell' ? 'SHORT' : 'LONG',
-            entryTs: openTs, exitTs: f.ts,
-            entryPx: pct(entryPx * 1000000) / 1000000,
-            exitPx: px, qty: portion,
-            notional: pct(portion * px * 100) / 100,
-            fees: pct((openFee * (portion / openQty) + fee) * 1000000) / 1000000,
-            pnl: pct(pnl * 10000) / 10000,
-            net: pct((pnl - (openFee * (portion / openQty) + fee)) * 10000) / 10000,
-            pnlPct: entryPx > 0 ? pct(((px - entryPx) / entryPx) * (side === 'sell' ? -100 : 100) * 100) / 100 : null,
-            holdMin: pct((f.ts - openTs) / 60000 * 10) / 10,
-          });
-          const frac = portion / openQty;
-          openCost *= 1 - frac; openFee *= 1 - frac; openQty -= portion; openNotional *= 1 - frac;
-          if (openQty <= 1e-9) { openQty = 0; openCost = 0; openFee = 0; openTs = 0; openNotional = 0; }
+          if (!ep) ep = { ts: f.ts, qty: 0, qty0: 0, cost0: 0, notional0: 0, fees: 0, pnl: 0, closeQty: 0, closeCost: 0, exits: [] };
+          ep.qty += qty; ep.qty0 += qty; ep.cost0 += px * qty; ep.fees += fee; ep.notional0 += qty * px;
+        } else if (f.tradeSide === 'close' && ep && ep.qty > 0) {
+          const portion = Math.min(qty, ep.qty);
+          ep.closeQty += portion; ep.closeCost += px * portion;
+          ep.fees += fee; ep.pnl += pnl;
+          ep.exits.push({ ts: f.ts, px, qty: portion, pnl: pct(pnl * 10000) / 10000 });
+          ep.qty -= portion;
+          if (ep.qty <= 1e-9) finish(f);
         }
       }
-      if (openQty > 0 && openTs)
-        trades.push({
-          symbol, dir: side === 'sell' ? 'SHORT' : 'LONG',
-          entryTs: openTs, exitTs: null, status: 'open',
-          entryPx: pct((openCost / openQty) * 1000000) / 1000000,
-          qty: openQty, notional: pct(openNotional * 100) / 100,
-          fees: pct(openFee * 1000000) / 1000000,
-          holdMin: pct((Date.now() - openTs) / 60000 * 10) / 10,
-        });
+      if (ep) finish(null);
     }
     trades.sort((a, b) => (b.exitTs ?? b.entryTs) - (a.exitTs ?? a.entryTs));
     const closed = trades.filter((t) => t.exitTs);
@@ -4008,7 +4034,7 @@ async function main() {
         open: trades.filter((t) => t.status === 'open').length,
       },
     });
-  } catch {}
+  } catch (e) { console.warn('taken-trades skipped:', e.message); }
 
   // ---- Van Tharp SQN engine: which strategy CHAIN maximizes System
   // Quality Number on the real graded record? Every evaluated signal is an
