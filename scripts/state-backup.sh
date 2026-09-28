@@ -10,6 +10,10 @@ F="api/history/state-$(date -u +%F).tar.gz"
 tar czf "$F" state \
   --exclude='state/round-archive-*' \
   --exclude='state/*.session' 2>/dev/null || true
+# benchmark db snapshot — the dry-run trade history is evidence, keep it too
+FB="api/history/ftbench-$(date -u +%F).tar.gz"
+tar czf "$FB" ft-bench/*.sqlite* 2>/dev/null || true
+ls -1t api/history/ftbench-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 # keep 10 snapshots max — git history keeps the rest forever anyway
 ls -1t api/history/state-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 echo "state-backup: wrote $F ($(du -h "$F" | cut -f1))"

@@ -235,6 +235,13 @@ async function tick() {
     if (!mark) continue;
     const distPct = p.side === 'long' ? (mark - p.liq) / p.liq * 100 : (p.liq - mark) / p.liq * 100;
     const g = (gates[key] ||= { lastTrim: 0, lastTrimMark: null });
+    // new-arrival alert: a position the guard has never seen gets a
+    // one-time "now watching" ping — silent arming meant the operator
+    // couldn't tell a protected position from an untracked one.
+    if (!g.seen) {
+      g.seen = true; dirty = true;
+      outbox(`👁 LIQ-GUARD armed — ${p.sym} ${p.side} ${p.size} @ ${p.entry} · ${distPct.toFixed(1)}% from liq ${p.liq} · ${p.marginMode || ''}`);
+    }
     // proximity ladder: alert on each tier crossed downward, re-arm above 4.5%
     const sev = ALERT_TIERS.filter((t) => distPct <= t).length;
     if (sev > (g.tier || 0)) {
@@ -248,8 +255,14 @@ async function tick() {
       const fpDist = fp ? (fp.side === 'long' ? (mark - fp.liq) / fp.liq * 100 : (fp.liq - mark) / fp.liq * 100) : null;
       if (!fresh || (fp && fpDist <= ALERT_TIERS[0])) {
         g.tier = sev;
-        const pv = fp || p, pd = fpDist ?? distPct;
-        outbox(`⚠️ LIQ PROXIMITY — ${p.sym} ${p.side} ${pd.toFixed(2)}% from liquidation\nmark ${mark} · liq ${pv.liq} · size ${pv.size} · upl $${(+pv.upl).toFixed(2)}`);
+        // boundary-flutter guard: hovering at a tier edge re-fires on every
+        // re-cross — space repeats per position so Telegram stays signal,
+        // not noise. A NEW deeper tier always fires immediately.
+        if (Date.now() - (g.lastAlert || 0) >= 10 * 60e3 || sev > (g.lastAlertTier || 0)) {
+          g.lastAlert = Date.now(); g.lastAlertTier = sev;
+          const pv = fp || p, pd = fpDist ?? distPct;
+          outbox(`⚠️ LIQ PROXIMITY — ${p.sym} ${p.side} ${pd.toFixed(2)}% from liquidation\nmark ${mark} · liq ${pv.liq} · size ${pv.size} · upl $${(+pv.upl).toFixed(2)}`);
+        }
       }
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
     stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };

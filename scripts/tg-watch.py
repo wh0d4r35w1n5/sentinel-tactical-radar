@@ -547,12 +547,25 @@ async def main():
                         topg = sorted(((api("gate-stats") or {}).get("totals24h") or {}).items(), key=lambda kv: -kv[1])[:4]
                         tops = " \u00b7 ".join(f"{k}\u00d7{v}" for k, v in topg) or "none"
                         posl = ", ".join(f"{p.get('symbol')} {p.get('side')} upl {round(p.get('upl') or 0, 2)}" for p in (ll2.get("positions") or [])) or "flat"
+                        # benchmark line — sentinel vs the freqtrade dry-run
+                        # engine on the same tape, side by side every day
+                        bench = api("freqtrade-bench") or {}
+                        bs = bench.get("stats") or bench
+                        ntr = bs.get("trades") or bs.get("closed") or 0
+                        bline = ""
+                        if ntr:
+                            bline = (f"\nbench(ft): {ntr} trades · win {bs.get('winRatePct','?')}% · "
+                                     f"PF {bs.get('profitFactor','?')} · net ${bs.get('netUsd','?')}")
+                        else:
+                            bline = f"\nbench(ft): {bs.get('openTrades', bs.get('open','0'))} open · 0 closed yet"
+                        dep = ll2.get('depositsUsd') or (ll2.get('risk') or {}).get('depositsUsd') or 0
+                        depl = f" · deposits ${dep}" if dep else ""
                         await say(
                             "\U0001F4CB <b>DAILY DIGEST</b> " + today + "\n"
-                            f"equity ${ll2.get('equityUsd','?')} \u00b7 dd {ll2.get('ddPct','?')}%\n"
+                            f"equity ${ll2.get('equityUsd','?')} \u00b7 dd {ll2.get('ddPct','?')}%{depl}\n"
                             f"today — bot {len(bf)} fills ({bpnl:+.2f}) \u00b7 manual {len(mf)} ({mpnl:+.2f})\n"
                             f"open: {esc(posl)}\n"
-                            f"top reject gates 24h: {esc(tops)}"
+                            f"top reject gates 24h: {esc(tops)}{bline}"
                         )
                     except Exception as e:
                         print(f"[tg-c2] digest: {type(e).__name__}: {e}", flush=True)

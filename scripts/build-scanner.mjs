@@ -2318,6 +2318,10 @@ async function main() {
     // 8h it's held. Charge the expected drag over the etaH hold window
     // (capped at one interval — a scalp rarely crosses two timestamps).
     const RR_MIN = +(process.env.SENTINEL_MIN_RR || 2);
+    // anti-chase zone: fraction of the 24h range that counts as "the
+    // extreme" — shorts into the bottom slice / longs into the top slice
+    // are vetoed. 0.25 = never enter in the outer quartile.
+    const CHASE_ZONE = +(process.env.SENTINEL_CHASE_ZONE || 0.25);
     const fundDrag =
       s.carry === 'pay'
         ? Math.abs(s.funding?.ratePct ?? 0) * Math.min(s.etaH ?? 1, 8) / 8
@@ -2365,51 +2369,75 @@ async function main() {
     // not by digging through code. First failure wins (eval order).
     const gateFails = [];
     const gate = (ok, name) => { if (!ok) gateFails.push(name); return ok; };
-    gate(tradeScore >= entryFloor, `score ${tradeScore}<${entryFloor}`);
+    // RELAX (SENTINEL_GATES_RELAX=1): operator deployment mandate — bypass
+    // advisory gates (score/rr/sponsorship/noise/strat-record/recency/
+    // sqn-chain) that refuse marginal setups. Structural gates stay
+    // enforced regardless: price sanity, cost floor, spread, anti-chase,
+    // dd-kill, mkt-type, duplicate/position caps.
+    const RELAX = process.env.SENTINEL_GATES_RELAX === '1';
+    gate(tradeScore >= (RELAX ? 35 : entryFloor), `score ${tradeScore}<${RELAX ? 35 : entryFloor}`);
     gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
     // net-of-cost floor, proportional: costs can't eat more than 60% of
     // the target AND the net must still be worth taking. An absolute 2%
     // floor banned every 2% target by construction — fees scale with
     // the move, so the bar must too. Volatile tape keeps a higher share.
-    gate((() => {
+    gate(RELAX || (() => {
       const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
       return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
     })(), 'net-edge');
-    gate(rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
-    gate(
+    gate(RELAX || rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
+    gate(RELAX ||
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
       s.ta?.ignition?.dir === s.direction ||
       !s.ta?.eng?.obv ||
       tradeScore >= SPONSOR_WAIVER,
       'fake-move (no OBV/Dow sponsorship)');
-    gate((s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
+    gate(RELAX || (s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
+    // anti-chase: never sell the bottom quartile of the day's range nor buy
+    // the top quartile — the move already happened and the entry inherits
+    // the reversal risk, not the trend. Breakout Continuation is exempt:
+    // buying strength IS that strategy's thesis.
+    gate(
+      s.strategy === 'Breakout Continuation' ||
+        (dirUp ? (s.rangePosition ?? 0.5) <= 1 - CHASE_ZONE : (s.rangePosition ?? 0.5) >= CHASE_ZONE),
+      'chasing-extreme');
     gate((s.spreadPct ?? 0) <= 0.4, 'spread');
-    gate(!(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1), 'funding-drag');
+    gate(RELAX || !(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1), 'funding-drag');
     gate(ddNow < ddKillPct, 'dd-kill');
     gate(mktAllows(s), 'mkt-type');
-    gate(s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
+    gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
     // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
     // the eval block — the strategy's record stays on the board for
     // evidence, but exceptional confluence may still route. Default 75;
     // set high to restore the strict block.
-    gate(!stratBlock.has(s.strategy) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
+    gate(RELAX || !stratBlock.has(s.strategy) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
-    gate(!recentClosed(s.asset, s.direction), 'recent-closed');
-    gate(!recentReversed(s.asset), 'recent-reversed');
-    gate(!lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
-    gate(sqnAllows(s), 'sqn-chain');
+    gate(RELAX || !recentClosed(s.asset, s.direction), 'recent-closed');
+    gate(RELAX || !recentReversed(s.asset), 'recent-reversed');
+    gate(RELAX || !lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
+    gate(RELAX || sqnAllows(s), 'sqn-chain');
     gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
     gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
     gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
+    // fading-runner: never short a +3% mover holding the upper half of its
+    // range — fighting live momentum donates margin (the QNT lesson).
+    // Enforced even under RELAX: deployment mandate covers entries, not
+    // directionally wrong entries. Breakout-continuation longs are exempt
+    // the other way; shorts have no symmetric exemption.
+    gate(
+      s.direction !== 'SHORT' ||
+        !(s.changePct > 3 && (s.rangePosition ?? 0.5) > 0.6),
+      'fading-runner');
     if (gateFails.length) {
       livePlan.rejects.push({
         symbol: s.asset + 'USDT', direction: s.direction, score: s.score,
         targetPct: s.targetPct, gates: gateFails,
+        rangePosition: s.rangePosition ?? null, changePct: s.changePct ?? null,
       });
       continue;
     }

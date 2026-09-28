@@ -106,8 +106,13 @@ const CORE_FLOOR_PCT = +(process.env.SENTINEL_CORE_FLOOR_PCT || 0.15);
 const CORE_FLOOR_USD = +(process.env.SENTINEL_CORE_FLOOR_USD || 8);
 const CORE_STOP_PCT = +(process.env.SENTINEL_CORE_STOP_PCT || 3);
 const CORE_TARGET_PCT = +(process.env.SENTINEL_CORE_TARGET_PCT || 5.5);
-const CORE_SYMS = (process.env.SENTINEL_CORE_SYMS || 'ETHUSDT,BTCUSDT')
+const CORE_SYMS = (process.env.SENTINEL_CORE_SYMS ?? 'ETHUSDT,BTCUSDT')
   .split(',').map((x) => x.trim()).filter(Boolean);
+// user mandate: symbols the executor must NEVER open — covers signal
+// entries AND mandate roles (core-carry). Empty = no restriction.
+const DENY_SYMS = new Set(
+  (process.env.SENTINEL_DENY_SYMS || '').split(',').map((s) => s.trim()).filter(Boolean)
+);
 
 const log = (...a) => console.log('[exec]', ...a);
 const round = (x, p = 6) => +(+x).toFixed(p);
@@ -235,10 +240,15 @@ const pendingOrders = (symbol) =>
 // TP/SL plans go through place-tpsl-order — profit_plan/loss_plan are
 // illegal on place-plan-order (that endpoint is for trigger/moving orders).
 // holdSide identifies the protected side; no side/orderType needed.
-const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
+const planOrder = (symbol, planType, triggerPrice, size, holdSide, marginMode) =>
   api('POST', '/api/v2/mix/order/place-tpsl-order', {
     body: {
-      symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
+      symbol, productType: PRODUCT,
+      // must match the POSITION's real margin mode — an 'isolated' plan on a
+      // crossed position is accepted by the API then silently invalidated
+      // seconds later, leaving the book naked while logging 'repaired'.
+      // (6 dead pos_loss plans in plan history proved this live.)
+      marginMode: marginMode === 'crossed' ? 'crossed' : 'isolated', marginCoin: MARGIN_COIN,
       planType, triggerPrice: String(triggerPrice), executePrice: /profit/.test(planType) ? String(triggerPrice) : '0', // TP legs limit@trigger — fee mandate; loss legs market (must fill)
       triggerType: 'mark_price', holdSide,
       // pos_profit/pos_loss cover the whole position — the API wants size
@@ -629,21 +639,49 @@ async function main() {
   // drawdown series — a $10k demo peak against a $6 live book reads as a
   // permanent ~99.9% wipeout and trips every DD rail on return to live.
   const peakPath = path.join(__dirname, '..', 'state', `equity-peak-${MODE}.json`);
-  let eqTrack = { peak: equityUsd, samples: [] };
+  let eqTrack = { peak: equityUsd, samples: [], deposits: 0, lastEq: 0, lastUpl: 0 };
   try {
     const prior = JSON.parse(fs.readFileSync(peakPath, 'utf8'));
-    eqTrack.peak = Math.max(equityUsd, +prior.peak || 0);
+    eqTrack.peak = +prior.peak || 0;
     eqTrack.samples = Array.isArray(prior.samples) ? prior.samples : [];
+    eqTrack.deposits = +prior.deposits || 0;
+    eqTrack.lastEq = +prior.lastEq || 0;
+    eqTrack.lastUpl = +prior.lastUpl || 0;
   } catch {}
   const nowMs = Date.now();
+  // deposit detection: equity moves unexplained by the change in open UPL
+  // (realized closes bank into equity with ~no net change; fees shave
+  // cents) are external funding. Deposits corrupt peak/dd — a deposit
+  // resets the peak, fakes zero drawdown, and silently disarms the risk
+  // throttle, so peak/dd must run on trading equity = equity − deposits.
+  const uplNow = [...posBySym.values()].reduce((a, p) => a + (+p.upl || 0), 0);
+  if (eqTrack.lastEq > 0) {
+    const unexplained = equityUsd - eqTrack.lastEq - (uplNow - eqTrack.lastUpl);
+    if (unexplained > 5) {
+      eqTrack.deposits += unexplained;
+      state.actions.push(`deposit detected +$${round(unexplained, 2)} (total funding $${round(eqTrack.deposits, 2)})`);
+      try {
+        fs.appendFileSync(path.join(__dirname, '..', 'state', 'tg-outbox.jsonl'),
+          JSON.stringify({ at: Date.now(), text: `💰 DEPOSIT +$${unexplained.toFixed(2)} detected — deploying per mandate.` }) + '\n');
+      } catch {}
+    } else if (unexplained < -15) {
+      eqTrack.deposits += unexplained; // withdrawals shrink the funding baseline too
+      state.actions.push(`withdrawal detected $${round(unexplained, 2)}`);
+    }
+  }
+  eqTrack.lastEq = equityUsd;
+  eqTrack.lastUpl = uplNow;
+  const tradingEq = equityUsd - eqTrack.deposits;
+  eqTrack.peak = Math.max(tradingEq, eqTrack.peak);
   // a failed account read returns equity=0 — pushing that sample would fake
   // a total wipeout on the rolling DD tape. Only record real reads.
-  if (equityUsd > 0) eqTrack.samples.push([nowMs, equityUsd]);
+  if (equityUsd > 0) eqTrack.samples.push([nowMs, tradingEq]);
   eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
-  try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, at: new Date().toISOString() }); } catch {}
-  const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - equityUsd) / eqTrack.peak) * 100 : 0;
-  const peak24 = Math.max(equityUsd, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
-  const dd24 = peak24 > 0 ? ((peak24 - equityUsd) / peak24) * 100 : 0;
+  try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, deposits: eqTrack.deposits, lastEq: eqTrack.lastEq, lastUpl: eqTrack.lastUpl, at: new Date().toISOString() }); } catch {}
+  const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - tradingEq) / eqTrack.peak) * 100 : 0;
+  const peak24 = Math.max(tradingEq, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
+  const dd24 = peak24 > 0 ? ((peak24 - tradingEq) / peak24) * 100 : 0;
+  state.depositsUsd = round(eqTrack.deposits, 2);
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
   const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
@@ -680,6 +718,10 @@ async function main() {
     protectionRule: 'exactly one TP + one SL per position; orphan positions get protection synthesized; entry emergency-closes if protection placement fails — never naked',
     rebalanceRule: 'a position holding > slot margin gets partially closed to free balance for other slots',
     disconnectRule: 'TP/SL are exchange-side plan orders — a VPS/network outage cannot leave a position unprotected',
+    deniedSymbols: [...DENY_SYMS],
+    manualHold: [...MANUAL],
+    depositsUsd: state.depositsUsd ?? 0,
+    relaxGates: process.env.SENTINEL_GATES_RELAX === '1',
   };
 
   // ---- margin rebalance: a single position may not hold more margin than
@@ -932,6 +974,8 @@ async function main() {
   // EXEC_MAX_ENTRIES_DAY now means what it says — the old wiring let 'day'
   // act as the HOURLY cap: 99 opens in 38h on a $65 book.
   const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_HOUR || 3);
+  // 0/unset-able: operator mandate removes the daily ceiling entirely —
+  // a negative or zero value disables the day-count check.
   const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 8);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
@@ -967,7 +1011,7 @@ async function main() {
     }
     if (legs.length < 2) return 0;
     for (const l of legs)
-      await planOrder(p.symbol, 'profit_plan', l.px, String(l.tsize), p.side);
+      await planOrder(p.symbol, 'profit_plan', l.px, String(l.tsize), p.side, p.marginMode);
     return legs.length;
   };
   // Prefetch all pending plans in parallel — a serial await-per-symbol made
@@ -1052,13 +1096,13 @@ async function main() {
           await cancelPlans(p.symbol);
           await planWithRetry(() =>
             planOrder(p.symbol, 'pos_loss',
-              trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0), '0', p.side));
+              trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0), '0', p.side, p.marginMode));
           // preserve the trader's own TP trigger if one was armed — the
           // rebuild fixes SIZE drift, it doesn't get to rewrite the target
           const keepTp = profitPlan && +profitPlan.triggerPrice > 0 ? +profitPlan.triggerPrice : null;
           await planWithRetry(() =>
             planOrder(p.symbol, 'pos_profit',
-              keepTp || round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side));
+              keepTp || round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side, p.marginMode));
           state.actions.push(
             `resynced ${p.symbol}: rebuilt whole-position protection (pending plan qty ${round(planQty, 4)} > size ${p.size})`
           );
@@ -1105,11 +1149,11 @@ async function main() {
           // ~200ms every ratchet. If the exchange refuses a second stop on
           // the same side, fall back to the old order (cancel then place).
           try {
-            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side);
+            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side, p.marginMode);
             if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
           } catch {
             if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
-            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side);
+            await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side, p.marginMode);
           }
           state.actions.push(why);
         }
@@ -1207,7 +1251,7 @@ async function main() {
             // place-then-cancel, same rule as the ratchet — cancel-first
             // leaves the position naked for the round-trip gap
             const oldId = lossPlan.orderId || lossPlan.planId;
-            await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side));
+            await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side, p.marginMode));
             if (oldId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(oldId)]);
             state.actions.push(`re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
           } catch (e) {
@@ -1222,7 +1266,7 @@ async function main() {
           const pp2 = cm[p.symbol]?.pricePlace ?? 6;
           const wStop = round(p.entry * (1 - (sgn2 * bandPct * 0.7) / 100), pp2);
           try {
-            await planOrder(p.symbol, 'pos_loss', wStop, '0', p.side);
+            await planOrder(p.symbol, 'pos_loss', wStop, '0', p.side, p.marginMode);
             await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
             state.actions.push(`widened ${p.symbol} stop ${round(armedPct, 2)}% -> ${round(bandPct * 0.7, 2)}% — using the room the band affords`);
           } catch (e) { state.errors.push(`widen ${p.symbol}: ${e.message}`); }
@@ -1237,8 +1281,11 @@ async function main() {
       // the synthesized stop must fire BEFORE liquidation or it protects
       // nothing — 100x liq sits ~0.9% out, under the 1.2% default. Clamp to
       // 80% of the entry→liq distance (same bound entry sizing uses).
+      // Manual/foreign positions repair WIDER (78% band): the operator's
+      // mandate is survival room on hand-managed trades, not the engine's
+      // tighter 70% floor — a stop they keep deleting protects nothing.
       const liqPct = bandPct;
-      if (!stopPct) stopPct = Math.max(1.2, Math.min(liqPct * 0.7, 5)); // mandate: band room, not a fixed tight stop
+      if (!stopPct) stopPct = Math.max(1.2, Math.min(liqPct * (manualHold ? 0.78 : 0.7), 5)); // mandate: band room, not a fixed tight stop
       if (liqPct > 0 && stopPct >= liqPct * 0.8) {
         const raw = stopPct;
         stopPct = Math.max(liqPct * 0.75, 0.05); // never tighter than 0.05%
@@ -1246,7 +1293,7 @@ async function main() {
       }
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
-          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
+          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side, p.marginMode);
         state.actions.push(`repaired ${p.symbol}: added pos_loss @ ${round(p.entry * (1 - (sgn * stopPct) / 100), pp)}`);
       }
       if (!hasProfit) {
@@ -1261,9 +1308,9 @@ async function main() {
         } else {
           const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
           try {
-            await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side);
+            await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side, p.marginMode);
           } catch {
-            await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
+            await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side, p.marginMode);
           }
           state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
         }
@@ -1294,7 +1341,7 @@ async function main() {
       if (liqPct > 0 && stopPct >= liqPct * 0.8) stopPct = Math.max(liqPct * 0.75, 0.05);
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
-          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side);
+          round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side, p.marginMode);
         state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_loss`);
       }
       if (!hasProfit) {
@@ -1303,7 +1350,7 @@ async function main() {
           state.actions.push(`protected ${p.symbol} ${p.side} (hedged): TP ladder ${placed} legs`);
         } else {
           await planOrder(p.symbol, 'pos_profit',
-            round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side);
+            round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side, p.marginMode);
           state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
         }
       }
@@ -1368,7 +1415,7 @@ async function main() {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
       }
-      if (entriesThisHour >= MAX_ENTRIES_HOUR || entriesThisDay >= MAX_ENTRIES_DAY) {
+      if ((MAX_ENTRIES_HOUR > 0 && entriesThisHour >= MAX_ENTRIES_HOUR) || (MAX_ENTRIES_DAY > 0 && entriesThisDay >= MAX_ENTRIES_DAY)) {
         state.actions.push(`entry rate cap (${entriesThisHour}/${MAX_ENTRIES_HOUR}/h · ${entriesThisDay}/${MAX_ENTRIES_DAY}/day) — standing down`);
         break;
       }
@@ -1385,6 +1432,13 @@ async function main() {
           !Number.isFinite(o.stopPct) || !Number.isFinite(o.targetPct) ||
           !Number.isFinite(o.leverage) || (o.direction !== 'LONG' && o.direction !== 'SHORT')) {
         state.errors.push(`${o.symbol || '?'}: malformed order fields — skipped`);
+        continue;
+      }
+      // user mandate: denied symbols refuse every entry — signal and
+      // mandate roles alike. Placed before all other gates.
+      if (DENY_SYMS.has(o.symbol)) {
+        state.actions.push(`${o.symbol} ${o.direction}: denied-symbol — entries refused by mandate`);
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['denied-symbol'] });
         continue;
       }
       // user mandate: no shorts — hard refusal independent of scanner gating,
@@ -1527,7 +1581,7 @@ async function main() {
       // its strategy's measured forward-alpha tier: proven-edge setups take
       // their full slot, unproven ones take a probe-size fraction. The
       // per-position cap below stays the absolute ceiling either way.
-      const convMul = Math.min(1.1, Math.max(0.2, +(o.conv ?? 1)));
+      const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1)));
       const marginUsd = Math.min(
         (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul,
         // single-position margin cap — 85%: near-full aggression on a
@@ -1608,6 +1662,12 @@ async function main() {
         (state.entriesLog = state.entriesLog || []).push({
           ts: Date.now(), symbol: o.symbol, direction: o.direction,
           strategy: o.strategy || null,
+          // entry-quality telemetry — the calibration journal needs where
+          // in the day's range and at what conviction each entry fired
+          rangePosition: Number.isFinite(o.rangePosition) ? o.rangePosition : null,
+          score: Number.isFinite(o.score) ? o.score : null,
+          conv: Number.isFinite(o.conv) ? o.conv : null,
+          marginUsd: round(marginUsd, 2), lev, notionalUsd: round(notional, 2),
         });
         // commit the attempt NOW — the ledger normally writes at run end;
         // a mid-run kill must still leave this entry visible to the next
@@ -1678,7 +1738,7 @@ async function main() {
             planOrder(
               o.symbol, 'loss_plan',
               round(fill * (1 - sgn * (o.stopPct / 100)), pp),
-              filledSize, holdSide
+              filledSize, holdSide, pp2?.marginMode || 'isolated'
             )
           )
         );
@@ -1703,7 +1763,7 @@ async function main() {
                   planOrder(
                     o.symbol, 'profit_plan',
                     round(fill * (1 + sgn * (o.targetPct * tr.mult) / 100), pp),
-                    String(tr.tsize), holdSide
+                    String(tr.tsize), holdSide, pp2?.marginMode || 'isolated'
                   )
                 )
               );
@@ -1713,7 +1773,7 @@ async function main() {
                 planOrder(
                   o.symbol, 'profit_plan',
                   round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-                  filledSize, holdSide
+                  filledSize, holdSide, pp2?.marginMode || 'isolated'
                 )
               )
             );
@@ -1724,7 +1784,7 @@ async function main() {
               planOrder(
                 o.symbol, 'profit_plan',
                 round(fill * (1 + sgn * (o.targetPct / 100)), pp),
-                filledSize, holdSide
+                filledSize, holdSide, pp2?.marginMode || 'isolated'
               )
             )
           );
