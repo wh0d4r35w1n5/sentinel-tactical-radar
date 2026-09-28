@@ -208,6 +208,24 @@ const marketOrder = (symbol, side, size, intent, extra = {}) =>
       ...extra,
     },
   });
+// EXEC_MAKER_ENTRIES (default ON — fee mandate: save max on fees). Entries
+// route through a post-only limit at touch when the book allows (maker
+// ~0.02% vs taker ~0.06%); an unfilled/rejected attempt falls back to market
+// for the REMAINDER — a certified entry is never sacrificed for a bp.
+const MAKER_ENTRIES = process.env.EXEC_MAKER_ENTRIES !== '0';
+const limitOrder = (symbol, side, size, price, extra = {}) =>
+  api('POST', '/api/v2/mix/order/place-order', {
+    body: {
+      symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
+      size: String(size), side, orderType: 'limit', price: String(price),
+      timeInForceValue: 'post_only',
+      ...(POS_MODE === 'hedge' ? { tradeSide: 'open' } : {}),
+      ...extra,
+    },
+  });
+const pendingOrders = (symbol) =>
+  api('GET', '/api/v2/mix/order/orders-pending', { qs: `symbol=${symbol}&productType=${PRODUCT}` })
+    .then((d) => { const l = d?.orders || d?.entrustedList || d; return Array.isArray(l) ? l : []; });
 // TP/SL plans go through place-tpsl-order — profit_plan/loss_plan are
 // illegal on place-plan-order (that endpoint is for trigger/moving orders).
 // holdSide identifies the protected side; no side/orderType needed.
@@ -215,7 +233,7 @@ const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
   api('POST', '/api/v2/mix/order/place-tpsl-order', {
     body: {
       symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-      planType, triggerPrice: String(triggerPrice), executePrice: '0',
+      planType, triggerPrice: String(triggerPrice), executePrice: /profit/.test(planType) ? String(triggerPrice) : '0', // TP legs limit@trigger — fee mandate; loss legs market (must fill)
       triggerType: 'mark_price', holdSide,
       // pos_profit/pos_loss cover the whole position — the API wants size
       // OMITTED for those, not a literal '0' (a zero-size param can read as
@@ -937,10 +955,11 @@ async function main() {
         let trig = lossPlan && +lossPlan.triggerPrice > 0 ? +lossPlan.triggerPrice : null;
         const sgn = p.side === 'long' ? 1 : -1;
         const pp0 = cm[p.symbol]?.pricePlace ?? 6;
-        let stopPct = trig ? (Math.abs(p.entry - trig) / p.entry) * 100 : 1.2;
+        let stopPct = trig ? (Math.abs(p.entry - trig) / p.entry) * 100 : 0;
         // a drifted stop parked past the liquidation band protects nothing —
         // the rebuild must clamp it inside the band, not re-place the defect
         const liqPct = p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 0;
+        if (!stopPct) stopPct = Math.max(1.2, Math.min(liqPct * 0.7, 5)); // mandate: band room, not a fixed tight stop
         if (liqPct > 0 && stopPct >= liqPct * 0.8) {
           stopPct = Math.max(liqPct * 0.75, 0.05);
           trig = round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
@@ -1109,16 +1128,30 @@ async function main() {
           }
         }
       }
+      if (manualHold && lossPlan && bandPct > 1.5) {
+        const armedPct = (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100;
+        if (armedPct < bandPct * 0.5) {
+          const sgn2 = p.side === 'long' ? 1 : -1;
+          const pp2 = cm[p.symbol]?.pricePlace ?? 6;
+          const wStop = round(p.entry * (1 - (sgn2 * bandPct * 0.7) / 100), pp2);
+          try {
+            await planOrder(p.symbol, 'pos_loss', wStop, '0', p.side);
+            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
+            state.actions.push(`widened ${p.symbol} stop ${round(armedPct, 2)}% -> ${round(bandPct * 0.7, 2)}% — using the room the band affords`);
+          } catch (e) { state.errors.push(`widen ${p.symbol}: ${e.message}`); }
+        }
+      }
       if (lossPlan && hasProfit) continue;
       const sgn = p.side === 'long' ? 1 : -1;
       const pp = cm[p.symbol]?.pricePlace ?? 6;
       let stopPct = lossPlan && +lossPlan.triggerPrice > 0
         ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
-        : 1.2;
+        : 0;
       // the synthesized stop must fire BEFORE liquidation or it protects
       // nothing — 100x liq sits ~0.9% out, under the 1.2% default. Clamp to
       // 80% of the entry→liq distance (same bound entry sizing uses).
       const liqPct = bandPct;
+      if (!stopPct) stopPct = Math.max(1.2, Math.min(liqPct * 0.7, 5)); // mandate: band room, not a fixed tight stop
       if (liqPct > 0 && stopPct >= liqPct * 0.8) {
         const raw = stopPct;
         stopPct = Math.max(liqPct * 0.75, 0.05); // never tighter than 0.05%
@@ -1166,10 +1199,11 @@ async function main() {
       const hasProfit = existing.some((x) => /profit/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
       let stopPct = lossPlan && +lossPlan.triggerPrice > 0
         ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
-        : 1.2;
+        : 0;
       const liqPct = p.liq > 0
         ? (Math.abs(p.entry - p.liq) / p.entry) * 100
         : (p.lev > 0 ? Math.max(0.2, 90 / p.lev) : 0);
+      if (!stopPct) stopPct = Math.max(1.2, Math.min(liqPct * 0.7, 5)); // mandate: band room, not a fixed tight stop
       if (liqPct > 0 && stopPct >= liqPct * 0.8) stopPct = Math.max(liqPct * 0.75, 0.05);
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
@@ -1435,7 +1469,29 @@ async function main() {
       try {
         await setIsolated(o.symbol);
         await setLeverage(o.symbol, lev);
-        await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid });
+        let needSize = size;
+        if (MAKER_ENTRIES) {
+          try {
+            const q = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${o.symbol}&productType=${PRODUCT}` });
+            const tk = Array.isArray(q) ? q[0] : q;
+            const touch = sgn > 0 ? +tk?.bidPr : +tk?.askPr; // join own side — post-only, never crosses
+            if (touch > 0) {
+              const lo = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, round(touch, cm[o.symbol]?.pricePlace ?? 6), { clientOid: coid });
+              const oid = String(lo?.orderId || '');
+              await new Promise((r) => setTimeout(r, 1200));
+              const still = (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid);
+              if (still) {
+                const filled = +(still.filledVolume ?? still.filledQty ?? 0) || 0;
+                const sp2 = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
+                needSize = filled > 0 ? Math.floor((size - filled) * sp2) / sp2 : size;
+                await api('POST', '/api/v2/mix/order/cancel-order', { body: { symbol: o.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, orderId: oid } }).catch(() => {});
+              } else needSize = 0;
+            }
+          } catch { /* limit path failed — taker covers full size below */ }
+        }
+        if (needSize > 0)
+          await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
+        else state.actions.push(`${o.symbol}: maker fill — taker fee saved`);
         // record the attempt immediately — the fills journal won't see this
         // for ~30s, and the rate cap must count it now (probe loops burn
         // fees per attempt, not per recorded fill)
