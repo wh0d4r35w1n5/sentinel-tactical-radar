@@ -65,6 +65,10 @@ const LIVE_ARMED =
 const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const MAX_POSITIONS = +(process.env.LIVE_MAX_POSITIONS || (RISK_MAX ? 12 : 10));
 const TARGET_POSITIONS = +(process.env.LIVE_TARGET_POSITIONS || 4);
+// deployment mandate: leftover margin tops up winning positions once the
+// order queue is exhausted — pyramiding strength only, never losers.
+const TOPUP_FLOOR_USD = +(process.env.SENTINEL_TOPUP_FLOOR_USD || 3);
+const TOPUP_MAX = +(process.env.SENTINEL_TOPUP_MAX || 2);
 const DD_KILL = +(process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
 // EXEC_EARLY_CUTS — the verdict-ladder time/redness cuts ('scalp-timeout').
 // Operator mandate: positions exit via exchange TP/SL or manual flatten ONLY
@@ -543,6 +547,7 @@ async function main() {
   state.positions = rawPos.map((p) => ({
     symbol: p.symbol, side: p.holdSide, size: +p.total,
     entry: +p.openPriceAvg, upl: +p.unrealizedPL, lev: +p.leverage,
+    margin: +p.marginSize || 0,
     marginMode: p.marginMode, cTime: +(p.cTime || 0), liq: +p.liquidationPrice || 0,
   }));
   // hedge-mode accounts can hold both directions on one symbol — a
@@ -1361,12 +1366,27 @@ async function main() {
 
   // ---- entries: only when the real drawdown guards are clear and capacity
   // allows — plan.killSwitch is sim-derived and logged for reference only ----
-  const protectionHalted =
+  let protectionHalted =
     Number.isFinite(state.protectionHaltUntil) && Date.now() < state.protectionHaltUntil;
   if (protectionHalted) {
-    state.actions.push(
-      `protection-halt until ${new Date(state.protectionHaltUntil).toISOString().slice(11, 19)}Z — TPSL placement failed earlier, entries paused (no naked probes)`
-    );
+    // auto-clear: the halt exists so entries can't fire while a placement
+    // failure might have left a position naked. The repair loops above
+    // already ran — if every position now verifies SL+TP on the exchange
+    // the risk is gone and the remaining timer only blocks deployment.
+    const allProtected = state.positions.every((p) => {
+      const ex = plansOf(p.symbol).filter((x) => !x.holdSide || x.holdSide === p.side);
+      return ex.some((x) => /loss|stop|moving/i.test(x.planType || '')) &&
+             ex.some((x) => /profit/i.test(x.planType || ''));
+    });
+    if (allProtected) {
+      delete state.protectionHaltUntil;
+      protectionHalted = false;
+      state.actions.push('protection-halt cleared early — all positions verified SL+TP on exchange');
+    } else {
+      state.actions.push(
+        `protection-halt until ${new Date(state.protectionHaltUntil).toISOString().slice(11, 19)}Z — TPSL placement failed earlier, entries paused (no naked probes)`
+      );
+    }
   }
   if (protectionHalted || entriesBlocked) {
     if (entriesBlocked) state.actions.push(`${entriesBlocked} — no new entries`);
@@ -1438,7 +1458,7 @@ async function main() {
       // mandate roles alike. Placed before all other gates.
       if (DENY_SYMS.has(o.symbol)) {
         state.actions.push(`${o.symbol} ${o.direction}: denied-symbol — entries refused by mandate`);
-        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['denied-symbol'] });
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['denied-symbol'] });
         continue;
       }
       // user mandate: no shorts — hard refusal independent of scanner gating,
@@ -1450,7 +1470,7 @@ async function main() {
       if (!o.core) { // mandate roles (core-carry deploys) are exempt from tape gates
         if (regimeChop) {
           state.actions.push(`${o.symbol} ${o.direction}: regime-chop — entries halted this window`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['regime-chop'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['regime-chop'] });
           continue;
         }
         const corrHit = Object.entries(corrMap[o.symbol] || {}).find(([s2]) => {
@@ -1460,13 +1480,13 @@ async function main() {
         });
         if (corrHit) {
           state.actions.push(`${o.symbol} ${o.direction}: corr-cluster — ${corrHit[0]} already held same direction (rho ${corrHit[1]})`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['corr-cluster'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['corr-cluster'] });
           continue;
         }
         const fr = fundMap[o.symbol];
         if (fr != null && ((o.direction === 'LONG' && fr > FUND_VETO) || (o.direction === 'SHORT' && fr < -FUND_VETO))) {
           state.actions.push(`${o.symbol} ${o.direction}: funding ${fr}%/8h hostile — vetoed`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, gates: ['funding-hostile'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['funding-hostile'] });
           continue;
         }
       }
@@ -1665,10 +1685,12 @@ async function main() {
           // entry-quality telemetry — the calibration journal needs where
           // in the day's range and at what conviction each entry fired
           rangePosition: Number.isFinite(o.rangePosition) ? o.rangePosition : null,
+          changePct: Number.isFinite(o.changePct) ? o.changePct : null,
           score: Number.isFinite(o.score) ? o.score : null,
           conv: Number.isFinite(o.conv) ? o.conv : null,
           marginUsd: round(marginUsd, 2), lev, notionalUsd: round(notional, 2),
         });
+        state.entriesLog = state.entriesLog.slice(-500);
         // commit the attempt NOW — the ledger normally writes at run end;
         // a mid-run kill must still leave this entry visible to the next
         // cycle's dedup/rate caps (belt-and-suspenders under the run lock)
@@ -1837,6 +1859,59 @@ async function main() {
       }
     }
   }
+
+  // ---- deployment mandate: capital never idles. When the order queue is
+  // exhausted (gated/cooldowns/denied) but margin remains, top up the
+  // strongest open positions — pyramiding winners, NEVER averaging losers.
+  if (!protectionHalted && !cmdFlat && marginFree > TOPUP_FLOOR_USD) {
+    const capUsd = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
+    const winners = [...posBySym.values()]
+      .filter((p) => +p.upl > 0 && !MANUAL.has(p.symbol) && !DENY_SYMS.has(p.symbol) && (p.marginMode || '') !== 'crossed')
+      .sort((a, b) => (b.upl / (b.size * b.entry)) - (a.upl / (a.size * a.entry)))
+      .slice(0, TOPUP_MAX);
+    for (const p of winners) {
+      if (!(marginFree > TOPUP_FLOOR_USD)) break;
+      try {
+        const tk = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${p.symbol}&productType=${PRODUCT}` });
+        const px = +((tk.data || [])[0]?.lastPr || (tk.data || [])[0]?.markPrice || 0);
+        if (!(px > 0)) continue;
+        const lev = Math.max(1, Math.min(+p.lev || 10, +(process.env.SENTINEL_MAX_LEV || 40)));
+        // the cap is per-position TOTAL margin — subtract what's already
+        // posted so a big position can't pyramid past it. All remaining
+        // free margin flows to the strongest winner first: no asymptotic
+        // idle split like the old /winners.length math
+        const room = Math.max(0, capUsd - (+p.margin || 0));
+        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3); // same fee headroom as entries
+        const size = sizeFor(cm, p.symbol, marginUsd * lev, px);
+        if (!size) { state.actions.push(`${p.symbol}: top-up skipped — below contract minimum`); continue; }
+        await marketOrder(p.symbol, p.side === 'short' ? 'sell' : 'buy', size, 'open');
+        marginFree -= marginUsd;
+        // top-ups are real entries — journal them so dedup, rate stats and
+        // the calibration layer count the deployment, strategy:'top-up'
+        // keeps them separable from signal entries
+        (state.entriesLog = state.entriesLog || []).push({
+          ts: Date.now(), symbol: p.symbol, direction: p.side === 'short' ? 'SHORT' : 'LONG',
+          strategy: 'top-up', marginUsd: round(marginUsd, 2), lev, notionalUsd: round(marginUsd * lev, 2),
+        });
+        p.margin = (+p.margin || 0) + marginUsd;
+        state.actions.push(`top-up ${p.symbol}: +${size} ${p.side} @~${px} — deployed leftover margin (upl ${round(p.upl, 2)})`);
+      } catch (e) { state.errors.push(`top-up ${p.symbol}: ${e.message}`); }
+    }
+  }
+  // idle-margin explainer: capital left undeployed carries its reason on
+  // the ledger — the dashboard answers "why is money sitting" itself
+  if (marginFree > 0.01) {
+    const capUsd = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
+    const winners = [...posBySym.values()].filter((p) => +p.upl > 0 && (p.margin || 0) < capUsd);
+    state.idleMargin = {
+      usd: round(marginFree, 2),
+      reason: marginFree <= TOPUP_FLOOR_USD ? 'below top-up floor + contract minimums — dust, undeployable'
+        : protectionHalted ? 'protection-halt active — entries and top-ups paused'
+        : cmdFlat ? 'flatten pending — refusing to deploy into a closing book'
+        : !winners.length ? 'no profitable positions below cap to top up (never averages losers)'
+        : 'winners capped or add-size below contract minimum',
+    };
+  } else delete state.idleMargin;
 
   // ---- real fill journal: pull the exchange's fill list, dedupe into a
   // persistent store, expose the last 50 on the ledger. This is the actual

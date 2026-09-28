@@ -388,7 +388,10 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="liveRows"></div>
     <div id="liveRisk" class="sub" style="margin-top:8px;font-size:10px"></div>
     <div id="liveFills"></div>
-    <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px"></div>
+    <div id="liveGuard"></div>
+    <div id="liveGates"></div>
+    <div id="liveBench"></div>
+    <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px;max-height:300px;overflow-y:auto"></div>
   </div>
   <div class="panel neon" id="godPanel" style="margin-top:16px;display:none">
     <div class="ptitle">GOD · the overseer <span class="sub">— audits every system invariant each cycle · pure read, never mutates, cannot hide</span><span id="godVerdict" style="float:right"></span></div>
@@ -644,8 +647,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -839,38 +842,130 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           ['Equity',eqAud?eqAud:(src.equityUsd!=null?'$'+src.equityUsd+' USD':'—'),src.mode+(src.equityUsd!=null?' · $'+src.equityUsd+' USD':'')],
           ['Positions',pos.length,'from the exchange, not the model'],
           ...(src.cycleMs!=null?[['Cycle',(src.cycleMs/1e3).toFixed(1)+'s',src.planAgeMs!=null?`plan age ${(src.planAgeMs/1e3).toFixed(0)}s`:'executor runtime']]:[]),
+          // freshness is its own stat — a dead executor showing last-hour
+          // data as if current is the lie this catches
+          ...(src.refreshedAt?[['Ledger',ago(Date.parse(src.refreshedAt))+' ago',(Date.now()-Date.parse(src.refreshedAt))>5*6e4?'<b style="color:var(--red)">STALE — executor may be dead</b>':'fresh']]:[]),
           ['Actions',(src.actions||[]).length,'this execution run'],
-          ['Errors',(src.errors||[]).length,'any failure is listed, not hidden'],
+          ['Errors',(src.errors||[]).length?'#'+((src.errors||[]).length):'0','any failure is listed, not hidden'],
         ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
         const heldSyms=new Set(src.manualHoldActive||[]);
-        $('liveRows').innerHTML=pos.map(p=>`<div class="ledger-row"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span>${heldSyms.has(p.symbol)?' <span class="sub" style="color:var(--warn,#ffd166)">MANUAL</span>':''} <span class="sub">${p.size} units</span></span><span class="num ${p.upl>=0?'up':'dn'}">${p.upl>=0?'+':''}${p.upl} UPL</span></div>`).join('');
+        // position cards — every position shows its real protection, not
+        // just size/UPL: SL trigger(s), TP ladder legs, leverage, posted
+        // margin, and distance from the entry to the liquidation print
+        $('liveRows').innerHTML=pos.map(p=>{
+          const plans=((src.plans||{})[p.symbol]||[]).filter(x=>!x.holdSide||x.holdSide===p.side);
+          const sls=plans.filter(x=>/loss|stop|moving/i.test(x.planType||'')).map(x=>+x.triggerPrice).filter(isFinite);
+          const tps=plans.filter(x=>/profit/i.test(x.planType||'')).map(x=>+x.triggerPrice).filter(isFinite)
+            .sort((a,b)=>p.side==='long'?a-b:b-a);
+          const liqD=(p.liq>0&&p.entry>0)?Math.abs(p.entry-p.liq)/p.entry*100:null;
+          const live=window.__live&&__live.price(p.symbol);
+          const liveUpl=(live>0&&p.entry>0&&p.size>0)?(live-p.entry)*p.size*(p.side==='long'?1:-1):null;
+          const upl=(liveUpl!=null&&isFinite(liveUpl))?liveUpl:p.upl;
+          return `<div class="ledger-row" style="display:block"><div style="display:flex;justify-content:space-between"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span>${heldSyms.has(p.symbol)?' <span class="sub" style="color:var(--warn,#ffd166)">MANUAL</span>':''} <span class="sub">${p.size} units${p.lev?' · '+p.lev+'x':''}${p.margin?' · $'+(+p.margin).toFixed(2)+' mgn':''}</span></span><span class="num ${upl>=0?'up':'dn'}" data-liveupl="${p.symbol}:${p.side}:${p.entry}:${p.size}">${upl>=0?'+':''}${(+upl).toFixed(2)} UPL${live?' · live':''}</span></div><div class="sub" style="font-size:9px;margin-top:1px">${live?'mark '+live+' · ':''}entry ${p.entry} · SL ${sls.length?sls.join(' / '):'<span style="color:var(--red)">NONE</span>'} · TP ${tps.length?tps.join(' → '):'<span style="color:var(--warn,#ffd166)">none</span>'}${liqD!=null?' · liq '+liqD.toFixed(1)+'%':''}</div></div>`;
+        }).join('');
+        // live UPL ticks — between ledger refreshes the WS ticker repaints
+        // each position's UPL so the panel breathes at market speed
+        if(window.__live&&!render._uplSub){
+          render._uplSub=1;
+          __live.onTick(function(){
+            document.querySelectorAll('[data-liveupl]').forEach(function(el){
+              const m=el.getAttribute('data-liveupl').split(':');
+              const px=__live.price(m[0]);if(!(px>0))return;
+              const u=(px-(+m[2]))*(+m[3])*(m[1]==='long'?1:-1);
+              el.innerHTML=(u>=0?'+':'')+u.toFixed(2)+' UPL · live';
+              el.className='num '+(u>=0?'up':'dn');
+            });
+          });
+        }
         // risk rails — the kill-switches and limits, made visible instead
         // of implied. External teardown flagged them as "not visible".
         if(src.risk){
           const r=src.risk;
           const rails=[
-            [`DD ${r.ddPct}%`, `kill at ${r.killSwitchPct}%`, r.ddPct>=r.killSwitchPct],
+            [`trading DD ${r.ddPct}%`, `excl. deposits · kill at ${r.killSwitchPct}%`, r.ddPct>=r.killSwitchPct],
             [`24h -${r.dd24Pct}%`, `halt at ${r.dailyHaltPct}%`, r.dd24Pct>=r.dailyHaltPct],
             [`${(src.positions||[]).length}/${r.maxPositions}`, r.sizingUsd, false],
             ['lev', r.leverageRule, false],
             ['TP+SL', r.protectionRule, false],
             ['net-down', r.disconnectRule, false],
           ];
+          // severity per rail: fail=red TRIPPED · warn=amber ! · ok=green ● · info=grey ·
+          const sev=t=>t?'fail':'ok';
+          const rails2=rails.map(([k,v,t])=>[k,v,sev(t)]);
+          // capital deployment visibility — idle money carries its reason
+          if(src.idleMargin)rails2.push([`idle $${src.idleMargin.usd}`,src.idleMargin.reason||'',src.idleMargin.usd>10?'warn':'info']);
+          // external funding is not trading profit — shown so equity growth
+          // can't masquerade as performance
+          if(src.depositsUsd)rails2.push([`deposits $${(+src.depositsUsd).toFixed(0)}`,'external funding, not PnL','info']);
+          if((r.deniedSymbols||[]).length)rails2.push(['denied',r.deniedSymbols.join(',')+' — new entries refused','info']);
+          if((r.manualHold||[]).length)rails2.push(['manual-hold',r.manualHold.join(',')+' — exits off, protection still enforced','info']);
+          if(r.relaxGates)rails2.push(['gates-relaxed','advisory vetoes bypassed — structural protections still on','warn']);
+          const sevStyle={fail:['TRIPPED','var(--red)'],warn:['!','var(--warn,#ffd166)'],ok:['●','var(--grn)'],info:['·','var(--mut)']};
           $('liveRisk').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Risk rails <span class="sub">— exchange-enforced, survive bot/network failure</span></div>'+
-            rails.map(([k,v,tripped])=>`<div class="ledger-row"><span><b style="font-size:10px;letter-spacing:.06em;color:${tripped?'var(--red)':'var(--grn)'}">${tripped?'TRIPPED':'●'} ${k}</b> <span class="sub">${v}</span></span></div>`).join('');
+            rails2.map(([k,v,s])=>{const[g,c]=sevStyle[s]||sevStyle.info;return `<div class="ledger-row"><span><b style="font-size:10px;letter-spacing:.06em;color:${c}">${g} ${k}</b> <span class="sub">${v}</span></span></div>`}).join('');
         }
         // real fill journal — actual exchange fills with charged fees,
         // the timestamped track record (not the paper model)
         const rf=(src.realFills||[]).slice(0,12);
         if(rf.length){
           const rs=src.realizedStats;
-          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?' · '+rs.winRatePct+'% win over '+rs.closes+' closes · net $'+rs.netUsd+' · PF '+rs.profitFactor:'')+'</span></div>')+
+          // attribution split — the engine's record vs manual fills, kept
+          // separate so neither can borrow the other's PnL
+          const bs=rs&&rs.bySource,bsStr=bs?' · bot '+(bs.bot.closes||0)+'c $'+(bs.bot.netUsd??'—')+' · manual '+(bs.manual.closes||0)+'c $'+(bs.manual.netUsd??'—')+(bs.legacy&&bs.legacy.closes?' · legacy '+bs.legacy.closes+'c $'+bs.legacy.netUsd:''):'';
+          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?' · '+rs.winRatePct+'% win over '+rs.closes+' closes · net $'+rs.netUsd+' · PF '+rs.profitFactor:'')+bsStr+'</span></div>')+
             rf.map(f=>{const net=(f.profit||0)-(f.fee||0);return `<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.tradeSide||''} ${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · net ${net>=0?'+':''}${net.toFixed(4)} · ${ago(f.ts)}</span></span><span class="num ${net>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`}).join('');
         }
         // gate-reject transparency — 'why didn't it trade' answers itself
-        const rj=(src.rejects||[]).map(r=>`· <span class="sub">rejected</span> ${r.symbol} ${r.direction} <span class="sub">${(r.gates||[]).join(', ')}</span>`);
+        // rejects carry where-in-range + 24h move context — a 'chasing-extreme'
+        // veto at range 92% explains itself without reading the scanner
+        const rj=(src.rejects||[]).map(r=>`· <span class="sub">rejected</span> ${r.symbol} ${r.direction} <span class="sub">${(r.gates||[]).join(', ')}${r.rangePosition!=null?` · range ${Math.round(r.rangePosition*100)}%`:''}${r.changePct!=null?` · 24h ${r.changePct>=0?'+':''}${r.changePct}%`:''}</span>`);
         if((src.manualHoldStale||[]).length)rj.unshift(`· <span class="sub" style="color:var(--warn,#ffd166)">stale manual-hold on flat ${src.manualHoldStale.join(',')} — future entries on it go unmanaged</span>`);
         $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...rj,...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
+
+        // ---- liquidation guard — per-position distance-to-liq ladder +
+        // the trim history, straight from the guard's own api artifact
+        if(liqG&&liqG.positions){
+          const rows=Object.entries(liqG.positions).sort((a,b)=>a[1].distPct-b[1].distPct);
+          const trims=(liqG.trims||[]).slice(-4).reverse();
+          const gAge=liqG.at?ago(liqG.at):null;
+          $('liveGuard').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Liq guard <span class="sub">— progressive 5% clips inside 2% of liquidation · state '+(gAge?gAge+' ago':'—')+'</span></div>'+
+            rows.map(([k,p])=>{
+              const d=+p.distPct,c=d<=2?'var(--red)':d<=4?'var(--warn,#ffd166)':'var(--grn)';
+              const w=Math.max(2,Math.min(100,100-d*8));
+              return `<div class="ledger-row"><span><b style="font-size:10px">${k}</b> <span class="sub">liq ${p.liq} · mark ${p.mark}</span></span><span><span class="num" style="color:${c};font-size:10px">${d.toFixed(2)}%</span><span style="display:inline-block;width:60px;height:4px;background:rgba(255,255,255,.08);margin-left:6px;vertical-align:middle;border-radius:2px"><span style="display:block;height:4px;width:${w}%;background:${c};border-radius:2px"></span></span></span></div>`;
+            }).join('')+
+            (trims.length?'<div class="sub" style="margin-top:3px">'+trims.map(t=>`✂️ ${t.sym} −${t.size} @${t.mark} ${ago(t.at)}`).join(' · ')+'</div>':'');
+        }
+        // ---- gate-reject histogram — 24h totals of every veto reason,
+        // so "why isn't it trading" answers itself at a glance
+        if(gateSt&&gateSt.totals24h){
+          const tot=Object.entries(gateSt.totals24h).sort((a,b)=>b[1]-a[1]);
+          const mx=tot.length?tot[0][1]:1;
+          $('liveGates').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Veto histogram <span class="sub">— 24h gate rejections, all candidates</span></div>'+
+            tot.slice(0,10).map(([g,n])=>`<div class="ledger-row"><span class="sub" style="font-size:10px">${g}</span><span><span style="display:inline-block;height:6px;width:${Math.max(3,n/mx*80)}px;background:var(--vio);border-radius:2px;vertical-align:middle"></span> <b class="num" style="font-size:10px">${n}</b></span></div>`).join('');
+        }
+        // ---- freqtrade benchmark — the public-baseline comparison, kept
+        // visually distinct from live: simulated fills, not real money
+        if(ftBench&&ftBench.closed!=null){
+          const fb=ftBench;
+          $('liveBench').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Freqtrade baseline <span class="sub">— dry-run comparator, same tape, NOT live money</span></div>'+
+            `<div class="ledger-row"><span><b style="font-size:10px">${fb.strategy||'freqtrade'}</b> <span class="sub">${fb.closed} closed · ${fb.open||0} open · ${fb.winRatePct??'—'}% win · PF ${fb.profitFactor??'—'}</span></span><span class="num ${(fb.netUsd||0)>=0?'up':'dn'}">${(fb.netUsd||0)>=0?'+':''}$${fb.netUsd}</span></div>`+
+            ((fb.lastTrades||[]).slice(-4).reverse().map(t=>`<div class="ledger-row"><span class="sub">${t.pair} · ${t.why||''}</span><span class="num ${(t.pnlUsd||0)>=0?'up':'dn'}" style="font-size:10px">${(t.pnlUsd||0)>=0?'+':''}$${t.pnlUsd}</span></div>`).join(''));
+        }
+        // ---- MAE/MFE calibration — median excursion per strategy family,
+        // the data that sets whether stops are too tight or too loose
+        if(maeMfe&&maeMfe.byFamily){
+          const fams=Object.entries(maeMfe.byFamily).filter(([k,v])=>(v.n||0)>=3).sort((a,b)=>b[1].n-a[1].n).slice(0,5);
+          if(fams.length)$('liveActs').innerHTML+='<div class="ptitle" style="font-size:9px;margin:10px 0 4px">Stop calibration <span class="sub">— median adverse vs favorable excursion by family</span></div>'+
+            fams.map(([k,v])=>`<div class="ledger-row"><span class="sub" style="font-size:10px">${k} <span style="color:var(--mut)">n=${v.n}</span></span><span class="sub">MAE <b class="dn">${v.medMaePct??'—'}%</b> · MFE <b class="up">${v.medMfePct??'—'}%</b></span></div>`).join('');
+        }
+        // ---- entry telemetry — the last few entries with where-in-range
+        // they fired, so chase vs dip entries are distinguishable on sight
+        const el=(src.entriesLog||[]).slice(-5).reverse();
+        if(el.length){
+          $('liveActs').innerHTML+='<div class="ptitle" style="font-size:9px;margin:10px 0 4px">Recent entries <span class="sub">— what the engine actually committed, with entry context</span></div>'+
+            el.map(e=>`<div class="ledger-row"><span class="sub"><b style="color:var(--fg)">${e.symbol}</b> ${e.direction||''} ${e.strategy?'· '+e.strategy:''}${e.rangePosition!=null?' · range '+Math.round(e.rangePosition*100)+'%':''}${e.score!=null?' · score '+e.score:''}${e.notionalUsd?' · $'+e.notionalUsd:''}</span><span class="sub" style="font-size:9px">${ago(e.ts)}</span></div>`).join('');
+        }
       }
     }
     // ---- GOD overseer — every invariant, audited each cycle ----

@@ -2468,6 +2468,11 @@ async function main() {
         conv,
         reason: s.ta?.reasons?.[0] || null,
         ver: s.ver ?? ENGINE_VERSION,
+        // entry-quality telemetry — the exec journals these so the
+        // calibration layer can correlate fills with range/confluence
+        rangePosition: s.rangePosition ?? null,
+        changePct: s.changePct ?? null,
+        score: s.score ?? null,
       });
     }
   }

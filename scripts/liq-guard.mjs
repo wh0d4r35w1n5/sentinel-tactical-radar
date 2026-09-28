@@ -196,7 +196,12 @@ const pickMark = async (sym) => {
 };
 
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return {}; } };
-const writeState = (o) => { try { fs.writeFileSync(STATE + '.tmp', JSON.stringify(o)); fs.renameSync(STATE + '.tmp', STATE); } catch {} };
+const API_STATE = path.join(__dirname, '..', 'api', 'liq-guard.json');
+const writeState = (o) => {
+  try { fs.writeFileSync(STATE + '.tmp', JSON.stringify(o)); fs.renameSync(STATE + '.tmp', STATE); } catch {}
+  // publish to api/ too — the dashboard reads artifacts, not state/
+  try { fs.writeFileSync(API_STATE, JSON.stringify(o)); } catch {}
+};
 // outbound alerts — tg-watch drains this JSONL into Saved Messages (~30s lag)
 const OUTBOX = path.join(__dirname, '..', 'state', 'tg-outbox.jsonl');
 const outbox = (text) => { try { fs.appendFileSync(OUTBOX, JSON.stringify({ ts: Date.now(), text }) + '\n'); } catch {} };

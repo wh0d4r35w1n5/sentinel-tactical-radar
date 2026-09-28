@@ -171,6 +171,24 @@ if (ll) {
   }
   add('exec-errors', (ll.errors || []).length ? 'WARN' : 'PASS',
     (ll.errors || []).length ? ll.errors.slice(0, 4).join(' · ') : 'clean run, zero errors');
+
+  // ---------- 6b. liquidation-guard liveness — the guard is the last line
+  // before liquidation; a dead process means open positions are unwatched.
+  // It writes api/liq-guard.json every cycle (~300ms), so minutes = dead.
+  {
+    const lg = readJson('liq-guard.json');
+    const openPos = (ll.positionsAfter || ll.positions || []).length;
+    if (!lg) {
+      add('liq-guard', openPos ? 'FAIL' : 'WARN',
+        openPos ? 'no liq-guard artifact with positions open — guard dead or never started'
+                : 'no liq-guard artifact (flat book — tolerable)');
+    } else {
+      const la = ageMin(lg.at);
+      const tracked = Object.keys(lg.positions || {}).length;
+      add('liq-guard', la > 2 ? (openPos ? 'FAIL' : 'WARN') : 'PASS',
+        `guard state ${Number.isFinite(la) ? la.toFixed(1) : '∞'}min old · ${tracked} tracked · ${(lg.trims || []).length} lifetime trims`);
+    }
+  }
 } else {
   add('exec-mode', 'WARN', 'no live-ledger.json — executor has not run (shadow/off or first cycle)');
 }
