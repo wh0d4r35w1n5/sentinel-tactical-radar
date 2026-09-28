@@ -900,6 +900,9 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           if((r.deniedSymbols||[]).length)rails2.push(['denied',r.deniedSymbols.join(',')+' — new entries refused','info']);
           if((r.manualHold||[]).length)rails2.push(['manual-hold',r.manualHold.join(',')+' — exits off, protection still enforced','info']);
           if(r.relaxGates)rails2.push(['gates-relaxed','advisory vetoes bypassed — structural protections still on','warn']);
+          // account-level circuit breakers — the rail that stops churn
+          const cb=r.circuitBreakers;
+          if(cb)rails2.push([cb.tripped?'⚠ breaker tripped':'breakers', cb.tripped||`armed · 24h net $${cb.net24Usd} · fees $${cb.fees24Usd} · wr20 ${cb.winRate20??'—'}%`, cb.tripped?'warn':'ok']);
           const sevStyle={fail:['TRIPPED','var(--red)'],warn:['!','var(--warn,#ffd166)'],ok:['●','var(--grn)'],info:['·','var(--mut)']};
           $('liveRisk').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Risk rails <span class="sub">— exchange-enforced, survive bot/network failure</span></div>'+
             rails2.map(([k,v,s])=>{const[g,c]=sevStyle[s]||sevStyle.info;return `<div class="ledger-row"><span><b style="font-size:10px;letter-spacing:.06em;color:${c}">${g} ${k}</b> <span class="sub">${v}</span></span></div>`}).join('');

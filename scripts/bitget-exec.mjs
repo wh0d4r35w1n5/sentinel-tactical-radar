@@ -697,6 +697,46 @@ async function main() {
     try { const c = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cmd-halt.json'), 'utf8')); return c.halted ? c : null; }
     catch { return null; }
   })();
+  // ---- account-level circuit breakers: per-trade stops protect single
+  // positions; these stop the ENGINE from grinding the account down via
+  // redeploy-after-loss churn (the 181-closes / -$176 / 16% win bleed that
+  // ate a deposit). Rolling 24h on BOT fills only (src 'api' + untagged
+  // legacy) — the user's manual trades never trip the engine's breakers.
+  let cbReason = null;
+  try {
+    const fills = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills || [])
+      .filter((f) => !f.src || f.src === 'api');
+    const day = fills.filter((f) => Date.now() - (f.ts || 0) < 86400e3);
+    const closes = fills.filter((f) => f.tradeSide === 'close');
+    const last20 = closes.slice(-20);
+    const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
+    const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
+    const net24 = dayPnl - fees24;
+    const wr = last20.length ? last20.filter((f) => (f.profit || 0) - (f.fee || 0) > 0).length / last20.length : null;
+    const LOSS_HALT_PCT = +(process.env.SENTINEL_LOSS_HALT_PCT || 8);   // realized bleed vs equity
+    const WR_HALT_PCT = +(process.env.SENTINEL_WR_HALT_PCT || 30);      // rolling win-rate floor
+    const WR_MIN_N = +(process.env.SENTINEL_WR_MIN_N || 12);            // sample size before WR gates
+    const FEE_HALT_PCT = +(process.env.SENTINEL_FEE_HALT_PCT || 10);    // fee churn vs equity
+    const STREAK_HALT = +(process.env.SENTINEL_STREAK_HALT || 6);       // consecutive losers stand-down
+    const RESERVE_USD = +(process.env.SENTINEL_RESERVE_USD || 0);       // equity reserved from deployment
+    if (net24 < -equityUsd * LOSS_HALT_PCT / 100)
+      cbReason = `circuit-breaker: 24h bot realized -$${round(-net24, 2)} >= ${LOSS_HALT_PCT}% of equity`;
+    else if (last20.length >= WR_MIN_N && wr != null && wr < WR_HALT_PCT / 100)
+      cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} closes < ${WR_HALT_PCT}%`;
+    else if (fees24 > equityUsd * FEE_HALT_PCT / 100)
+      cbReason = `circuit-breaker: 24h fee burn $${round(fees24, 2)} > ${FEE_HALT_PCT}% of equity — churning`;
+    else if (closes.length >= STREAK_HALT &&
+             closes.slice(-STREAK_HALT).every((f) => (f.profit || 0) - (f.fee || 0) <= 0))
+      cbReason = `circuit-breaker: last ${STREAK_HALT} closes all losers — stand-down`;
+    else if (RESERVE_USD > 0 && equityUsd < RESERVE_USD)
+      cbReason = `circuit-breaker: equity $${round(equityUsd, 2)} below reserve floor $${RESERVE_USD}`;
+    state.circuitBreakers = {
+      net24Usd: round(net24, 2), fees24Usd: round(fees24, 2),
+      winRate20: wr != null ? round(wr * 100, 1) : null, closes20: last20.length,
+      thresholds: { lossHaltPct: LOSS_HALT_PCT, wrHaltPct: WR_HALT_PCT, feeHaltPct: FEE_HALT_PCT, streakHalt: STREAK_HALT, reserveUsd: RESERVE_USD },
+      tripped: cbReason,
+    };
+  } catch {}
   const entriesBlocked =
     cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
     : realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
@@ -705,7 +745,7 @@ async function main() {
     // account can't post margin for even two contract-min positions —
     // every further entry is just donating fees. Preserve the last chip.
     : equityUsd < MIN_TRADE_EQUITY ? `equity floor ($${round(equityUsd,2)} < $${MIN_TRADE_EQUITY} — capital preservation, entries halted)`
-    : null;
+    : cbReason; // account-level breakers join the same rail — entries only, never exits
 
   // published risk rails — the machine-readable answer to "where are the
   // kill-switches / position limits / disconnect handling" — rendered on
@@ -713,7 +753,9 @@ async function main() {
   state.risk = {
     riskProfile: RISK_MAX ? 'max' : 'default',
     riskMultiplier: +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)),
-    sizingUsd: `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each) × risk multiplier`,
+    sizingUsd: TARGET_POSITIONS > 0
+      ? `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each) × risk multiplier`
+      : 'deployment frozen — 0 target slots',
     maxPositions: MAX_POSITIONS,
     leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
     killSwitchPct: DD_KILL,
@@ -727,6 +769,7 @@ async function main() {
     manualHold: [...MANUAL],
     depositsUsd: state.depositsUsd ?? 0,
     relaxGates: process.env.SENTINEL_GATES_RELAX === '1',
+    circuitBreakers: state.circuitBreakers || null,
   };
 
   // ---- margin rebalance: a single position may not hold more margin than

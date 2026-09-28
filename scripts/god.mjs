@@ -188,6 +188,25 @@ if (ll) {
       add('liq-guard', la > 2 ? (openPos ? 'FAIL' : 'WARN') : 'PASS',
         `guard state ${Number.isFinite(la) ? la.toFixed(1) : '∞'}min old · ${tracked} tracked · ${(lg.trims || []).length} lifetime trims`);
     }
+
+    // ---------- 6c. circuit-breakers armed — the failure mode that ate a
+    // deposit was every safety rail disabled by env. Audit that at least
+    // one account-level breaker can actually trip, and report trip state.
+    {
+      const cb = (ll.risk || {}).circuitBreakers || ll.circuitBreakers;
+      if (!cb) {
+        add('breakers-armed', ll.mode === 'live' ? 'FAIL' : 'WARN',
+          'no circuit-breaker data on ledger — exec predates breaker telemetry');
+      } else {
+        const t = cb.thresholds || {};
+        const allDead = (t.lossHaltPct ?? 0) >= 100 && (t.wrHaltPct ?? 0) <= 0 &&
+                        (t.feeHaltPct ?? 0) >= 100 && (t.streakHalt ?? 99) >= 99 && !(t.reserveUsd > 0);
+        add('breakers-armed', allDead ? 'FAIL' : cb.tripped ? 'WARN' : 'PASS',
+          allDead ? 'ALL account breakers disabled — nothing stops a churn bleed'
+          : cb.tripped ? `TRIPPED: ${cb.tripped}`
+          : `armed · 24h net $${cb.net24Usd} · fees $${cb.fees24Usd} · wr20 ${cb.winRate20 ?? '—'}% (n=${cb.closes20})`);
+      }
+    }
   }
 } else {
   add('exec-mode', 'WARN', 'no live-ledger.json — executor has not run (shadow/off or first cycle)');
