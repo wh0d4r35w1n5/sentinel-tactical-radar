@@ -167,6 +167,8 @@ ul.conf li.inf{color:var(--mut)}ul.conf li.inf::before{content:'·'}
 .echip b{color:var(--txt);font-weight:600}
 .echip.bull{border-color:rgba(77,255,166,.45);color:var(--grn)}.echip.bull b{color:var(--grn)}
 .echip.bear{border-color:rgba(255,77,125,.45);color:var(--red)}.echip.bear b{color:var(--red)}
+.jtog{font-size:9.5px;padding:2px 9px;border:1px solid var(--line);border-radius:3px;letter-spacing:.05em;color:var(--mut);cursor:pointer;user-select:none}
+.jtog.on{border-color:rgba(77,255,166,.55);color:var(--grn);background:rgba(77,255,166,.08)}
 tr.jrow{cursor:pointer;transition:background .18s}
 tr.jrow:hover td,tr.jrow.open td{background:linear-gradient(90deg,rgba(138,91,255,.1),rgba(255,46,196,.04))}
 tr.jsyn td{background:rgba(138,91,255,.04);padding:14px 18px}
@@ -365,8 +367,8 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     </div>
   </div>
   <div class="panel" style="margin-top:16px" id="jPanel">
-    <div class="ptitle">Trade journal · forward-tested record <span class="sub">— every emitted signal graded against the tape it predicted · click a row for the before/after chartwork</span><span id="jSummary" class="sub" style="float:right"></span></div>
-    <div class="jscroll"><table><thead><tr><th class="srt" data-t="jrn" data-k="asset">Coin</th><th class="srt" data-t="jrn" data-k="side">Side</th><th class="srt" data-t="jrn" data-k="grade">Grade</th><th class="srt" data-t="jrn" data-k="score">Score</th><th class="srt" data-t="jrn" data-k="strat">Strategy</th><th class="srt" data-t="jrn" data-k="entry">Entry</th><th class="srt" data-t="jrn" data-k="res">Result</th><th class="srt" data-t="jrn" data-k="h1">+1h</th><th class="srt" data-t="jrn" data-k="h4">+4h</th><th class="srt" data-t="jrn" data-k="h24">+24h</th><th class="srt" data-t="jrn" data-k="alpha">α 24h</th><th class="srt" data-t="jrn" data-k="ts">Emitted</th></tr></thead><tbody id="journal"></tbody></table></div>
+    <div class="ptitle">Trade journal <span class="sub">— <b>Taken</b>: real exchange round-trips with fees · <b>Emitted</b>: every signal graded against the tape it predicted (click a row for before/after chartwork)</span><span class="sub" style="float:right"><span class="jtog" data-jm="taken">Taken</span> <span class="jtog" data-jm="emitted">Emitted</span> &nbsp; <span id="jSummary"></span></span></div>
+    <div class="jscroll"><table><thead id="jHead"></thead><tbody id="journal"></tbody></table></div>
   </div>
   <div class="panel neon" id="livePanel" style="margin-top:16px;display:none">
     <div class="ptitle">Live execution · real Bitget account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
@@ -525,12 +527,17 @@ const SUPPORT=[
 // engine/default order. Row pairs (main + expandable detail) move as one unit;
 // nulls always sort last. Only real table columns carry keys — spark cells,
 // 2-value enums and ranked card panels would be noise, not signal.
-const SORTS={sig:{k:null,dir:0},jrn:{k:null,dir:0},fund:{k:null,dir:0}};
+const SORTS={sig:{k:null,dir:0},jrn:{k:null,dir:0},fund:{k:null,dir:0},tkn:{k:null,dir:0}};
 const GRADERANK=g=>{const m=String(g||'').trim().toUpperCase();const b={A:4,B:3,C:2,D:1,F:0}[m[0]];return b==null?null:b+(m.includes('+')?.4:m.includes('-')?-.4:0)};
 const SIGKEYS={asset:s=>(s.asset||'').toLowerCase(),side:s=>s.direction,grade:s=>GRADERANK(s.grade),score:s=>s.score,chg:s=>s.changePct,rsi:s=>((LAST.detail&&LAST.detail.coins||{})[s.asset]||{}).rsi14,px:s=>s.lastPrice,tgt:s=>s.targetPct};
 const JKEYS={asset:r=>(r.asset||'').toLowerCase(),side:r=>r.direction,grade:r=>GRADERANK(r.grade),score:r=>r.score,strat:r=>(r.strategy||'').toLowerCase(),entry:r=>r.entry,res:r=>r.complete?r.outcomePct:null,h1:r=>r.fwd1h,h4:r=>r.fwd4h,h24:r=>r.fwd24h,alpha:r=>r.alpha24h,ts:r=>r.runTs};
 const FKEYS={asset:f=>(f.asset||'').toLowerCase(),rate:f=>f.ratePct,ann:f=>f.annualPct,basis:f=>f.basisPct,be:f=>f.breakevenH};
-const SORTDEF={sig:{asset:1,side:1,grade:-1,score:-1,chg:-1,rsi:-1,px:-1,tgt:-1},jrn:{asset:1,side:1,grade:-1,score:-1,strat:1,entry:-1,res:-1,h1:-1,h4:-1,h24:-1,alpha:-1,ts:-1},fund:{asset:1,rate:1,ann:1,basis:1,be:1}};
+const TKEYS={coin:t=>(t.symbol||'').toLowerCase(),side:t=>t.dir,in:t=>t.entryPx,out:t=>t.exitPx,qty:t=>t.qty,not:t=>t.notional,fee:t=>t.fees,pnl:t=>t.pnl,net:t=>t.net,hold:t=>t.holdMin,ts:t=>t.exitTs??t.entryTs};
+const SORTDEF={sig:{asset:1,side:1,grade:-1,score:-1,chg:-1,rsi:-1,px:-1,tgt:-1},jrn:{asset:1,side:1,grade:-1,score:-1,strat:1,entry:-1,res:-1,h1:-1,h4:-1,h24:-1,alpha:-1,ts:-1},fund:{asset:1,rate:1,ann:1,basis:1,be:1},tkn:{coin:1,side:1,in:-1,out:-1,qty:-1,not:-1,fee:-1,pnl:-1,net:-1,hold:-1,ts:-1}};
+// journal view mode — real fills by default; 'emitted' shows the signal book
+let JMODE=localStorage.jmode||'taken';
+const JHEAD={taken:'<tr><th class="srt" data-t="tkn" data-k="coin">Coin</th><th class="srt" data-t="tkn" data-k="side">Side</th><th class="srt" data-t="tkn" data-k="in">In</th><th class="srt" data-t="tkn" data-k="out">Out</th><th class="srt" data-t="tkn" data-k="qty">Qty</th><th class="srt" data-t="tkn" data-k="not">Notional</th><th class="srt" data-t="tkn" data-k="fee">Fees</th><th class="srt" data-t="tkn" data-k="pnl">PnL</th><th class="srt" data-t="tkn" data-k="net">Net</th><th class="srt" data-t="tkn" data-k="hold">Hold</th><th class="srt" data-t="tkn" data-k="ts">Closed</th></tr>',
+emitted:'<tr><th class="srt" data-t="jrn" data-k="asset">Coin</th><th class="srt" data-t="jrn" data-k="side">Side</th><th class="srt" data-t="jrn" data-k="grade">Grade</th><th class="srt" data-t="jrn" data-k="score">Score</th><th class="srt" data-t="jrn" data-k="strat">Strategy</th><th class="srt" data-t="jrn" data-k="entry">Entry</th><th class="srt" data-t="jrn" data-k="res">Result</th><th class="srt" data-t="jrn" data-k="h1">+1h</th><th class="srt" data-t="jrn" data-k="h4">+4h</th><th class="srt" data-t="jrn" data-k="h24">+24h</th><th class="srt" data-t="jrn" data-k="alpha">α 24h</th><th class="srt" data-t="jrn" data-k="ts">Emitted</th></tr>'};
 function sortRows(arr,st,keys){
   if(!st.k||!keys[st.k])return arr;
   const f=keys[st.k];
@@ -553,7 +560,31 @@ function renderSigs(){
     <td class="num">${s.targetPct?`$${fmtP(s.targetPrice)} USD <span class="sub">(${s.direction==='LONG'?'+':'−'}${s.targetPct}%)</span>`:'—'}</td>
     <td data-spark>${sparkSVG(s.spark&&s.spark.length>1?s.spark:c.spark)||'<span class="sub" style="opacity:.4">—</span>'}${(s.sparkTf||c.sparkTf)==='5m'?'<div class="sub" style="font-size:8px;opacity:.55;letter-spacing:.06em">≈4h · 5m tape</div>':''}</td></tr>`+sigDetail(s,i)}).join('')||'<tr><td colspan="9" class="err" style="color:var(--warn,#ffd166);letter-spacing:.12em"><b>NO EDGE — STAND DOWN</b> · '+(ledger&&ledger.stats&&ledger.stats.ddKill&&ledger.stats.ddKill.active?'DRAWDOWN KILL-SWITCH ENGAGED at '+ledger.stats.ddKill.currentPct+'% equity DD — book halted until the record heals':'board produced no qualifying setup')+' · holding cash is a position</td></tr>';
 }
+function renderJournalTaken(){
+  const d=LAST.taken,trades=(d&&d.trades)||[],stats=(d&&d.stats)||{};
+  const rows=sortRows(trades.slice(0,40),SORTS.tkn,TKEYS);
+  const open=trades.filter(t=>t.status==='open').length;
+  $('jSummary').textContent=stats.n!=null?`${stats.wins}/${stats.n} won · net $${stats.net} · fees $${stats.fees}${open?` · ${open} open`:''}`:'no fill data yet';
+  const usd=v=>v==null?'<span class="sub">—</span>':`<span class="${v>=0?'up':'dn'}">${v>=0?'+':''}$${v}</span>`;
+  $('journal').innerHTML=rows.map(t=>{
+    const openRow=t.status==='open';
+    return `<tr class="trow"><td><b>${t.symbol}</b></td>
+      <td><span class="tag ${t.dir==='LONG'?'long':'short'}">${t.dir}</span></td>
+      <td class="num">$${fmtP(t.entryPx)}</td>
+      <td class="num">${openRow?'<span class="tag long">OPEN</span>':'$'+fmtP(t.exitPx)}</td>
+      <td class="num">${t.qty}</td>
+      <td class="num">$${t.notional}</td>
+      <td class="num sub">$${t.fees}</td>
+      <td class="num">${openRow?'<span class="sub">—</span>':usd(t.pnl)}</td>
+      <td class="num">${openRow?'<span class="sub">—</span>':usd(t.net)}</td>
+      <td class="num sub">${t.holdMin!=null?t.holdMin+'m':'—'}</td>
+      <td class="sub">${openRow?ago(t.entryTs)+' old':ago(t.exitTs)}</td></tr>`;
+  }).join('')||'<tr><td colspan="11" class="sub">no exchange fills journaled yet — the ledger writes each real fill here</td></tr>';
+}
 function renderJournal(){
+  $('jHead').innerHTML=JHEAD[JMODE];
+  document.querySelectorAll('.jtog').forEach(x=>x.classList.toggle('on',x.dataset.jm===JMODE));
+  if(JMODE==='taken')return renderJournalTaken();
   const evals=LAST.evals,confl=LAST.confl;
   const jAll=((evals&&evals.records)||[]).slice().sort((a,b)=>b.runTs-a.runTs);
   const jrecs=sortRows([...jAll.filter(r=>!r.complete).slice(0,8),...jAll.filter(r=>r.complete).slice(0,28)],SORTS.jrn,JKEYS);
@@ -601,10 +632,10 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
-  LAST={scan,detail,ledger,evals,confl,funding};
+  LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
   const isLive=scan.source==='bitget-live';
   const next=Math.max(0,Math.round((t+600e3-Date.now())/6e4));
@@ -998,7 +1029,8 @@ document.getElementById('sigBody').addEventListener('keydown',e=>{
 });
 // sortable headers — click cycles per-column default dir → opposite dir →
 // engine order; the third state restores the engine's own ranking
-document.querySelectorAll('thead th.srt').forEach(th=>th.addEventListener('click',()=>{
+document.addEventListener('click',e=>{
+  const th=e.target.closest('thead th.srt');if(!th)return;
   const t=th.dataset.t,k=th.dataset.k,st=SORTS[t];
   const d0=(SORTDEF[t]||{})[k]??-1;
   if(st.k!==k){st.k=k;st.dir=d0}
@@ -1007,8 +1039,8 @@ document.querySelectorAll('thead th.srt').forEach(th=>th.addEventListener('click
   document.querySelectorAll(`thead th.srt[data-t="${t}"]`).forEach(h=>{
     h.classList.toggle('asc',st.k===h.dataset.k&&st.dir===1);
     h.classList.toggle('desc',st.k===h.dataset.k&&st.dir===-1)});
-  ({sig:renderSigs,jrn:renderJournal,fund:renderFunding})[t]();
-}));
+  ({sig:renderSigs,jrn:renderJournal,tkn:renderJournal,fund:renderFunding})[t]();
+});
 async function candlesFor(asset,fromMs,toMs,gran){
   // paginate — a single 200-bar page truncated 15m charts on 50h+ trades,
   // silently cutting the exit end of the trade off the replay chart
@@ -1213,6 +1245,11 @@ async function mountJournalCharts(key){
   if(eb)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);
   if(ea)drawChart(ea,e,csA,true);
 }
+document.querySelectorAll('.jtog').forEach(b=>b.addEventListener('click',()=>{
+  JMODE=b.dataset.jm;localStorage.jmode=JMODE;
+  SORTS.jrn.k=null;SORTS.jrn.dir=0;SORTS.tkn.k=null;SORTS.tkn.dir=0;
+  renderJournal();
+}));
 document.getElementById('journal').addEventListener('click',e=>{
   const tr=e.target.closest('tr.jrow');if(!tr)return;
   const d=document.querySelector(`tr.jsyn[data-js="${CSS.escape(tr.dataset.j)}"]`);
