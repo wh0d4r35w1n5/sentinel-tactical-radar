@@ -745,9 +745,41 @@ async function main() {
   const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
-  // a profit plan. Orphaned/manual positions get synthesized protection —
-  // stop distance is inferred from an existing loss plan, else 1.2%; the
-  // take-profit lands at 2R of that distance.
+  // a staggered take-profit ladder — never a single take-profit level.
+  // Orphaned/manual positions get synthesized protection: stop distance is
+  // inferred from an existing loss plan, else 1.2%; the TP ladder anchors
+  // at 2R of that distance.
+  // Staggered TP tranches — the mandate: EVERY position (managed, manual,
+  // foreign, hedged) banks in levels, never one take-profit. 40% at 0.55x
+  // of the position's target distance, 30% at 1.0x, 15% at 1.8x; the last
+  // ~15% stays unplanned as the moon bag riding the stop. baseDistPct is
+  // the position's TP distance: the signal target on managed entries, the
+  // trader's own trigger distance on a retrofit, 2R when synthesized.
+  // Returns legs placed; 0 = too small to split, caller falls back to one
+  // full-size pos_profit.
+  const placeTpLadder = async (p, baseDistPct) => {
+    const sgn = p.side === 'long' ? 1 : -1;
+    const sp = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
+    const pp = cm[p.symbol]?.pricePlace ?? 6;
+    // cumulative-difference allocation — tranche_i = floor(size*cum[i+1]) -
+    // floor(size*cum[i]): rounding residue lands in the moon bag, not lost
+    const cum = [0, 0.40, 0.70, 0.85];
+    const mults = [0.55, 1.0, 1.8];
+    const legs = [];
+    for (let i = 0; i < 3; i++) {
+      const tsize =
+        (Math.floor(p.size * cum[i + 1] * sp) - Math.floor(p.size * cum[i] * sp)) / sp;
+      if (tsize > 0)
+        legs.push({
+          tsize,
+          px: round(p.entry * (1 + (sgn * baseDistPct * mults[i]) / 100), pp),
+        });
+    }
+    if (legs.length < 2) return 0;
+    for (const l of legs)
+      await planOrder(p.symbol, 'profit_plan', l.px, String(l.tsize), p.side);
+    return legs.length;
+  };
   // Prefetch all pending plans in parallel — a serial await-per-symbol made
   // each position pay a full round-trip inside the loop (~200ms × N symbols).
   const planCache = new Map();
@@ -777,8 +809,10 @@ async function main() {
     try {
       // foreign positions (app/exchange/manual opens) get the same hands-off
       // treatment as MANUAL_HOLD: armed with synthesized protection, but no
-      // ratchets, ladders, time-cuts, or scanner-driven exits. The user's
-      // trade is the user's trade — the engine guards it, it doesn't manage it.
+      // ratchets, time-cuts, or scanner-driven exits — the staggered TP
+      // ladder still applies (mandate: every position banks in levels).
+      // The user's trade is the user's trade — the engine guards it, it
+      // doesn't manage it.
       const manualHold = MANUAL.has(p.symbol) || foreign(p.symbol);
       const existing = plansOf(p.symbol);
       // 'moving_plan' (trailing stop) IS loss protection — without it in the
@@ -940,40 +974,27 @@ async function main() {
         }
       }
       // retrofit: an open position still carrying ONE full-size profit plan
-      // gets the staggered ladder — cancel the single TP, replace with
-      // 45/35/20 tranches at 0.55x/1.0x/1.8x of its original target distance.
-      // Too-small positions (<3x contract min) keep their single TP.
-      if (profitPlans.length === 1 && p.size > 0 && !manualHold) {
-        const sgn0 = p.side === 'long' ? 1 : -1;
+      // gets the staggered ladder — tranches placed BEFORE cancelling the
+      // original TP so the position is never uncovered. Applies to managed,
+      // manual, and foreign positions alike — the trader's own TP distance
+      // is preserved as the middle rung (0.55x/1.0x/1.8x tranches). A
+      // position too small to split into >=2 tranches keeps its single TP.
+      if (profitPlans.length === 1 && p.size > 0) {
         const tpTrig = +profitPlans[0].triggerPrice;
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
-        const sp0 = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
-        const pp0 = cm[p.symbol]?.pricePlace ?? 6;
-        // plan orders accept sub-minimum tranche sizes — no minQty gate.
-        // Cumulative-difference allocation maximizes granularity coverage:
-        // tranche_i = floor(size*cum[i+1]) - floor(size*cum[i]) so rounding
-        // residue lands in the moon bag, not lost. Place tranches BEFORE
-        // cancelling the original TP — the position is never uncovered.
-        if (distPct > 0 && p.size > 0) {
+        if (distPct > 0) {
           const pid = profitPlans[0].orderId || profitPlans[0].planId || profitPlans[0].id;
-          const cum = [0, 0.40, 0.70, 0.85];
-          const mults = [0.55, 1.0, 1.8];
-          const pending = [];
-          for (let i = 0; i < 3; i++) {
-            const tsize =
-              (Math.floor(p.size * cum[i + 1] * sp0) - Math.floor(p.size * cum[i] * sp0)) / sp0;
-            if (tsize > 0) pending.push({ tsize, mult: mults[i] });
-          }
-          if (pending.length >= 2) {
-            for (const tr of pending)
-              await planOrder(
-                p.symbol, 'profit_plan',
-                round(p.entry * (1 + sgn0 * (distPct * tr.mult) / 100), pp0),
-                String(tr.tsize), p.side
-              );
-            if (pid) await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+          const placed = await placeTpLadder(p, distPct);
+          if (placed >= 2) {
+            if (pid) {
+              try {
+                await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+              } catch (e) {
+                state.errors.push(`ladder-cancel ${p.symbol}: ${e.message}`);
+              }
+            }
             state.actions.push(
-              `laddered ${p.symbol}: TP split ${pending.length} ways @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon-bag trail`
+              `laddered ${p.symbol}${manualHold ? ' (manual/foreign)' : ''}: TP split ${placed} ways @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon bag`
             );
           }
         }
@@ -1021,13 +1042,23 @@ async function main() {
         state.actions.push(`repaired ${p.symbol}: added pos_loss @ ${round(p.entry * (1 - (sgn * stopPct) / 100), pp)}`);
       }
       if (!hasProfit) {
-        const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
-        try {
-          await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side);
-        } catch {
-          await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
+        // staggered TPs even on synthesized protection — 2R is the base
+        // distance, so tranches land at ~1.1R/2R/3.6R + the moon bag.
+        // Too small to split -> one whole-position pos_profit as before.
+        const placed = await placeTpLadder(p, 2 * stopPct);
+        if (placed >= 2) {
+          state.actions.push(
+            `repaired ${p.symbol}: TP ladder ${placed} legs @ ${round(2 * stopPct * 0.55, 2)}/${round(2 * stopPct, 2)}/${round(2 * stopPct * 1.8, 2)}% + moon bag`
+          );
+        } else {
+          const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
+          try {
+            await planOrder(p.symbol, 'pos_profit', tpPrice, '0', p.side);
+          } catch {
+            await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side);
+          }
+          state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
         }
-        state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
       }
     } catch (e) {
       state.errors.push(`protect ${p.symbol}: ${e.message}`);
@@ -1058,9 +1089,14 @@ async function main() {
         state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_loss`);
       }
       if (!hasProfit) {
-        await planOrder(p.symbol, 'pos_profit',
-          round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side);
-        state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
+        const placed = await placeTpLadder(p, 2 * stopPct);
+        if (placed >= 2) {
+          state.actions.push(`protected ${p.symbol} ${p.side} (hedged): TP ladder ${placed} legs`);
+        } else {
+          await planOrder(p.symbol, 'pos_profit',
+            round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side);
+          state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
+        }
       }
     } catch (e) {
       state.errors.push(`protect ${p.symbol} ${p.side} (hedged): ${e.message}`);
