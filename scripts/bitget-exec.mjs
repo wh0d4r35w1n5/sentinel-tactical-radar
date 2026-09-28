@@ -690,8 +690,18 @@ async function main() {
         await closePosition(p.symbol, p.side);
         state.actions.push(`rebalanced ${p.symbol}: closed fully (remainder under min ${minSz})`);
       } else {
-        await api('POST', '/api/v2/mix/order/close-positions', {
-          body: { symbol: p.symbol, productType: PRODUCT, holdSide: p.side, size: String(closeSize) },
+        // close-positions ignores `size` (whole-side only — a 'partial' call
+        // flattened a live position). True partial = place-order market close:
+        // hedge mode needs side = POSITION direction (close long = buy+close).
+        await api('POST', '/api/v2/mix/order/place-order', {
+          body: {
+            symbol: p.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN,
+            size: String(closeSize), orderType: 'market',
+            marginMode: p.marginMode === 'crossed' ? 'crossed' : 'isolated',
+            ...(POS_MODE === 'hedge'
+              ? { side: p.side === 'long' ? 'buy' : 'sell', tradeSide: 'close' }
+              : { side: p.side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES' }),
+          },
         });
         state.actions.push(`rebalanced ${p.symbol}: closed ${closeSize}/${p.size} — margin ~$${round(marginEst, 2)} -> slot ~$${round(slotMargin, 2)}`);
         p.size -= closeSize;
@@ -1689,6 +1699,7 @@ async function main() {
           if (!old.size) old.size = size;
           if (f.quoteVolume) old.notionalUsd = +f.quoteVolume;
           if (f.tradeSide) old.tradeSide = f.tradeSide;
+          if (f.enterPointSource) old.src = f.enterPointSource;
           repaired++;
         }
         continue;
@@ -1704,6 +1715,7 @@ async function main() {
         fee,
         profit: +(f.profit ?? 0),
         tradeSide: f.tradeSide || null,
+        src: f.enterPointSource || null, // 'api' = bot · 'ios'/'android'/'web' = manual
         ts: +(f.cTime ?? f.uTime ?? Date.now()),
       });
       added++;
@@ -1731,6 +1743,20 @@ async function main() {
     const grossL = Math.abs(
       netCloses.filter((f) => netOfFee(f) <= 0).reduce((a, f) => a + netOfFee(f), 0)
     );
+    const statsFor = (rows) => {
+      const cl = rows.filter((f) => f.tradeSide === 'close' || (f.profit || 0) !== 0).filter((f) => f.profit != null);
+      const fees = rows.reduce((a, f) => a + (f.fee || 0), 0);
+      const w = cl.filter((f) => netOfFee(f) > 0);
+      const gW = w.reduce((a, f) => a + netOfFee(f), 0);
+      const gL = Math.abs(cl.filter((f) => netOfFee(f) <= 0).reduce((a, f) => a + netOfFee(f), 0));
+      return {
+        closes: cl.length,
+        winRatePct: cl.length ? round((w.length / cl.length) * 100, 1) : null,
+        netUsd: round(cl.reduce((a, f) => a + f.profit, 0) - fees, 4),
+        feesUsd: round(fees, 4),
+        profitFactor: gL > 0 ? round(gW / gL, 2) : null,
+      };
+    };
     state.realizedStats = {
       // scope: every close-side fill incl. foreign/manual fills — the raw
       // journal total. trades-taken.json episodes aggregate differently.
@@ -1742,6 +1768,13 @@ async function main() {
       netUsd: round(netCloses.reduce((a, f) => a + f.profit, 0) - allFees, 4),
       feesUsd: round(allFees, 4),
       profitFactor: grossL > 0 ? round(grossW / grossL, 2) : null,
+      // attribution split: enterPointSource 'api' = this engine; ios/android/
+      // web = manual account trading; null = legacy fill recorded pre-tag
+      bySource: {
+        bot: statsFor(store.fills.filter((f) => f.src === 'api')),
+        manual: statsFor(store.fills.filter((f) => f.src && f.src !== 'api')),
+        legacy: statsFor(store.fills.filter((f) => !f.src)),
+      },
     };
   } catch (e) {
     state.errors.push(`fills journal: ${e.message}`);

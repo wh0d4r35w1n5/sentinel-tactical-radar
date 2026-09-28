@@ -13,9 +13,10 @@ Control commands write state/cmd-*.json files the executor consumes.
 Config: scripts/tg-config.json  { "api_id": int, "api_hash": str, "group": str|int }
 First run needs phone + login code once; session persists in tg-session.session.
 """
-import asyncio, json, os, re, sys, time
+import asyncio, json, os, re, subprocess, sys, time
 from pathlib import Path
 from telethon import TelegramClient, events
+import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG_PATH = ROOT / "scripts" / "tg-config.json"
@@ -367,6 +368,8 @@ async def main():
                 "/pause [reason] — halt new entries\n"
                 "/resume — re-arm entry gates\n"
                 "/flatten — panic close ALL (CONFIRM-gated)\n"
+                "/watch SYM above|below PX [note] — price trigger ping\n"
+                "/watches — armed triggers · /unwatch SYM|ALL\n"
                 "<b>Nav</b>\n"
                 "/links — dashboard URLs\n"
                 "/ping — liveness")
@@ -377,11 +380,50 @@ async def main():
                 f"🖼 <a href='{LINKS}/gallery.html'>Evidence gallery</a>\n"
                 f"📄 <a href='https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/'>GitHub Pages mirror</a>")
 
+    def c_watch(arg):
+        m = re.match(r"([A-Za-z0-9]+)\s+(above|below)\s+([0-9.]+)\s*(.*)", (arg or "").strip(), re.I)
+        if not m:
+            return "usage: <code>/watch CRO above 0.06966 reason…</code>"
+        sym = m.group(1).upper()
+        if not sym.endswith("USDT"):
+            sym += "USDT"
+        wl = statef("watchlist")
+        if not isinstance(wl, list):
+            wl = []
+        wl.append({"sym": sym, "dir": m.group(2).lower(), "px": float(m.group(3)),
+                   "note": m.group(4).strip(), "setAt": int(time.time() * 1000)})
+        wstate("watchlist", wl)
+        return (f"🎯 watch armed — <b>{sym}</b> {'▲' if m.group(2).lower()=='above' else '▼'} <b>{m.group(3)}</b>"
+                + (f"\n<i>{esc(m.group(4).strip())}</i>" if m.group(4).strip() else ""))
+
+    def c_watches(arg):
+        wl = statef("watchlist")
+        if not isinstance(wl, list) or not wl:
+            return "🎯 <b>No watches armed</b> — <code>/watch SYM above|below PX</code>"
+        return ("<b>◈ PRICE WATCHES</b>\n─────────────────────\n"
+                + "\n".join(f"{w['sym']} {'▲' if w['dir']=='above' else '▼'} <b>{w['px']}</b>"
+                           + (f" — {esc(w.get('note',''))[:60]}" if w.get("note") else "") for w in wl))
+
+    def c_unwatch(arg):
+        a = (arg or "").strip().upper()
+        wl = statef("watchlist")
+        if not isinstance(wl, list):
+            wl = []
+        if a == "ALL":
+            wstate("watchlist", [])
+            return f"🗑 cleared {len(wl)} watches"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        keep = [w for w in wl if w["sym"] != a]
+        wstate("watchlist", keep)
+        return f"🗑 removed {len(wl) - len(keep)} watch(es) on {a}"
+
     CMDS = {"status": c_status, "pos": c_pos, "positions": c_pos, "eq": c_eq, "equity": c_eq,
             "sig": c_sig, "signals": c_sig, "radar": c_radar, "mtf": c_mtf, "soc": c_soc,
             "social": c_soc, "ein": c_ein, "einstein": c_ein, "j": c_j, "journal": c_j,
             "pulse": c_pulse, "pause": c_pause, "resume": c_resume, "links": c_links,
-            "help": c_help, "menu": c_help, "start": c_help, "ping": lambda a: "🏓 sentinel live — " + time.strftime("%H:%M:%SZ", time.gmtime())}
+            "help": c_help, "menu": c_help, "start": c_help, "watch": c_watch,
+            "watches": c_watches, "unwatch": c_unwatch, "ping": lambda a: "🏓 sentinel live — " + time.strftime("%H:%M:%SZ", time.gmtime())}
 
     @client.on(events.NewMessage(outgoing=True))
     async def on_cmd(ev):
@@ -408,6 +450,15 @@ async def main():
         except Exception as e:
             print(f"[tg-c2] handler error: {type(e).__name__}: {e}", flush=True)
 
+    def last_price(sym):
+        try:
+            u = ("https://api.bitget.com/api/v2/mix/market/ticker?symbol="
+                 + sym + "&productType=USDT-FUTURES")
+            with urllib.request.urlopen(u, timeout=10) as r:
+                return float(json.loads(r.read())["data"][0]["lastPr"])
+        except Exception:
+            return None
+
     # ---- proactive alert loop — pushes intel to Saved Messages ------------
     async def alert_loop():
         alerted_path = STATE_DIR / "tg-alerted.json"
@@ -415,7 +466,7 @@ async def main():
             alerted = set(json.loads(alerted_path.read_text()))
         except Exception:
             alerted = set()
-        prev_pos, prev_halt = None, None
+        prev_pos, prev_halt, prev_dead = None, None, ""
         while True:
             try:
                 scan = api("market-scanner") or {}
@@ -441,6 +492,48 @@ async def main():
                 if prev_halt is not None and hl != prev_halt:
                     await say("⛔ <b>ENTRIES HALTED</b> by operator" if hl else "🟢 <b>ENTRIES RE-ARMED</b>")
                 prev_halt = hl
+                # deadman — service heartbeat + ledger freshness. Catches the
+                # failures nothing else reports: dead executor, dead guard,
+                # stalled ledger. (A dead VPS can't self-report — external
+                # watchdogs cover total box loss.)
+                dead = []
+                for svc in ("sentinel-rapid.service", "sentinel-liq-guard.service"):
+                    try:
+                        if subprocess.run(["systemctl", "is-active", "--quiet", svc]).returncode != 0:
+                            dead.append(svc.replace("sentinel-", "").replace(".service", ""))
+                    except Exception:
+                        pass
+                try:
+                    led_age = (time.time() - os.path.getmtime(ROOT / "api" / "live-ledger.json")) / 60
+                    if led_age > 3:
+                        dead.append(f"ledger stale {led_age:.0f}m")
+                except Exception:
+                    pass
+                dk = "|".join(dead)
+                if dk != prev_dead:
+                    prev_dead = dk
+                    if dk:
+                        await say("\U0001F6A8 <b>DEADMAN</b> — " + esc(dk))
+                    else:
+                        await say("\U0001FAC0 <b>DEADMAN CLEAR</b> — services + ledger alive")
+                # price watches — consume-on-hit triggers from state/watchlist.json
+                wl = statef("watchlist")
+                if isinstance(wl, list):
+                    for w in list(wl):
+                        try:
+                            px = await asyncio.get_event_loop().run_in_executor(None, last_price, w["sym"])
+                            if px is None:
+                                continue
+                            hit = (w["dir"] == "above" and px >= w["px"]) or \
+                                  (w["dir"] == "below" and px <= w["px"])
+                            if hit:
+                                wl.remove(w)
+                                wstate("watchlist", wl)
+                                ar = "▲" if w["dir"] == "above" else "▼"
+                                await say(f"🎯 <b>WATCH HIT</b> — <code>{esc(w['sym'])}</code> {ar} <b>{w['px']}</b> (now {fmtp(px)})"
+                                          + (f"\n<i>{esc(w.get('note',''))}</i>" if w.get("note") else ""))
+                        except Exception as e:
+                            print(f"[tg-c2] watch {w.get('sym')}: {type(e).__name__}: {e}", flush=True)
                 alerted_path.parent.mkdir(exist_ok=True)
                 alerted_path.write_text(json.dumps(list(alerted)[-400:]))
             except Exception as e:
