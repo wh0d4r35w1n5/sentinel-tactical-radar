@@ -82,6 +82,9 @@ const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
 // idempotent-order window: a signal that already produced an entry attempt
 // inside this horizon is a replay, not a new opportunity — skip it.
 const ENTRY_DEDUP_MS = +(process.env.SENTINEL_ENTRY_DEDUP_MS || 10 * 60e3);
+// min-hold on scanner-driven closes: a managed position younger than this
+// can't be closed by plan emissions — exchange-side SL/TP still fire.
+const MIN_HOLD_MS = +(process.env.SENTINEL_MIN_HOLD_MS || 10 * 60e3);
 // manually-placed positions the executor must NOT auto-manage — no
 // rebalance, decay, flip, or scalp-timeout exits. Exchange-side TP/SL
 // still protect them; the ledger still reports them.
@@ -342,8 +345,10 @@ async function main() {
       // (not fills) are what cost fees; count them locally.
       if (prior.mode === MODE && Array.isArray(prior.entriesLog))
         state.entriesLog = prior.entriesLog.filter(
-          // entries may be bare timestamps (legacy) or {ts,symbol,direction}
-          (e) => Number.isFinite(e.ts ?? e) && Date.now() - (e.ts ?? e) < 3600e3
+          // entries may be bare timestamps (legacy) or {ts,symbol,direction}.
+          // 24h retention — the hourly cap filters to the window itself; a
+          // true DAILY cap needs the whole day's attempts retained.
+          (e) => Number.isFinite(e.ts ?? e) && Date.now() - (e.ts ?? e) < 24 * 3600e3
         );
       // symbols that carried pending plans last cycle — orphan-plan sweep
       // uses this to find triggers still live on symbols now flat
@@ -357,6 +362,24 @@ async function main() {
     log('mode=off — set SENTINEL_EXEC=shadow|demo|live');
     return;
   }
+  // ---- run lock: cycles spawn on a fixed timer, but a run's network
+  // latency can outlive its slot. One live run at a time — exchange-side
+  // plans keep every position protected while a cycle is skipped.
+  const lockPath = path.join(__dirname, '..', 'state', 'exec.lock');
+  try {
+    const lk = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    let alive = false;
+    if (Number.isFinite(lk.pid) && Date.now() - (lk.ts || 0) < 180e3) {
+      try { process.kill(lk.pid, 0); alive = true; }
+      catch (e) { alive = e.code === 'EPERM'; }
+    }
+    if (alive) {
+      log(`prior run still working (pid ${lk.pid}, ${Math.round((Date.now() - lk.ts) / 1e3)}s) — skipping cycle`);
+      return;
+    }
+  } catch {}
+  try { fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, ts: Date.now() })); } catch {}
+  process.on('exit', () => { try { fs.unlinkSync(lockPath); } catch {} });
   let plan = null;
   try {
     plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
@@ -514,6 +537,14 @@ async function main() {
     }
     const pos = posBySym.get(c.symbol);
     if (!pos) continue;
+    // min-hold: a scanner close inside the floor is the flip-flop vector —
+    // the position was opened seconds ago and never got to be a trade.
+    // The exchange-side SL covers a genuine dump meanwhile; nothing the
+    // scanner says at <10min age is worth two more taker fees.
+    if (pos.cTime && Date.now() - pos.cTime < MIN_HOLD_MS) {
+      state.actions.push(`close ${c.symbol} ignored — position ${Math.round((Date.now() - pos.cTime) / 1e3)}s old (< ${Math.round(MIN_HOLD_MS / 1e3)}s min-hold)`);
+      continue;
+    }
     try {
       await cancelPlans(c.symbol);
       await closePosition(c.symbol, pos.side);
@@ -721,12 +752,39 @@ async function main() {
     }
   } catch {}
 
+  // ---- universal re-entry cooldown + daily fee-burn governor ----
+  // ANY close on a symbol benches re-entry for the cooldown window — the
+  // churn autopsy showed open->close->open loops at 15-90s spacing; a flat
+  // cooldown makes that loop structurally impossible regardless of which
+  // layer emitted the closes.
+  const REENTRY_MS = +(process.env.SENTINEL_REENTRY_COOLDOWN_MS || 60 * 60e3);
+  const lastCloseBySym = {};
+  let feesToday = 0;
+  try {
+    const fj =
+      JSON.parse(
+        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
+      ).fills || [];
+    const dayStart = new Date().setUTCHours(0, 0, 0, 0);
+    for (const f of fj) {
+      if (f.tradeSide === 'close')
+        lastCloseBySym[f.symbol] = Math.max(lastCloseBySym[f.symbol] || 0, +f.ts || 0);
+      if (+f.ts >= dayStart) feesToday += +f.fee || 0;
+    }
+  } catch {}
+  // fee-burn halt: commissions >5% of equity in a day stands the book
+  // down — a fee-churn day is always a regime the engine can't read, and
+  // the only winning move is to stop paying.
+  const FEE_HALT_PCT = +(process.env.SENTINEL_FEE_HALT_PCT || 0.05);
+  const feeHalted = equityUsd > 0 && feesToday >= equityUsd * FEE_HALT_PCT;
+
   // ---- entry rate cap — rolling 1h window, not a calendar cliff: a scalp
   // regime turns positions over fast, so the guard limits RATE not daily
   // total. Max 3 new entries per rolling hour stops fee-churn sprays while
   // the book never sits dead waiting for a window to drain.
   const windowStart = Date.now() - 3600e3;
   let entriesThisHour = 0;
+  let entriesThisDay = 0;
   try {
     const fj =
       JSON.parse(
@@ -739,10 +797,19 @@ async function main() {
         entriesThisHour++;
     // journaled fills lag live opens by up to ~30s; the local attempt log
     // (persisted via ledger) sees them immediately — take the higher count
-    entriesThisHour = Math.max(entriesThisHour, (state.entriesLog || []).length);
+    entriesThisHour = Math.max(
+      entriesThisHour,
+      (state.entriesLog || []).filter((e) => Date.now() - (e.ts ?? e) < 3600e3).length
+    );
+    entriesThisDay = Math.max(
+      entriesThisDay,
+      (state.entriesLog || []).filter((e) => Date.now() - (e.ts ?? e) < 24 * 3600e3).length
+    );
   } catch {}
-  // env kept for compat; the name lies (it's a rolling 1h cap, not a day cap)
-  const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_DAY || 3);
+  // EXEC_MAX_ENTRIES_DAY now means what it says — the old wiring let 'day'
+  // act as the HOURLY cap: 99 opens in 38h on a $65 book.
+  const MAX_ENTRIES_HOUR = +(process.env.EXEC_MAX_ENTRIES_HOUR || 3);
+  const MAX_ENTRIES_DAY = +(process.env.EXEC_MAX_ENTRIES_DAY || 8);
 
   // ---- protection repair: EVERY open position must carry a loss plan AND
   // a staggered take-profit ladder — never a single take-profit level.
@@ -1132,9 +1199,18 @@ async function main() {
         state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
         continue;
       }
-      if (entriesThisHour >= MAX_ENTRIES_HOUR) {
-        state.actions.push(`entry rate cap (${MAX_ENTRIES_HOUR}/h) — too soon, standing down`);
+      if (entriesThisHour >= MAX_ENTRIES_HOUR || entriesThisDay >= MAX_ENTRIES_DAY) {
+        state.actions.push(`entry rate cap (${entriesThisHour}/${MAX_ENTRIES_HOUR}/h · ${entriesThisDay}/${MAX_ENTRIES_DAY}/day) — standing down`);
         break;
+      }
+      if (feeHalted) {
+        state.actions.push(`fee-burn halt — ${round(feesToday, 2)} commissions today >= ${round(FEE_HALT_PCT * 100, 1)}% of equity — standing down`);
+        break;
+      }
+      const lastClose = lastCloseBySym[o.symbol];
+      if (lastClose && Date.now() - lastClose < REENTRY_MS) {
+        state.actions.push(`${o.symbol}: re-entry cooldown — closed ${Math.round((Date.now() - lastClose) / 6e4)}m ago (< ${Math.round(REENTRY_MS / 6e4)}m)`);
+        continue;
       }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
           !Number.isFinite(o.stopPct) || !Number.isFinite(o.targetPct) ||
@@ -1239,7 +1315,11 @@ async function main() {
       // stop at <=80% of the band edge, otherwise liquidation fires first.
       const lev = Math.max(
         1,
-        Math.min(cm[o.symbol].maxLev || 125, Math.floor(80 / (o.stopPct + 0.64)))
+        Math.min(
+          cm[o.symbol].maxLev || 125,
+          Math.floor(80 / (o.stopPct + 0.64)),
+          +(process.env.SENTINEL_MAX_LEV || 40) // account ceiling — the max-safety profile pins it lower
+        )
       );
       // fee headroom: Bitget charges the taker fee on NOTIONAL from free
       // balance — at 37x the round-trip (open taker + conditional exit)
@@ -1308,6 +1388,10 @@ async function main() {
         (state.entriesLog = state.entriesLog || []).push({
           ts: Date.now(), symbol: o.symbol, direction: o.direction,
         });
+        // commit the attempt NOW — the ledger normally writes at run end;
+        // a mid-run kill must still leave this entry visible to the next
+        // cycle's dedup/rate caps (belt-and-suspenders under the run lock)
+        try { writeJson(outPath, state); } catch {}
         managed.add(o.symbol); // engine-entered — exits apply to managed only
         entriesThisHour++;
         // protective levels anchor to the ACTUAL fill, not the plan's ref
