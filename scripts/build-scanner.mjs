@@ -1497,6 +1497,15 @@ async function main() {
                   }
                 : null,
               candles: ta.candles,
+              candleDir: ta.candles?.dir ?? null,
+              candleClv: ta.candles?.clv ?? null,
+              candleClv3: ta.candles?.clv3 ?? null,
+              candleEdge: ta.candles?.atEdge ?? null,
+              harmPrz: ta.harmPrz
+                ? { dir: ta.harmPrz.dir, inZone: ta.harmPrz.inZone,
+                    consensus: ta.harmPrz.consensus, zones: ta.harmPrz.zones?.length ?? 0,
+                    label: ta.harmPrz.label }
+                : null,
               fvgOpen: ta.fvgs.length,
               fvgNearest: ta.fvgs[0] ?? null,
               goldenPocket: ta.fib?.goldenPocket ?? false,

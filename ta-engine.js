@@ -313,21 +313,87 @@
   }
 
   // ---------- candlestick patterns (last 3 candles) ----------
+  // ---------- candlestick patterns — Bulkowski-graded: the same candle
+  // means different things at range edge vs mid-range. Return value is a
+  // name array (unchanged for consumers) carrying .dir/.conf/.clv props —
+  // names serialize, metadata stays in-process for confluence/drivers.
   function candlesticks(cs) {
     var out = [], n = cs.length;
     if (n < 3) return out;
     var c = cs[n - 1], p = cs[n - 2], pp = cs[n - 3];
     var body = Math.abs(c.c - c.o), rng = c.h - c.l || 1e-12;
     var uw = c.h - Math.max(c.o, c.c), lw = Math.min(c.o, c.c) - c.l;
-    var pbody = Math.abs(p.c - p.o);
+    var pbody = Math.abs(p.c - p.o), prng = p.h - p.l || 1e-12;
+    // trend + position context — a hammer at a swing low is a reversal;
+    // the same candle mid-range is noise (Bulkowski's core finding)
+    var hi20 = -Infinity, lo20 = Infinity;
+    for (var k = Math.max(0, n - 20); k < n; k++) { hi20 = Math.max(hi20, cs[k].h); lo20 = Math.min(lo20, cs[k].l); }
+    var rPos = (c.c - lo20) / (hi20 - lo20 || 1e-9);          // 0 = range low
+    var trend = n >= 6 ? (cs[n - 1].c - cs[n - 6].c) / cs[n - 6].c : 0; // prior drift
+    var atLo = rPos <= 0.3, atHi = rPos >= 0.7;
+    var volX = 1;
+    var avgV = 0, vc = 0;
+    for (var j = Math.max(0, n - 12); j < n - 1; j++) if (cs[j].qv > 0) { avgV += cs[j].qv; vc++; }
+    if (vc && cs[n - 1].qv) volX = cs[n - 1].qv / (avgV / vc || 1e-9);
+    var conf = function (dirWord, needAt) {
+      // A = right location + volume sponsored; C = pattern alone
+      var locOk = needAt === 'lo' ? atLo : needAt === 'hi' ? atHi : true;
+      return (locOk ? 'B' : 'C') && (volX >= 1.5 && locOk) ? 'A' : (locOk ? 'B' : 'C');
+    };
+    // --- classics (kept verbatim, now location-graded via conf) ---
     if (c.c > c.o && p.c < p.o && c.c >= p.o && c.o <= p.c && body > pbody) out.push('bullish engulfing');
     if (c.c < c.o && p.c > p.o && c.c <= p.o && c.o >= p.c && body > pbody) out.push('bearish engulfing');
-    if (lw > body * 2 && uw < body) out.push('hammer');
-    if (uw > body * 2 && lw < body) out.push('shooting star');
+    if (lw > body * 2 && uw < body) out.push(atLo ? 'hammer' : 'hanging man');
+    if (uw > body * 2 && lw < body) out.push(atHi ? 'shooting star' : 'inverted hammer');
     if (body / rng < 0.1) out.push('doji');
     if (body / rng > 0.9) out.push(c.c > c.o ? 'bullish marubozu' : 'bearish marubozu');
     if (pp.c < pp.o && Math.abs(p.c - p.o) < Math.abs(pp.c - pp.o) * 0.4 && c.c > c.o && c.c > (pp.o + pp.c) / 2) out.push('morning star');
     if (pp.c > pp.o && Math.abs(p.c - p.o) < Math.abs(pp.c - pp.o) * 0.4 && c.c < c.o && c.c < (pp.o + pp.c) / 2) out.push('evening star');
+    // --- high-signal additions (TA-Lib/Bulkowski top performers) ---
+    // tweezer top/bottom — identical wick extremes = absorbed liquidity
+    if (Math.abs(c.h - p.h) / p.h < 0.001 && uw > body && p.h - Math.max(p.o, p.c) > pbody) out.push('tweezer top');
+    if (Math.abs(c.l - p.l) / p.l < 0.001 && lw > body && Math.min(p.o, p.c) - p.l > pbody) out.push('tweezer bottom');
+    // piercing / dark cloud — 50%+ body penetration through the prior body
+    if (p.c < p.o && c.c > c.o && c.o < p.l && c.c > (p.o + p.c) / 2 && c.c < p.o) out.push('piercing line');
+    if (p.c > p.o && c.c < c.o && c.o > p.h && c.c < (p.o + p.c) / 2 && c.c > p.o) out.push('dark cloud cover');
+    // harami — inside-body stall after a move (direction = counter-trend read)
+    if (c.c > c.o && p.c < p.o && c.h < p.o && c.l > p.c) out.push('bullish harami');
+    if (c.c < c.o && p.c > p.o && c.h < p.c && c.l > p.o) out.push('bearish harami');
+    // three soldiers/crows — consecutive strong closes, expanding conviction
+    if (n >= 3 && c.c > c.o && p.c > p.o && pp.c > pp.o && c.c > p.c && p.c > pp.c &&
+        body > prng * 0.5 && pbody > Math.abs(pp.c - pp.o) * 0.5) out.push('three white soldiers');
+    if (n >= 3 && c.c < c.o && p.c < p.o && pp.c < pp.o && c.c < p.c && p.c < pp.c &&
+        body > prng * 0.5 && pbody > Math.abs(pp.c - pp.o) * 0.5) out.push('three black crows');
+    // kicker — opposite marubozu gap = institutional reversal
+    if (p.c < p.o && c.c > c.o && c.o >= p.o && body / rng > 0.8 && pbody / prng > 0.8) out.push('bullish kicker');
+    if (p.c > p.o && c.c < c.o && c.o <= p.o && body / rng > 0.8 && pbody / prng > 0.8) out.push('bearish kicker');
+    // belt hold — opens at extreme, drives through the whole bar
+    if (c.c > c.o && Math.abs(c.o - c.l) / rng < 0.05 && body / rng > 0.6) out.push('bullish belt hold');
+    if (c.c < c.o && Math.abs(c.o - c.h) / rng < 0.05 && body / rng > 0.6) out.push('bearish belt hold');
+    // inside / outside bar — volatility contraction / two-sided expansion
+    if (c.h < p.h && c.l > p.l) out.push('inside bar');
+    if (c.h > p.h && c.l < p.l) out.push('outside bar');
+    // ---- meta: net direction + CLV (close location — where in the bar did
+    // price settle: institutional footprint; sustained positive CLV under a
+    // red close = quiet accumulation)
+    var BULL = ['bullish engulfing', 'hammer', 'morning star', 'piercing line', 'bullish harami',
+                'three white soldiers', 'bullish kicker', 'bullish belt hold', 'tweezer bottom',
+                'bullish marubozu', 'inverted hammer'];
+    var BEAR = ['bearish engulfing', 'shooting star', 'hanging man', 'evening star', 'dark cloud cover',
+                'bearish harami', 'three black crows', 'bearish kicker', 'bearish belt hold',
+                'tweezer top', 'bearish marubozu'];
+    var nb = 0, ns = 0;
+    for (var m = 0; m < out.length; m++) {
+      if (BULL.indexOf(out[m]) >= 0) nb++;
+      else if (BEAR.indexOf(out[m]) >= 0) ns++;
+    }
+    var clv = rng > 0 ? ((c.c - c.l) - (c.h - c.c)) / rng : 0;   // -1..+1
+    var clv3 = 0; for (var q = n - 3; q < n; q++) { var r3 = cs[q].h - cs[q].l || 1e-12; clv3 += ((cs[q].c - cs[q].l) - (cs[q].h - cs[q].c)) / r3; }
+    out.dir = nb > ns ? 'bull' : ns > nb ? 'bear' : null;
+    out.clv = +clv.toFixed(2);
+    out.clv3 = +clv3.toFixed(2);
+    out.atEdge = atLo ? 'lo' : atHi ? 'hi' : null;
+    out.volX = +volX.toFixed(2);
     return out;
   }
 
@@ -966,12 +1032,37 @@
     }
     var chikou = i >= 26 ? (px > cs[i - 26].c ? 'bull' : px < cs[i - 26].c ? 'bear' : null) : null;
     var dir = vs === 'above' && tenkan > kijun ? 'bull' : vs === 'below' && tenkan < kijun ? 'bear' : null;
+    // ---- upgrades (the pro grading layer the basic indicators miss) ----
+    // Kumo twist ahead — future Senkou A/B at the NEXT projected bar. If the
+    // forward cloud flips color, current price is walking into a reversal
+    // zone the naked eye can't see for 26 bars. Computed from the span of
+    // the pipeline feeding future spans.
+    var fA = (mid(i, 9) + mid(i, 26)) / 2, fB = mid(i, 52);  // spans forming NOW = future cloud
+    var kumoTwist = (fA > fB) !== (cA > cB) ? (fA > fB ? 'bull' : 'bear') : null;
+    // cloud thickness = conviction — thin clouds are weak barriers,
+    // thick clouds are regime walls
+    var thickness = px ? +(((cTop - cBot) / px) * 100).toFixed(2) : null;
+    // TK-cross grading — a cross's worth depends on where it fired vs the
+    // cloud: bull cross ABOVE the cloud = strong, inside = neutral,
+    // below = weak (Hosoda's own grading)
+    var crossGrade = cross ? (cross.dir === 'bull'
+      ? (vs === 'above' ? 'strong' : vs === 'inside' ? 'neutral' : 'weak')
+      : (vs === 'below' ? 'strong' : vs === 'inside' ? 'neutral' : 'weak')) : null;
+    // kijun magnet — a FLAT kijun-26 is a price magnet; strong trend legs
+    // snap back to it. Flag proximity to a flat kijun.
+    var kPrev = mid(Math.max(0, i - 4), 26);
+    var kFlat = Math.abs(kijun - kPrev) / (px || 1) < 0.002;
+    var kMagnet = kFlat && Math.abs(px - kijun) / px < 0.006 ? 'pulling'
+               : kFlat ? 'flat' : null;
     return {
       dir: dir, vs: vs, tenkan: tenkan, kijun: kijun, cloudTop: cTop, cloudBot: cBot,
       cross: cross, chikou: chikou,
+      kumoTwist: kumoTwist, cloudThickness: thickness, crossGrade: crossGrade, kijunMagnet: kMagnet,
       label: 'price ' + vs + ' cloud · T' + (tenkan > kijun ? '>' : '<') + 'K'
-        + (cross ? ' · ' + cross.dir + ' TK cross ' + cross.age + 'b ago' : '')
+        + (cross ? ' · ' + cross.dir + ' TK cross ' + cross.age + 'b ago' + (crossGrade ? ' (' + crossGrade + ')' : '') : '')
         + (chikou ? ' · chikou ' + chikou : '')
+        + (kumoTwist ? ' · ⚠ kumo twist ' + kumoTwist : '')
+        + (kMagnet === 'pulling' ? ' · kijun magnet' : '')
     };
   }
 
@@ -1069,19 +1160,57 @@
       var hFlat = Math.abs(hh1.p - hh2.p) / hh2.p <= 0.012, lFlat = Math.abs(ll1.p - ll2.p) / ll2.p <= 0.012;
       var hDn = hh1.p < hh2.p && !hFlat, lUp = ll1.p > ll2.p && !lFlat;
       var hUp = hh1.p > hh2.p && !hFlat, lDn = ll1.p < ll2.p && !lFlat;
-      if (hFlat && lFlat) out.push({ name: 'rectangle range', dir: null, conf: 'C', s: 'box ' + px(ll1.p) + '–' + px(hh1.p) });
-      else if (hDn && lUp) out.push({ name: 'sym triangle', dir: null, conf: 'C', s: 'coiling — apex break pending' });
-      else if (hUp && lUp) out.push({ name: 'rising channel', dir: 'LONG', conf: 'C', s: 'parallel rising structure' });
-      else if (hDn && lDn) out.push({ name: 'falling channel', dir: 'SHORT', conf: 'C', s: 'parallel falling structure' });
-      else if (hUp && lDn) out.push({ name: 'broadening', dir: null, conf: 'C', s: 'expanding volatility — megaphone' });
-      else if (!hDn && lUp) out.push({ name: 'rising wedge', dir: 'SHORT', conf: 'C', s: 'rising compression — bearish lean' });
-      else if (hDn && !lUp) out.push({ name: 'falling wedge', dir: 'LONG', conf: 'C', s: 'falling compression — bullish lean' });
+      if (hFlat && lFlat) out.push({ name: 'rectangle range', dir: null, conf: 'C', s: 'box ' + px(ll1.p) + '–' + px(hh1.p), tgt: null });
+      // ascending/descending triangles BEFORE the wedge cases — a flat side
+      // + rising/falling other side is the directional triangle Bulkowski
+      // scores ~60% for the flat side's direction, not a wedge
+      else if (hFlat && lUp) out.push({ name: 'ascending triangle', dir: 'LONG', conf: 'B', s: 'flat top ' + px(hh1.p) + ' · rising lows — pressure on resistance', tgt: hh1.p * 1 + (hh1.p - ll1.p) });
+      else if (hDn && lFlat) out.push({ name: 'descending triangle', dir: 'SHORT', conf: 'B', s: 'falling highs · flat base ' + px(ll1.p) + ' — pressure on support', tgt: ll1.p - (hh1.p - ll1.p) });
+      else if (hDn && lUp) out.push({ name: 'sym triangle', dir: null, conf: 'C', s: 'coiling — apex break pending', tgt: null });
+      else if (hUp && lUp) out.push({ name: 'rising channel', dir: 'LONG', conf: 'C', s: 'parallel rising structure', tgt: null });
+      else if (hDn && lDn) out.push({ name: 'falling channel', dir: 'SHORT', conf: 'C', s: 'parallel falling structure', tgt: null });
+      else if (hUp && lDn) out.push({ name: 'broadening', dir: null, conf: 'C', s: 'expanding volatility — megaphone', tgt: null });
+      else if (!hDn && lUp) out.push({ name: 'rising wedge', dir: 'SHORT', conf: 'C', s: 'rising compression — bearish lean', tgt: null });
+      else if (hDn && !lUp) out.push({ name: 'falling wedge', dir: 'LONG', conf: 'C', s: 'falling compression — bullish lean', tgt: null });
     }
     var n6 = cs.slice(-6), p6 = cs.slice(-14, -6);
     if (p6.length === 8 && n6.length === 6) {
       var imp = (p6[7].c - p6[0].o) / p6[0].o, drift = (n6[5].c - n6[0].o) / n6[0].o;
-      if (imp > 0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bull flag', dir: 'LONG', conf: 'B', s: '+' + (imp * 100).toFixed(1) + '% impulse then coil' });
-      else if (imp < -0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bear flag', dir: 'SHORT', conf: 'B', s: (imp * 100).toFixed(1) + '% impulse then coil' });
+      // pennant = flag with CONVERGING rails (higher lows + lower highs in
+      // the flag bars); parallel sideways drift = classic flag. Same pole
+      // continuation logic, tighter coil = sharper break.
+      var fH = Math.max.apply(null, n6.map(function (x) { return x.h; })),
+          fL = Math.min.apply(null, n6.map(function (x) { return x.l; })),
+          fH2 = Math.max(n6[0].h, n6[1].h), fL2 = Math.min(n6[0].l, n6[1].l),
+          fH5 = Math.max(n6[4].h, n6[5].h), fL5 = Math.min(n6[4].l, n6[5].l);
+      var converging = (fH5 - fL5) < (fH2 - fL2) * 0.75;
+      var shape = converging ? 'pennant' : 'flag';
+      var pole = Math.abs(imp);
+      if (imp > 0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bull ' + shape, dir: 'LONG', conf: 'B',
+        s: '+' + (imp * 100).toFixed(1) + '% impulse then ' + (converging ? 'pennant coil' : 'flag drift'),
+        tgt: cs[cs.length - 1].c * (1 + pole) });
+      else if (imp < -0.025 && Math.abs(drift) < 0.012) out.push({ name: 'bear ' + shape, dir: 'SHORT', conf: 'B',
+        s: (imp * 100).toFixed(1) + '% impulse then ' + (converging ? 'pennant coil' : 'flag drift'),
+        tgt: cs[cs.length - 1].c * (1 - pole) });
+    }
+    // measured-move targets for reversal patterns — Bulkowski's rule: the
+    // pattern's height projected from the neck/equal-extreme level
+    for (var tpi = 0; tpi < out.length; tpi++) {
+      var tp = out[tpi];
+      if (tp.tgt != null) continue;
+      if (tp.name === 'head & shoulders' && H.length >= 3 && L.length) {
+        var neck = Math.max.apply(null, L.map(function (x) { return x.p; }));
+        tp.tgt = +(neck - (H[H.length - 2].p - neck)).toFixed(8);
+      } else if (tp.name === 'inverse H&S' && L.length >= 3 && H.length) {
+        var neck2 = Math.min.apply(null, H.map(function (x) { return x.p; }));
+        tp.tgt = +(neck2 + (neck2 - L[L.length - 2].p)).toFixed(8);
+      } else if ((tp.name === 'double top' || tp.name === 'triple top') && L.length) {
+        var base = Math.max.apply(null, L.map(function (x) { return x.p; }));
+        tp.tgt = +(base - (H[H.length - 1].p - base)).toFixed(8);
+      } else if ((tp.name === 'double bottom' || tp.name === 'triple bottom') && H.length) {
+        var cap = Math.min.apply(null, H.map(function (x) { return x.p; }));
+        tp.tgt = +(cap + (cap - L[L.length - 1].p)).toFixed(8);
+      }
     }
     return out;
   }
@@ -1229,6 +1358,7 @@
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
         brk = breakout(cs), er = effortResult(cs), ep = elliottProj(cs),
+        prz = H && H.project ? H.project(cs) : null,
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
@@ -1276,6 +1406,10 @@
       if (ep && ep.live && ep.dir === (L ? 'bull' : 'bear')) confluence++;
       if (er && er.dir === (L ? 'bull' : 'bear')) confluence++;
       if (mas && mas.fanning === (L ? 'bull' : 'bear')) confluence++;
+      if (prz && prz.inZone && prz.dir === (L ? 'bullish' : 'bearish')) confluence += 2; // price sitting in the projected reversal zone
+      if (cd.dir === (L ? 'bull' : 'bear')) confluence++;
+      if (cd.clv3 && Math.sign(cd.clv3) === (L ? 1 : -1) && Math.abs(cd.clv3) > 0.8) confluence++; // sustained close-location sponsorship
+      if (ichi && ichi.kumoTwist && ichi.kumoTwist !== (L ? 'bull' : 'bear')) confluence--; // future cloud flips against the trade
       if (mc && ((mc.bos === 'bullish') === L || (mc.choch === 'bullish') === L)) confluence++;
       if (mc && mc.inOB && (mc.inOB.dir === 'bullish') === L) confluence++;
       if (mc && ((mc.zone === 'discount') === L) && mc.zone !== 'equilibrium') confluence++;
@@ -1330,10 +1464,12 @@
     if (fb && fb.goldenPocket) F('fib', 'bull', 'golden pocket · ' + fb.clusters + ' cluster(s)');
     else if (fb && fb.clusters) F('fib', 'flat', fb.clusters + ' fib cluster(s) nearby');
     if (cd && cd.length) {
-      var cb = cd.filter(function (x) { return x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star'; }),
-          cr = cd.filter(function (x) { return x.indexOf('bull') !== 0 && x !== 'hammer' && x !== 'morning star'; });
-      F('candles', cb.length > cr.length ? 'bull' : cr.length > cb.length ? 'bear' : 'flat', cd.join(', '));
+      var cb = cd.filter(function (x) { return x.indexOf('bull') === 0 || x === 'hammer' || x === 'morning star' || x === 'tweezer bottom' || x === 'piercing line' || x.indexOf('soldiers') >= 0 || x.indexOf('kicker') >= 0 && x.indexOf('bear') !== 0 || x === 'tweezer bottom'; }),
+          cr = cd.filter(function (x) { return cb.indexOf(x) < 0; });
+      F('candles', (cd.dir || (cb.length > cr.length ? 'bull' : cr.length > cb.length ? 'bear' : 'flat')),
+        cd.join(', ') + (cd.clv != null ? ' · CLV ' + cd.clv + (cd.clv3 != null ? ' (3b ' + cd.clv3 + ')' : '') : '') + (cd.atEdge ? ' · at range ' + cd.atEdge : ''));
     }
+    if (prz) F('harm-PRZ', prz.dir === 'bullish' ? 'bull' : 'bear', prz.label);
     if (cps && cps.length) cps.forEach(function (p) { F('pattern', LD(p.dir) , p.name + ' (' + p.conf + ') — ' + p.s); });
     // deep MTF frames — per-timeframe factor rows so each TF's vote is
     // individually auditable (and Einstein can IC-test them separately)
@@ -1355,7 +1491,7 @@
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
-             effort: er, ewProj: ep,
+             effort: er, ewProj: ep, harmPrz: prz,
              mtf: mtd,
              bias: bias, reasons: reasons, confluence: confluence };
   }
