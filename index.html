@@ -10,10 +10,22 @@
 <meta property="og:title" content="Sentinel Tactical Radar"/>
 <meta property="og:description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
-<script src="/sentinel-tactical-radar/live-feed.js"></script>
-<script src="/sentinel-tactical-radar/harmonics.js"></script>
-<script src="/sentinel-tactical-radar/cps-detect.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="manifest" href="/sentinel-tactical-radar/manifest.webmanifest"/>
+<!-- pre-warm the three origins the terminal actually talks to: kills the
+     DNS+TLS (and WS handshake) latency on the first live call — ~50–300ms
+     each on cold start, more on mobile radio -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+<link rel="preconnect" href="https://api.bitget.com" crossorigin/>
+<link rel="dns-prefetch" href="https://ws.bitget.com"/>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net"/>
+<!-- defer every script — nothing above should block first paint -->
+<script src="/sentinel-tactical-radar/live-feed.js" defer></script>
+<script src="/sentinel-tactical-radar/harmonics.js" defer></script>
+<script src="/sentinel-tactical-radar/cps-detect.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
+<!-- service worker: cache-first statics, SWR on api/*.json, jsDelivr
+     failover when Pages is down — the dashboard never renders a hole -->
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sentinel-tactical-radar/sw.js').catch(()=>{})</script>
 <style>
 @property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
 :root{--bg:#07050f;--bg2:#0d0820;--panel:rgba(19,13,38,.82);--line:rgba(140,120,255,.2);--line2:rgba(140,120,255,.42);
@@ -483,9 +495,27 @@ const BG=x=>'https://www.bitget.com/futures/usdt/'+SYM(x);
 const LK=(h,t)=>`<a class="al" href="${h}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t}</a>`;
 const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
 const ago=t=>{const s=(Date.now()-t)/1e3;return !Number.isFinite(s)?'—':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
-// cache-busting query defeats both browser cache AND the Pages CDN edge
-// (max-age=600 was serving 10-minute-old artifacts after every deploy)
-const j=u=>fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+// fetch discipline: 10s abort timeout -> one retry with jitter -> the
+// last-known-good localStorage snapshot. Transient blips never blank a
+// panel; a dead origin serves the last real data, marked stale upstream.
+const j=async u=>{
+  const key='lkg:'+u;
+  const once=async()=>{
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),10e3);
+    try{
+      const r=await fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store',signal:ctl.signal});
+      if(!r.ok)throw 0;
+      const d=await r.json();
+      if(d!=null)try{localStorage[key]=JSON.stringify({d,t:Date.now()})}catch(_){}
+      return d;
+    }finally{clearTimeout(t)}
+  };
+  try{return await once()}catch(_){
+    try{await new Promise(r=>setTimeout(r,300+Math.random()*500)); return await once()}catch(_2){
+      try{const c=JSON.parse(localStorage[key]||'null'); return c?c.d:null}catch(_3){return null}
+    }
+  }
+};
 let LAST={};
 
 
