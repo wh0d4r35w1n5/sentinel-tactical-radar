@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
 import '../ta-engine.js';  // sets globalThis.TAEngine
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
+import { integrityNote } from './crc32.mjs';
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
@@ -18,11 +19,14 @@ const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api')
 
 // atomic artifact writes — a killed process mid-write hands consumers a
 // truncated JSON (executor reads live-plan.json; god audits all of api/).
-// tmp+rename is atomic on POSIX and Windows-over-CIFS alike.
+// tmp+rename is atomic on POSIX and Windows-over-CIFS alike. Each write
+// records its CRC32 in state/checksums.json — integrity is auditable.
 const writeJson = (file, obj) => {
+  const body = JSON.stringify(obj);
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.writeFileSync(tmp, body);
   fs.renameSync(tmp, file);
+  integrityNote(file, body);
 };
 // Universe = Bitget USDT-M perpetual futures: crypto + RWA contracts
 // (stocks, indexes, FX, metals) — everything tradeable from the futures account.
@@ -44,6 +48,15 @@ const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 // user mandate: SENTINEL_LONG_ONLY=1 — short signals still render on the
 // board but are gated out of every order with a named 'shorts-banned' reject.
 const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
+// mode-scoped fills journal — demo fills/cooldowns must never read the
+// live loss record (and vice versa).
+const FILLS_FILE =
+  (process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo'
+    ? 'demo-fills.json'
+    : 'real-fills.json';
+// test epoch: fills older than this are pre-test history on a shared
+// demo account — excluded from cooldowns and journal pairing.
+const FILLS_SINCE = +(process.env.SENTINEL_FILLS_SINCE_MS || 0);
 const KLINE_CANDIDATES = RAPID ? 16 : 48; // top-volume pairs get 1h momentum metrics
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
@@ -1438,7 +1451,23 @@ async function main() {
                     volX: ta.wyckoff.eventDetail?.volX ?? null,
                     tr: ta.wyckoff.tr ?? null,
                     events: ta.wyckoff.events ?? [],
+                    springHold: ta.wyckoff.springHold ?? null,
+                    uthrHold: ta.wyckoff.uthrHold ?? null,
+                    target: ta.wyckoff.target ?? null,
+                    invalid: ta.wyckoff.invalid ?? null,
+                    phaseConf: ta.wyckoff.phaseConf ?? null,
                   }
+                : null,
+              ewProj: ta.ewProj
+                ? {
+                    dir: ta.ewProj.dir, live: ta.ewProj.live,
+                    targetLo: ta.ewProj.targetLo, targetHi: ta.ewProj.targetHi,
+                    invalid: ta.ewProj.invalid, age: ta.ewProj.age,
+                  }
+                : null,
+              effort: ta.effort
+                ? { dir: ta.effort.dir, absorb: ta.effort.absorb, supply: ta.effort.supply,
+                    drive: ta.effort.drive, strength: ta.effort.strength, label: ta.effort.label }
                 : null,
               smc: ta.smc
                 ? {
@@ -1490,7 +1519,12 @@ async function main() {
               factors: ta.factors ?? null,
               eng: ta.eng
                 ? Object.fromEntries(
-                    Object.entries(ta.eng).map(([k, x]) => [k, x ? { dir: x.dir, label: x.label, confirmed: x.confirmed } : null])
+                    Object.entries(ta.eng).map(([k, x]) => [k, x ? {
+                      dir: x.dir, label: x.label, confirmed: x.confirmed,
+                      leadBull: x.leadBull, leadBear: x.leadBear,
+                      unconfirmedBreak: x.unconfirmedBreak,
+                      failSwing: x.failSwing, histDiv: x.histDiv, fanning: x.fanning,
+                    } : null])
                   )
                 : null,
             }
@@ -2162,10 +2196,11 @@ async function main() {
   // opposite-direction close inside the window means whipsaw — don't flip.
   let recentFills = [];
   try {
-    recentFills =
+    recentFills = (
       JSON.parse(
-        fs.readFileSync(path.join(API, '..', 'state', 'real-fills.json'), 'utf8')
-      ).fills || [];
+        fs.readFileSync(path.join(API, '..', 'state', FILLS_FILE), 'utf8')
+      ).fills || []
+    ).filter((f) => !FILLS_SINCE || (+f.ts || 0) >= FILLS_SINCE);
   } catch {}
   const RECENT_CLOSED_MS = +(process.env.SENTINEL_RECENT_CLOSED_MS || 15 * 60e3);
   // a close fill's `side` is the closed POSITION's side ('sell' = was short)
@@ -2271,7 +2306,7 @@ async function main() {
   })();
   // live-execution plan — emitted every build regardless of executor state.
   // orders = gate-passed entries this run; closes/trails filled post-settle.
-  const livePlan = { orders: [], closes: [], trails: [], rejects: [] };
+  const livePlan = { orders: [], closes: [], trails: [], rejects: [], mktType, marketSQN };
   // portfolio heat: total equity at risk if every live stop fired right
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
@@ -2390,9 +2425,25 @@ async function main() {
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
       s.ta?.ignition?.dir === s.direction ||
+      (s.ta?.wyckoff?.springHold === true && dirUp) ||
+      (s.ta?.wyckoff?.uthrHold === true && !dirUp) ||
+      (s.ta?.ewProj?.live === true && s.ta?.ewProj?.dir === (dirUp ? 'bull' : 'bear')) ||
+      (s.ta?.effort?.dir === (dirUp ? 'bull' : 'bear') && (s.ta?.effort?.strength ?? 0) >= 0.4) ||
       !s.ta?.eng?.obv ||
       tradeScore >= SPONSOR_WAIVER,
-      'fake-move (no OBV/Dow sponsorship)');
+      'fake-move (no OBV/Dow/Wyckoff/EW sponsorship)');
+    // effort-vs-result hard veto — high effort + no result AT the signal's
+    // destination means the move is walking into absorption. Longs can't
+    // run into supply absorption at highs; shorts can't run into absorbed
+    // demand at lows. (Wyckoff's 2nd law, enforced.)
+    gate(RELAX || !(
+      (dirUp && (s.ta?.effort?.supply ?? 0) >= 2) ||
+      (!dirUp && (s.ta?.effort?.absorb ?? 0) >= 2)),
+      'effort-absorbed');
+    // OBV-unconfirmed breakout: price at a range extreme while OBV never
+    // broke out = the break lacks sponsorship — classic bull/bear trap.
+    gate(RELAX || s.strategy !== 'Breakout Continuation' ||
+      !s.ta?.eng?.obv?.unconfirmedBreak, 'obv-unconfirmed-break');
     gate(RELAX || (s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
     // anti-chase: never sell the bottom quartile of the day's range nor buy
     // the top quartile — the move already happened and the entry inherits
@@ -2473,6 +2524,19 @@ async function main() {
         rangePosition: s.rangePosition ?? null,
         changePct: s.changePct ?? null,
         score: s.score ?? null,
+        // regime at decision time — exec vets direction-vs-regime again at
+        // fill time and journals this onto the position's record, so the
+        // per-regime expectancy table attributes every R to its market type
+        mktType,
+        // structural evidence from the new engines — journaled so every fill
+        // carries the indicator thesis it was taken on (and the level that
+        // would falsify it)
+        structInvalid: s.ta?.ewProj?.live && s.ta.ewProj.dir === (s.direction === 'LONG' ? 'bull' : 'bear')
+          ? s.ta.ewProj.invalid
+          : s.ta?.wyckoff?.invalid ?? null,
+        ewTarget: s.ta?.ewProj?.live ? { lo: s.ta.ewProj.targetLo, hi: s.ta.ewProj.targetHi } : null,
+        wyckTarget: s.ta?.wyckoff?.target ?? null,
+        effortDir: s.ta?.effort?.dir ?? null,
       });
     }
   }
@@ -2963,6 +3027,59 @@ async function main() {
   ledger.stats.maxR = Rs.length ? round(Math.max(...Rs), 2) : null;
   ledger.stats.minR = Rs.length ? round(Math.min(...Rs), 2) : null;
   ledger.stats.expectancyCI = meanCI(Rs.map((r) => round(r, 4)));
+  // Sortino-SQN — downside deviation only. A moon-bag winner stretches
+  // the right tail and inflates total σ; that variance is profit, not
+  // risk. Deviations measured below target 0 (semi-deviation over all
+  // trades, MAR=0), so consistent winners score higher than the classic
+  // SQN gives them credit for.
+  if (Rs.length > 1 && avgR != null) {
+    const dsd = Math.sqrt(Rs.reduce((a, r) => a + Math.min(0, r) ** 2, 0) / Rs.length);
+    ledger.stats.sqnSortino = dsd > 0 ? round((avgR / dsd) * Math.sqrt(Rs.length), 2) : null;
+    ledger.stats.downsideDevR = round(dsd, 3);
+  }
+  // Deflated SQN (Bailey–López de Prado DSR): a SQN picked from a grid of
+  // T trials needs a haircut — expected max SR under T zero-edge trials is
+  // not zero. PSR-style significance: P(true SR > E[max SR across T null
+  // trials]), given skew/kurtosis of the realized R-multiples. Trials =
+  // the optimizer's ranked config cells (real search breadth, not a guess).
+  try {
+    const opt = JSON.parse(fs.readFileSync(path.join(API, 'rr-optimize.json'), 'utf8'));
+    const srs = (opt.ranked || []).map((r) => (r.sqn100 ?? 0) / 10).filter(Number.isFinite);
+    const T = srs.length, n = Rs.length;
+    if (T > 2 && n > 2 && stdR > 0 && avgR != null) {
+      const erf = (x) => Math.tanh(1.128379167 * x + 0.2726679 * x * x * x); // Φ via tanh approx
+      const Phi = (x) => 0.5 * (1 + erf(x / Math.SQRT2));
+      const invPhi = (p) => {
+        const a = [2.5066282, -18.6150006, 41.3911977, -25.4410605];
+        const b = [-8.4735109, 23.0833674, -21.0622410, 3.1308291];
+        const c = [0.3374755, 0.9761690, -0.6639323, -0.5958186, -0.1363116, -0.0178944, -0.0083913];
+        const y = p - 0.5;
+        if (Math.abs(y) < 0.42) {
+          const r = y * y;
+          return (y * (((a[3] * r + a[2]) * r + a[1]) * r + a[0])) / ((((b[3] * r + b[2]) * r + b[1]) * r + b[0]) * r + 1);
+        }
+        let r = p, q;
+        if (y > 0) r = 1 - p;
+        r = Math.log(-Math.log(r));
+        q = c[0] + r * (c[1] + r * (c[2] + r * (c[3] + r * (c[4] + r * (c[5] + r * c[6])))));
+        return y < 0 ? -q : q;
+      };
+      const sr = avgR / stdR;
+      const vSr = srs.reduce((a, x) => a + (x - srs.reduce((b, y) => b + y, 0) / T) ** 2, 0) / (T - 1);
+      const EU = 0.5772156649;
+      const srStar = Math.sqrt(Math.max(0, vSr)) * ((1 - EU) * invPhi(1 - 1 / T) + EU * invPhi(1 - 1 / (T * Math.E)));
+      const m3 = Rs.reduce((a, r) => a + Math.pow(r - avgR, 3), 0) / n;
+      const m4 = Rs.reduce((a, r) => a + Math.pow(r - avgR, 4), 0) / n;
+      const skew = m3 / Math.pow(stdR, 3), kurt = m4 / Math.pow(stdR, 4);
+      const denom = Math.sqrt(Math.max(1e-9, 1 - skew * sr + ((kurt - 1) / 4) * sr * sr));
+      ledger.stats.deflatedSqn = {
+        trials: T,
+        srStar: round(srStar, 3),
+        dsr: round(Phi(((sr - srStar) * Math.sqrt(n - 1)) / denom), 4),
+        note: 'P(observed SR exceeds best-of-T null) — the multiple-testing haircut',
+      };
+    }
+  } catch {}
   // cost decomposition — what the frictions actually ate. pnlPct is net of
   // fees+funding, so gross = net + fees − funding carry. If fees consume
   // the edge, the "strategy" is just churn dressed as signal.
@@ -3972,10 +4089,11 @@ async function main() {
   // ---- taken-trades journal: FIFO-pair real fills per symbol+side into
   // round-trips the dashboard can show beside the emitted-signal book.
   try {
-    const fills =
+    const fills = (
       JSON.parse(
-        fs.readFileSync(path.join(API, '..', 'state', 'real-fills.json'), 'utf8')
-      ).fills || [];
+        fs.readFileSync(path.join(API, '..', 'state', FILLS_FILE), 'utf8')
+      ).fills || []
+    ).filter((f) => !FILLS_SINCE || (+f.ts || 0) >= FILLS_SINCE);
     const bySym = {};
     for (const f of [...fills].sort((a, b) => a.ts - b.ts))
       (bySym[f.symbol + '|' + f.side] = bySym[f.symbol + '|' + f.side] || []).push(f);

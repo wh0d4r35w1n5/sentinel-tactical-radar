@@ -235,6 +235,18 @@
       spring: last('spring') || null, jtc: last('JTC') || null,
       utad: last('UTAD') || null, fti: last('FTI') || null,
       age: act ? n - 1 - act.i : null,
+      // go-wyckoff confirmation layer — an event is a hypothesis, not a
+      // signal: a spring must HOLD above support to count as accumulation;
+      // an upthrust must HOLD below resistance to count as distribution
+      springHold: last('spring') ? lastClose > support : null,
+      uthrHold: last('UTAD') ? lastClose < resist : null,
+      // measured-move: Wyckoff's counting — the TR width projects the
+      // markup/markdown leg; invalidation sits at the spring/UTAD extreme
+      target: type === 'accumulation' && isRange ? +(resist + (resist - support)).toFixed(8)
+            : type === 'distribution' && isRange ? +(support - (resist - support)).toFixed(8) : null,
+      invalid: type === 'accumulation' ? +(last('spring') ? Math.min(support, last('spring').i != null ? cs[last('spring').i].l : support) : support * 0.99).toFixed(8)
+             : type === 'distribution' ? +(last('UTAD') && cs[last('UTAD').i] ? Math.max(resist, cs[last('UTAD').i].h) : resist * 1.01).toFixed(8) : null,
+      phaseConf: type ? Math.min(0.95, 0.4 + ev.length * 0.08 + (phase === 'D' || phase === 'E' ? 0.2 : 0)) : null,
     };
   }
 
@@ -544,10 +556,30 @@
     if (last == null) return null;
     var zone = last <= 30 ? 'oversold' : last >= 70 ? 'overbought' : last <= 42 ? 'low' : last >= 58 ? 'high' : 'neutral';
     var div = divergence(cs, r, 0.012);
+    // RSI failure swing — RSI tags the extreme, falls back, then breaks the
+    // reaction trough WITHOUT retagging the extreme: momentum died at the
+    // excursion, not at divergence — the sharper reversal signature
+    var fs = null, hi7 = -1, hiIdx = -1, lo3 = 101, loIdx = -1;
+    for (var fi = r.length - 2; fi > r.length - 18 && fi > 0; fi--) {
+      if (r[fi] == null) continue;
+      if (r[fi] >= 70 && r[fi] > hi7) { hi7 = r[fi]; hiIdx = fi; break; }
+    }
+    if (hiIdx > 0) { for (var fj = hiIdx + 1; fj < r.length - 1; fj++) if (r[fj] != null && r[fj] < lo3) { lo3 = r[fj]; loIdx = fj; }
+      if (loIdx > hiIdx && last < lo3) fs = 'bear'; }
+    if (!fs) { var lo7 = 101; loIdx = -1;
+      for (var fk = r.length - 2; fk > r.length - 18 && fk > 0; fk--) {
+        if (r[fk] == null) continue;
+        if (r[fk] <= 30 && r[fk] < lo7) { lo7 = r[fk]; loIdx = fk; break; }
+      }
+      if (loIdx > 0) { var hi3 = -1, hi3Idx = -1;
+        for (var fl = loIdx + 1; fl < r.length - 1; fl++) if (r[fl] != null && r[fl] > hi3) { hi3 = r[fl]; hi3Idx = fl; }
+        if (hi3Idx > loIdx && last > hi3) fs = 'bull'; } }
     var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
-            : last <= 30 ? 'bull' : last >= 70 ? 'bear' : last > 50 ? 'bull' : 'bear';
+            : fs ? fs : last <= 30 ? 'bull' : last >= 70 ? 'bear' : last > 50 ? 'bull' : 'bear';
     return { dir: dir, rsi: +last.toFixed(1), zone: zone, div: div ? div.type : null, divAge: div ? div.age : null,
-      label: 'RSI ' + last.toFixed(1) + ' ' + zone + (div ? ' · ' + div.type + ' divergence ' + div.age + 'b ago' : ' · no divergence') };
+      failSwing: fs,
+      label: 'RSI ' + last.toFixed(1) + ' ' + zone + (div ? ' · ' + div.type + ' divergence ' + div.age + 'b ago' : ' · no divergence')
+        + (fs ? ' · ' + fs + ' failure swing' : '') };
   }
   // ---------- ENGINE: MACD ----------
   function macdEng(cs) {
@@ -562,13 +594,19 @@
     var rising = h0 > hist[n - 2] && hist[n - 2] > hist[n - 3];
     var falling = h0 < hist[n - 2] && hist[n - 2] < hist[n - 3];
     var div = divergence(cs, m, 0.012);
+    // histogram divergence — momentum peaks decaying against price peaks
+    // fires earlier than MACD-line divergence (hist leads the line by a leg)
+    var hdiv = divergence(cs, hist, 0.02);
     var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
+            : hdiv && hdiv.age <= 6 ? (hdiv.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
             : cross && cross.age <= 8 ? cross.dir
             : h0 > 0 ? 'bull' : 'bear';
     return { dir: dir, aboveZero: m[n - 1] > 0, cross: cross ? cross.dir + ' ' + cross.age + 'b' : null,
              histDir: rising ? 'rising' : falling ? 'falling' : 'flat', div: div ? div.type : null,
+             histDiv: hdiv ? hdiv.type : null, histDivAge: hdiv ? hdiv.age : null,
       label: 'MACD ' + (m[n - 1] > 0 ? 'above' : 'below') + ' zero · hist ' + (rising ? 'rising' : falling ? 'falling' : 'flat')
-             + (cross ? ' · ' + cross.dir + ' cross ' + cross.age + 'b ago' : '') + (div ? ' · ' + div.type + ' div' : '') };
+             + (cross ? ' · ' + cross.dir + ' cross ' + cross.age + 'b ago' : '') + (div ? ' · ' + div.type + ' div' : '')
+             + (hdiv ? ' · hist ' + hdiv.type + ' div ' + hdiv.age + 'b' : '') };
   }
   // ---------- ENGINE: Volume + OBV ----------
   function obvEng(cs) {
@@ -580,10 +618,19 @@
     var mxP = Math.max.apply(null, cl.slice(-60, -1)), mnP = Math.min.apply(null, cl.slice(-60, -1));
     var lastO = obv[obv.length - 1], lastP = cl[cl.length - 1];
     var stealth = lastO >= mxO && lastP < mxP, distrib = lastO <= mnO && lastP > mnP;
+    // OBV breakout confirmation — OBV punching to a new range extreme
+    // BEFORE price does is the leading tell (accumulation running ahead of
+    // the tape); price at its own extreme without OBV = unconfirmed break
+    var obvBrkUp = lastO >= mxO, obvBrkDn = lastO <= mnO,
+        pxBrkUp = lastP >= mxP, pxBrkDn = lastP <= mnP;
+    var leadBull = obvBrkUp && !pxBrkUp, leadBear = obvBrkDn && !pxBrkDn,
+        unconfBrk = (pxBrkUp && !obvBrkUp) || (pxBrkDn && !obvBrkDn);
     var dir = div ? (div.type.indexOf('bull') >= 0 ? 'bull' : 'bear')
-            : stealth ? 'bull' : distrib ? 'bear' : oS > 0.001 ? 'bull' : oS < -0.001 ? 'bear' : null;
+            : stealth ? 'bull' : distrib ? 'bear' : leadBull ? 'bull' : leadBear ? 'bear'
+            : oS > 0.001 ? 'bull' : oS < -0.001 ? 'bear' : null;
     return { dir: dir, obvSlope: +(oS * 100).toFixed(2), priceSlope: +(pS * 100).toFixed(2),
              div: div ? div.type : null, stealth: stealth, distrib: distrib,
+             leadBull: leadBull, leadBear: leadBear, unconfirmedBreak: unconfBrk,
       label: 'OBV ' + (oS > 0 ? 'rising' : 'falling') + ' ' + (oS * 100).toFixed(1) + '%/20b vs price ' + (pS * 100).toFixed(1) + '%'
              + (stealth ? ' · stealth accumulation (OBV new high, price lagging)' : distrib ? ' · distribution (OBV new low, price holding)' : '')
              + (div ? ' · ' + div.type + ' div' : '') };
@@ -953,12 +1000,19 @@
     var ec = crossOf(e20, e50, 30);
     var bull = px > e20[i] && e20[i] > e50[i] && (e200[i] == null || e50[i] > e200[i]);
     var bear = px < e20[i] && e20[i] < e50[i] && (e200[i] == null || e50[i] < e200[i]);
+    // ribbon fanning — all three EMAs sloping the same way means the stack
+    // is expanding (trend acceleration); opposing slopes = churn/range
+    var slopeOf = function (S, k) { return S[i] != null && S[i - k] != null ? S[i] - S[i - k] : 0; };
+    var s20 = slopeOf(e20, 5), s50 = slopeOf(e50, 8), s200v = e200[i] != null ? slopeOf(e200, 12) : 0;
+    var fanning = bull && s20 > 0 && s50 > 0 && s200v >= 0 ? 'bull'
+               : bear && s20 < 0 && s50 < 0 && s200v <= 0 ? 'bear' : null;
     return {
-      dir: bull ? 'bull' : bear ? 'bear' : null, aligned: bull || bear,
+      dir: bull ? 'bull' : bear ? 'bear' : null, aligned: bull || bear, fanning: fanning,
       ema20: e20[i], ema50: e50[i], ema200: e200[i] != null ? e200[i] : null,
       sma50: s50[i], sma200: s200[i],
       golden: gc, eCross: ec,
       label: (bull ? 'bull stack' : bear ? 'bear stack' : 'mixed stack')
+        + (fanning ? ' · fanning' : '')
         + ' · px ' + (px > e20[i] ? '>' : '<') + ' E20 ' + (e20[i] > e50[i] ? '>' : '<') + ' E50'
         + (ec ? ' · ' + ec.dir + ' E20/50 cross ' + ec.age + 'b' : '')
         + (gc ? ' · ' + gc.name + ' ' + gc.age + 'b' : '')
@@ -1096,13 +1150,85 @@
     };
   }
 
+  // ---------- ENGINE: effort vs result (Wyckoff's 2nd law) ----------
+  // High effort (volume) producing low result (range) at an edge means the
+  // aggressive side is being absorbed — composite-man tell. At range lows:
+  // sellers working hard but price can't fall = accumulation under cover.
+  // At highs: buyers straining, price won't rise = distribution supply.
+  // Drive bars (effort AND result both expanded) confirm initiative flow.
+  function effortResult(cs) {
+    var n = cs.length; if (n < 40) return null;
+    var refV = 0, refR = 0, cnt = 0;
+    for (var i = n - 42; i < n - 12; i++) if (i >= 0) { refV += cs[i].qv || 0; refR += cs[i].h - cs[i].l; cnt++; }
+    if (!cnt || !refV) return null;
+    refV /= cnt; refR /= cnt;
+    var lo = 1e18, hi = -1e18;
+    for (var j = n - 12; j < n; j++) { lo = Math.min(lo, cs[j].l); hi = Math.max(hi, cs[j].h); }
+    var span = hi - lo || 1e-9;
+    var absorb = 0, supply = 0, driveBull = 0, driveBear = 0;
+    for (var k = n - 12; k < n - 1; k++) {
+      var c = cs[k], effort = (c.qv || 0) / refV, result = (c.h - c.l) / (refR || 1e-9);
+      var nearLo = c.l <= lo + span * 0.25, nearHi = c.h >= hi - span * 0.25;
+      if (effort >= 1.6 && result <= 0.75) {
+        if (nearLo) absorb++; else if (nearHi) supply++;
+      } else if (effort >= 1.5 && result >= 1.5) {
+        if (c.c >= c.o) driveBull++; else driveBear++;
+      }
+    }
+    var dir = absorb >= 2 ? 'bull' : supply >= 2 ? 'bear'
+            : driveBull - driveBear >= 2 ? 'bull' : driveBear - driveBull >= 2 ? 'bear' : null;
+    var strength = Math.min(1, (absorb + supply) / 4 + Math.abs(driveBull - driveBear) / 8);
+    return { dir: dir, absorb: absorb, supply: supply, drive: driveBull - driveBear,
+             strength: +strength.toFixed(2),
+             label: absorb >= 2 ? absorb + ' absorption bars at lows — sellers absorbed'
+                  : supply >= 2 ? supply + ' supply bars at highs — buyers absorbed'
+                  : Math.abs(driveBull - driveBear) >= 2 ? (driveBull > driveBear ? 'bull' : 'bear') + ' drive ' + Math.abs(driveBull - driveBear) + ' bars'
+                  : 'effort matches result — no imbalance' };
+  }
+
+  // ---------- ENGINE: Elliott forward projection ----------
+  // The completed-W5 detector marks tops/bottoms. This engine finds the
+  // IMPULSE STILL RUNNING: trailing pivots X-W1-W2-W3-W4 with hard rules
+  // checked (W2 holds X, W4 no overlap into W1, W3 not shortest), then
+  // projects W5 targets on the standard Fib extensions and reports the
+  // invalidation level — Elliott as hypothesis with a kill-switch, not dogma.
+  function elliottProj(cs) {
+    if (!zigzag || cs.length < 30) return null;
+    var piv = zigzag(cs, 0.02);
+    if (piv.length < 5) return null;
+    var p = piv.slice(-5), seq = p.map(function (x) { return x.type; }).join('');
+    var up = seq === 'LHLHL', dn = seq === 'HLHLH';
+    if (!up && !dn) return null;
+    var X = p[0].p, W1 = p[1].p, W2 = p[2].p, W3 = p[3].p, W4 = p[4].p;
+    var w1 = Math.abs(W1 - X), w3 = Math.abs(W3 - W2), w13 = Math.abs(W3 - X);
+    var w4r = Math.abs(W3 - W4) / (w3 || 1e-9), w2r = Math.abs(W1 - W2) / (w1 || 1e-9);
+    var ok = up ? (W2 > X * 0.995 && W4 > W1 * 0.99 && w3 >= w1 * 0.9 && w2r > 0.236 && w2r < 0.9 && w4r > 0.1 && w4r < 0.62)
+              : (W2 < X * 1.005 && W4 < W1 * 1.01 && w3 >= w1 * 0.9 && w2r > 0.236 && w2r < 0.9 && w4r > 0.1 && w4r < 0.62);
+    if (!ok) return null;
+    // W5 projections: 0.618×W1-3 net, and 1.0×W1 from W4 — report the band
+    var tA = up ? W4 + w13 * 0.618 : W4 - w13 * 0.618,
+        tB = up ? W4 + w1 * 1.0 : W4 - w1 * 1.0;
+    var lastC = cs[cs.length - 1].c;
+    var age = cs.length - 1 - p[4].i;
+    var live = up ? lastC < Math.max(tA, tB) * 1.005 : lastC > Math.min(tA, tB) * 0.995;
+    return { dir: up ? 'bull' : 'bear', inW5: true, complete: false,
+             targetLo: +Math.min(tA, tB).toFixed(8), targetHi: +Math.max(tA, tB).toFixed(8),
+             invalid: up ? +W1.toFixed(8) : +W1.toFixed(8),
+             live: live, age: age,
+             ratios: { w2r: +w2r.toFixed(3), w4r: +w4r.toFixed(3) },
+             label: 'W5 ' + (up ? 'up' : 'down') + ' in progress · tgt ' +
+                    (up ? Math.min(tA, tB).toPrecision(4) + '–' + Math.max(tA, tB).toPrecision(4)
+                        : Math.min(tA, tB).toPrecision(4) + '–' + Math.max(tA, tB).toPrecision(4)) +
+                    ' · invalid <' + (up ? '>' : '') + ' W1 ' + W1.toPrecision(4) };
+  }
+
   function analyze(cs, cs5m, extra) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
         cd = candlesticks(cs), fb = fib(cs), st = structure(cs), ig = ignition(cs),
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
-        brk = breakout(cs),
+        brk = breakout(cs), er = effortResult(cs), ep = elliottProj(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
@@ -1119,6 +1245,8 @@
     else if (mc && mc.bos) { bias = mc.bos === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-bos'); }
     else if (ig) { bias = ig.dir; reasons.push('ignition'); }
     else if (vw && vw.stretched) { bias = vw.fade; reasons.push('vwap-reversion'); }
+    else if (ep && ep.live) { bias = ep.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('elliott-w5-proj'); }
+    else if (er && er.dir && er.strength >= 0.5) { bias = er.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('effort-result'); }
     else if (eq && eq.lean) { bias = eq.lean; reasons.push('eq-edge'); }
     // sub-engines: RSI/MACD/OBV/Dow/trends/reversal/MTF — confirmation layer
     var eng = {
@@ -1143,6 +1271,11 @@
       if (e && ((e.shortTop) === !L)) confluence++;
       if (w && w.bias === bias) confluence++;
       if (w && w.quality >= 70) confluence++;            // confirmed wyckoff event
+      if (L && w && w.springHold === true) confluence++; // spring holding above support
+      if (!L && w && w.uthrHold === true) confluence++;  // upthrust holding below resist
+      if (ep && ep.live && ep.dir === (L ? 'bull' : 'bear')) confluence++;
+      if (er && er.dir === (L ? 'bull' : 'bear')) confluence++;
+      if (mas && mas.fanning === (L ? 'bull' : 'bear')) confluence++;
       if (mc && ((mc.bos === 'bullish') === L || (mc.choch === 'bullish') === L)) confluence++;
       if (mc && mc.inOB && (mc.inOB.dir === 'bullish') === L) confluence++;
       if (mc && ((mc.zone === 'discount') === L) && mc.zone !== 'equilibrium') confluence++;
@@ -1182,7 +1315,11 @@
       (lq.setup ? lq.setup.grade + '-grade sweep → ' : '') + (lq.zone || '?') + ' zone' + (lq.targetDistPct ? ' · draw ' + lq.targetDistPct + '% away' : ''));
     if (s) F('SFP', s.type === 'bullish' ? 'bull' : 'bear', s.type + ' sweep of ' + (s.level != null ? s.level : '?') + ' · str ' + s.strength);
     if (e && e.complete) F('elliott', e.shortTop ? 'bear' : e.longBottom ? 'bull' : 'flat', 'wave-5 complete · q' + (e.quality ?? '?'));
-    if (w && w.event) F('wyckoff', LD(w.bias), (w.event || '?') + ' · phase ' + (w.phase || '?') + ' · q' + w.quality);
+    if (ep && ep.live) F('EW proj', ep.dir === 'bull' ? 'bull' : 'bear', ep.label);
+    if (w && w.event) F('wyckoff', LD(w.bias), (w.event || '?') + ' · phase ' + (w.phase || '?') + ' · q' + w.quality
+      + (w.springHold === true ? ' · spring holding' : w.uthrHold === true ? ' · UTAD holding' : '')
+      + (w.target ? ' · tgt ' + (+w.target).toPrecision(4) : ''));
+    if (er && (er.dir || er.absorb || er.supply)) F('effort/result', er.dir || 'flat', er.label);
     if (mc && (mc.bos || mc.choch)) F('SMC', mc.choch === 'bullish' || mc.bos === 'bullish' ? 'bull' : mc.choch === 'bearish' || mc.bos === 'bearish' ? 'bear' : 'flat',
       (mc.choch ? 'CHoCH ' + mc.choch : 'BOS ' + mc.bos) + ' · ' + (mc.zone || '?'));
     if (eq && (eq.lean || eq.rangeQ)) F('EQ', LD(eq.lean), (eq.rangeQ || '?') + ' · pos ' + Math.round((eq.rangePos || 0) * 100) + '%');
@@ -1218,6 +1355,7 @@
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
+             effort: er, ewProj: ep,
              mtf: mtd,
              bias: bias, reasons: reasons, confluence: confluence };
   }
@@ -1227,6 +1365,7 @@
                  structure: structure, ignition: ignition, keyLevels: keyLevels,
                  vwap: vwap, smc: smc, eqLevels: eqLevels, liquidity: liquidity,
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
-                 mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng };
+                 mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng,
+                 effortResult: effortResult, elliottProj: elliottProj };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

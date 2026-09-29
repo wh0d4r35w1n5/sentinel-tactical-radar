@@ -28,16 +28,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { crc32hex, integrityCheck, integrityNote } from './crc32.mjs';
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API_DIR = path.join(__dirname, '..', 'api');
 // atomic artifact writes — a mid-write kill must never leave a truncated
-// live-ledger.json (god audits it; the scanner's heat math reads it)
+// live-ledger.json (god audits it; the scanner's heat math reads it).
+// Every write also records its CRC32 into state/checksums.json — readers
+// verify against the manifest, so corruption/tamper is never silent.
 const writeJson = (file, obj) => {
+  const body = JSON.stringify(obj);
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.writeFileSync(tmp, body);
   fs.renameSync(tmp, file);
+  integrityNote(file, body);
 };
 
 const HOST = 'https://api.bitget.com';
@@ -59,6 +64,122 @@ const PASS = MODE === 'demo'
   : (process.env.BITGET_PASSPHRASE || '');
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
+// mode-scoped fills journal: demo/paper fills must never contaminate the
+// live loss record (breakers, streak cooldowns, digest all read this).
+const FILLS_FILE = MODE === 'demo' ? 'demo-fills.json' : 'real-fills.json';
+// SENTINEL_FILLS_SINCE_MS — test epoch: exchange fills older than this are
+// pre-test account history — never journaled, never counted by breakers,
+// streaks, cooldowns or rate caps. Lets a shared demo account run a clean
+// 100/1000-trade evaluation.
+const FILLS_SINCE = +(process.env.SENTINEL_FILLS_SINCE_MS || 0);
+const loadFills = () => {
+  try {
+    const fj = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', FILLS_FILE), 'utf8')).fills || [];
+    return FILLS_SINCE ? fj.filter((f) => (+f.ts || 0) >= FILLS_SINCE) : fj;
+  } catch { return []; }
+};
+// R:R ladder profile — picked by scripts/rr-optimizer.mjs (1M-roll Monte
+// Carlo over candidate ladders; writes state/rr-config.json). mults are
+// stop-distance multiples per leg, alloc is the position fraction banked
+// at each leg, moon rides the trail. cum is the cumulative allocation the
+// ladder splitter consumes. SENTINEL_RR=off pins the legacy 40/30/15
+// @0.55/1/1.8 ladder.
+const RR = (() => {
+  const legacy = { mults: [0.55, 1.0, 1.8], alloc: [0.40, 0.30, 0.15], moon: 0.15 };
+  try {
+    if (process.env.SENTINEL_RR === 'off') throw 0;
+    const c = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'rr-config.json'), 'utf8'));
+    if (!Array.isArray(c.mults) || !Array.isArray(c.alloc) || c.mults.length !== c.alloc.length || !c.mults.length) throw 0;
+    return { mults: c.mults.map(Number), alloc: c.alloc.map(Number), moon: +c.moon || 0, profile: c.profile };
+  } catch { return { ...legacy, profile: 'legacy-default' }; }
+})();
+const RR_CUM = [0, ...RR.alloc.reduce((a, f, i) => (a.push(+(a[i] + f).toFixed(8)), a), [0]).slice(0, -1), 1 - RR.moon];
+const RR_MAX_ALLOC = Math.max(...RR.alloc);
+// ---- wealth vault: SENTINEL_VAULT_SHARE (default 50%) of every
+// profitable close is swept into state/wealth-vault.json — a balance the
+// engine can never trade with. Profits lock permanently; the tradable
+// book is equity MINUS vault. (Ledger-level in demo; on live this is the
+// sizing boundary — a real subaccount transfer wires on top later.)
+const VAULT_SHARE = Math.min(0.9, Math.max(0, +(process.env.SENTINEL_VAULT_SHARE ?? 0.5)));
+const VAULT_PATH = path.join(__dirname, '..', 'state', 'wealth-vault.json');
+const loadVault = () => {
+  try { return { balanceUsd: 0, sweptIds: {}, sweeps: [], ...JSON.parse(fs.readFileSync(VAULT_PATH, 'utf8')) }; }
+  catch { return { balanceUsd: 0, sweptIds: {}, sweeps: [] }; }
+};
+// ---- entry-edge discipline: rr-backtest.mjs fits how predictive our
+// entries actually are from every excursion episode on record. Below
+// SENTINEL_EDGE_MIN the marginal entry is a fee donation — skip it. Under
+// SENTINEL_CHASE_EDGE an unfilled pullback limit is a saved loss, not a
+// missed opportunity — never chase. Between floor and parity, sizing
+// scales by edge. Skeptical prior 0.5 until clean data proves better.
+const EDGE_LIVE = (() => {
+  try {
+    const bt = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'rr-backtest.json'), 'utf8'));
+    if ((bt.episodes || 0) >= 20 && bt.edgeEmpirical > 0) return { v: +bt.edgeEmpirical, src: 'episode-fit' };
+  } catch {}
+  try {
+    const op = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'rr-optimize.json'), 'utf8'));
+    if (op.edgeCalibrated > 0 && op.edgeSource !== 'martingale-prior') return { v: +op.edgeCalibrated, src: 'close-share' };
+  } catch {}
+  return { v: 0.5, src: 'skeptical-prior' };
+})();
+const EDGE_MIN_TRADE = +(process.env.SENTINEL_EDGE_MIN || 0.35);
+const CHASE_EDGE = +(process.env.SENTINEL_CHASE_EDGE || 0.8);
+const PULLBACK_PCT = +(process.env.SENTINEL_PULLBACK_PCT || 0.4);
+// ---- meta-label (López de Prado, AFML ch.3): the primary model decides
+// SIDE; a secondary model answers "will following it make money" and
+// scales SIZE. Ours is a shrunk bucketed classifier over the graded
+// signal archive — naive-Bayes odds product across strategy × regime ×
+// direction, each factor shrunk toward 1 by its cell's evidence. Below
+// META_MIN_P the signal is a statistically-informed skip; above it the
+// estimate modulates size toward/away from baseline.
+const META_MIN_P = +(process.env.SENTINEL_META_MIN_P || 0.30);
+const META_MIN_N = +(process.env.SENTINEL_META_MIN_N || 40);
+const META = (() => {
+  if (+(process.env.SENTINEL_METALABEL ?? 1) === 0) return null;
+  try {
+    const recs = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'signal-eval.json'), 'utf8')).records || [];
+    const scored = recs.filter((r) => Number.isFinite(r.outcomePct));
+    if (scored.length < META_MIN_N) return null;
+    const win = (r) => (r.outcomePct - 0.20) / Math.max(0.5, r.stopPct || 4) > 0; // net R > 0 after round-trip cost
+    const shrunk = (rs) => rs.length < 5 ? null : { p: (rs.filter(win).length + 2) / (rs.length + 4), n: rs.length };
+    const bucket = (keyFn) => {
+      const g = {};
+      for (const r of scored) { const k = keyFn(r); if (k) (g[k] ||= []).push(r); }
+      const out = {};
+      for (const [k, rs] of Object.entries(g)) { const s = shrunk(rs); if (s) out[k] = s; }
+      return out;
+    };
+    const p0c = shrunk(scored);
+    return {
+      evN: scored.length, p0: p0c ? p0c.p : null,
+      strat: bucket((r) => r.strategy), regime: bucket((r) => r.mktType), dir: bucket((r) => r.direction),
+    };
+  } catch { return null; }
+})();
+// p(win | features) — odds update from base rate by each factor,
+// shrinkage-scaled so thin cells barely move the estimate
+function metaProb(o) {
+  if (!META || META.p0 == null) return null;
+  const f = (tbl, key) => {
+    const c = tbl[key];
+    return c ? 1 + (c.p / META.p0 - 1) * Math.min(1, c.n / 30) : 1;
+  };
+  const p = META.p0
+    * f(META.strat, o.strategy || 'unattributed')
+    * f(META.regime, o.mktType || '')
+    * f(META.dir, o.direction);
+  return Math.min(0.97, Math.max(0.02, p));
+}
+// stall-exit: episodes show losers telegraph early — median adverse run
+// ~1.3% vs median favorable ~0.33%. A managed position still red at
+// STALL_MIN that never showed STALL_MFE favor is statistically a bleeder.
+const STALL_MIN_MS = +(process.env.SENTINEL_STALL_MIN || 45) * 60e3;
+const STALL_MFE_PCT = +(process.env.SENTINEL_STALL_MFE_PCT || 0.35);
+const FAM_STATS = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'mae-mfe.json'), 'utf8')).byFamily || {}; }
+  catch { return {}; }
+})();
 // SENTINEL_RISK_PROFILE=max: maximum aggression — kill-switch at 35% DD and
 // daily halt at 25% (defaults 8/6). Below those floors the book still stands
 // down — a wipeout spiral isn't risk, it's the end of the book.
@@ -520,7 +641,25 @@ async function main() {
     log('cannot determine position mode — refusing to guess close semantics');
     return;
   }
-  const equityUsd = acct.equity;
+  // SENTINEL_EQUITY_OVERRIDE_USD (demo only) — paper-test a small book on
+  // a big demo balance: sizing, caps, breakers and the equity floor all
+  // judge the book as if equity were this figure. Never pretends the book
+  // is bigger than the real balance, and never applies live — real money
+  // always sizes off real equity.
+  const EQ_OVERRIDE = MODE === 'demo' ? +(process.env.SENTINEL_EQUITY_OVERRIDE_USD || 0) : 0;
+  // the override is the STARTING book, not a permanent pin — the test
+  // account compounds/suffers its own realized record: book = base +
+  // epoch net (every journaled fill: open fees + close P&L) - the vault.
+  const epochNet = EQ_OVERRIDE > 0 ? loadFills().reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) : 0;
+  const vaultNow = +loadVault().balanceUsd || 0;
+  const equityUsd = EQ_OVERRIDE > 0
+    ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultNow)
+    : Math.max(0, acct.equity - vaultNow);
+  state.epochNetUsd = EQ_OVERRIDE ? round(epochNet, 2) : undefined;
+  state.vaultUsd = round(vaultNow, 2);
+  state.vaultSweeps = (loadVault().sweeps || []).length;
+  state.edgeLive = round(EDGE_LIVE.v, 3);
+  state.edgeSrc = EDGE_LIVE.src;
   // `available` ignores crossed-position unrealized losses — a cross book
   // deep in the red still reports the raw balance, while Bitget's order
   // validator nets upl before accepting margin. Overestimating here was
@@ -537,6 +676,7 @@ async function main() {
     : Math.max(0, Math.min(acct.available, acct.available + crossUplNeg));
   const scale = equityUsd > 0 ? Math.min(1, equityUsd / PAPER_EQUITY) : 0;
   state.equityUsd = round(equityUsd, 2);
+  if (EQ_OVERRIDE) state.equityReal = round(acct.equity, 2);
   state.marginFreeUsd = round(marginFree, 2);
   state.posMode = POS_MODE;
   const rawPos = (positions || []).filter((p) => +p.total > 0);
@@ -562,6 +702,24 @@ async function main() {
     posBySym.set(p.symbol, p);
   }
   for (const s of ambiguous) state.errors.push(`${s}: both long AND short open — refusing to guess, close manually`);
+  // excursion tracking for the stall-exit gate — peak/trough per open
+  // position, refreshed each cycle by the excursion block below
+  const maeTrack = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'mae-track.json'), 'utf8')); }
+    catch { return {}; }
+  })();
+  // integrity verify — the money files (journal, vault, ladder config)
+  // are never trusted blind: recompute CRC32 vs the write manifest; a
+  // mismatch means corruption or tamper and lands on the error feed.
+  for (const cf of [
+    path.join(__dirname, '..', 'state', FILLS_FILE),
+    VAULT_PATH,
+    path.join(__dirname, '..', 'state', 'rr-config.json'),
+  ]) {
+    const c = integrityCheck(cf);
+    if (c.ok === false)
+      state.errors.push(`integrity: ${path.basename(cf)} checksum mismatch (${c.actual || 'unreadable'} != manifest ${c.expected || '?'}) — verify provenance`);
+  }
   log(`${MODE}: equity $${equityUsd.toFixed(2)} | ${state.positions.length} open | scale ${scale.toFixed(3)}`);
 
   // prune managed to still-open symbols — if the engine's position is flat
@@ -587,7 +745,7 @@ async function main() {
       try {
         await cancelPlans(sym);
         await closePosition(sym, p.side);
-        state.actions.push(`flatten: closed ${sym} ${p.side} ${p.size}`);
+        state.actions.push(`🧯 flatten: closed ${sym} ${p.side} ${p.size}`);
         posBySym.delete(sym);
       } catch (e) { state.errors.push(`flatten ${sym}: ${e.message}`); }
     }
@@ -605,7 +763,7 @@ async function main() {
     // exits — a paper ledger expiry/reversal must not kill a deliberately
     // held position, nor one the user opened outside the engine
     if (MANUAL.has(c.symbol) || foreign(c.symbol)) {
-      state.actions.push(`close ${c.symbol} skipped — ${MANUAL.has(c.symbol) ? 'manual hold' : 'foreign position'}`);
+      state.actions.push(`📤 close ${c.symbol} skipped — ${MANUAL.has(c.symbol) ? 'manual hold' : 'foreign position'}`);
       continue;
     }
     const pos = posBySym.get(c.symbol);
@@ -615,21 +773,21 @@ async function main() {
     // The exchange-side SL covers a genuine dump meanwhile; nothing the
     // scanner says at <10min age is worth two more taker fees.
     if (pos.cTime && Date.now() - pos.cTime < MIN_HOLD_MS) {
-      state.actions.push(`close ${c.symbol} ignored — position ${Math.round((Date.now() - pos.cTime) / 1e3)}s old (< ${Math.round(MIN_HOLD_MS / 1e3)}s min-hold)`);
+      state.actions.push(`📤 close ${c.symbol} ignored — position ${Math.round((Date.now() - pos.cTime) / 1e3)}s old (< ${Math.round(MIN_HOLD_MS / 1e3)}s min-hold)`);
       continue;
     }
     try {
       await cancelPlans(c.symbol);
       await closePosition(c.symbol, pos.side);
-      state.actions.push(`closed ${c.symbol} ${pos.side} ${pos.size}`);
+      state.actions.push(`📤 closed ${c.symbol} ${pos.side} ${pos.size}`);
       posBySym.delete(c.symbol);
     } catch (e) {
       // already flat / position gone — the sim's own exit path (stop, TP,
       // expiry) fired first; a close for a missing position is convergence
       // confirmed, not an error
       if (/22002|no position|not exist|40034/i.test(e.message))
-        state.actions.push(`close ${c.symbol}: already flat`);
-      else state.errors.push(`close ${c.symbol}: ${e.message}`);
+        state.actions.push(`📤 close ${c.symbol}: already flat`);
+      else state.errors.push(`📤 close ${c.symbol}: ${e.message}`);
     }
   }
 
@@ -660,18 +818,21 @@ async function main() {
   // resets the peak, fakes zero drawdown, and silently disarms the risk
   // throttle, so peak/dd must run on trading equity = equity − deposits.
   const uplNow = [...posBySym.values()].reduce((a, p) => a + (+p.upl || 0), 0);
-  if (eqTrack.lastEq > 0) {
+  // pinned-equity test books: with equity fixed at the override, every real
+  // balance move would masquerade as a deposit — tracking stays off so
+  // peak/dd run on the test book, not the demo account's actual balance.
+  if (eqTrack.lastEq > 0 && !EQ_OVERRIDE) {
     const unexplained = equityUsd - eqTrack.lastEq - (uplNow - eqTrack.lastUpl);
     if (unexplained > 5) {
       eqTrack.deposits += unexplained;
-      state.actions.push(`deposit detected +$${round(unexplained, 2)} (total funding $${round(eqTrack.deposits, 2)})`);
+      state.actions.push(`💰 deposit detected +$${round(unexplained, 2)} (total funding $${round(eqTrack.deposits, 2)})`);
       try {
         fs.appendFileSync(path.join(__dirname, '..', 'state', 'tg-outbox.jsonl'),
           JSON.stringify({ at: Date.now(), text: `💰 DEPOSIT +$${unexplained.toFixed(2)} detected — deploying per mandate.` }) + '\n');
       } catch {}
     } else if (unexplained < -15) {
       eqTrack.deposits += unexplained; // withdrawals shrink the funding baseline too
-      state.actions.push(`withdrawal detected $${round(unexplained, 2)}`);
+      state.actions.push(`🏧 withdrawal detected $${round(unexplained, 2)}`);
     }
   }
   eqTrack.lastEq = equityUsd;
@@ -704,8 +865,15 @@ async function main() {
   // legacy) — the user's manual trades never trip the engine's breakers.
   let cbReason = null;
   try {
-    const fills = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills || [])
-      .filter((f) => !f.src || f.src === 'api');
+    // loss measured against equity at the START of the 24h window, not the
+    // shrunken current equity — otherwise the same dollar loss trips an
+    // ever-tighter percentage as the book bleeds (denominator drift)
+    const winT = Date.now() - 86400e3;
+    let eqStart = null;
+    for (const [t, q] of eqTrack.samples || [])
+      if (t <= winT && (!eqStart || t > eqStart[0])) eqStart = [t, q];
+    const lossBasis = eqStart && eqStart[1] > 0 ? eqStart[1] : equityUsd;
+    const fills = loadFills().filter((f) => !f.src || f.src === 'api');
     const day = fills.filter((f) => Date.now() - (f.ts || 0) < 86400e3);
     const closes = fills.filter((f) => f.tradeSide === 'close');
     const last20 = closes.slice(-20);
@@ -719,8 +887,8 @@ async function main() {
     const FEE_HALT_PCT = +(process.env.SENTINEL_FEE_HALT_PCT || 10);    // fee churn vs equity
     const STREAK_HALT = +(process.env.SENTINEL_STREAK_HALT || 6);       // consecutive losers stand-down
     const RESERVE_USD = +(process.env.SENTINEL_RESERVE_USD || 0);       // equity reserved from deployment
-    if (net24 < -equityUsd * LOSS_HALT_PCT / 100)
-      cbReason = `circuit-breaker: 24h bot realized -$${round(-net24, 2)} >= ${LOSS_HALT_PCT}% of equity`;
+    if (net24 < -lossBasis * LOSS_HALT_PCT / 100)
+      cbReason = `circuit-breaker: 24h bot realized -$${round(-net24, 2)} >= ${LOSS_HALT_PCT}% of window-start equity $${round(lossBasis, 2)}`;
     else if (last20.length >= WR_MIN_N && wr != null && wr < WR_HALT_PCT / 100)
       cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} closes < ${WR_HALT_PCT}%`;
     else if (fees24 > equityUsd * FEE_HALT_PCT / 100)
@@ -730,12 +898,48 @@ async function main() {
       cbReason = `circuit-breaker: last ${STREAK_HALT} closes all losers — stand-down`;
     else if (RESERVE_USD > 0 && equityUsd < RESERVE_USD)
       cbReason = `circuit-breaker: equity $${round(equityUsd, 2)} below reserve floor $${RESERVE_USD}`;
+    // CUSUM edge-death detector (Page's sequential test, the quant
+    // standard for "when to stop trading a strategy"): accumulates the
+    // per-close shortfall below the null mean 0 — k=0.25σ slack keeps
+    // ordinary noise from accumulating, h=4σ threshold. Detects a
+    // persistent MEAN shift (edge evaporation) that magnitude breakers
+    // can't see — a slow bleed never trips a streak rule.
+    let cusum = null;
+    if (closes.length >= 10) {
+      const nets = closes.slice().reverse().map((f) => (+f.profit || 0) - (+f.fee || 0));
+      const m = nets.reduce((a, b) => a + b, 0) / nets.length;
+      const sd = Math.sqrt(nets.reduce((a, b) => a + (b - m) ** 2, 0) / (nets.length - 1)) || 1e-9;
+      const k = 0.25 * sd, h = 4 * sd;
+      let S = 0;
+      for (const x of nets) S = Math.max(0, S - x - k);
+      cusum = { n: nets.length, meanUsd: round(m, 4), sdUsd: round(sd, 4), S: round(S, 3), h: round(h, 3) };
+      if (S > h && !cbReason)
+        cbReason = `edge-death CUSUM: close-stream mean shifted negative (S ${round(S, 2)} > h ${round(h, 2)} · mean $${round(m, 3)}/close, n=${nets.length})`;
+    }
+    // half-Kelly risk ceiling — the realized close record implies an
+    // optimal risk fraction f* = p − q/b; we deploy at most half of it
+    // (fractional Kelly — the variance-robust textbook choice). f*≤0
+    // means the account's own record says negative edge: hard floor.
+    let kelly = null;
+    if (closes.length >= 15) {
+      const wins = closes.filter((f) => (+f.profit || 0) - (+f.fee || 0) > 0);
+      const losses = closes.filter((f) => (+f.profit || 0) - (+f.fee || 0) <= 0);
+      if (wins.length && losses.length) {
+        const p = wins.length / closes.length;
+        const avgW = wins.reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) / wins.length;
+        const avgL = Math.abs(losses.reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) / losses.length);
+        const fStar = p - (1 - p) / Math.max(0.05, avgW / avgL);
+        kelly = { fStar: round(fStar, 3), n: closes.length, halfKellyRiskUsd: round(Math.max(0, 0.5 * fStar * equityUsd), 2) };
+      }
+    }
     state.circuitBreakers = {
-      net24Usd: round(net24, 2), fees24Usd: round(fees24, 2),
+      net24Usd: round(net24, 2), fees24Usd: round(fees24, 2), basisUsd: round(lossBasis, 2),
       winRate20: wr != null ? round(wr * 100, 1) : null, closes20: last20.length,
+      edgeDeath: cusum, kelly,
       thresholds: { lossHaltPct: LOSS_HALT_PCT, wrHaltPct: WR_HALT_PCT, feeHaltPct: FEE_HALT_PCT, streakHalt: STREAK_HALT, reserveUsd: RESERVE_USD },
       tripped: cbReason,
     };
+    var kellyRiskUsd = kelly ? kelly.halfKellyRiskUsd : null;
   } catch {}
   const entriesBlocked =
     cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
@@ -797,7 +1001,7 @@ async function main() {
         // remainder dust — close the whole slot instead of leaving an
         // un-closeable stub
         await closePosition(p.symbol, p.side);
-        state.actions.push(`rebalanced ${p.symbol}: closed fully (remainder under min ${minSz})`);
+        state.actions.push(`⚖️ rebalanced ${p.symbol}: closed fully (remainder under min ${minSz})`);
       } else {
         // close-positions ignores `size` (whole-side only — a 'partial' call
         // flattened a live position). True partial = place-order market close:
@@ -812,7 +1016,7 @@ async function main() {
               : { side: p.side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES' }),
           },
         });
-        state.actions.push(`rebalanced ${p.symbol}: closed ${closeSize}/${p.size} — margin ~$${round(marginEst, 2)} -> slot ~$${round(slotMargin, 2)}`);
+        state.actions.push(`⚖️ rebalanced ${p.symbol}: closed ${closeSize}/${p.size} — margin ~$${round(marginEst, 2)} -> slot ~$${round(slotMargin, 2)}`);
         p.size -= closeSize;
         p.marginFreed = (closeSize * p.entry) / levNow;
         marginFree += p.marginFreed;
@@ -879,7 +1083,7 @@ async function main() {
       if (!EARLY_CUTS) {
         // same mandate — a flip signal can veto the THESIS, not spend a
         // taker fee cutting a position whose stop already bounds the loss
-        state.actions.push(`flip-note ${p.symbol}: fresh ${flip} vs open ${posDir} — riding stop (early cuts disabled)`);
+        state.actions.push(`🔀 flip-note ${p.symbol}: fresh ${flip} vs open ${posDir} — riding stop (early cuts disabled)`);
         continue;
       }
       await closePosition(p.symbol, p.side);
@@ -897,10 +1101,7 @@ async function main() {
   // signal the engine's model of that market is wrong right now.
   const cooledSym = new Set();
   try {
-    const fj =
-      JSON.parse(
-        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
-      ).fills || [];
+    const fj = loadFills();
     const bySym = {};
     for (const f of fj) {
       if (!(f.tradeSide === 'close' || (f.profit || 0) !== 0)) continue;
@@ -933,10 +1134,7 @@ async function main() {
   const lastCloseBySym = {};
   let feesToday = 0;
   try {
-    const fj =
-      JSON.parse(
-        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
-      ).fills || [];
+    const fj = loadFills();
     const dayStart = new Date().setUTCHours(0, 0, 0, 0);
     for (const f of fj) {
       if (f.tradeSide === 'close')
@@ -958,14 +1156,14 @@ async function main() {
   const REGIME_WINDOW_MS = +(process.env.SENTINEL_REGIME_WINDOW_MS || 4 * 3600e3);
   let regimeNet = 0, regimeCloses = 0;
   try {
-    const fj4 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills || [];
+    const fj4 = loadFills();
     for (const f of fj4) {
       if (Date.now() - (+f.ts || 0) > REGIME_WINDOW_MS) continue;
       if (f.tradeSide === 'close') { regimeCloses++; regimeNet += (f.profit || 0) - (f.fee || 0); }
     }
   } catch {}
   const regimeChop = +(process.env.SENTINEL_REGIME_GATE || 1) && regimeCloses >= REGIME_MIN_CLOSES && regimeNet < 0;
-  if (regimeChop) state.actions.push(`regime-chop armed — ${regimeCloses} closes net ${round(regimeNet, 2)} in ${Math.round(REGIME_WINDOW_MS / 3600e3)}h — new entries standing down`);
+  if (regimeChop) state.actions.push(`🌊 regime-chop armed — ${regimeCloses} closes net ${round(regimeNet, 2)} in ${Math.round(REGIME_WINDOW_MS / 3600e3)}h — new entries standing down`);
 
   // ---- correlation cluster cap: corr>=0.6 in the same direction is ONE
   // bet. correlation.json's own contract — nothing enforced it until now.
@@ -996,10 +1194,7 @@ async function main() {
   let entriesThisHour = 0;
   let entriesThisDay = 0;
   try {
-    const fj =
-      JSON.parse(
-        fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')
-      ).fills || [];
+    const fj = loadFills();
     for (const f of fj)
       // opens only — a scratch close (profit 0, tradeSide missing) must not
       // eat the rate budget the same way a real entry does. Attribution fix:
@@ -1045,10 +1240,10 @@ async function main() {
     const pp = cm[p.symbol]?.pricePlace ?? 6;
     // cumulative-difference allocation — tranche_i = floor(size*cum[i+1]) -
     // floor(size*cum[i]): rounding residue lands in the moon bag, not lost
-    const cum = [0, 0.40, 0.70, 0.85];
-    const mults = [0.55, 1.0, 1.8];
+    const cum = RR_CUM;
+    const mults = RR.mults;
     const legs = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < mults.length; i++) {
       const tsize =
         (Math.floor(p.size * cum[i + 1] * sp) - Math.floor(p.size * cum[i] * sp)) / sp;
       if (tsize > 0 && tsize * p.entry >= MIN_TRANCHE_USD)
@@ -1061,6 +1256,38 @@ async function main() {
     for (const l of legs)
       await planOrder(p.symbol, 'profit_plan', l.px, String(l.tsize), p.side, p.marginMode);
     return legs.length;
+  };
+  // rebuildProfitCover — cancel ONLY the profit legs (the stop stays armed
+  // throughout the swap) and re-cover at LIVE size. Manual/foreign
+  // positions keep their own trigger prices re-split across the live size
+  // — sizes get fixed, targets never move; engine positions get a fresh
+  // band ladder. Whole-position pos_profit is the fallback whenever the
+  // tranches can't meet contract minimums. Cancel-first is forced anyway:
+  // pending plan qty counts against the position, so placing beside stale
+  // legs just 43023-blocks.
+  const rebuildProfitCover = async (p, keepTrigs, bandPct) => {
+    await cancelByType(p.symbol, (x) => /profit/i.test(x.planType || ''));
+    const sgn = p.side === 'long' ? 1 : -1;
+    const pp = cm[p.symbol]?.pricePlace ?? 6;
+    const spx = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
+    if (keepTrigs.length) {
+      let prev = 0, placed = 0;
+      for (let i = 0; i < keepTrigs.length; i++) {
+        const cum = Math.floor(((p.size * 0.85 * (i + 1)) / keepTrigs.length) * spx) / spx;
+        const ts = +(cum - prev).toFixed(8); prev = cum;
+        if (ts > 0 && ts * p.entry >= MIN_TRANCHE_USD) {
+          await planOrder(p.symbol, 'profit_plan', keepTrigs[i], String(ts), p.side, p.marginMode);
+          placed++;
+        }
+      }
+      if (placed) return;
+      await planOrder(p.symbol, 'pos_profit', keepTrigs[0], '0', p.side, p.marginMode);
+      return;
+    }
+    const placed = await placeTpLadder(p, bandPct);
+    if (placed < 2)
+      await planOrder(p.symbol, 'pos_profit',
+        round(p.entry * (1 + (sgn * bandPct) / 100), pp), '0', p.side, p.marginMode);
   };
   // Prefetch all pending plans in parallel — a serial await-per-symbol made
   // each position pay a full round-trip inside the loop (~200ms × N symbols).
@@ -1081,7 +1308,7 @@ async function main() {
       const stale = await getPlans(sym).catch(() => []);
       if (stale.length) {
         await cancelPlans(sym);
-        state.actions.push(`swept ${stale.length} orphan plan(s) on flat ${sym}`);
+        state.actions.push(`🧹 swept ${stale.length} orphan plan(s) on flat ${sym}`);
       }
     } catch (e) {
       state.errors.push(`orphan-sweep ${sym}: ${e.message}`);
@@ -1102,6 +1329,27 @@ async function main() {
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
       const hasProfit = !!profitPlan;
+      // stall-exit — the excursion record shows losers telegraph early:
+      // median adverse run ~1.3% vs median favorable ~0.33%. A managed
+      // position still red past STALL_MIN that never showed STALL_MFE
+      // favor is statistically a bleeder — close it for the small loss
+      // instead of donating the full stop distance. Manual positions are
+      // never touched.
+      if (!manualHold && managed.has(p.symbol) && +p.cTime > 0 && Date.now() - p.cTime > STALL_MIN_MS) {
+        const tr = maeTrack[`${p.symbol}:${p.side}`];
+        const peakGain = tr && tr.entry > 0
+          ? (p.side === 'long' ? (tr.peak - tr.entry) / tr.entry : (tr.entry - tr.trough) / tr.entry) * 100
+          : null;
+        if ((peakGain == null || peakGain < STALL_MFE_PCT) && (p.upl || 0) < 0) {
+          try {
+            await closePosition(p.symbol, p.side);
+            state.actions.push(`✂️ stall-exit ${p.symbol} ${p.side}: ${Math.round((Date.now() - p.cTime) / 6e4)}m old, peak favor ${peakGain == null ? 'untracked' : round(peakGain, 2) + '%'}, upl ${round(p.upl, 2)} — closed before the stop`);
+            continue;
+          } catch (e) {
+            state.errors.push(`${p.symbol} stall-exit failed: ${String(e).slice(0, 100)}`);
+          }
+        }
+      }
       // breakeven ratchet — "no one went broke taking profit": with the TP
       // ladder live, progress is measured against the NEAREST profit
       // trigger, so the tranche-1 fill (0.55x target) is the ratchet point.
@@ -1141,23 +1389,77 @@ async function main() {
           trig = round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
         }
         try {
-          await cancelPlans(p.symbol);
-          await planWithRetry(() =>
-            planOrder(p.symbol, 'pos_loss',
-              trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0), '0', p.side, p.marginMode));
-          // preserve the trader's own TP trigger if one was armed — the
-          // rebuild fixes SIZE drift, it doesn't get to rewrite the target
-          const keepTp = profitPlan && +profitPlan.triggerPrice > 0 ? +profitPlan.triggerPrice : null;
-          await planWithRetry(() =>
-            planOrder(p.symbol, 'pos_profit',
-              keepTp || round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp0), '0', p.side, p.marginMode));
+          // never-naked rebuild: the stop stays armed while profit cover
+          // swaps — sized profit legs die first (their pending qty was what
+          // blocked new placements), then re-cover at LIVE size in the same
+          // breath. Manual positions keep their own trigger prices.
+          const keepTrigs = manualHold
+            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+                .sort((a, b) => (sgn === 1 ? a - b : b - a))
+            : [];
+          await rebuildProfitCover(p, keepTrigs, 2 * stopPct);
+          // a sized loss_plan/moving_plan quoting more than the live size
+          // swaps into a whole-position pos_loss — place-first so the book
+          // is never uncovered on the downside; only on an exchange refusal
+          // (qty-cap reject) does it fall back to cancel-then-place.
+          const sizedLoss = lossPlan &&
+            /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
+            Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size;
+          if (!lossPlan || sizedLoss) {
+            const newTrig = trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
+            let placed = false;
+            try {
+              await planWithRetry(() =>
+                planOrder(p.symbol, 'pos_loss', newTrig, '0', p.side, p.marginMode));
+              placed = true;
+            } catch (e) {
+              if (!sizedLoss) throw e;
+              state.errors.push(`resync ${p.symbol}: second pos_loss refused (${e.message}) — swapping stale leg`);
+            }
+            if (sizedLoss) {
+              const id = lossPlan.orderId || lossPlan.planId || lossPlan.id;
+              await cancelPlanOrders(p.symbol, lossPlan.planType, [String(id)]).catch(() => {});
+              if (!placed)
+                await planWithRetry(() =>
+                  planOrder(p.symbol, 'pos_loss', newTrig, '0', p.side, p.marginMode));
+            }
+          }
           state.actions.push(
-            `resynced ${p.symbol}: rebuilt whole-position protection (pending plan qty ${round(planQty, 4)} > size ${p.size})`
+            `🔄 resynced ${p.symbol}: rebuilt protection at live size (pending ${round(planQty, 4)} vs size ${p.size})`
           );
         } catch (e) {
           state.errors.push(`resync ${p.symbol}: ${e.message}`);
         }
         continue;
+      }
+      // under-laddered: manual adds or top-ups grew the position after the
+      // ladder was built — the size-zero pos_loss tracks live size, but
+      // sized profit legs stay small and the added size banks nothing.
+      // Legs banked by the ladder's OWN progression look identical to
+      // under-coverage, so compare the biggest leg (the 40% tranche) to
+      // the live size: implied build-size = leg/0.40. Only rebuild when
+      // the position genuinely outgrew its ladder — and never when the
+      // mark is already through the ladder zone, where entry-priced legs
+      // would sit below mark and instant-close the runner.
+      const wholeProfit = profitPlans.some((x) => !(+x.size > 0)); // size-0 leg covers all
+      const bigLeg = Math.max(0, ...profitPlans.map((x) => +x.size || 0));
+      const impliedSize = bigLeg / RR_MAX_ALLOC;
+      const sgn2 = p.side === 'long' ? 1 : -1;
+      const markPx = p.entry + (sgn2 * p.upl) / p.size;
+      const stopD = lossPlan && +lossPlan.triggerPrice > 0
+        ? (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100
+        : Math.max(1.2, Math.min((p.liq > 0 ? (Math.abs(p.entry - p.liq) / p.entry) * 100 : 3) * 0.7, 5));
+      const legFloor = p.entry * (1 + (sgn2 * 2 * RR.mults[0] * stopD) / 100); // 2x TP1-mult band
+      const runner = sgn2 === 1 ? markPx >= legFloor : markPx <= legFloor;
+      if (!wholeProfit && bigLeg > 0 && impliedSize < p.size * 0.8 && !runner) {
+        try {
+          const keepTrigs = manualHold
+            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+                .sort((a, b) => (sgn2 === 1 ? a - b : b - a))
+            : [];
+          await rebuildProfitCover(p, keepTrigs, 2 * stopD);
+          state.actions.push(`🔄 reladdered ${p.symbol}: legs sized for ~${round(impliedSize, 4)} -> position ${p.size}`);
+        } catch (e) { state.errors.push(`reladder ${p.symbol}: ${e.message}`); }
       }
       if (lossPlan && p.size > 0 && !manualHold) {
         const sgn = p.side === 'long' ? 1 : -1;
@@ -1251,7 +1553,7 @@ async function main() {
             : null;
         if (scalpDead) {
           await closePosition(p.symbol, p.side);
-          state.actions.push(`scalp-timeout ${p.symbol}: ${scalpDead} — margin recycled`);
+          state.actions.push(`⏱ scalp-timeout ${p.symbol}: ${scalpDead} — margin recycled`);
           posBySym.delete(p.symbol);
           continue;
         }
@@ -1277,7 +1579,7 @@ async function main() {
               }
             }
             state.actions.push(
-              `laddered ${p.symbol}${manualHold ? ' (manual/foreign)' : ''}: TP split ${placed} ways @ ${round(distPct * 0.55, 2)}/${round(distPct, 2)}/${round(distPct * 1.8, 2)}% + moon bag`
+              `laddered ${p.symbol}${manualHold ? ' (manual/foreign)' : ''}: TP split ${placed} ways @ ${RR.mults.map((m) => round(distPct * m, 2)).join('/')}% + moon bag`
             );
           }
         }
@@ -1301,7 +1603,7 @@ async function main() {
             const oldId = lossPlan.orderId || lossPlan.planId;
             await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side, p.marginMode));
             if (oldId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(oldId)]);
-            state.actions.push(`re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
+            state.actions.push(`📏 re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
           } catch (e) {
             state.errors.push(`re-band ${p.symbol}: ${e.message}`);
           }
@@ -1316,7 +1618,7 @@ async function main() {
           try {
             await planOrder(p.symbol, 'pos_loss', wStop, '0', p.side, p.marginMode);
             await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
-            state.actions.push(`widened ${p.symbol} stop ${round(armedPct, 2)}% -> ${round(bandPct * 0.7, 2)}% — using the room the band affords`);
+            state.actions.push(`📏 widened ${p.symbol} stop ${round(armedPct, 2)}% -> ${round(bandPct * 0.7, 2)}% — using the room the band affords`);
           } catch (e) { state.errors.push(`widen ${p.symbol}: ${e.message}`); }
         }
       }
@@ -1337,12 +1639,12 @@ async function main() {
       if (liqPct > 0 && stopPct >= liqPct * 0.8) {
         const raw = stopPct;
         stopPct = Math.max(liqPct * 0.75, 0.05); // never tighter than 0.05%
-        state.actions.push(`clamped ${p.symbol} synth stop ${round(raw, 2)}% -> ${round(stopPct, 2)}% (liq ${round(liqPct, 2)}% away)`);
+        state.actions.push(`📏 clamped ${p.symbol} synth stop ${round(raw, 2)}% -> ${round(stopPct, 2)}% (liq ${round(liqPct, 2)}% away)`);
       }
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
           round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side, p.marginMode);
-        state.actions.push(`repaired ${p.symbol}: added pos_loss @ ${round(p.entry * (1 - (sgn * stopPct) / 100), pp)}`);
+        state.actions.push(`🔧 repaired ${p.symbol}: added pos_loss @ ${round(p.entry * (1 - (sgn * stopPct) / 100), pp)}`);
       }
       if (!hasProfit) {
         // staggered TPs even on synthesized protection — 2R is the base
@@ -1351,7 +1653,7 @@ async function main() {
         const placed = await placeTpLadder(p, 2 * stopPct);
         if (placed >= 2) {
           state.actions.push(
-            `repaired ${p.symbol}: TP ladder ${placed} legs @ ${round(2 * stopPct * 0.55, 2)}/${round(2 * stopPct, 2)}/${round(2 * stopPct * 1.8, 2)}% + moon bag`
+            `🔧 repaired ${p.symbol}: TP ladder ${placed} legs @ ${RR.mults.map((m) => round(2 * stopPct * m, 2)).join('/')}% + moon bag`
           );
         } else {
           const tpPrice = round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp);
@@ -1360,7 +1662,7 @@ async function main() {
           } catch {
             await planOrder(p.symbol, 'pos_profit', tpPrice, String(p.size), p.side, p.marginMode);
           }
-          state.actions.push(`repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
+          state.actions.push(`🔧 repaired ${p.symbol}: added pos_profit @ ${tpPrice}`);
         }
       }
     } catch (e) {
@@ -1390,16 +1692,16 @@ async function main() {
       if (!lossPlan) {
         await planOrder(p.symbol, 'pos_loss',
           round(p.entry * (1 - (sgn * stopPct) / 100), pp), '0', p.side, p.marginMode);
-        state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_loss`);
+        state.actions.push(`🛡️ protected ${p.symbol} ${p.side} (hedged): added pos_loss`);
       }
       if (!hasProfit) {
         const placed = await placeTpLadder(p, 2 * stopPct);
         if (placed >= 2) {
-          state.actions.push(`protected ${p.symbol} ${p.side} (hedged): TP ladder ${placed} legs`);
+          state.actions.push(`🛡️ protected ${p.symbol} ${p.side} (hedged): TP ladder ${placed} legs`);
         } else {
           await planOrder(p.symbol, 'pos_profit',
             round(p.entry * (1 + (sgn * 2 * stopPct) / 100), pp), '0', p.side, p.marginMode);
-          state.actions.push(`protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
+          state.actions.push(`🛡️ protected ${p.symbol} ${p.side} (hedged): added pos_profit`);
         }
       }
     } catch (e) {
@@ -1427,7 +1729,7 @@ async function main() {
       state.actions.push('protection-halt cleared early — all positions verified SL+TP on exchange');
     } else {
       state.actions.push(
-        `protection-halt until ${new Date(state.protectionHaltUntil).toISOString().slice(11, 19)}Z — TPSL placement failed earlier, entries paused (no naked probes)`
+        `🧯 protection-halt until ${new Date(state.protectionHaltUntil).toISOString().slice(11, 19)}Z — TPSL placement failed earlier, entries paused (no naked probes)`
       );
     }
   }
@@ -1471,24 +1773,24 @@ async function main() {
       // position — an auto-entry on a held symbol would open then go
       // unmanaged (management exempts itself by design). Entries blocked.
       if (MANUAL.has(o.symbol)) {
-        state.actions.push(`${o.symbol}: manual-hold symbol — entry skipped (symbol is hands-off)`);
+        state.actions.push(`${o.symbol}: ✋ manual-hold symbol — entry skipped (symbol is hands-off)`);
         continue;
       }
       if (cooledSym.has(o.symbol)) {
-        state.actions.push(`${o.symbol}: cooldown — last two closes were losers, 6h timeout`);
+        state.actions.push(`${o.symbol}: ⏳ cooldown — last two closes were losers, 6h timeout`);
         continue;
       }
       if ((MAX_ENTRIES_HOUR > 0 && entriesThisHour >= MAX_ENTRIES_HOUR) || (MAX_ENTRIES_DAY > 0 && entriesThisDay >= MAX_ENTRIES_DAY)) {
-        state.actions.push(`entry rate cap (${entriesThisHour}/${MAX_ENTRIES_HOUR}/h · ${entriesThisDay}/${MAX_ENTRIES_DAY}/day) — standing down`);
+        state.actions.push(`🚦 entry rate cap (${entriesThisHour}/${MAX_ENTRIES_HOUR}/h · ${entriesThisDay}/${MAX_ENTRIES_DAY}/day) — standing down`);
         break;
       }
       if (feeHalted) {
-        state.actions.push(`fee-burn halt — ${round(feesToday, 2)} commissions today >= ${round(FEE_HALT_PCT * 100, 1)}% of equity — standing down`);
+        state.actions.push(`🔥 fee-burn halt — ${round(feesToday, 2)} commissions today >= ${round(FEE_HALT_PCT * 100, 1)}% of equity — standing down`);
         break;
       }
       const lastClose = lastCloseBySym[o.symbol];
       if (lastClose && Date.now() - lastClose < REENTRY_MS) {
-        state.actions.push(`${o.symbol}: re-entry cooldown — closed ${Math.round((Date.now() - lastClose) / 6e4)}m ago (< ${Math.round(REENTRY_MS / 6e4)}m)`);
+        state.actions.push(`${o.symbol}: ⏳ re-entry cooldown — closed ${Math.round((Date.now() - lastClose) / 6e4)}m ago (< ${Math.round(REENTRY_MS / 6e4)}m)`);
         continue;
       }
       if (!Number.isFinite(o.refEntry) || !Number.isFinite(o.notionalUsd) ||
@@ -1500,14 +1802,14 @@ async function main() {
       // user mandate: denied symbols refuse every entry — signal and
       // mandate roles alike. Placed before all other gates.
       if (DENY_SYMS.has(o.symbol)) {
-        state.actions.push(`${o.symbol} ${o.direction}: denied-symbol — entries refused by mandate`);
+        state.actions.push(`${o.symbol} ${o.direction}: 🚫 denied-symbol — entries refused by mandate`);
         (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['denied-symbol'] });
         continue;
       }
       // user mandate: no shorts — hard refusal independent of scanner gating,
       // so a stale or hand-built plan can never route a short entry.
       if (LONG_ONLY && o.direction === 'SHORT') {
-        state.actions.push(`${o.symbol}: SHORT blocked — longs-only mandate`);
+        state.actions.push(`${o.symbol}: ⛔ SHORT blocked — longs-only mandate`);
         continue;
       }
       if (!o.core) { // mandate roles (core-carry deploys) are exempt from tape gates
@@ -1522,13 +1824,13 @@ async function main() {
           return sd === (o.direction === 'LONG' ? 'long' : 'short');
         });
         if (corrHit) {
-          state.actions.push(`${o.symbol} ${o.direction}: corr-cluster — ${corrHit[0]} already held same direction (rho ${corrHit[1]})`);
+          state.actions.push(`${o.symbol} ${o.direction}: 🧬 corr-cluster — ${corrHit[0]} already held same direction (rho ${corrHit[1]})`);
           (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['corr-cluster'] });
           continue;
         }
         const fr = fundMap[o.symbol];
         if (fr != null && ((o.direction === 'LONG' && fr > FUND_VETO) || (o.direction === 'SHORT' && fr < -FUND_VETO))) {
-          state.actions.push(`${o.symbol} ${o.direction}: funding ${fr}%/8h hostile — vetoed`);
+          state.actions.push(`${o.symbol} ${o.direction}: 💸 funding ${fr}%/8h hostile — vetoed`);
           (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['funding-hostile'] });
           continue;
         }
@@ -1541,7 +1843,7 @@ async function main() {
         (e) => e.symbol === o.symbol && e.direction === o.direction &&
                Date.now() - e.ts < ENTRY_DEDUP_MS
       )) {
-        state.actions.push(`${o.symbol} ${o.direction}: duplicate signal — idempotent skip`);
+        state.actions.push(`${o.symbol} ${o.direction}: 🔁 duplicate signal — idempotent skip`);
         continue;
       }
       // ≥RR_MIN net R:R defense — the scanner stamps netRR/costPct; recompute
@@ -1556,9 +1858,36 @@ async function main() {
         const cost = Math.max(Number.isFinite(o.costPct) ? o.costPct : 0, 0.20);
         const netRR = (o.targetPct - cost) / (o.stopPct + cost);
         if (!(netRR >= RR_MIN)) {
-          state.actions.push(`${o.symbol}: net R:R ${netRR.toFixed(2)} < ${RR_MIN}:1 after costs — rejected`);
+          state.actions.push(`${o.symbol}: 📐 net R:R ${netRR.toFixed(2)} < ${RR_MIN}:1 after costs — rejected`);
           continue;
         }
+      }
+      // entry-edge gate — when the excursion record says entries are
+      // net-negative expectancy (fitted edge < EDGE_MIN_TRADE) the
+      // marginal entry is a fee donation to the exchange. Skip it.
+      const metaP = metaProb(o);
+      let metaMul = 1;
+      if (metaP != null && META.evN >= META_MIN_N) {
+        if (metaP < META_MIN_P) {
+          state.actions.push(`${o.symbol} ${o.direction}: 🧠 meta-label — p(profit) ${round(metaP, 2)} < ${META_MIN_P} over n=${META.evN} graded signals — skipped`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['meta-label'] });
+          continue;
+        }
+        // above the floor the estimate modulates size — LdP: the meta
+        // model owns SIZE while the primary model owns SIDE
+        metaMul = Math.min(1.3, Math.max(0.5, metaP / Math.max(0.05, META.p0)));
+      }
+      if (EDGE_LIVE.v < EDGE_MIN_TRADE) {
+        state.actions.push(`${o.symbol}: ⛔ edge-gated — fitted entry edge ${EDGE_LIVE.v.toFixed(2)} < ${EDGE_MIN_TRADE} (${EDGE_LIVE.src}) — skipped`);
+        continue;
+      }
+      // family gate — strategy families that have had their trial (n>=8
+      // episodes) and lost on average stop getting bullets until fresh
+      // evidence acquits them
+      const fam = FAM_STATS[o.strategy || 'unattributed'];
+      if (fam && fam.n >= 8 && fam.meanRetPct < 0 && fam.winShare < 0.35) {
+        state.actions.push(`${o.symbol}: ⛔ family-gated — '${o.strategy || 'unattributed'}' n=${fam.n} wr ${Math.round(fam.winShare * 100)}% ret ${fam.meanRetPct}% — skipped`);
+        continue;
       }
       // drift guard — the plan can be up to 15min old; a market order at a
       // price that already ran past the modeled entry breaks the 3:1
@@ -1570,7 +1899,7 @@ async function main() {
         const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
         const drift = (o.direction === 'LONG' ? last - o.refEntry : o.refEntry - last) / o.refEntry;
         if (last > 0 && drift > 0.006) {
-          state.actions.push(`${o.symbol}: price ran ${round(drift * 100, 2)}% past ref entry — skipped (chasing = worse R:R)`);
+          state.actions.push(`${o.symbol}: 🏃 price ran ${round(drift * 100, 2)}% past ref entry — skipped (chasing = worse R:R)`);
           continue;
         }
         // trigger-side sanity: if mark already sits beyond the modeled stop,
@@ -1618,7 +1947,10 @@ async function main() {
       // it during equity highs. Sizing still uses whatever margin is free.
       const riskMul =
         +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)) *
-        ((state.ddPct ?? 0) > 10 ? 0.5 : 1);
+        ((state.ddPct ?? 0) > 10 ? 0.5 : 1) *
+        // edge-scaled sizing — unproven entries earn proportional
+        // bullets: edge 0.5 fires at half size, edge >=1 at full
+        Math.min(1, EDGE_LIVE.v);
       // leverage: contract max, bounded so the designed stop still sits
       // inside the liquidation band — lev <= 80/(stopPct + 0.64) keeps the
       // stop at <=80% of the band edge, otherwise liquidation fires first.
@@ -1644,13 +1976,17 @@ async function main() {
       // its strategy's measured forward-alpha tier: proven-edge setups take
       // their full slot, unproven ones take a probe-size fraction. The
       // per-position cap below stays the absolute ceiling either way.
-      const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1)));
+      const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1))) * metaMul;
       const marginUsd = Math.min(
         (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul,
         // single-position margin cap — 85%: near-full aggression on a
         // qualifying shot while still banking one reload. Ruin is the only
         // unrecoverable outcome; every other loss is tuition.
-        equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85)
+        equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85),
+        // half-Kelly ceiling: equity-at-risk (margin×lev×stopPct) stays
+        // under half the realized record's optimal fraction — dormant
+        // until n>=15 closes; f*<=0 collapses it to zero = full stand-down
+        ...(kellyRiskUsd != null ? [kellyRiskUsd / Math.max(0.05, (lev * (o.stopPct || 3)) / 100)] : [])
       );
       // effective-notional cap: margin_cap × lev ≈ 50x equity → the 0.12%
       // round-trip eats ~6% of equity per trade while measured signal
@@ -1679,7 +2015,7 @@ async function main() {
         if (marginNeeded + feeNeeded <= budget) {
           const p = Math.pow(10, c.sizePlace);
           size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
-          state.actions.push(`${o.symbol}: scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
+          state.actions.push(`${o.symbol}: 📏 scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
         }
       }
       if (!size) {
@@ -1703,22 +2039,54 @@ async function main() {
             const tk = Array.isArray(q) ? q[0] : q;
             const touch = sgn > 0 ? +tk?.bidPr : +tk?.askPr; // join own side — post-only, never crosses
             if (touch > 0) {
-              const lo = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, round(touch, cm[o.symbol]?.pricePlace ?? 6), { clientOid: coid });
+              // pullback pricing — the excursion record shows entries
+              // running ~1.3% against before moving for us (MAE ≈ 4×
+              // MFE). Quoting PULLBACK_PCT deeper than touch converts
+              // that typical adverse excursion into a better fill
+              // instead of buying the local top/bottom.
+              const pull = touch * (1 - (sgn * PULLBACK_PCT) / 100);
+              const lo = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, round(pull, cm[o.symbol]?.pricePlace ?? 6), { clientOid: coid });
               const oid = String(lo?.orderId || '');
-              await new Promise((r) => setTimeout(r, 1200));
-              const still = (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid);
+              await new Promise((r) => setTimeout(r, 2500));
+              let still = (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid);
               if (still) {
                 const filled = +(still.filledVolume ?? still.filledQty ?? 0) || 0;
                 const sp2 = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
                 needSize = filled > 0 ? Math.floor((size - filled) * sp2) / sp2 : size;
                 await api('POST', '/api/v2/mix/order/cancel-order', { body: { symbol: o.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, orderId: oid } }).catch(() => {});
+                // second bite: requote the REMAINDER at touch — still a
+                // passive maker fill, just no pullback discount. Below
+                // CHASE_EDGE we never cross the spread, but an unearned
+                // discount isn't a reason to skip a qualified entry.
+                if (needSize > 0 && EDGE_LIVE.v < CHASE_EDGE) {
+                  const q2 = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${o.symbol}&productType=${PRODUCT}` }).catch(() => null);
+                  const tk2 = Array.isArray(q2) ? q2[0] : q2;
+                  const touch2 = sgn > 0 ? +tk2?.bidPr : +tk2?.askPr;
+                  if (touch2 > 0) {
+                    const lo2 = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, round(touch2, cm[o.symbol]?.pricePlace ?? 6), { clientOid: (coid + 'r').slice(0, 38) }).catch(() => null);
+                    const oid2 = String(lo2?.orderId || '');
+                    await new Promise((r) => setTimeout(r, 2000));
+                    const still2 = oid2 ? (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid2) : null;
+                    if (still2) {
+                      const f2 = +(still2.filledVolume ?? still2.filledQty ?? 0) || 0;
+                      needSize = f2 > 0 ? Math.floor((needSize - f2) * sp2) / sp2 : needSize;
+                      await api('POST', '/api/v2/mix/order/cancel-order', { body: { symbol: o.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, orderId: oid2 } }).catch(() => {});
+                    } else if (oid2) needSize = 0;
+                  }
+                }
               } else needSize = 0;
             }
           } catch { /* limit path failed — taker covers full size below */ }
         }
-        if (needSize > 0)
-          await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
-        else state.actions.push(`${o.symbol}: maker fill — taker fee saved`);
+        if (needSize > 0) {
+          if (EDGE_LIVE.v >= CHASE_EDGE)
+            await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
+          else {
+            state.actions.push(`${o.symbol}: 🛡️ pullback unfilled — no market chase at edge ${EDGE_LIVE.v.toFixed(2)} < ${CHASE_EDGE}`);
+            continue;
+          }
+        }
+        else state.actions.push(`${o.symbol}: 💚 maker fill — taker fee saved`);
         // record the attempt immediately — the fills journal won't see this
         // for ~30s, and the rate cap must count it now (probe loops burn
         // fees per attempt, not per recorded fill)
@@ -1732,6 +2100,13 @@ async function main() {
           score: Number.isFinite(o.score) ? o.score : null,
           conv: Number.isFinite(o.conv) ? o.conv : null,
           marginUsd: round(marginUsd, 2), lev, notionalUsd: round(notional, 2),
+          mktType: o.mktType ?? null,
+          // structural evidence — the indicator thesis + the level that
+          // would falsify it (EW W1 / wyckoff spring-UTAD extreme)
+          structInvalid: o.structInvalid ?? null,
+          ewTarget: o.ewTarget ?? null,
+          wyckTarget: o.wyckTarget ?? null,
+          effortDir: o.effortDir ?? null,
         });
         state.entriesLog = state.entriesLog.slice(-500);
         // commit the attempt NOW — the ledger normally writes at run end;
@@ -1764,7 +2139,7 @@ async function main() {
           if (+pp2.openPriceAvg > 0) fill = +pp2.openPriceAvg;
           filledSize = Math.min(size, +pp2.total);
           if (filledSize < size)
-            state.actions.push(`partial fill ${o.symbol}: ${filledSize}/${size}`);
+            state.actions.push(`◐ partial fill ${o.symbol}: ${filledSize}/${size}`);
         } else {
           state.actions.push(`${o.symbol}: position not visible after 8s — protecting on intended size`);
         }
@@ -1788,10 +2163,11 @@ async function main() {
         // plan orders accept sub-minimum sizes (conditional triggers aren't
         // market entries — verified live) — the only real constraints are
         // tranche-1 clearing round-trip fees and nonzero sizes after rounding
-        const ladder = o.targetPct * 0.55 >= 0.9;
+        const ladder = o.targetPct * RR.mults[0] >= 0.9;
         // runner distance scales with signal confluence — strong setups
-        // earn a longer tail (1.6x..2.4x), weak ones bank sooner
-        const runnerMult = Math.max(1.2, +(o.runnerMult || 1.8));
+        // earn a longer tail; the optimizer's final leg is the floor, the
+        // signal can only extend it
+        const runnerMult = Math.max(RR.mults[RR.mults.length - 1], +(o.runnerMult || 0));
         // plan thunks — executed SEQUENTIALLY below. Concurrent
         // place-tpsl-order calls on one fresh position race Bitget's
         // position index (43023/43059 observed live) and the loss plan
@@ -1811,10 +2187,10 @@ async function main() {
           // 40/30/15 staggered banks — the leftover ~15% is the moon bag:
           // deliberately given NO profit plan so it rides the trailing stop
           // and lets a real winner run past every target
-          const cum = [0, 0.40, 0.70, 0.85];
-          const mults = [0.55, 1.0, runnerMult];
+          const cum = RR_CUM;
+          const mults = [...RR.mults.slice(0, -1), runnerMult];
           const trancheSizes = [];
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < mults.length; i++) {
             const tsize =
               (Math.floor(filledSize * cum[i + 1] * sp) - Math.floor(filledSize * cum[i] * sp)) / sp;
             if (tsize > 0) trancheSizes.push({ tsize, mult: mults[i] });
@@ -1894,7 +2270,7 @@ async function main() {
         try {
           await cancelPlans(o.symbol);
           await closePosition(o.symbol, p.holdSide || p.side);
-          state.actions.push(`emergency-closed ${o.symbol} (protection failed)`);
+          state.actions.push(`🚨 emergency-closed ${o.symbol} (protection failed)`);
         } catch (e2) {
           state.errors.push(`EMERGENCY CLOSE FAILED ${o.symbol}: ${e2.message}`);
         }
@@ -1935,10 +2311,11 @@ async function main() {
         (state.entriesLog = state.entriesLog || []).push({
           ts: Date.now(), symbol: p.symbol, direction: p.side === 'short' ? 'SHORT' : 'LONG',
           strategy: 'top-up', marginUsd: round(marginUsd, 2), lev, notionalUsd: round(marginUsd * lev, 2),
+          mktType: (plan?.mktType) ?? null,
         });
         p.margin = (+p.margin || 0) + marginUsd;
-        state.actions.push(`top-up ${p.symbol}: +${size} ${p.side} @~${px} — deployed leftover margin (upl ${round(p.upl, 2)})`);
-      } catch (e) { state.errors.push(`top-up ${p.symbol}: ${e.message}`); }
+        state.actions.push(`➕ top-up ${p.symbol}: +${size} ${p.side} @~${px} — deployed leftover margin (upl ${round(p.upl, 2)})`);
+      } catch (e) { state.errors.push(`➕ top-up ${p.symbol}: ${e.message}`); }
     }
   }
   // idle-margin explainer: capital left undeployed carries its reason on
@@ -1960,10 +2337,13 @@ async function main() {
   // persistent store, expose the last 50 on the ledger. This is the actual
   // track record — fees and profits as charged, not modeled.
   try {
-    const fillsPath = path.join(__dirname, '..', 'state', 'real-fills.json');
+    const fillsPath = path.join(__dirname, '..', 'state', FILLS_FILE);
     let store = { fills: [] };
     try { store = JSON.parse(fs.readFileSync(fillsPath, 'utf8')); } catch {}
     if (!Array.isArray(store.fills)) store.fills = [];
+    // epoch reset: pre-test account history is dropped from the journal
+    // entirely — the count starts clean, not merely filtered at read time
+    if (FILLS_SINCE) store.fills = store.fills.filter((f) => (+f.ts || 0) >= FILLS_SINCE);
     const seen = new Set(store.fills.map((f) => f.tradeId));
     const byId = new Map(store.fills.map((f) => [f.tradeId, f]));
     let added = 0;
@@ -1971,6 +2351,8 @@ async function main() {
     for (const f of await getFills().catch(() => [])) {
       const id = f.tradeId || f.fillId || `${f.orderId}:${f.cTime}`;
       if (!id) continue;
+      // pre-epoch exchange fills never enter the test journal
+      if (FILLS_SINCE && +(f.cTime ?? f.uTime ?? 0) < FILLS_SINCE) continue;
       const fee = Math.abs(+((f.feeDetail || [])[0]?.totalFee ?? f.fee ?? f.totalFee ?? 0));
       const size = +(f.baseVolume ?? f.size ?? f.volume ?? f.qty ?? 0);
       // backfill: entries recorded before the feeDetail/baseVolume fix
@@ -1991,7 +2373,7 @@ async function main() {
         continue;
       }
       seen.add(id);
-      store.fills.unshift({
+      const rec = {
         tradeId: id,
         symbol: f.symbol,
         side: f.side,
@@ -2003,7 +2385,22 @@ async function main() {
         tradeSide: f.tradeSide || null,
         src: f.enterPointSource || null, // 'api' = bot · 'ios'/'android'/'web' = manual
         ts: +(f.cTime ?? f.uTime ?? Date.now()),
-      });
+        // regime attribution — the entriesLog carries mktType at decision
+        // time; on a close we look back and stamp which market type the
+        // position was opened in, so per-regime expectancy stays honest
+        mktAtEntry: f.tradeSide === 'close'
+          ? (state.entriesLog || []).filter((e) => e.symbol === f.symbol && e.ts <= +(f.cTime ?? f.uTime ?? Date.now())).pop()?.mktType ?? null
+          : null,
+        // structural thesis that opened this trade — journaled onto the
+        // close so expectancy can be sliced by evidence type later
+        structInvalid: f.tradeSide === 'close'
+          ? (state.entriesLog || []).filter((e) => e.symbol === f.symbol && e.ts <= +(f.cTime ?? f.uTime ?? Date.now())).pop()?.structInvalid ?? null
+          : null,
+      };
+      // per-record checksum — proves WHICH fill changed, not just that
+      // the file did; recomputed by crc32-verify.mjs on every audit pass
+      rec.fcrc = crc32hex(JSON.stringify(rec));
+      store.fills.unshift(rec);
       added++;
     }
     if (added || repaired) {
@@ -2016,6 +2413,34 @@ async function main() {
     }
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
+    // ---- wealth vault sweep — VAULT_SHARE of every profitable close
+    // moves out of the tradable book, permanently. SweptIds dedupes so a
+    // fill can never double-pay; the balance subtracts from equity at
+    // the top of every cycle, so the engine cannot size with it.
+    if (VAULT_SHARE > 0) {
+      try {
+        const vault = loadVault();
+        vault.sweptIds ||= {}; vault.sweeps ||= [];
+        let chg = 0;
+        for (const f of store.fills) {
+          if (vault.sweptIds[f.tradeId]) continue;
+          const net = (+f.profit || 0) - (+f.fee || 0);
+          if (!(net > 0)) continue;
+          vault.sweptIds[f.tradeId] = 1;
+          vault.sweeps.push({ ts: f.ts || Date.now(), tradeId: f.tradeId, symbol: f.symbol, amountUsd: round(net * VAULT_SHARE, 4) });
+          vault.balanceUsd = round(vault.balanceUsd + net * VAULT_SHARE, 4);
+          chg += net * VAULT_SHARE;
+        }
+        if (chg > 0) {
+          vault.sweeps = vault.sweeps.slice(-1000);
+          vault.updatedAt = new Date().toISOString();
+          writeJson(VAULT_PATH, vault);
+          state.actions.push(`🏦 vault sweep: +$${round(chg, 2)} banked — untouchable total $${round(vault.balanceUsd, 2)}`);
+        }
+      } catch (e) {
+        state.errors.push('vault sweep failed: ' + String(e).slice(0, 100));
+      }
+    }
     // realized scoreboard from the exchange's own record — close fills
     // carry realized profit; net-of-fee win rate is the number that matters
     const closes = store.fills.filter((f) => f.tradeSide === 'close' || (f.profit || 0) !== 0);
@@ -2155,11 +2580,18 @@ async function main() {
       for (const e of epis) (byFam[e.strat] ||= []).push(e);
       const fam = {};
       for (const [k, arr] of Object.entries(byFam)) {
-        fam[k] = { n: arr.length, medMaePct: round(med(arr.map((e) => e.maePct)), 2), medMfePct: round(med(arr.map((e) => e.mfePct)), 2) };
+        const rets = arr.map((e) => ((e.exit - e.entry) / e.entry) * (e.side === 'long' ? 1 : -1) * 100);
+        fam[k] = {
+          n: arr.length,
+          medMaePct: round(med(arr.map((e) => e.maePct)), 2),
+          medMfePct: round(med(arr.map((e) => e.mfePct)), 2),
+          winShare: round(rets.filter((r) => r > 0).length / (arr.length || 1), 3),
+          meanRetPct: round(rets.reduce((a, b) => a + b, 0) / (arr.length || 1), 3),
+        };
       }
       writeJson(apiPath, { refreshedAt: new Date().toISOString(), bySymbol: agg, byFamily: fam, episodes: epis.slice(-50) });
       state.maeMfe = fam;
-      state.actions.push(`excursion: finalized ${done.length} episode(s) — mae/mfe journal updated`);
+      state.actions.push(`🧪 excursion: finalized ${done.length} episode(s) — mae/mfe journal updated`);
     }
     writeJson(trackPath, track);
   } catch (e) { state.errors.push(`mae/mfe: ${e.message}`); }
