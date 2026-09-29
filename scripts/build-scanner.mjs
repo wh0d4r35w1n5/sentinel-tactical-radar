@@ -1501,6 +1501,11 @@ async function main() {
               candleClv: ta.candles?.clv ?? null,
               candleClv3: ta.candles?.clv3 ?? null,
               candleEdge: ta.candles?.atEdge ?? null,
+              sakata: ta.sakata
+                ? { dir: ta.sakata.dir, sanpo: ta.sakata.sanpo, sansen: ta.sakata.sansen,
+                    sanku: ta.sakata.sanku, sanzan: ta.sakata.sanzan, pause: ta.sakata.pause,
+                    dstreak: ta.sakata.dstreak, label: ta.sakata.label }
+                : null,
               harmPrz: ta.harmPrz
                 ? { dir: ta.harmPrz.dir, inZone: ta.harmPrz.inZone,
                     consensus: ta.harmPrz.consensus, zones: ta.harmPrz.zones?.length ?? 0,

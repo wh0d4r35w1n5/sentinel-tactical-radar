@@ -397,6 +397,93 @@
     return out;
   }
 
+  // ---------- Sakata methods — Honma Munehisa's five patterns (1750s rice
+  // futures) + the three-days rule. Every method is a *location + sequence*
+  // read, not a candle shape — the original quant discipline:
+  //   sanzan 三山 three mountains  — triple peak, 3rd fails = distribution
+  //   sanku  三空 three gaps      — 3 directional "air" moves = exhaustion
+  //   sanpei 三兵 three soldiers  — 3 advancing/declining soldiers (streak)
+  //   sanpō  三法 three methods   — big bar, counter-candles INSIDE it,
+  //                                 big bar resumes = strongest continuation
+  //   sansen 三川 three rivers    — 3 declines then a reversal bar = the buy
+  //   三休   three-days rule      — never enter the direction of a 4th-day
+  //                                 extension; the move is spent
+  //   休む   the pause            — Sakata's deepest doctrine: when nothing
+  //                                 confirms, hold flat. Cutting N on bad
+  //                                 entries IS the SQN lever.
+  function sakata(cs) {
+    var n = cs.length; if (n < 10) return null;
+    var i = n - 1, c = cs[i], p = cs[i - 1], pp = cs[i - 2], p3 = cs[i - 3], p4 = cs[i - 4];
+    var bodyOf = function (x) { return Math.abs(x.c - x.o); };
+    var upOf = function (x) { return x.c > x.o; };
+    // consecutive same-direction closes — the streak that powers the
+    // three-days rule and the soldiers
+    var streak = 0, sdir = upOf(c) ? 1 : -1;
+    for (var k = i; k >= 1 && upOf(cs[k]) === (sdir === 1); k--) streak++;
+    // consecutive same-direction CLOSES (close > prior close) — momentum days
+    var dstreak = 0, ddir = c.c > p.c ? 1 : -1;
+    for (var k2 = i; k2 >= 1 && (cs[k2].c > cs[k2 - 1].c) === (ddir === 1); k2--) dstreak++;
+    // sanku — count non-overlapping "air" candles in the streak (wick-to-
+    // wick gap or close-opens-prior-close). 3 airs = the move is spent.
+    var airs = 0;
+    for (var g = i; g > i - dstreak && g >= 1; g--) {
+      var gc = cs[g], gp = cs[g - 1];
+      var air = ddir === 1 ? (gp.c < gc.o || gp.h < gc.l) : (gp.c > gc.o || gp.l > gc.h);
+      if (air) airs++;
+    }
+    var sanku = airs >= 3 ? (ddir === 1 ? 'exhausted-up' : 'exhausted-down') : null;
+    // sanpō three methods — the continuation king: a big bar, 2–3 small
+    // counter-bars fully CONTAINED inside its range, then a big resumption
+    // bar closing beyond it. Find the pattern in the last 6 bars.
+    var sanpo = null;
+    for (var anchor = i - 4; anchor >= Math.max(1, i - 5); anchor--) {
+      var a = cs[anchor];
+      if (bodyOf(a) < (a.h - a.l) * 0.55) continue;          // needs a real impulse bar
+      var inside = 0, broke = false;
+      for (var m = anchor + 1; m <= Math.min(anchor + 3, i - 1); m++) {
+        var b = cs[m];
+        if (b.h <= a.h * 1.002 && b.l >= a.l * 0.998 && bodyOf(b) <= bodyOf(a) * 0.5) inside++;
+        else if (m <= i - 1) broke = true;
+      }
+      if (inside < 2 || inside > 3 || broke) continue;
+      var upA = upOf(a);
+      if (upA && upOf(c) && c.c > a.c && bodyOf(c) >= bodyOf(a) * 0.7) sanpo = 'rising';
+      else if (!upA && !upOf(c) && c.c < a.c && bodyOf(c) >= bodyOf(a) * 0.7) sanpo = 'falling';
+      if (sanpo) break;
+    }
+    // sansen three rivers — 3+ declining closes then the first strong
+    // reversal bar at a range low: the river-carried price turns
+    var hi20 = -Infinity, lo20 = Infinity;
+    for (var r = Math.max(0, n - 20); r < n; r++) { hi20 = Math.max(hi20, cs[r].h); lo20 = Math.min(lo20, cs[r].l); }
+    var rPos = (c.c - lo20) / (hi20 - lo20 || 1e-9);
+    var sansen = null;
+    if (ddir === 1 && dstreak <= 2 && p.c < pp.c && pp.c < p3.c && p3.c < p4.c && rPos <= 0.35 && bodyOf(c) > (c.h - c.l) * 0.5)
+      sansen = 'bullish-river';
+    else if (ddir === -1 && dstreak <= 2 && p.c > pp.c && pp.c > p3.c && p3.c > p4.c && rPos >= 0.65 && bodyOf(c) > (c.h - c.l) * 0.5)
+      sansen = 'bearish-river';
+    // sanzan three mountains — zigzag highs where the 3rd fails the 1st:
+    // distribution, not accumulation (chartPats sees 'lower high' — Sakata
+    // reads the THIRD mountain's failure as the tell)
+    var piv = zigzag ? zigzag(cs, 0.015) : [];
+    var Hs = piv.filter(function (x) { return x.type === 'H'; }).slice(-3);
+    var sanzan = Hs.length === 3 && Hs[2].p < Hs[0].p && Hs[1].p >= Hs[0].p * 0.995 ? 'distribution' : null;
+    // the pause — Sakata's cardinal rule: 4th+ day of a streak with NO
+    // reversal structure = sit on hands. Exposed so the caller can veto.
+    var pause = dstreak >= 4 && !sansen && !sanku ? (ddir === 1 ? 'long-streak' : 'short-streak') : null;
+    var dir = sanpo === 'rising' || sansen === 'bullish-river' ? 'bull'
+            : sanpo === 'falling' || sansen === 'bearish-river' || sanzan ? 'bear' : null;
+    var parts = [];
+    if (sanpo) parts.push('sanpō ' + sanpo + ' three-methods');
+    if (sansen) parts.push('sansen ' + sansen);
+    if (sanzan) parts.push('sanzan distribution');
+    if (sanku) parts.push('sanku ' + sanku + ' (' + airs + ' airs)');
+    if (streak >= 3) parts.push('sanpei ' + (sdir === 1 ? 'white-soldiers' : 'black-crows') + ' x' + streak);
+    if (pause) parts.push('pause — day ' + dstreak + ' of ' + (ddir === 1 ? 'ascent' : 'descent') + ', enter nothing');
+    return { dir: dir, streak: streak, dstreak: dstreak, sanku: sanku, sanpo: sanpo,
+             sansen: sansen, sanzan: sanzan, pause: pause, airs: airs,
+             label: parts.join(' · ') || 'no sakata structure' };
+  }
+
   // ---------- fib confluence / golden pocket ----------
   function fib(cs) {
     var piv = zigzag(cs, 0.025);
@@ -1358,7 +1445,7 @@
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
         brk = breakout(cs), er = effortResult(cs), ep = elliottProj(cs),
-        prz = H && H.project ? H.project(cs) : null,
+        prz = H && H.project ? H.project(cs) : null, sk = sakata(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
@@ -1410,6 +1497,13 @@
       if (cd.dir === (L ? 'bull' : 'bear')) confluence++;
       if (cd.clv3 && Math.sign(cd.clv3) === (L ? 1 : -1) && Math.abs(cd.clv3) > 0.8) confluence++; // sustained close-location sponsorship
       if (ichi && ichi.kumoTwist && ichi.kumoTwist !== (L ? 'bull' : 'bear')) confluence--; // future cloud flips against the trade
+      // ---- Sakata votes — Munehisa's max-SQN doctrine: pay for confirmed
+      // structure, refuse the extended move ----
+      if (sk && sk.sanpo === (L ? 'rising' : 'falling')) confluence += 2;   // three-methods continuation — highest-SQN Sakata pattern
+      if (sk && sk.sansen === (L ? 'bullish-river' : 'bearish-river')) confluence++;
+      if (sk && sk.sanzan && !L) confluence++;                            // 3rd mountain failed = distribution aids shorts
+      if (sk && sk.sanku === (L ? 'exhausted-up' : 'exhausted-down')) confluence--; // entering INTO the 3rd gap = buying exhaustion
+      if (sk && sk.dstreak >= 4 && (sk.streak === 0 || true) && ((L && cs[cs.length-1].c > cs[cs.length-2].c) === L)) confluence--; // 三日月 three-days rule: day-4+ chase is spent fuel
       if (mc && ((mc.bos === 'bullish') === L || (mc.choch === 'bullish') === L)) confluence++;
       if (mc && mc.inOB && (mc.inOB.dir === 'bullish') === L) confluence++;
       if (mc && ((mc.zone === 'discount') === L) && mc.zone !== 'equilibrium') confluence++;
@@ -1470,6 +1564,7 @@
         cd.join(', ') + (cd.clv != null ? ' · CLV ' + cd.clv + (cd.clv3 != null ? ' (3b ' + cd.clv3 + ')' : '') : '') + (cd.atEdge ? ' · at range ' + cd.atEdge : ''));
     }
     if (prz) F('harm-PRZ', prz.dir === 'bullish' ? 'bull' : 'bear', prz.label);
+    if (sk && (sk.dir || sk.pause || sk.sanku)) F('Sakata', sk.dir || (sk.pause ? (sk.pause === 'long-streak' ? 'bear' : 'bull') : 'flat'), sk.label);
     if (cps && cps.length) cps.forEach(function (p) { F('pattern', LD(p.dir) , p.name + ' (' + p.conf + ') — ' + p.s); });
     // deep MTF frames — per-timeframe factor rows so each TF's vote is
     // individually auditable (and Einstein can IC-test them separately)
@@ -1491,7 +1586,7 @@
              candles: cd, fib: fb, structure: st, ignition: ig, vwap: vw,
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
-             effort: er, ewProj: ep, harmPrz: prz,
+             effort: er, ewProj: ep, harmPrz: prz, sakata: sk,
              mtf: mtd,
              bias: bias, reasons: reasons, confluence: confluence };
   }
@@ -1502,6 +1597,7 @@
                  vwap: vwap, smc: smc, eqLevels: eqLevels, liquidity: liquidity,
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
                  mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng,
-                 effortResult: effortResult, elliottProj: elliottProj };
+                 effortResult: effortResult, elliottProj: elliottProj,
+                 sakata: sakata };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
