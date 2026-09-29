@@ -129,23 +129,30 @@ const closeMarket = async (sym, side, sizeStr, posMode, marginMode) => {
   const mm = marginMode === 'crossed' ? 'crossed' : 'isolated';
   const alt = mm === 'crossed' ? 'isolated' : 'crossed';
   const base = { symbol: sym, productType: PRODUCT, marginCoin: COIN, size: sizeStr, orderType: 'market' };
-  if (posMode === 'hedge') {
-    // hedge-mode `side` is the POSITION direction: close long = buy+close.
-    // (side:'sell' asks to close a short -> 22002 'No position to close')
+  // hedge-mode `side` is the POSITION direction: close long = buy+close.
+  // (side:'sell' asks to close a short -> 22002 'No position to close')
+  const hedgeBody = (m) => ({ ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: m });
+  const onewayBody = (m) => ({ ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: m });
+  // posMode detection can silently default wrong (a failed boot probe falls
+  // back to 'oneway' forever — the SNDK/CLU 40774 loop was exactly that:
+  // hedge account + reduceOnly). 40774 IS the mode mismatch signal, so try
+  // the detected convention first, then the other — self-healing without
+  // trusting the probe.
+  const attempts = posMode === 'hedge'
+    ? [hedgeBody(mm), hedgeBody(alt), onewayBody(mm), onewayBody(alt)]
+    : [onewayBody(mm), onewayBody(alt), hedgeBody(mm), hedgeBody(alt)];
+  let lastErr;
+  for (const body of attempts) {
     try {
-      return await api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: mm } });
+      return await api('POST', '/api/v2/mix/order/place-order', { body });
     } catch (e) {
-      if (!/margin ?mode|40774/i.test(e.message)) throw e;
-      return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: alt } });
+      lastErr = e;
+      // only a mode/margin mismatch justifies the next convention — a real
+      // rejection (size, no-position) must surface, not be retried blind
+      if (!/margin ?mode|40774/.test(e.message)) throw e;
     }
   }
-  try {
-    return await api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: mm } });
-  } catch (e) {
-    if (/margin ?mode|40774/i.test(e.message)) // retry other convention
-      return api('POST', '/api/v2/mix/order/place-order', { body: { ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: alt } });
-    throw e;
-  }
+  throw lastErr;
 };
 
 // --- realtime mark feed: Bitget public WS, REST ticker stays the fallback ---
@@ -254,6 +261,7 @@ async function tick() {
   if (Date.now() - posCacheAt > wantMs) {
     const p = await getAllPos().catch(() => null);
     if (p) { posCache = p; posCacheAt = Date.now(); p.forEach((x) => ensureSub(x.sym)); }
+    if (!posModeConfirmed) posMode = await probePosMode();
   }
   ensureSub(SEED_SYM);
 
@@ -344,7 +352,10 @@ async function tick() {
               if (np?.liq) {
                 const sgn = np.side === 'long' ? 1 : -1;
                 const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
-                const deepTrig = +(np.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(6);
+                // trigger must land on the contract's price grid — a blanket
+                // toFixed(6) violates checkBDScale (SNDK=2dp, CLU=3dp -> 40808)
+                const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+                const deepTrig = +(np.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(pxDec);
                 const deeper = np.side === 'long' ? deepTrig < trig : deepTrig > trig;
                 if (deeper && deepTrig > 0) {
                   await planLoss(p.sym, p.side, deepTrig, np.marginMode || p.marginMode);
@@ -400,7 +411,8 @@ async function tick() {
       if (np?.liq) {
         const sgn = np.side === 'long' ? 1 : -1;
         const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
-        const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(5);
+        const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+        const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(pxDec);
         await planLoss(p.sym, p.side, trig, np.marginMode || p.marginMode);
         const plans = await getPlans(p.sym);
         // holdSide filter is mandatory in hedge mode — an unfiltered cancel
@@ -421,12 +433,29 @@ async function tick() {
   }
 }
 
+// posMode probe — a failed probe used to silently default 'oneway' forever,
+// which fires 40774 on every trim of a hedge-mode account. The demo env
+// lists a SUBSET of symbols — probing on the seed (HBARUSDT) 40034s there,
+// so probe on a symbol the contract map actually contains. Retry at boot,
+// and if still unknown mark it unconfirmed so tick() keeps re-probing.
+let posModeConfirmed = false, probeLogged = false;
+const probePosMode = async () => {
+  const sym = cm[SEED_SYM] ? SEED_SYM : Object.keys(cm)[0] || SEED_SYM;
+  const acc = await api('GET', '/api/v2/mix/account/account', { qs: `symbol=${sym}&productType=${PRODUCT}&marginCoin=${COIN}` })
+    .catch((e) => { if (!probeLogged) { probeLogged = true; log(`posMode probe on ${sym}: ${e.message}`); } return null; });
+  if (acc?.posMode) { posModeConfirmed = true; return acc.posMode === 'hedge_mode' ? 'hedge' : 'oneway'; }
+  return posMode;
+};
+
 async function boot() {
   const cs = await api('GET', '/api/v2/mix/market/contracts', { qs: `productType=${PRODUCT}` }).catch(() => []);
   for (const c of cs || []) cm[c.symbol] = c;
-  const acc = await api('GET', '/api/v2/mix/account/account', { qs: `symbol=${SEED_SYM}&productType=${PRODUCT}&marginCoin=${COIN}` }).catch(() => null);
-  const pm = acc?.posMode === 'hedge_mode' ? 'hedge' : 'oneway';
-  log(`armed — all positions · trim ${TRIM_PCT}% · zone ${ZONE_PCT}% · spacing ${SPACING_MS / 1e3}s + new-low gate · seed ${SEED_SYM} min ${MIN_SIZE} · posMode ${pm}`);
+  let pm = posMode;
+  for (let i = 0; i < 3 && !posModeConfirmed; i++) {
+    pm = await probePosMode();
+    if (!posModeConfirmed) await new Promise((r) => setTimeout(r, 1500));
+  }
+  log(`armed — all positions · trim ${TRIM_PCT}% · zone ${ZONE_PCT}% · spacing ${SPACING_MS / 1e3}s + new-low gate · seed ${SEED_SYM} min ${MIN_SIZE} · posMode ${pm}${posModeConfirmed ? '' : ' (UNCONFIRMED — probing every cycle)'}`);
   return pm;
 }
 
