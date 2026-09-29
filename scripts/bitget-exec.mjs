@@ -680,6 +680,17 @@ async function main() {
   state.marginFreeUsd = round(marginFree, 2);
   state.posMode = POS_MODE;
   const rawPos = (positions || []).filter((p) => +p.total > 0);
+  // ---- extended Telegram C2 channels — one-line state files the operator
+  // drives from Saved Messages. Merged HERE, before the hold/stale reports
+  // and every downstream gate, so handset adds take effect this same cycle.
+  // They merge with (never shrink) the env-side lists — a handset add can't
+  // unprotect an env-declared hold.
+  const cmdJson = (name) => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', name), 'utf8')); }
+    catch { return null; }
+  };
+  for (const s of (cmdJson('cmd-manual-hold.json')?.symbols || [])) MANUAL.add(String(s).toUpperCase());
+  for (const s of (cmdJson('cmd-deny.json')?.symbols || [])) DENY_SYMS.add(String(s).toUpperCase());
   // a MANUAL_HOLD on a flat symbol silently exempts future auto-entries from
   // management — flag it so the exemption can't linger forgotten
   state.manualHoldStale = [...MANUAL].filter((s) => !rawPos.some((p) => p.symbol === s && +p.total > 0));
@@ -858,6 +869,25 @@ async function main() {
     try { const c = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cmd-halt.json'), 'utf8')); return c.halted ? c : null; }
     catch { return null; }
   })();
+  // risk multiplier override — clamped hard so a fat-finger can't 50x the book
+  const cmdRisk = cmdJson('cmd-risk.json');
+  const riskMulOverride = Number.isFinite(+cmdRisk?.mul) ? Math.min(Math.max(+cmdRisk.mul, 0), 8) : null;
+  // targeted close — one-shot like flatten: {symbol, ts} closes that symbol's
+  // position at market, then self-clears with an ack for the C2 layer.
+  const cmdClosePath = path.join(__dirname, '..', 'state', 'cmd-close.json');
+  const cmdClose = (() => { try { const c = cmdJson('cmd-close.json'); return c?.symbol ? c : null; } catch { return null; } })();
+  if (cmdClose) {
+    const p = posBySym.get(String(cmdClose.symbol).toUpperCase());
+    try { fs.writeFileSync(cmdClosePath, JSON.stringify({ symbol: null, ackedAt: new Date().toISOString() })); } catch {}
+    if (p) {
+      try {
+        await cancelPlans(p.symbol);
+        await closePosition(p.symbol, p.side);
+        state.actions.push(`🎯 cmd-close: ${p.symbol} ${p.side} ${p.size} closed by operator`);
+        posBySym.delete(p.symbol);
+      } catch (e) { state.errors.push(`cmd-close ${p.symbol}: ${e.message}`); }
+    } else state.actions.push(`cmd-close ${cmdClose.symbol}: no open position`);
+  }
   // ---- account-level circuit breakers: per-trade stops protect single
   // positions; these stop the ENGINE from grinding the account down via
   // redeploy-after-loss churn (the 181-closes / -$176 / 16% win bleed that
@@ -956,7 +986,7 @@ async function main() {
   // the dashboard and exported with the ledger.
   state.risk = {
     riskProfile: RISK_MAX ? 'max' : 'default',
-    riskMultiplier: +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)),
+    riskMultiplier: +(riskMulOverride ?? (process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1))),
     sizingUsd: TARGET_POSITIONS > 0
       ? `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each) × risk multiplier`
       : 'deployment frozen — 0 target slots',
@@ -1946,7 +1976,7 @@ async function main() {
       // peak the multiplier halves — protect capital during a bleed, press
       // it during equity highs. Sizing still uses whatever margin is free.
       const riskMul =
-        +(process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1)) *
+        +(riskMulOverride ?? (process.env.SENTINEL_RISK_MUL || (RISK_MAX ? 3 : 1))) *
         ((state.ddPct ?? 0) > 10 ? 0.5 : 1) *
         // edge-scaled sizing — unproven entries earn proportional
         // bullets: edge 0.5 fires at half size, edge >=1 at full

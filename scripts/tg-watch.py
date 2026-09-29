@@ -13,9 +13,9 @@ Control commands write state/cmd-*.json files the executor consumes.
 Config: scripts/tg-config.json  { "api_id": int, "api_hash": str, "group": str|int }
 First run needs phone + login code once; session persists in tg-session.session.
 """
-import asyncio, json, os, re, subprocess, sys, time
+import asyncio, inspect, json, os, re, subprocess, sys, time
 from pathlib import Path
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, Button
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -216,11 +216,12 @@ async def main():
         hl = statef("cmd-halt") or {}
         halt = "⛔ OPERATOR HALT" if hl.get("halted") else "🟢 armed"
         eq = (ll or {}).get("equityUsd")
-        return (f"<b>◈ SENTINEL COMMAND</b>\n"
+        return (f"<b>🛰️ SENTINEL COMMAND</b>\n"
                 f"─────────────────────\n"
                 f"Mode: <code>{(ll or {}).get('mode','?')}</code> · {halt}\n"
                 f"Equity: <b>${fmtp(eq)}</b> · DD {(ll or {}).get('ddPct','—')}% · 24h {(ll or {}).get('dd24Pct','—')}%\n"
                 f"Positions: <b>{len((ll or {}).get('positions') or [])}</b> open · margin free ${fmtp((ll or {}).get('marginFreeUsd'))}\n"
+                f"🏦 Vault: <b>${fmtp((ll or {}).get('vaultUsd'))}</b> locked · ⚖️ edge {(ll or {}).get('edgeLive','—')}\n"
                 f"Scanner: {ago(time.mktime(time.strptime(sc['refreshedAt'][:19],'%Y-%m-%dT%H:%M:%S'))*1000 if sc and sc.get('refreshedAt') else 0)} ago · {len((sc or {}).get('signals',[]))} signals · {(sc or {}).get('pairsScanned','?')} pairs\n"
                 f"Ledger: {(ll or {}).get('realFillCount',0)} real fills · cycle {round(((ll or {}).get('cycleMs') or 0)/1000,1)}s\n"
                 f"─────────────────────\n<i>/help for the full command card</i>")
@@ -230,7 +231,7 @@ async def main():
         pos = ll.get("positions") or []
         if not pos:
             return "📭 <b>No open positions</b>"
-        out = ["<b>◈ OPEN POSITIONS</b>", "─────────────────────"]
+        out = ["<b>📊 OPEN POSITIONS</b>", "─────────────────────"]
         for p in pos:
             mk = p.get("entry", 0) + (p.get("upl") or 0) / max(p.get("size") or 1e-9, 1e-9)
             liqd = abs(mk - (p.get("liq") or mk)) / mk * 100 if mk else 0
@@ -245,7 +246,7 @@ async def main():
         ll = api("live-ledger") or {}
         pk = statef(f"equity-peak-{ll.get('mode','live')}") or {}
         r = ll.get("risk") or {}
-        return (f"<b>◈ EQUITY &amp; RISK RAILS</b>\n─────────────────────\n"
+        return (f"<b>🏦 EQUITY &amp; RISK RAILS</b>\n─────────────────────\n"
                 f"Equity: <b>${fmtp(ll.get('equityUsd'))}</b> (peak ${fmtp(pk.get('peak'))})\n"
                 f"Drawdown: {ll.get('ddPct','—')}% all-time · {ll.get('dd24Pct','—')}% rolling-24h\n"
                 f"Free margin: ${fmtp(ll.get('marginFreeUsd'))}\n"
@@ -259,7 +260,7 @@ async def main():
         sigs = (sc.get("signals") or [])[:6]
         if not sigs:
             return "📡 <b>No signals on the board</b>"
-        out = ["<b>◈ SIGNAL BOARD — top</b>", "─────────────────────"]
+        out = ["<b>📡 SIGNAL BOARD — top</b>", "─────────────────────"]
         for s in sigs:
             mtf = (s.get("ta") or {}).get("mtf") or {}
             out.append(f"<b>{s.get('asset','?')}</b> {s.get('direction','?')} · <code>{s.get('score','?')}</code> · {s.get('grade','?')} · tgt {s.get('targetPct','?')}%"
@@ -268,7 +269,7 @@ async def main():
 
     def c_radar():
         v, b = api("volcore") or {}, api("breakouts") or {}
-        out = ["<b>◈ ORDER-FLOW RADAR</b>", "─────────────────────"]
+        out = ["<b>🌊 ORDER-FLOW RADAR</b>", "─────────────────────"]
         ev = (v.get("events") or [])[:5]
         out += [f"• {e.get('kind','?')} {e.get('asset','?')} — {e.get('spikeX','?')}× vol" for e in ev] or ["• prints quiet"]
         be = [e for e in (b.get("events") or []) if e.get("state") in ("RETEST", "BREAKOUT")][:5]
@@ -281,14 +282,14 @@ async def main():
         if arg:
             r = rows.get(arg.upper())
             if not r: return f"no MTF data for {esc(arg.upper())}"
-            lines = [f"<b>◈ MTF — {esc(arg.upper())}</b>", "─────────────────────", f"<b>{esc(r.get('stack','?'))}</b>"]
+            lines = [f"<b>🧮 MTF — {esc(arg.upper())}</b>", "─────────────────────", f"<b>{esc(r.get('stack','?'))}</b>"]
             for tf in m.get("frames", []):
                 c = (r.get("cells") or {}).get(tf)
                 if c: lines.append(f"{tf:>4}: {'▲' if c.get('dir')=='bull' else '▼' if c.get('dir')=='bear' else '·'} {c.get('trend','?')} · RSI {round(c.get('rsi') or 0)} · MACD {c.get('macd','?')}")
             return "\n".join(lines)
         st = [a for a, r in rows.items() if r.get("kind") == "stacked"]
         pb = [a for a, r in rows.items() if r.get("kind") == "pullback"]
-        return (f"<b>◈ MTF MATRIX</b>\n─────────────────────\n"
+        return (f"<b>🧮 MTF MATRIX</b>\n─────────────────────\n"
                 f"Stacked: <b>{len(st)}</b> · Pullback: <b>{len(pb)}</b> · Mixed: {len(rows)-len(st)-len(pb)}\n"
                 f"Stacked: {', '.join(f'{a}({rows[a].get('dir','?')})' for a in st[:8]) or '—'}\n"
                 f"Pullback: {', '.join(pb[:8]) or '—'}\n<i>/mtf BTC for per-asset detail</i>")
@@ -298,7 +299,7 @@ async def main():
         mk, assets = s.get("market") or {}, s.get("assets") or {}
         fg = mk.get("fg") or {}
         top = sorted(assets.items(), key=lambda kv: -(kv[1].get("heat") or 0))[:8]
-        return (f"<b>◈ SOCIAL RADAR</b>\n─────────────────────\n"
+        return (f"<b>📣 SOCIAL RADAR</b>\n─────────────────────\n"
                 f"Fear &amp; Greed: <b>{fg.get('v','—')} {esc(fg.get('c',''))}</b>\n"
                 f"Trending: {', '.join(x.get('sym','') for x in (mk.get('trending') or [])[:6]) or '—'}\n─────────────────────\n"
                 + "\n".join(f"{a}: score {v.get('score','—')} · heat {v.get('heat','—')}"
@@ -309,7 +310,7 @@ async def main():
         e = api("einstein") or {}
         f = (e.get("findings") or [])[:6]
         if not f: return "🧠 <b>Einstein:</b> lab warming — needs graded confl snapshots"
-        return "<b>◈ EINSTEIN LAB</b>\n─────────────────────\n" + "\n".join(
+        return "<b>🧬 EINSTEIN LAB</b>\n─────────────────────\n" + "\n".join(
             f"• <code>{x.get('key','?')}</code> {esc(x.get('txt',''))[:110]}" for x in f)
 
     def c_j():
@@ -317,7 +318,7 @@ async def main():
         rec = (ev.get("records") or [])[-8:]
         done = [r for r in rec if r.get("outcome")]
         wins = sum(1 for r in done if (r.get("outcomePct") or 0) > 0)
-        out = [f"<b>◈ TRADE JOURNAL</b>\n─────────────────────\n{len(done)} graded · {wins}W/{len(done)-wins}L shown"]
+        out = [f"<b>📜 TRADE JOURNAL</b>\n─────────────────────\n{len(done)} graded · {wins}W/{len(done)-wins}L shown"]
         for r in reversed(rec[-6:]):
             oc = r.get("outcome") or "open"
             p = r.get("outcomePct")
@@ -327,7 +328,7 @@ async def main():
     def c_pulse():
         sc = api("market-scanner") or {}
         p, ov = sc.get("pulse") or {}, sc.get("overview") or {}
-        return (f"<b>◈ MARKET PULSE</b>\n─────────────────────\n"
+        return (f"<b>💓 MARKET PULSE</b>\n─────────────────────\n"
                 f"▲ {ov.get('advancing','—')} / ▼ {ov.get('declining','—')} · breadth {p.get('breadthPct','—')}%\n"
                 f"median Δ24h {p.get('medianDelta','—')}% · regime {esc(sc.get('regime','—'))}\n"
                 f"boards: {len(sc.get('signals',[]))} signals · median score {sc.get('medianScore','—')}")
@@ -352,7 +353,7 @@ async def main():
         return "🚨 <b>FLATTEN EXECUTING</b> — executor closes all positions next cycle."
 
     def c_help():
-        return ("<b>◈ SENTINEL COMMAND CENTRE</b>\n─────────────────────\n"
+        return ("<b>🛰️ SENTINEL COMMAND CENTRE</b>\n─────────────────────\n"
                 "<b>Intel</b>\n"
                 "/status — godhead: equity, halt state, cycle health\n"
                 "/pos — open positions: entry→mark, upl, liq distance\n"
@@ -370,12 +371,30 @@ async def main():
                 "/flatten — panic close ALL (CONFIRM-gated)\n"
                 "/watch SYM above|below PX [note] — price trigger ping\n"
                 "/watches — armed triggers · /unwatch SYM|ALL\n"
+                "<b>Deep Intel</b>\n"
+                "/fills — real fills w/ net P&amp;L\n"
+                "/vault — wealth vault sweeps + balance\n"
+                "/quant — CUSUM edge-death · Kelly · breakers\n"
+                "/regime — market type + per-regime expectancy\n"
+                "/sqn — strategy SQN leaderboard\n"
+                "/gates — 24h reject histogram\n"
+                "/god — overseer audit findings\n"
+                "/plan — live order plan + rejects\n"
+                "/corr — correlation clusters\n"
+                "/ta SYM — full engine read (wyckoff·elliott·harmonics·sakata)\n"
+                "<b>Control</b>\n"
+                "/close SYM — close one position (CONFIRM-gated)\n"
+                "/hold SYM · /unhold SYM · /holds — hands-off list\n"
+                "/deny SYM · /allow SYM · /denied — entry blacklist\n"
+                "/risk [0–8] — size multiplier override\n"
+                "/hud — live self-editing status tile\n"
                 "<b>Nav</b>\n"
                 "/links — dashboard URLs\n"
-                "/ping — liveness")
+                "/ping — liveness\n"
+                "<i>or just send a raw emoji: 📊 💰 📡 🌡 🧠 📐 ⚖️ ⏸ ▶️ 🚨</i>")
 
     def c_links():
-        return (f"<b>◈ SURFACES</b>\n─────────────────────\n"
+        return (f"<b>🗺 SURFACES</b>\n─────────────────────\n"
                 f"🌐 <a href='{LINKS}'>Command deck</a>\n"
                 f"🖼 <a href='{LINKS}/gallery.html'>Evidence gallery</a>\n"
                 f"📄 <a href='https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/'>GitHub Pages mirror</a>")
@@ -400,7 +419,7 @@ async def main():
         wl = statef("watchlist")
         if not isinstance(wl, list) or not wl:
             return "🎯 <b>No watches armed</b> — <code>/watch SYM above|below PX</code>"
-        return ("<b>◈ PRICE WATCHES</b>\n─────────────────────\n"
+        return ("<b>🎯 PRICE WATCHES</b>\n─────────────────────\n"
                 + "\n".join(f"{w['sym']} {'▲' if w['dir']=='above' else '▼'} <b>{w['px']}</b>"
                            + (f" — {esc(w.get('note',''))[:60]}" if w.get("note") else "") for w in wl))
 
@@ -418,12 +437,346 @@ async def main():
         wstate("watchlist", keep)
         return f"🗑 removed {len(wl) - len(keep)} watch(es) on {a}"
 
+    # ================= EXTENDED OS SURFACE =================
+    # intel + control — every artifact the engine publishes, plus the
+    # command files the executor consumes next cycle.
+
+    def spark(vals, width=16):
+        BARS = "▁▂▃▄▅▆▇█"
+        vs = [float(v) for v in vals if isinstance(v, (int, float))][-width:]
+        if len(vs) < 2:
+            return "—"
+        lo, hi = min(vs), max(vs)
+        rg = hi - lo or 1
+        return "".join(BARS[min(7, int((v - lo) / rg * 7.999))] for v in vs)
+
+    def fills_file():
+        ll = api("live-ledger") or {}
+        return statef("demo-fills" if ll.get("mode") == "demo" else "real-fills") or {}
+
+    def c_fills():
+        fs = (fills_file().get("fills") or [])[-8:]
+        if not fs:
+            return "📒 <b>No fills yet this epoch</b>"
+        out = ["<b>📒 REAL FILLS</b>", "─────────────────────"]
+        for f in reversed(fs):
+            p = (f.get("profit") or 0) - (f.get("fee") or 0)
+            ts = f.get("ts", 0)
+            out.append(f"{'🟢' if p > 0 else '🔴' if p < 0 else '⚪'} <b>{f.get('symbol','?')}</b> {f.get('tradeSide','?')} "
+                       f"{f.get('side','?')} {f.get('size','?')} @ {fmtp(f.get('price'))} · <b>${p:+.2f}</b> · {ago(ts)} ago")
+        return "\n".join(out)
+
+    def c_vault():
+        v = statef("wealth-vault") or {}
+        ll = api("live-ledger") or {}
+        sw = (v.get("sweeps") or [])[-5:]
+        out = ["<b>🏦 WEALTH VAULT</b>", "─────────────────────",
+               f"Locked: <b>${fmtp(v.get('balanceUsd'))}</b> — untouchable, 50% of every profitable close",
+               f"Sweeps: <b>{len(v.get('sweptIds') or {})}</b> fills taxed"]
+        for s in reversed(sw):
+            out.append(f"• {s.get('symbol','?')} +${s.get('amountUsd',0):.2f} · {ago(s.get('ts',0))} ago")
+        if ll.get("vaultUsd") is not None:
+            out.append(f"<i>ledger sees ${fmtp(ll['vaultUsd'])}</i>")
+        return "\n".join(out)
+
+    def c_quant():
+        ll = api("live-ledger") or {}
+        cb = ll.get("circuitBreakers") or {}
+        ed, ky = cb.get("edgeDeath") or {}, cb.get("kelly")
+        out = ["<b>🧠 QUANT LAYER</b>", "─────────────────────"]
+        out.append(f"Edge: <b>{ll.get('edgeLive','—')}</b> ({esc(ll.get('edgeSrc','?'))})")
+        if ed:
+            armed = "🔴 TRIPPED" if ed.get("S", 0) > ed.get("h", 1e9) else "🟢 armed"
+            out.append(f"CUSUM edge-death: {armed} S={round(ed.get('S',0),2)}/h={round(ed.get('h',0),1)} · n={ed.get('n',0)} · mean ${round(ed.get('meanUsd',0),2)}/close")
+        else:
+            out.append("CUSUM edge-death: dormant")
+        out.append(f"Kelly ceiling: {('f*=' + str(round(ky.get('fStar',0),3)) + ' → cap $' + str(round(ky.get('halfKellyRiskUsd',0),2)) + ' · n=' + str(ky.get('n',0))) if ky else 'dormant (n<15)'}")
+        out.append(f"Breakers: <b>{'⚠️ ' + esc(str(cb.get('tripped'))) if cb.get('tripped') else 'clear'}</b>")
+        out.append(f"24h: net ${round(cb.get('net24Usd',0),2)} · fees ${round(cb.get('fees24Usd',0),2)} · WR20 {cb.get('winRate20','—')}%")
+        try:
+            meta = statef("meta-label") or {}
+            if meta.get("signals"): out.append(f"Meta-label: {meta.get('signals')} graded signals in model")
+        except Exception:
+            pass
+        return "\n".join(out)
+
+    def c_regime():
+        sc = api("market-scanner") or {}
+        ov = sc.get("overview") or {}
+        lp = api("live-plan") or {}
+        rs = (api("live-ledger") or {}).get("realizedStats") or {}
+        out = ["<b>🌡 REGIME</b>", "─────────────────────",
+               f"Type: <b>{esc(lp.get('mktType') or ov.get('mktType') or sc.get('regime','—'))}</b>",
+               f"Market SQN: <b>{lp.get('marketSQN', ov.get('marketSQN','—'))}</b> · ATR {ov.get('atrPct','—')}%"]
+        bmt = rs.get("byMktType") or {}
+        if bmt:
+            out.append("— expectancy by regime —")
+            for k, v in list(bmt.items())[:5]:
+                out.append(f"  {esc(k)}: {v.get('n',0)} closes · net ${round(v.get('netUsd',0),2)} · WR {v.get('winRatePct','—')}%")
+        return "\n".join(out)
+
+    def c_sqn():
+        r = api("sqn-report") or {}
+        per = r.get("perStrategy") or []
+        if not per:
+            return "📐 <b>SQN report empty</b> — needs graded closes"
+        out = ["<b>📐 SQN LEADERBOARD</b>", "─────────────────────", "<i>E·√n/σ per strategy, shrunk</i>"]
+        for s in sorted(per, key=lambda x: -(x.get("shrunkSqn") or -9))[:8]:
+            em = "🟢" if (s.get("shrunkSqn") or 0) > 0 else "🔴"
+            out.append(f"{em} {esc(s.get('strategy','?'))}: sqn100 {s.get('shrunkSqn','—')} · E {s.get('E','—')}R · n{s.get('n',0)} · hit {s.get('hit','—')}%")
+        ch = r.get("chain") or {}
+        if ch.get("members"):
+            out.append(f"── chain: {' + '.join(ch['members'])} · sqn {ch.get('shrunkSqn','—')}")
+        return "\n".join(out)
+
+    def c_gates():
+        g = api("gate-stats") or {}
+        t = g.get("totals24h") or g.get("totals") or {}
+        if not t:
+            return "🚧 <b>No gate stats</b>"
+        top = sorted(t.items(), key=lambda kv: -kv[1])[:10]
+        mx = max(v for _, v in top) or 1
+        out = ["<b>🚧 REJECT GATES — 24h</b>", "─────────────────────"]
+        for k, v in top:
+            bar = "█" * max(1, int(v / mx * 10))
+            out.append(f"<code>{k:<20}</code> {bar} {v}")
+        return "\n".join(out)
+
+    def c_god():
+        g = api("god") or {}
+        checks = g.get("checks") or []
+        if not checks and not g.get("verdict"):
+            return "🌩 <b>GOD report unreadable</b>"
+        verdict = g.get("verdict", "—")
+        em = {"CLEAN": "🟢", "BROKEN": "🔴", "WARN": "🟡"}.get(verdict, "⚪")
+        out = ["<b>🌩 GOD AUDIT</b>", "─────────────────────",
+               f"{em} verdict <b>{esc(str(verdict))}</b> · {g.get('pass',0)} pass · {g.get('warn',0)} warn · {g.get('fail',0)} fail",
+               f"<i>{ago(int(time.mktime(time.strptime((g.get('at') or '')[:19], '%Y-%m-%dT%H:%M:%S'))*1000) if g.get('at') else 0)} ago</i>"]
+        for c in checks:
+            if c.get("status") in ("FAIL", "WARN"):
+                out.append(f"{'🔴' if c.get('status')=='FAIL' else '🟡'} {esc(c.get('name','?'))} — {esc(str(c.get('detail',''))[:80])}")
+        if not any(c.get("status") in ("FAIL", "WARN") for c in checks):
+            out.append("all clear ✓")
+        return "\n".join(out)
+
+    def c_plan():
+        lp = api("live-plan") or {}
+        ll = api("live-ledger") or {}
+        od = lp.get("orders") or []
+        rj = (ll.get("rejects") or [])[:8]
+        out = ["<b>🗺 LIVE PLAN</b>", "─────────────────────",
+               f"{len(od)} orders · mkt {esc(lp.get('mktType','—'))}"]
+        for o in od[:6]:
+            out.append(f"• {o.get('symbol','?')} {o.get('direction','?')} · lev {o.get('leverage','?')}x · stop {o.get('stopPct','?')}% · conv {o.get('conv','—')}")
+        if rj:
+            out.append("— top rejects —")
+            for r in rj[:5]:
+                out.append(f"✕ {r.get('symbol','?')} {r.get('direction','?')}: <i>{esc(', '.join(r.get('gates') or []))}</i>")
+        return "\n".join(out)
+
+    def c_corr():
+        c = api("correlation") or {}
+        pairs = c.get("pairs") or c.get("matrix") or {}
+        ll = api("live-ledger") or {}
+        held = [p.get("symbol") for p in (ll.get("positions") or [])]
+        out = ["<b>🧬 CORRELATION</b>", "─────────────────────",
+               f"mean board corr: {c.get('meanBoardCorr','—')}"]
+        for s in held[:6]:
+            row = pairs.get(s) or {}
+            hot = sorted(row.items(), key=lambda kv: -abs(kv[1]))[:3]
+            if hot:
+                out.append(f"{s}: " + ", ".join(f"{k} {round(v,2)}" for k, v in hot))
+        return "\n".join(out)
+
+    def c_ta(arg):
+        sym = (arg or "").strip().upper()
+        if not sym:
+            return "usage: <code>/ta SOL</code> — full engine read on an asset"
+        if not sym.endswith("USDT"):
+            sym += "USDT"
+        base = sym[:-4]
+        sc = api("market-scanner") or {}
+        sig = next((s for s in (sc.get("signals") or []) if s.get("asset") in (sym, base)), None)
+        ta = (sig or {}).get("ta") or {}
+        m = (api("mtf") or {}).get("rows") or {}
+        row = m.get(base) or m.get(sym) or {}
+        if not sig and not row:
+            return f"🔍 <b>{esc(sym)}</b> — not on the board, no MTF row"
+        out = [f"<b>🔬 {esc(sym)} TA DEEP-READ</b>", "─────────────────────"]
+        if sig:
+            out.append(f"signal: {sig.get('direction','?')} · score {sig.get('score','?')} · {sig.get('strategy','?')} · tgt {sig.get('targetPct','?')}%")
+        if row.get("stack"):
+            out.append(f"MTF: {esc(row.get('stack',''))}")
+        if ta.get("bias"):
+            out.append(f"engine bias: <b>{esc(str(ta['bias']))}</b> · confluence {ta.get('confluence','—')}")
+        wk = ta.get("wyckoff") or {}
+        if wk.get("phase") or wk.get("events"):
+            evs = wk.get("events") or []
+            out.append(f"Wyckoff: {esc(str(wk.get('phase','—')))} · {esc(str(evs[-1])) if evs else '—'}")
+        ew = ta.get("ewProj") or ta.get("elliott")
+        if ew:
+            out.append(f"Elliott: {esc(str(ew.get('txt') or ew.get('dir') or ew) if isinstance(ew, dict) else str(ew))[:90]}")
+        hm = ta.get("harmPrz")
+        if hm:
+            out.append(f"Harmonics PRZ: {esc(str(hm.get('consensus') or hm.get('dir') or hm) if isinstance(hm, dict) else str(hm))[:90]}")
+        sk = ta.get("sakata") or {}
+        if sk.get("methods") or sk.get("dir"):
+            out.append(f"Sakata: {esc(', '.join(sk.get('methods') or [])[:70] or str(sk.get('dir','')))}")
+        cd, clv = ta.get("candleDir"), ta.get("candleClv")
+        if cd:
+            out.append(f"Candles: {esc(str(cd))} · CLV {clv}")
+        if ta.get("fibClusters"):
+            out.append(f"Fib clusters: {esc(str(ta['fibClusters']))[:60]}")
+        if ta.get("goldenPocket"):
+            out.append(f"Golden pocket: {esc(str(ta['goldenPocket']))[:60]}")
+        if ta.get("fvgNearest"):
+            out.append(f"FVG: {esc(str(ta['fvgNearest']))[:60]}")
+        if ta.get("liquidity"):
+            out.append(f"Liquidity: {esc(str(ta['liquidity']))[:70]}")
+        if len(out) <= 3:
+            out.append("engine quiet — no active structures")
+        return "\n".join(out)
+
+    # ---- control surface ----
+    def _list_cmd(fname):
+        c = statef(fname) or {}
+        return c.get("symbols") if isinstance(c.get("symbols"), list) else []
+
+    def _list_save(fname, syms):
+        wstate(fname, {"symbols": syms, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+    def c_hold(arg):
+        a = (arg or "").strip().upper()
+        if not a:
+            return "usage: <code>/hold SOL</code> — engine won't manage/exits-skip a held symbol"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        syms = _list_cmd("cmd-manual-hold")
+        if a not in syms:
+            syms.append(a)
+        _list_save("cmd-manual-hold", syms)
+        return f"✋ <b>{a} HELD</b> — hands-off next cycle (protection still armed)"
+
+    def c_unhold(arg):
+        a = (arg or "").strip().upper()
+        if not a:
+            return "usage: <code>/unhold SOL</code>"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        syms = [s for s in _list_cmd("cmd-manual-hold") if s != a]
+        _list_save("cmd-manual-hold", syms)
+        return f"🤲 <b>{a} RELEASED</b> — engine manages it again"
+
+    def c_holds():
+        env = os.environ.get("SENTINEL_MANUAL_HOLD", "")
+        envl = [s for s in env.split(",") if s]
+        cmdl = _list_cmd("cmd-manual-hold")
+        return ("<b>✋ MANUAL HOLDS</b>\n─────────────────────\n"
+                f"env: {', '.join(envl) or '—'}\ntg:  {', '.join(cmdl) or '—'}")
+
+    def c_deny(arg):
+        a = (arg or "").strip().upper()
+        if not a:
+            return "usage: <code>/deny ETH</code> — refuse every entry on it"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        syms = _list_cmd("cmd-deny")
+        if a not in syms:
+            syms.append(a)
+        _list_save("cmd-deny", syms)
+        return f"🚫 <b>{a} DENIED</b> — entries refused next cycle"
+
+    def c_allow(arg):
+        a = (arg or "").strip().upper()
+        if not a:
+            return "usage: <code>/allow ETH</code>"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        syms = [s for s in _list_cmd("cmd-deny") if s != a]
+        _list_save("cmd-deny", syms)
+        return f"✅ <b>{a} ALLOWED</b> — deny flag cleared (env denies unchanged)"
+
+    def c_denied():
+        envl = [s for s in os.environ.get("SENTINEL_DENY_SYMS", "").split(",") if s]
+        return ("<b>🚫 DENY LIST</b>\n─────────────────────\n"
+                f"env: {', '.join(envl) or '—'}\ntg:  {', '.join(_list_cmd('cmd-deny')) or '—'}")
+
+    def c_risk(arg):
+        a = (arg or "").strip()
+        if not a:
+            cur = statef("cmd-risk") or {}
+            envv = os.environ.get("SENTINEL_RISK_MUL", "1")
+            return (f"<b>🎚 RISK MULTIPLIER</b>\n─────────────────────\n"
+                    f"env: ×{envv} · tg override: {('×' + str(cur.get('mul'))) if cur.get('mul') is not None else '—'}\n"
+                    f"<i>/risk 0.5 halves every new entry's size · /risk off clears</i>")
+        if a.lower() in ("off", "clear", "reset"):
+            _list_save("cmd-risk", {"mul": None})
+            return "🎚 override cleared — env risk multiplier back in force"
+        try:
+            v = float(a)
+        except ValueError:
+            return "usage: <code>/risk 0.5</code> (0–8, clamped)"
+        v = min(max(v, 0.0), 8.0)
+        _list_save("cmd-risk", {"mul": v})
+        return f"🎚 <b>RISK ×{v}</b> — applies to next entry sizing"
+
+    def c_close(arg, chat_key):
+        a = (arg or "").strip().upper()
+        if a.startswith("CONFIRM "):
+            target = a.split(None, 1)[1]
+            if not target.endswith("USDT"):
+                target += "USDT"
+            if PENDING.pop(chat_key, None) != f"close:{target}":
+                return f"no close armed for {target} — send /close {target} first."
+            wstate("cmd-close", {"symbol": target, "by": "telegram", "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+            return f"🎯 <b>CLOSING {target}</b> — executor market-closes it next cycle."
+        if not a:
+            return "usage: <code>/close SOL</code>"
+        if not a.endswith("USDT"):
+            a += "USDT"
+        PENDING[chat_key] = f"close:{a}"
+        return (f"⚠️ close <b>{a}</b> at market?\nReply <code>/close CONFIRM {a}</code> within 60s.")
+
+    def c_hud(arg):
+        st = statef("tg-hud") or {}
+        on = not st.get("on")
+        st["on"] = on
+        wstate("tg-hud", st)
+        return ("🖥 <b>LIVE HUD ON</b> — pinned tile edits itself every ~45s" if on
+                else "🖥 HUD off — tile frozen")
+
+    # emoji as first-class commands — the OS listens for raw emoji too
+    EMOJI_CMDS = {
+        "📊": "status", "💰": "vault", "📈": "eq", "📉": "pos",
+        "📡": "sig", "🌡": "regime", "🧠": "quant", "📐": "sqn",
+        "⚖️": "j", "⚖": "j", "📜": "j", "🌊": "radar", "🧮": "mtf",
+        "📣": "soc", "🧬": "ein", "💓": "pulse", "💗": "pulse",
+        "🚧": "gates", "🌩": "god", "🗺": "plan", "🗺️": "plan",
+        "📒": "fills", "🔬": "mtf", "⏸": "pause", "▶️": "resume",
+        "▶": "resume", "🖥": "hud", "🖥️": "hud", "🆘": "help",
+        "🏓": "ping", "🩺": "status",
+    }
+
     CMDS = {"status": c_status, "pos": c_pos, "positions": c_pos, "eq": c_eq, "equity": c_eq,
             "sig": c_sig, "signals": c_sig, "radar": c_radar, "mtf": c_mtf, "soc": c_soc,
             "social": c_soc, "ein": c_ein, "einstein": c_ein, "j": c_j, "journal": c_j,
             "pulse": c_pulse, "pause": c_pause, "resume": c_resume, "links": c_links,
             "help": c_help, "menu": c_help, "start": c_help, "watch": c_watch,
-            "watches": c_watches, "unwatch": c_unwatch, "ping": lambda a: "🏓 sentinel live — " + time.strftime("%H:%M:%SZ", time.gmtime())}
+            "watches": c_watches, "unwatch": c_unwatch, "ping": lambda a: "🏓 sentinel live — " + time.strftime("%H:%M:%SZ", time.gmtime()),
+            "fills": c_fills, "vault": c_vault, "wealth": c_vault, "quant": c_quant,
+            "regime": c_regime, "sqn": c_sqn, "gates": c_gates, "god": c_god,
+            "plan": c_plan, "corr": c_corr, "ta": c_ta,
+            "hold": c_hold, "unhold": c_unhold, "holds": c_holds,
+            "deny": c_deny, "allow": c_allow, "denied": c_denied,
+            "risk": c_risk, "hud": c_hud}
+
+    def run_cmd(fn, arg):
+        # handlers are mixed-arity — intel commands ignore args, control
+        # commands take them. Dispatch on signature so both work.
+        try:
+            return fn(arg) if len(inspect.signature(fn).parameters) else fn()
+        except (ValueError, TypeError):
+            return fn(arg)
 
     @client.on(events.NewMessage(outgoing=True))
     async def on_cmd(ev):
@@ -434,21 +787,110 @@ async def main():
             if getattr(m.peer_id, "user_id", None) != me.id:
                 return  # only Saved Messages (self) — spoof-proof by construction
             txt = m.raw_text.strip()
+            # raw-emoji command channel — "📊" alone fires /status, etc.
+            # len-gate is load-bearing: our own alerts start with emoji too —
+            # a long message beginning "🌩" must NOT re-dispatch as /god.
             if not txt.startswith("/"):
+                em = txt.strip()
+                if len(em) > 2:
+                    return
+                hit = EMOJI_CMDS.get(em) or EMOJI_CMDS.get(em[:1])
+                if not hit:
+                    return
+                reply = run_cmd(CMDS[hit], "") if hit in CMDS else None
+                if reply is None:
+                    return
+                await say(reply)
+                print(f"[tg-c2] emoji {em!r} -> /{hit}", flush=True)
                 return
             parts = txt.split(None, 1)
             cmd = parts[0].lstrip("/").lower().split("@")[0]
             arg = parts[1] if len(parts) > 1 else ""
             if cmd == "flatten":
                 reply = c_flatten(arg, "me")
+            elif cmd == "close":
+                reply = c_close(arg, "me")
+            elif cmd == "menu":
+                await say(c_help())
+                await send_menu()
+                return
             elif cmd in CMDS:
-                reply = CMDS[cmd](arg)
+                reply = run_cmd(CMDS[cmd], arg)
             else:
                 reply = f"unknown command <code>{esc(cmd)}</code> — /help"
             await say(reply)
             print(f"[tg-c2] /{cmd} answered", flush=True)
         except Exception as e:
             print(f"[tg-c2] handler error: {type(e).__name__}: {e}", flush=True)
+
+    # ---- inline keyboard deck ---------------------------------------------
+    MENU_BUTTONS = [
+        [Button.inline("📊 Status", b"cmd:status"), Button.inline("📈 Equity", b"cmd:eq"), Button.inline("📉 Positions", b"cmd:pos")],
+        [Button.inline("📡 Signals", b"cmd:sig"), Button.inline("🌡 Regime", b"cmd:regime"), Button.inline("🧠 Quant", b"cmd:quant")],
+        [Button.inline("📐 SQN", b"cmd:sqn"), Button.inline("📒 Fills", b"cmd:fills"), Button.inline("🏦 Vault", b"cmd:vault")],
+        [Button.inline("🗺 Plan", b"cmd:plan"), Button.inline("🚧 Gates", b"cmd:gates"), Button.inline("🌩 GOD", b"cmd:god")],
+        [Button.inline("💓 Pulse", b"cmd:pulse"), Button.inline("🖥 HUD", b"cmd:hud"), Button.inline("⏸ Pause", b"cmd:pause")],
+    ]
+
+    async def send_menu():
+        await client.send_message(me, "🎛 <b>SENTINEL CONSOLE</b> — tap a tile, or send a raw emoji", buttons=MENU_BUTTONS, parse_mode="html")
+
+    @client.on(events.CallbackQuery)
+    async def on_cb(ev):
+        if getattr(ev.query, "user_id", None) != me.id:
+            return
+        data = (ev.data or b"").decode("utf-8", "ignore")
+        if not data.startswith("cmd:"):
+            return
+        try:
+            await ev.answer()
+        except Exception:
+            pass
+        cmd = data[4:]
+        if cmd in CMDS:
+            await say(run_cmd(CMDS[cmd], ""))
+
+    # ---- live HUD — one pinned tile that edits itself ----------------------
+    def hud_text():
+        ll = api("live-ledger") or {}
+        eq_usd = ll.get("equityUsd")
+        st = ll.get("stats") or {}
+        ps = ll.get("positions") or []
+        rs = ll.get("realizedStats") or {}
+        upl = sum(float(p.get("upl") or 0) for p in ps)
+        cb = ll.get("circuitBreakers") or {}
+        pv = [(r.get("v") if isinstance(r, dict) else r) for r in ((api("pulse-history") or {}).get("runs") or [])][-20:]
+        alert = "🚨 HALTED" if (statef("cmd-halt") or {}).get("halted") else ("⚠️ " + esc(str(cb.get("tripped"))[:30]) if cb.get("tripped") else "✅ armed")
+        vv = statef("wealth-vault") or {}
+        return ("<b>🛰 SENTINEL LIVE HUD</b>\n"
+                f"💵 ${fmtp(eq_usd)} · upl <b>${upl:+.2f}</b> · 🏦 ${fmtp(ll.get('vaultUsd') or vv.get('balanceUsd'))}\n"
+                f"<code>{spark(pv)}</code>\n"
+                f"📉 {len(ps)} open · edge <b>{ll.get('edgeLive','—')}</b> · {esc(str(ll.get('mktType','—')))}\n"
+                f"WR {rs.get('winRatePct','—')}% · PF {rs.get('profitFactor','—')} · net ${fmtp(rs.get('netUsd'))}\n"
+                f"{alert} · {time.strftime('%H:%M:%SZ', time.gmtime())}")
+
+    async def hud_loop():
+        while True:
+            await asyncio.sleep(45)
+            try:
+                st = statef("tg-hud") or {}
+                if not st.get("on"):
+                    continue
+                if st.get("msgId"):
+                    try:
+                        await client.edit_message(me, st["msgId"], hud_text(), parse_mode="html")
+                        continue
+                    except Exception:
+                        st["msgId"] = None
+                m = await client.send_message(me, hud_text(), parse_mode="html")
+                try:
+                    await client.pin_message("me", m.id, notify=False)
+                except Exception:
+                    pass
+                st["msgId"] = m.id
+                wstate("tg-hud", st)
+            except Exception:
+                pass
 
     def last_price(sym):
         try:
@@ -467,6 +909,7 @@ async def main():
         except Exception:
             alerted = set()
         prev_pos, prev_halt, prev_dead = None, None, ""
+        prev_trip, prev_vault, prev_god = "", None, None
         while True:
             try:
                 scan = api("market-scanner") or {}
@@ -516,6 +959,34 @@ async def main():
                         await say("\U0001F6A8 <b>DEADMAN</b> — " + esc(dk))
                     else:
                         await say("\U0001FAC0 <b>DEADMAN CLEAR</b> — services + ledger alive")
+                # quant + vault + audit watches — breakers, edge-death, sweeps, GOD
+                cbx = ll.get("circuitBreakers") or {}
+                trip = str(cbx.get("tripped") or "")
+                if trip != prev_trip:
+                    if trip:
+                        await say(f"⚠️ <b>BREAKER TRIPPED</b> — {esc(trip[:120])}\n<i>entries gated — /quant for detail</i>")
+                    elif prev_trip:
+                        await say("✅ <b>BREAKERS CLEAR</b> — risk rails re-armed")
+                prev_trip = trip
+                ed = cbx.get("edgeDeath") or {}
+                if ed.get("S", 0) > (ed.get("h") or 1e9) and f"edge:{ed.get('n')}" not in alerted:
+                    alerted.add(f"edge:{ed.get('n')}")
+                    await say(f"🧠 <b>EDGE DEATH — CUSUM FIRED</b>\nS={round(ed.get('S',0),2)} crossed h={round(ed.get('h',0),1)} at n={ed.get('n')}\n"
+                              "<i>the tape stopped paying — risk pinned to floor</i>")
+                try:
+                    vs = len(((statef("wealth-vault") or {}).get("sweptIds") or {}))
+                    if prev_vault is not None and vs > prev_vault:
+                        await say(f"🏦 <b>VAULT SWEEP</b> — {vs - prev_vault} fill(s) taxed 50% → vault <b>${fmtp((statef('wealth-vault') or {}).get('balanceUsd'))}</b> locked")
+                    prev_vault = vs
+                except Exception:
+                    pass
+                god = api("god") or {}
+                gok = god.get("verdict")
+                if gok in ("BROKEN", "WARN") and prev_god not in ("BROKEN", "WARN"):
+                    bad = [str(c.get("name", "?")) for c in (god.get("checks") or [])
+                           if c.get("status") == "FAIL"][:3]
+                    await say(f"🌩 <b>GOD {esc(gok)}</b> — " + esc(", ".join(bad) or "audit findings") + "\n<i>/god for the report</i>")
+                prev_god = gok
                 # outbox — other services (liq-guard etc.) drop JSONL lines
                 # here; we deliver them to Saved Messages
                 op = STATE_DIR / "tg-outbox.jsonl"
@@ -539,7 +1010,7 @@ async def main():
                     try:
                         ll2 = api("live-ledger") or {}
                         day0 = int(time.mktime(time.strptime(today, "%Y-%m-%d")) * 1000)
-                        fills = (statef("real-fills") or {}).get("fills", [])
+                        fills = (statef("demo-fills" if (ll2 or {}).get("mode") == "demo" else "real-fills") or {}).get("fills", [])
                         bf = [f for f in fills if f.get("src") == "api" and (f.get("ts") or 0) >= day0]
                         mf = [f for f in fills if f.get("src") not in (None, "api") and (f.get("ts") or 0) >= day0]
                         bpnl = round(sum((f.get("profit") or 0) - (f.get("fee") or 0) for f in bf), 2)
@@ -595,7 +1066,11 @@ async def main():
             await asyncio.sleep(30)
 
     asyncio.create_task(alert_loop())
-    await say("<b>◈ SENTINEL C2 ONLINE</b>\nCommand surface live — /help for the card\nAlerts armed: signals · positions · halts")
+    asyncio.create_task(hud_loop())
+    await say("<b>🛰️ SENTINEL C2 ONLINE</b>\n"
+              "Command surface live — <code>/menu</code> for the console deck, <code>/help</code> for the card\n"
+              "🎛 inline keyboard · 😀 raw-emoji commands · 🖥 live HUD\n"
+              "Alerts armed: signals · positions · halts · breakers · edge-death · vault · GOD · deadman · watches")
     await client.run_until_disconnected()
 
 
