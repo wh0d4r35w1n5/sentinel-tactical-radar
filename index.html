@@ -538,8 +538,9 @@ function sparkSVG(vals,w=90,h=26){
   return `<svg class="spark" width="${w}" height="${h}"><path d="${d} L${w},${h} L0,${h} Z" fill="${fill}"/><path d="${d}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="1.9" fill="${c}"/></svg>`;
 }
 function pulseSVG(series){
-  const el=$('pulseSvg');if(!series||series.length<2){el.innerHTML='';return}
-  const vals=series.map(p=>p.value),mn=Math.min(...vals),mx=Math.max(...vals),rg=mx-mn||1,W=560,H=120;
+  const el=$('pulseSvg');series=(series||[]).filter(p=>Number.isFinite(+p?.value));
+  if(series.length<2){el.innerHTML='';return}
+  const vals=series.map(p=>+p.value),mn=Math.min(...vals),mx=Math.max(...vals),rg=mx-mn||1,W=560,H=120;
   const pts=vals.map((v,i)=>[(i/(vals.length-1))*W,H-12-((v-mn)/rg)*(H-24)]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
   const y100=H-12-((100-mn)/rg)*(H-24);
