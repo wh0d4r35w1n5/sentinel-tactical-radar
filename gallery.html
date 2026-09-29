@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sentinel — Evidence Gallery · real-trade chartwork</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="vendor/lightweight-charts-4.2.3.js"></script>
 <script src="harmonics.js"></script>
 <script src="cps-detect.js"></script>
 <style>
@@ -50,6 +50,25 @@ h1 .sub{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:400;dis
 #loadmore{display:block;margin:26px auto 0;padding:10px 34px;background:var(--bg2);border:1px solid var(--vio);color:#fff;border-radius:9px;font-size:11px;letter-spacing:.14em;font-weight:700;cursor:pointer;transition:all .25s}
 #loadmore:hover{box-shadow:0 0 22px rgba(138,91,255,.4)}
 .note{text-align:center;color:var(--mut);font-size:10px;margin-top:26px}
+/* ---- evidence panels ---- */
+.evpanel{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.evpanel .pane{flex:1;min-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 32px rgba(0,0,0,.28)}
+.evpanel .cv{min-height:220px}
+.evnote{font-size:9px;color:var(--mut);margin-top:6px;letter-spacing:.04em}
+select.fs{font-size:10px;letter-spacing:.08em;font-weight:700;padding:5px 10px;border:1px solid var(--line);border-radius:99px;color:var(--mut);background:var(--bg2);cursor:pointer}
+select.fs:focus{outline:none;border-color:var(--vio)}
+/* ---- card internals ---- */
+.cap{font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 8px;border-radius:4px}
+.cap.g{background:rgba(77,255,166,.12);color:var(--grn);border:1px solid rgba(77,255,166,.4)}
+.cap.b{background:rgba(255,180,84,.12);color:var(--amb);border:1px solid rgba(255,180,84,.4)}
+.cap.x{background:rgba(139,147,168,.12);color:var(--mut);border:1px solid var(--line)}
+details.xtab{margin-top:8px;font-size:10px;color:var(--mut)}
+details.xtab summary{cursor:pointer;font-size:9px;letter-spacing:.12em;font-weight:700;color:var(--cyan)}
+details.xtab table{width:100%;border-collapse:collapse;margin-top:6px}
+details.xtab td,details.xtab th{padding:3px 8px;text-align:right;border-bottom:1px solid rgba(140,160,255,.08);font-variant-numeric:tabular-nums}
+details.xtab th{font-size:8px;letter-spacing:.1em;color:var(--mut)}
+.cverr{display:flex;align-items:center;justify-content:center;min-height:250px;color:var(--mut);font-size:10px;letter-spacing:.08em}
+#genAt{float:right;font-size:9px;color:var(--mut);letter-spacing:.08em}
 </style>
 </head>
 <body>
@@ -60,7 +79,12 @@ h1 .sub{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:400;dis
   <a class="back" href="index.html">← COMMAND DECK</a>
 </header>
 <div class="stats" id="stats"></div>
+<div class="evpanel">
+  <div class="pane"><div class="pt">EQUITY OF EVIDENCE — cumulative net per closed round-trip · engine-attributed vs all fills</div><div class="cv" id="eqcurve"></div><div class="evnote" id="eqnote">—</div></div>
+  <div class="pane"><div class="pt">CAPTURE MAP — adverse excursion vs favorable excursion, per trade · dots fill in as charts below mount · click a dot to jump to its card</div><div class="cv" id="scatter"></div><div class="evnote" id="scnote">measuring…</div></div>
+</div>
 <div class="filters" id="filters"></div>
+<div class="filters" id="filters2" style="margin-top:-10px"></div>
 <div id="gallery"></div>
 <button id="loadmore" style="display:none">LOAD MORE ▾</button>
 <div class="note">data: Bitget USDT-M fills · reconstructed FIFO episodes — staggered exits merge into one trade · fees included · no paper, no emitted-only signals</div>
@@ -192,28 +216,43 @@ async function mountCard(key){
   const [csB,csA]=await Promise.all([
     candlesFor(asset,r.entryTs-48*3600e3,r.entryTs+2*3600e3,'1H').catch(()=>[]),
     candlesFor(asset,r.entryTs-aPad,afterEnd+aPad,aGran).catch(()=>[])]);
-  if(csA.length&&e.exitTs){
+  if(csA.length){
+    const end=e.exitTs||Date.now();
     let mfe=e.entry,mae=e.entry;
-    for(const c of csA){if(c.t<r.entryTs||c.t>e.exitTs)continue;
+    for(const c of csA){if(c.t<r.entryTs||c.t>end)continue;
       const f=sgn>0?c.h:c.l,a=sgn>0?c.l:c.h;
       if(sgn>0?f>mfe:f<mfe)mfe=f;
       if(sgn>0?a<mae:a>mae)mae=a}
     e.mfe=mfe;e.mae=mae;
+    // measured evidence — excursion percentages + capture efficiency, fed to
+    // the scatter panel + rolling stats as each card mounts
+    r.mfePct=sgn*(mfe-e.entry)/e.entry*100;
+    r.maePct=sgn*(mae-e.entry)/e.entry*100;
+    const favUsd=Math.max(0,r.mfePct)/100*r.notional;
+    r.capture=favUsd>0.01?Math.max(-99,Math.min(120,r.net/favUsd*100)):null;
+    noteMeasured(r);
   }
   const eb=card.querySelector('[data-chb]'),ea=card.querySelector('[data-cha]');
-  if(eb)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);
-  if(ea)drawChart(ea,e,csA,true);
+  if(eb){if(csB.length)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);else eb.innerHTML='<div class="cverr">tape unavailable — Bitget API unreachable</div>'}
+  if(ea){if(csA.length)drawChart(ea,e,csA,true);else ea.innerHTML='<div class="cverr">tape unavailable — Bitget API unreachable</div>'}
+  if(!csA.length){r.measureFailed=true;paintCap(r)}
 }
 function cardHTML(r){
   const open=r.status==='open';
   const ocCls=open?'open':r.net>0?'tp':'sl';
   const ocTxt=open?'OPEN '+holdTxt(r.holdMin):fmt$(r.net);
   const xn=(r.exits||[]).length;
+  const utc=new Date(r.entryTs).toISOString().slice(0,16).replace('T',' ')+'Z';
+  const xtab=xn?`<details class="xtab"><summary>EXIT LADDER — ${xn} tranche${xn>1?'s':''}</summary><table>
+    <tr><th>time</th><th>px</th><th>qty</th><th>tranche net</th></tr>
+    ${r.exits.map(x=>`<tr><td>${new Date(x.ts).toISOString().slice(5,16).replace('T',' ')}Z</td><td>${fmtP(x.px)}</td><td>${x.qty}</td><td class="${x.pnl>=0?'up':'dn'}">${fmt$(x.pnl)}</td></tr>`).join('')}
+    </table></details>`:'';
   return `<div class="card" data-k="${r.key}">
     <div class="chead">
       <span class="asset">${r.symbol.replace(/USDT$/,'')}</span>
       <span class="tag ${r.dir==='LONG'?'long':'short'}">${r.dir}</span>
       ${r.strategy?`<span class="tag strat" title="linked emitted signal · score ${r.score??'—'} · grade ${r.grade||'—'}">${r.strategy}${r.score!=null?' '+r.score:''}</span>`:'<span class="sub">manual / foreign fill</span>'}
+      <span class="cap x" data-cap title="capture efficiency — share of the favorable excursion actually banked">cap …</span>
       <span class="sub">${fmtP(r.entryPx)} → ${open?'…':fmtP(r.exitPx)} · qty <b>${r.qty}</b> · <b class="num">$${r.notional}</b>${xn>1?` · ${xn} exits`:''}</span>
       <span class="oc ${ocCls}">${ocTxt}</span>
     </div>
@@ -221,44 +260,137 @@ function cardHTML(r){
       <div class="pane"><div class="pt">BEFORE — the tape at entry · zigzag · range · fibs · EMA20/50 · harmonics</div><div class="cv" data-chb></div></div>
       <div class="pane"><div class="pt">EXECUTED — entry shading · tranche exits · MFE/MAE · net result</div><div class="cv" data-cha></div></div>
     </div>
+    ${xtab}
     <div class="meta">
-      <span>in <b>${ago(r.entryTs)} ago</b></span><span>${open?'open '+holdTxt(r.holdMin):'held <b>'+holdTxt(r.holdMin)+'</b>'}</span>
+      <span><b>${utc}</b> · ${ago(r.entryTs)} ago</span><span>${open?'open '+holdTxt(r.holdMin):'held <b>'+holdTxt(r.holdMin)+'</b>'}</span>
       <span>fees <b class="dn">$${r.fees}</b></span><span>gross <b class="${r.pnl>=0?'up':'dn'}">${fmt$(r.pnl)}</b></span>
       <span>net <b class="${r.net>=0?'up':'dn'}">${fmt$(r.net)}</b>${r.pnlPct!=null?` (${r.pnlPct>=0?'+':''}${r.pnlPct}%)`:''}</span>
       <a class="sub" style="margin-left:auto" href="https://www.bitget.com/futures/usdt/${r.symbol}" target="_blank" rel="noopener">Bitget chart →</a>
     </div></div>`;
 }
-const FLT={all:()=>true,win:r=>r.exitTs&&r.net>0,loss:r=>r.exitTs&&r.net<=0,open:r=>r.status==='open',LONG:r=>r.dir==='LONG',SHORT:r=>r.dir==='SHORT'};
+const FLT={all:()=>true,win:r=>r.exitTs&&r.net>0,loss:r=>r.exitTs&&r.net<=0,open:r=>r.status==='open',LONG:r=>r.dir==='LONG',SHORT:r=>r.dir==='SHORT',engine:r=>!!r.strategy,manual:r=>!r.strategy};
+const SORTS={newest:(a,b)=>(b.exitTs||b.entryTs)-(a.exitTs||a.entryTs),win:(a,b)=>b.net-a.net,loss:(a,b)=>a.net-b.net,hold:(a,b)=>(b.holdMin||0)-(a.holdMin||0),cap:(a,b)=>(b.capture??-1e9)-(a.capture??-1e9),big:(a,b)=>b.notional-a.notional};
+let STRAT='all',SORT='newest';
+const MEASURED=[];
+function hashState(){const h=location.hash.slice(1);const o={};for(const p of h.split('&')){const[k,v]=p.split('=');if(v)o[k]=decodeURIComponent(v)}return o}
+function pushHash(){history.replaceState(null,'','#'+['f='+FILTER,'s='+SORT,'strat='+encodeURIComponent(STRAT)].join('&'))}
+
+// ---- progressive evidence: every mounted card contributes a measured dot ----
+function noteMeasured(r){
+  if(!MEASURED.includes(r))MEASURED.push(r);
+  paintCap(r);
+  const cap=MEASURED.filter(x=>x.capture!=null);
+  if(cap.length){
+    const avg=cap.reduce((a,x)=>a+x.capture,0)/cap.length;
+    const el=document.getElementById('statCap');if(el)el.textContent=avg.toFixed(0)+'%';
+  }
+  renderScatter();
+}
+function renderScatter(){
+  const el=document.getElementById('scatter');if(!el)return;
+  const W=el.clientWidth||520,H=220,P=28;
+  const vk=new Set(view().map(r=>r.key)); // scatter honors the active filter
+  const pts=MEASURED.filter(r=>r.maePct!=null&&r.mfePct!=null&&vk.has(r.key));
+  const mx=Math.max(2,...pts.map(r=>Math.abs(r.maePct)),...pts.map(r=>Math.abs(r.mfePct)))*1.1;
+  const X=v=>P+Math.abs(v)/mx*(W-2*P),Y=v=>H-P-Math.abs(v)/mx*(H-2*P);
+  const dots=pts.map(r=>{
+    const x=X(Math.abs(r.maePct)),y=Y(Math.max(0,r.mfePct));
+    const col=r.status==='open'?'#3ddcff':r.net>0?'#4dffa6':'#ff4d7d';
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${col}" fill-opacity=".75" stroke="${col}" stroke-opacity=".9" data-k="${r.key}" style="cursor:pointer"><title>${r.symbol} ${r.dir} · MAE ${r.maePct.toFixed(2)}% · MFE ${r.mfePct.toFixed(2)}% · net ${fmt$(r.net)}${r.capture!=null?' · cap '+r.capture.toFixed(0)+'%':''}</title></circle>`;
+  }).join('');
+  el.innerHTML=`<svg width="${W}" height="${H}" style="display:block">
+    <line x1="${X(0)}" y1="${Y(0)}" x2="${X(mx)}" y2="${Y(mx)}" stroke="rgba(140,160,255,.35)" stroke-dasharray="4 4"/>
+    <line x1="${X(0)}" y1="${Y(0)}" x2="${X(mx)}" y2="${Y(0)}" stroke="rgba(140,160,255,.15)"/>
+    <line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(mx)}" stroke="rgba(140,160,255,.15)"/>
+    <text x="${W-P}" y="${H-6}" fill="#8b93a8" font-size="8" text-anchor="end">heat taken (MAE%) →</text>
+    <text x="6" y="${P-14}" fill="#8b93a8" font-size="8">↑ move offered (MFE%)</text>
+    ${dots}</svg>`;
+  el.querySelectorAll('circle').forEach(c=>c.onclick=()=>{const card=document.querySelector(`[data-k="${CSS.escape(c.dataset.k)}"]`);if(card)card.scrollIntoView({behavior:'smooth',block:'center'})});
+  const n=document.getElementById('scnote');
+  if(n){const und=pts.filter(r=>Math.abs(r.maePct)>Math.abs(r.mfePct)&&r.net<=0).length;
+    n.textContent=`${pts.length} trades measured · ${und} paid more heat than the move gave back · diagonal = breakeven trade`}
+}
+
+// ---- equity of evidence curve -------------------------------------------
+function renderEquity(){
+  const el=document.getElementById('eqcurve');if(!el||!window.LightweightCharts)return;
+  const done=RECS.filter(r=>r.exitTs).sort((a,b)=>a.exitTs-b.exitTs);
+  if(!done.length){el.innerHTML='<div class="cverr">no closed trades yet</div>';return}
+  const chart=LightweightCharts.createChart(el,{layout:{background:{type:'solid',color:'transparent'},textColor:'#8ea0bf',fontSize:9},
+    grid:{vertLines:{visible:false},horzLines:{color:'rgba(140,150,255,.06)'}},
+    timeScale:{visible:false},rightPriceScale:{borderVisible:false},
+    width:el.clientWidth||520,height:220,crosshair:{mode:1}});
+  let cum=0,cumE=0;
+  const all=[],eng=[];
+  done.forEach((r,i)=>{cum+=r.net;if(r.strategy)cumE+=r.net;
+    all.push({time:i+1,value:+cum.toFixed(2)});eng.push({time:i+1,value:+cumE.toFixed(2)})});
+  chart.addBaselineSeries({baseValue:{type:'price',price:0},topLineColor:'rgba(61,220,255,.9)',topFillColor1:'rgba(61,220,255,.25)',topFillColor2:'rgba(61,220,255,.02)',bottomLineColor:'rgba(255,77,109,.9)',bottomFillColor1:'rgba(255,77,109,.02)',bottomFillColor2:'rgba(255,77,109,.25)',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'all fills'}).setData(all);
+  chart.addLineSeries({color:'#ffd750',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false,title:'engine only'}).setData(eng);
+  let pk=-1e18,mdd=0;for(const p of all){pk=Math.max(pk,p.value);mdd=Math.max(mdd,pk-p.value)}
+  const n=document.getElementById('eqnote');if(n)n.textContent=`cyan = all fills · gold dashed = engine-attributed only · max excursion into drawdown $${mdd.toFixed(2)} · x-axis = trade #`;
+}
+
+// ---- filters + sort + shareable state ------------------------------------
+function view(){const s=SORTS[SORT]||SORTS.newest;return RECS.filter(FLT[FILTER]||FLT.all).filter(r=>STRAT==='all'||(STRAT==='_manual'?!r.strategy:r.strategy===STRAT)).slice().sort(s)}
 function applyFilter(){
   const g=document.getElementById('gallery');
-  const list=RECS.filter(FLT[FILTER]||FLT.all);
+  const list=view();
   SHOWN=0;g.innerHTML='';
+  if(!list.length)g.innerHTML='<div class="cverr">no trades match this filter</div>';
   loadMore(list);
+  pushHash();
 }
 function loadMore(list){
-  list=list||RECS.filter(FLT[FILTER]||FLT.all);
+  list=list||view();
   const g=document.getElementById('gallery');
   const batch=list.slice(SHOWN,SHOWN+PAGE);
   g.insertAdjacentHTML('beforeend',batch.map(cardHTML).join(''));
   SHOWN+=batch.length;
   for(const c of g.querySelectorAll('.card:not([data-obs])')){c.dataset.obs='1';obs.observe(c)}
+  // already-measured cards re-render their capture badges instantly
+  for(const r of batch)if(r.capture!=null)paintCap(r);
   document.getElementById('loadmore').style.display=SHOWN<list.length?'block':'none';
+}
+function paintCap(r){
+  const el=document.querySelector(`[data-k="${CSS.escape(r.key)}"] [data-cap]`);
+  if(!el)return;
+  if(r.measureFailed){el.className='cap x';el.textContent='cap n/a';el.title='candle fetch failed — excursion unmeasured';return}
+  if(r.capture==null){el.className='cap x';el.textContent='cap —';el.title='no favorable excursion — never offered a profit';return}
+  el.className='cap '+(r.capture>=50?'g':r.capture>=0?'b':'x');
+  el.textContent='cap '+(r.capture>=0?'+':'')+r.capture.toFixed(0)+'%';
+  el.title=`capture efficiency: banked ${r.capture.toFixed(0)}% of the ${r.mfePct.toFixed(2)}% favorable move`;
 }
 document.getElementById('loadmore').onclick=()=>loadMore();
 (async()=>{
-  const [tk]=await Promise.all([j(API+'trades-taken.json')]);
+  const [tk,ll]=await Promise.all([j(API+'trades-taken.json'),j(API+'live-ledger.json')]);
   RECS=((tk&&tk.trades)||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
   const st=(tk&&tk.stats)||{},done=RECS.filter(r=>r.exitTs);
+  const wins=done.filter(r=>r.net>0),losses=done.filter(r=>r.net<=0);
+  const gp=wins.reduce((a,r)=>a+r.net,0),gl=-losses.reduce((a,r)=>a+r.net,0);
+  const exp=done.length?done.reduce((a,r)=>a+r.net,0)/done.length:null;
+  const vault=(ll&&ll.vaultUsd)!=null?'$'+fmtP(ll.vaultUsd):'—';
   document.getElementById('stats').innerHTML=[
     ['TRADES',st.n??done.length,'closed round-trips · ladder tranches merged'],
     ['WINS',st.wins??'—',st.n!=null?Math.round(st.wins/st.n*100)+'% hit rate':''],
     ['NET P&L',fmt$(st.net),'after all fees'],
+    ['EXPECTANCY',exp!=null?fmt$(exp):'—','avg net per closed trade'],
+    ['PROFIT FACTOR',gl>0?(gp/gl).toFixed(2):'—',`avg win ${wins.length?fmt$(gp/wins.length):'—'} · avg loss ${losses.length?fmt$(-gl/losses.length):'—'}`],
+    ['CAPTURE','<span id="statCap">…</span>','share of offered move banked — fills as charts measure'],
     ['FEES PAID','$'+(st.fees??0).toFixed(2),'the bleed line'],
+    ['🏦 VAULT',vault,'50% of profitable closes — untouchable'],
     ['OPEN',st.open??0,'positions still live'],
   ].map(s=>`<div class="stat"><div class="k">${s[0]}</div><div class="v num">${s[1]}</div><div class="sub" style="font-size:9px">${s[2]}</div></div>`).join('');
-  const fc=[['all','ALL'],['win','WINS'],['loss','LOSSES'],['open','OPEN'],['LONG','LONGS'],['SHORT','SHORTS']];
+  const hs=hashState();if(hs.f&&FLT[hs.f])FILTER=hs.f;if(hs.s&&SORTS[hs.s])SORT=hs.s;if(hs.strat)STRAT=hs.strat;
+  const fc=[['all','ALL'],['engine','ENGINE'],['manual','MANUAL'],['win','WINS'],['loss','LOSSES'],['open','OPEN'],['LONG','LONGS'],['SHORT','SHORTS']];
   document.getElementById('filters').innerHTML=fc.map(([k,l])=>`<span class="fchip${k===FILTER?' on':''}" data-f="${k}">${l}</span>`).join('');
   document.getElementById('filters').onclick=e=>{const c=e.target.closest('.fchip');if(!c)return;FILTER=c.dataset.f;document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===c));applyFilter()};
+  const strats=[...new Set(RECS.map(r=>r.strategy).filter(Boolean))];
+  document.getElementById('filters2').innerHTML=
+    `<select class="fs" id="fStrat"><option value="all">ALL STRATEGIES</option>${strats.map(s=>`<option${s===STRAT?' selected':''}>${s}</option>`).join('')}<option value="_manual"${STRAT==='_manual'?' selected':''}>manual / foreign</option></select>`+
+    `<select class="fs" id="fSort">${[['newest','NEWEST'],['win','BIGGEST WINS'],['loss','BIGGEST LOSSES'],['cap','BEST CAPTURE'],['hold','LONGEST HELD'],['big','BIGGEST SIZE']].map(([k,l])=>`<option value="${k}"${k===SORT?' selected':''}>${l}</option>`).join('')}</select>`;
+  document.getElementById('fStrat').onchange=e=>{STRAT=e.target.value;applyFilter()};
+  document.getElementById('fSort').onchange=e=>{SORT=e.target.value;applyFilter()};
+  renderEquity();
   applyFilter();
 })();
 </script>

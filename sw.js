@@ -7,7 +7,7 @@
 //                     a Pages outage shows last-known-good data, never a hole.
 //   fallback CDN   -> jsDelivr gh mirror, only when Pages itself is down
 //                     (cached ~12h upstream; stale beats absent)
-var VER = 'str-v3';
+var VER = 'str-v4';
 var STATIC = [
   '/sentinel-tactical-radar/',
   '/sentinel-tactical-radar/index.html',
@@ -15,6 +15,8 @@ var STATIC = [
   '/sentinel-tactical-radar/harmonics.js',
   '/sentinel-tactical-radar/cps-detect.js',
   '/sentinel-tactical-radar/ta-engine.js',
+  '/sentinel-tactical-radar/gallery.html',
+  '/sentinel-tactical-radar/vendor/lightweight-charts-4.2.3.js',
   '/sentinel-tactical-radar/favicon.ico',
 ];
 var JSD = 'https://cdn.jsdelivr.net/gh/wh0d4r35w1n5/sentinel-tactical-radar@main';
