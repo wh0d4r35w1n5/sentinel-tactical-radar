@@ -4132,6 +4132,25 @@ async function main() {
       }
       return best ? { strategy: best.r.strategy, score: best.r.score, grade: best.r.grade, runTs: best.r.runTs } : null;
     };
+    // operator setups attribute via the executor's entriesLog — every
+    // setup-driven entry attempt carries setupId+setupMode; match on
+    // symbol+direction inside a 10min window of the episode's first fill
+    let entryLog = [];
+    try {
+      entryLog = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).entriesLog || [];
+    } catch {}
+    const linkSetup = (symbol, dir, entryTs) => {
+      let best = null;
+      for (const e of entryLog) {
+        if (!e.setupId || e.symbol !== symbol || e.direction !== dir || !e.ts) continue;
+        const dt = Math.abs(e.ts - entryTs);
+        if (dt > 10 * 60e3) continue;
+        if (!best || dt < best.dt) best = { e, dt };
+      }
+      return best
+        ? { strategy: best.e.strategy || 'vema-setup', setupId: best.e.setupId, setupMode: best.e.setupMode || null, note: best.e.note || null }
+        : null;
+    };
     const trades = [];
     for (const [k, list] of Object.entries(bySym)) {
       const [symbol, side] = k.split('|');
@@ -4155,7 +4174,7 @@ async function main() {
           holdMin: last ? pct((last.ts - ep.ts) / 60000 * 10) / 10 : pct((Date.now() - ep.ts) / 60000 * 10) / 10,
           exits: ep.exits,
         };
-        const sig = linkSignal(symbol, t.dir, entryPx, ep.ts);
+        const sig = linkSetup(symbol, t.dir, ep.ts) || linkSignal(symbol, t.dir, entryPx, ep.ts);
         if (sig) Object.assign(t, sig);
         trades.push(t);
         ep = null;

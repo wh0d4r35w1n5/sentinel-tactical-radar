@@ -388,6 +388,9 @@ async def main():
                 "/deny SYM · /allow SYM · /denied — entry blacklist\n"
                 "/risk [0–8] — size multiplier override\n"
                 "/hud — live self-editing status tile\n"
+                "<b>Setup Builder</b> — operator entries, VEMA-style\n"
+                "/setup SYM long|short market|bounce|br … — CONFIRM-gated\n"
+                "/setups — live setup board · /unsetup S-xxxx — cancel\n"
                 "<b>Nav</b>\n"
                 "/links — dashboard URLs\n"
                 "/ping — liveness\n"
@@ -745,6 +748,216 @@ async def main():
         return ("🖥 <b>LIVE HUD ON</b> — pinned tile edits itself every ~45s" if on
                 else "🖥 HUD off — tile frozen")
 
+    # ---- operator setup builder (VEMA-style) -------------------------------
+    # /setup arms an operator-defined entry into state/cmd-setups.json — the
+    # executor evaluates triggers each cycle and routes fills through every
+    # safety rail. Modes: market (next-cycle fill), bounce (fill when price
+    # trades at entry), br (break through `break` px then fill on retest of
+    # entry). Risk-% sizes the position so a stop-out loses ~that much of
+    # equity. CONFIRM-gated: the risk card is shown before anything arms.
+    def c_setup(arg, chat_key):
+        a = (arg or "").strip()
+        if a.upper() == "CONFIRM":
+            spec = PENDING.pop(chat_key, None)
+            if not isinstance(spec, dict) or "setup" not in spec:
+                return "no setup armed — send /setup first."
+            f = statef("cmd-setups") or {}
+            setups = f.get("setups") if isinstance(f.get("setups"), list) else []
+            s = spec["setup"]
+            s["status"] = "armed"
+            s["by"] = "telegram"
+            setups.append(s)
+            wstate("cmd-setups", {"setups": setups})
+            return (f"🛠 <b>SETUP ARMED</b> — <code>{s['id']}</code> {s['symbol']} "
+                    f"{s['direction']} {s['mode']}\nexecutor evaluates it next cycle · "
+                    f"/setups to track · /unsetup {s['id']} to cancel")
+        if not a:
+            return ("<b>🛠 SETUP BUILDER</b> — operator-defined entries\n"
+                    "─────────────────────\n"
+                    "<code>/setup SYM long|short [market|bounce|br] [entry] [break P]\n"
+                    "  sl P [tp P pct]… [risk %] [ttl min] [strat name] [note …]</code>\n\n"
+                    "<b>market</b> — fill at mark next cycle\n"
+                    "<b>bounce</b> — fill only when price trades AT entry (limit-style)\n"
+                    "<b>br</b> — break through <code>break</code> px, fill on retest of entry\n\n"
+                    "e.g. <code>/setup SOL long br 90.5 92 sl 88 tp 95 50 tp 99 50 risk 1 note range break</code>\n"
+                    "tp pct sums ≤100 — the rest rides the stop as the moon bag.\n"
+                    "CONFIRM-gated: full risk card shown before it arms.")
+        raw = a.split()
+        note = ""
+        for i, t in enumerate(raw):
+            if t.lower() == "note":
+                note = " ".join(raw[i + 1:]).strip()
+                raw = raw[:i]
+                break
+        if len(raw) < 2:
+            return "usage: /setup SYM long|short [mode] … — see /setup"
+        sym = raw[0].upper()
+        if not sym.endswith("USDT"):
+            sym += "USDT"
+        d = raw[1].lower()
+        direction = "LONG" if d in ("long", "l", "buy") else "SHORT" if d in ("short", "s", "sell") else None
+        if not direction:
+            return f"❌ direction '{esc(raw[1])}' — use long|short"
+        rest = raw[2:]
+        mode = "market"
+        if rest and rest[0].lower() in ("market", "mkt", "m", "bounce", "b", "limit",
+                                        "br", "b&r", "break", "breakretest", "sniper"):
+            mt = rest.pop(0).lower()
+            mode = ("br" if mt in ("br", "b&r", "break", "breakretest", "sniper")
+                    else "bounce" if mt in ("bounce", "b", "limit") else "market")
+        entry = brk = sl = risk = ttl = strat = None
+        tps, posnum, i, err = [], [], 0, None
+        while i < len(rest):
+            t = rest[i].lower()
+            def num(j):
+                try:
+                    return float(rest[j])
+                except (ValueError, IndexError):
+                    return None
+            if t == "entry" and num(i + 1) is not None:
+                entry = num(i + 1); i += 2
+            elif t == "break" and num(i + 1) is not None:
+                brk = num(i + 1); i += 2
+            elif t == "sl" and num(i + 1) is not None:
+                sl = num(i + 1); i += 2
+            elif t == "tp" and num(i + 1) is not None:
+                px = num(i + 1); i += 2
+                pct = num(i)
+                if pct is not None:
+                    i += 1
+                tps.append([px, pct])
+            elif t == "risk" and num(i + 1) is not None:
+                risk = num(i + 1); i += 2
+            elif t == "ttl" and num(i + 1) is not None:
+                ttl = num(i + 1); i += 2
+            elif t in ("strat", "strategy") and i + 1 < len(rest):
+                strat = rest[i + 1]; i += 2
+            elif t in ("be", "nobe"):
+                i += 1  # exchange-side ratchet already locks BE after TP1
+            else:
+                v = num(i)
+                if v is None:
+                    err = f"unknown token '{rest[i]}'"; break
+                posnum.append(v); i += 1
+        if err:
+            return f"❌ {esc(err)} — see /setup"
+        if entry is None and posnum:
+            entry = posnum.pop(0)
+        if mode == "br" and brk is None and posnum:
+            brk = posnum.pop(0)
+        sgn = 1 if direction == "LONG" else -1
+        if mode in ("bounce", "br") and not (entry and entry > 0):
+            return "❌ bounce/br need an entry px — positional or <code>entry P</code>"
+        if mode == "br" and not (brk and brk > 0):
+            return "❌ br needs a break level — positional or <code>break P</code>"
+        if sl is None or sl <= 0:
+            return "❌ sl required — <code>sl P</code>"
+        if not tps:
+            return "❌ at least one <code>tp P pct</code> required"
+        # live mark for side-checks + the card when no entry was typed
+        ref = entry if entry else last_price(sym)
+        if ref:
+            if sgn > 0 and sl >= ref:
+                return f"❌ long SL {sl} must be BELOW entry {ref}"
+            if sgn < 0 and sl <= ref:
+                return f"❌ short SL {sl} must be ABOVE entry {ref}"
+            if mode == "br":
+                if sgn > 0 and brk <= ref:
+                    return "❌ long break level must be ABOVE entry"
+                if sgn < 0 and brk >= ref:
+                    return "❌ short break level must be BELOW entry"
+            bad = [px for px, _ in tps if (sgn > 0 and px <= ref) or (sgn < 0 and px >= ref)]
+            if bad:
+                return f"❌ TP(s) {', '.join(str(x) for x in bad)} must be {'above' if sgn > 0 else 'below'} entry {fmtp(ref)}"
+        allocated = sum(p or 0 for _, p in tps)
+        if allocated > 100.01:
+            return f"❌ tp allocations {allocated:g}% > 100%"
+        # tps typed without pct split the unallocated remainder evenly
+        unalloc = max(0.0, 100.0 - allocated)
+        nofrac = [t for t in tps if t[1] is None]
+        for t in nofrac:
+            t[1] = round(unalloc / len(nofrac), 2)
+        risk = risk if risk else 1.0
+        if not (0.05 <= risk <= 10):
+            return "❌ risk 0.05–10% of equity"
+        ttl = min(max(ttl or 720, 5), 10080)
+        ll = api("live-ledger") or {}
+        eq = float(ll.get("equityUsd") or 0)
+        risk_usd = eq * risk / 100
+        sid = "S-" + format(int(time.time() * 1000), "x")[-4:] + format(int(time.time_ns() % 0xffff), "04x")
+        spec = {"id": sid, "symbol": sym, "direction": direction, "mode": mode,
+                "entryPx": entry, "breakPx": brk, "slPx": sl,
+                "tps": [{"px": px, "pct": p} for px, p in tps],
+                "riskPct": risk, "ttlMin": ttl, "be": True,
+                "note": note or None, "strategy": strat or "vema-setup",
+                "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        card = ["<b>🛠 SETUP PREVIEW</b>", "─────────────────────",
+                f"<b>{sym}</b> {direction} · <code>{mode}</code>"
+                + (f" @ {fmtp(entry)}" if entry else f" @ mark ~{fmtp(ref)}")]
+        if mode == "br":
+            card.append(f"break {fmtp(brk)} → retest {fmtp(entry)}")
+        if ref:
+            stop_pct = abs(ref - sl) / ref * 100
+            wsum = sum(p for _, p in tps) or 1
+            wtgt = sum(abs(px - ref) / ref * 100 * p for px, p in tps) / wsum
+            netrr = max(0.0, (wtgt - 0.20) / (stop_pct + 0.20))
+            notional = risk_usd / max(0.0005, stop_pct / 100 + 0.0012) if eq else 0
+            lev = min(40, max(1, int(80 / (stop_pct + 0.64))))
+            card.append(f"SL {fmtp(sl)} (−{stop_pct:.2f}%)")
+            for j, (px, p) in enumerate(tps, 1):
+                card.append(f"TP{j} {fmtp(px)} · {p:g}% · {'+' if (px - ref) * sgn > 0 else ''}{(px - ref) / ref * 100:.2f}%")
+            moon = 100 - sum(p for _, p in tps)
+            if moon > 0.5:
+                card.append(f"🌙 {moon:.0f}% rides the stop as moon bag")
+            card.append("─────────────────────")
+            card.append(f"risk {risk:g}% ≈ <b>${risk_usd:.2f}</b> · notional ≈ ${notional:.2f} @ ~{lev}x (margin ${notional / lev:.2f})")
+            card.append(f"net R:R ≈ <b>{netrr:.2f}:1</b> · floor 1:1")
+            if netrr < 1:
+                card.append("⚠️ executor will REJECT — netRR below floor")
+        PENDING[chat_key] = {"setup": spec}
+        card.append(f"\nReply <code>/setup CONFIRM</code> within 60s to arm <code>{sid}</code>")
+        return "\n".join(card)
+
+    def c_setups():
+        arr = (api("setups") or {}).get("setups") or (statef("cmd-setups") or {}).get("setups") or []
+        if not arr:
+            return "🛠 <b>No setups</b> — /setup SYM long|short mode … to arm one"
+        ic = {"armed": "🟡", "await-retest": "🟠", "triggered": "🔵", "filled": "🟢",
+              "cancelled": "⚫", "expired": "⌛", "failed": "🔴", "rejected": "⛔", "missed": "💨"}
+        out = ["<b>🛠 SETUP BOARD</b>", "─────────────────────"]
+        for s in arr[-12:]:
+            st = (s.get("stage") if s.get("mode") == "br" and s.get("stage") else s.get("status")) or "armed"
+            line = f"{ic.get(st, '•')} <b>{s.get('symbol', '?')}</b> {s.get('direction', '?')[:1]}·{s.get('mode', '?')}"
+            if s.get("entryPx"):
+                line += f" @{fmtp(s['entryPx'])}"
+            line += f" · SL {fmtp(s.get('slPx'))}"
+            if s.get("lastPx"):
+                line += f" · mk {fmtp(s['lastPx'])}"
+            if s.get("status") == "filled":
+                line += f" → <b>filled</b> {fmtp(s.get('fillPx'))}"
+            if s.get("reason"):
+                line += f" · <i>{esc(str(s['reason'])[:42])}</i>"
+            elif s.get("blockedBy"):
+                line += f" · <i>{esc(str(s['blockedBy']))}</i>"
+            out.append(line)
+        out.append("<i>/unsetup S-xxxx cancels · /setup arms a new one</i>")
+        return "\n".join(out)
+
+    def c_unsetup(arg):
+        a = (arg or "").strip().upper()
+        if not a:
+            return "usage: <code>/unsetup S-1a2b</code> — /setups to list"
+        f = statef("cmd-setups") or {}
+        setups = f.get("setups") if isinstance(f.get("setups"), list) else []
+        hit = next((s for s in setups if str(s.get("id", "")).upper() == a), None)
+        if not hit:
+            return f"no setup <code>{esc(a)}</code> — /setups to list"
+        if hit.get("status") in ("filled", "cancelled", "expired", "failed", "rejected", "missed"):
+            return f"{a} already terminal ({hit.get('status')})"
+        hit["status"] = "cancelled"
+        wstate("cmd-setups", f)
+        return f"⚫ <b>{a} CANCELLED</b> — executor ignores it next cycle"
+
     # emoji as first-class commands — the OS listens for raw emoji too
     EMOJI_CMDS = {
         "📊": "status", "💰": "vault", "📈": "eq", "📉": "pos",
@@ -768,7 +981,9 @@ async def main():
             "plan": c_plan, "corr": c_corr, "ta": c_ta,
             "hold": c_hold, "unhold": c_unhold, "holds": c_holds,
             "deny": c_deny, "allow": c_allow, "denied": c_denied,
-            "risk": c_risk, "hud": c_hud}
+            "risk": c_risk, "hud": c_hud,
+            "setups": c_setups, "builder": c_setups,
+            "unsetup": c_unsetup, "cancelsetup": c_unsetup, "setupcancel": c_unsetup}
 
     def run_cmd(fn, arg):
         # handlers are mixed-arity — intel commands ignore args, control
@@ -810,6 +1025,8 @@ async def main():
                 reply = c_flatten(arg, "me")
             elif cmd == "close":
                 reply = c_close(arg, "me")
+            elif cmd == "setup":
+                reply = c_setup(arg, "me")
             elif cmd == "menu":
                 await say(c_help())
                 await send_menu()
@@ -829,7 +1046,7 @@ async def main():
         [Button.inline("📡 Signals", b"cmd:sig"), Button.inline("🌡 Regime", b"cmd:regime"), Button.inline("🧠 Quant", b"cmd:quant")],
         [Button.inline("📐 SQN", b"cmd:sqn"), Button.inline("📒 Fills", b"cmd:fills"), Button.inline("🏦 Vault", b"cmd:vault")],
         [Button.inline("🗺 Plan", b"cmd:plan"), Button.inline("🚧 Gates", b"cmd:gates"), Button.inline("🌩 GOD", b"cmd:god")],
-        [Button.inline("💓 Pulse", b"cmd:pulse"), Button.inline("🖥 HUD", b"cmd:hud"), Button.inline("⏸ Pause", b"cmd:pause")],
+        [Button.inline("� Setups", b"cmd:setups"), Button.inline("�💓 Pulse", b"cmd:pulse"), Button.inline("🖥 HUD", b"cmd:hud"), Button.inline("⏸ Pause", b"cmd:pause")],
     ]
 
     async def send_menu():
@@ -978,6 +1195,27 @@ async def main():
                     if prev_vault is not None and vs > prev_vault:
                         await say(f"🏦 <b>VAULT SWEEP</b> — {vs - prev_vault} fill(s) taxed 50% → vault <b>${fmtp((statef('wealth-vault') or {}).get('balanceUsd'))}</b> locked")
                     prev_vault = vs
+                except Exception:
+                    pass
+                # setup board transitions — a triggered/failed/filled setup
+                # pings so the operator never has to poll /setups
+                try:
+                    for s in (api("setups") or {}).get("setups", []):
+                        sid = s.get("id")
+                        if not sid:
+                            continue
+                        stt = s.get("status") or "armed"
+                        stg = s.get("stage") or ""
+                        k = f"setup:{sid}:{stt}:{stg}"
+                        if k in alerted:
+                            continue
+                        alerted.add(k)
+                        if stt in ("triggered", "filled", "failed", "rejected", "expired", "missed", "cancelled") or stg == "await-retest":
+                            em = {"triggered": "🔵", "filled": "🟢", "failed": "🔴", "rejected": "⛔",
+                                  "expired": "⌛", "missed": "💨", "cancelled": "⚫"}.get(stt, "🟠")
+                            lbl = "RETEST HIT — awaiting entry touch" if stg == "await-retest" and stt == "armed" else str(stt).upper()
+                            extra = f" · <i>{esc(str(s.get('reason'))[:60])}</i>" if s.get("reason") else ""
+                            await say(f"{em} <b>SETUP {lbl}</b> — {s.get('symbol')} {s.get('direction')} {s.get('mode')} <code>{sid}</code>{extra}")
                 except Exception:
                     pass
                 god = api("god") or {}

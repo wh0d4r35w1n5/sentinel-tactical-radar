@@ -35,6 +35,7 @@ h1 .sub{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:400;dis
 .tag.long{background:rgba(77,255,166,.12);color:var(--grn);border:1px solid rgba(77,255,166,.4)}
 .tag.short{background:rgba(255,77,125,.12);color:var(--red);border:1px solid rgba(255,77,125,.4)}
 .tag.strat{background:rgba(61,220,255,.1);color:var(--cyan);border:1px solid rgba(61,220,255,.35)}
+.tag.setup{background:rgba(255,215,80,.12);color:var(--gold,#ffd750);border:1px solid rgba(255,215,80,.45)}
 .oc{font-size:11px;font-weight:800;letter-spacing:.06em;padding:3px 10px;border-radius:6px;margin-left:auto}
 .oc.tp{background:rgba(77,255,166,.14);color:var(--grn);border:1px solid rgba(77,255,166,.45)}
 .oc.sl{background:rgba(255,77,125,.14);color:var(--red);border:1px solid rgba(255,77,125,.45)}
@@ -62,6 +63,14 @@ select.fs:focus{outline:none;border-color:var(--vio)}
 .cap.g{background:rgba(77,255,166,.12);color:var(--grn);border:1px solid rgba(77,255,166,.4)}
 .cap.b{background:rgba(255,180,84,.12);color:var(--amb);border:1px solid rgba(255,180,84,.4)}
 .cap.x{background:rgba(139,147,168,.12);color:var(--mut);border:1px solid var(--line)}
+/* journal annotations — operator notes + tags per trade (localStorage) */
+.tnote{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed rgba(140,150,255,.12);font-size:10.5px}
+.ntxt{color:#cdd6ea;font-style:italic}
+.ntag{font-size:9px;font-weight:800;letter-spacing:.06em;padding:1px 8px;border-radius:99px;border:1px solid rgba(186,104,255,.45);color:#ba68ff;background:rgba(186,104,255,.08)}
+.nedit{color:var(--mut);cursor:pointer;font-size:9.5px;letter-spacing:.06em;border:1px solid transparent;padding:1px 7px;border-radius:4px;transition:all .2s}
+.nedit:hover{color:var(--cyan);border-color:rgba(61,220,255,.35)}
+.ninp{background:var(--bg2);border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:5px 8px;font-size:11px;flex:1;min-width:120px;outline:none}
+.ninp:focus{border-color:var(--cyan)}
 details.xtab{margin-top:8px;font-size:10px;color:var(--mut)}
 details.xtab summary{cursor:pointer;font-size:9px;letter-spacing:.12em;font-weight:700;color:var(--cyan)}
 details.xtab table{width:100%;border-collapse:collapse;margin-top:6px}
@@ -251,7 +260,7 @@ function cardHTML(r){
     <div class="chead">
       <span class="asset">${r.symbol.replace(/USDT$/,'')}</span>
       <span class="tag ${r.dir==='LONG'?'long':'short'}">${r.dir}</span>
-      ${r.strategy?`<span class="tag strat" title="linked emitted signal · score ${r.score??'—'} · grade ${r.grade||'—'}">${r.strategy}${r.score!=null?' '+r.score:''}</span>`:'<span class="sub">manual / foreign fill</span>'}
+      ${r.strategy==='vema-setup'||r.strategy==='tv-webhook'?`<span class="tag setup" title="operator setup — armed via the setup builder${r.setupId?' · '+r.setupId:''}">🛠 ${esc(r.strategy)}${r.setupId?' '+esc(r.setupId):''}</span>`:r.strategy?`<span class="tag strat" title="linked emitted signal · score ${r.score??'—'} · grade ${r.grade||'—'}">${r.strategy}${r.score!=null?' '+r.score:''}</span>`:'<span class="sub">manual / foreign fill</span>'}
       <span class="cap x" data-cap title="capture efficiency — share of the favorable excursion actually banked">cap …</span>
       <span class="sub">${fmtP(r.entryPx)} → ${open?'…':fmtP(r.exitPx)} · qty <b>${r.qty}</b> · <b class="num">$${r.notional}</b>${xn>1?` · ${xn} exits`:''}</span>
       <span class="oc ${ocCls}">${ocTxt}</span>
@@ -265,8 +274,40 @@ function cardHTML(r){
       <span><b>${utc}</b> · ${ago(r.entryTs)} ago</span><span>${open?'open '+holdTxt(r.holdMin):'held <b>'+holdTxt(r.holdMin)+'</b>'}</span>
       <span>fees <b class="dn">$${r.fees}</b></span><span>gross <b class="${r.pnl>=0?'up':'dn'}">${fmt$(r.pnl)}</b></span>
       <span>net <b class="${r.net>=0?'up':'dn'}">${fmt$(r.net)}</b>${r.pnlPct!=null?` (${r.pnlPct>=0?'+':''}${r.pnlPct}%)`:''}</span>
+      ${r.note?`<span class="sub" style="font-style:italic" title="operator thesis">“${esc(r.note).slice(0,90)}”</span>`:''}
       <a class="sub" style="margin-left:auto" href="https://www.bitget.com/futures/usdt/${r.symbol}" target="_blank" rel="noopener">Bitget chart →</a>
-    </div></div>`;
+    </div>
+    <div class="tnote" data-nk="${r.key}">${noteHTML(r.key)}</div></div>`;
+}
+// ---- journal annotations — notes + tags ride localStorage per trade key.
+// The evidence is the exchange's; the annotation layer is the operator's.
+function noteGet(k){try{return JSON.parse(localStorage['galnote:'+k]||'null')||{}}catch(_){return{}}}
+function noteSet(k,v){try{v&&(v.note||v.tags)?localStorage['galnote:'+k]=JSON.stringify(v):localStorage.removeItem('galnote:'+k)}catch(_){}}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function noteHTML(k){
+  const n=noteGet(k);
+  const tags=(n.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+  return `${n.note?`<span class="ntxt">“${esc(n.note)}”</span>`:''}${tags.map(t=>`<span class="ntag">${esc(t)}</span>`).join('')}<span class="nedit" title="annotate this trade — note + comma-separated tags">✎ ${n.note||tags.length?'edit':'note · tags'}</span>`;
+}
+document.addEventListener('click',e=>{
+  const ed=e.target.closest('.nedit');if(!ed)return;
+  const row=ed.closest('.tnote');const k=row.dataset.nk;const cur=noteGet(k);
+  row.innerHTML=`<input class="ninp" placeholder="thesis — what did you see?" value="${esc(cur.note||'')}"><input class="ninp ntag" style="max-width:150px" placeholder="tags (comma-sep)" value="${esc(cur.tags||'')}"><span class="nedit nsave">save</span>`;
+  const[ni,ti]=row.querySelectorAll('input');ni.focus();
+  const save=()=>{noteSet(k,{note:ni.value.trim(),tags:ti.value.trim()});row.innerHTML=noteHTML(k)};
+  row.querySelector('.nsave').onclick=save;
+  row.onkeydown=ev=>{if(ev.key==='Enter')save();if(ev.key==='Escape')row.innerHTML=noteHTML(k)};
+});
+// ---- CSV export — the filtered view as a spreadsheet row-set --------------
+function exportCsv(){
+  const rows=[['symbol','dir','strategy','setupId','entry','exit','qty','notional','fees','pnl','net','pnlPct','holdMin','status','maePct','mfePct','capturePct','entryTs','exitTs','exits','note','tags'].join(',')];
+  for(const r of view()){
+    const n=noteGet(r.key);
+    const cell=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+    rows.push([r.symbol,r.dir,r.strategy||'',r.setupId||'',r.entryPx,r.exitPx,r.qty,r.notional,r.fees,r.pnl,r.net,r.pnlPct,r.holdMin,r.status,r.maePct??'',r.mfePct??'',r.capture!=null?+r.capture.toFixed(1):'',new Date(r.entryTs).toISOString(),r.exitTs?new Date(r.exitTs).toISOString():'',(r.exits||[]).length,n.note||'',n.tags||''].map(cell).join(','));
+  }
+  const b=new Blob([rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sentinel-evidence-'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
 }
 const FLT={all:()=>true,win:r=>r.exitTs&&r.net>0,loss:r=>r.exitTs&&r.net<=0,open:r=>r.status==='open',LONG:r=>r.dir==='LONG',SHORT:r=>r.dir==='SHORT',engine:r=>!!r.strategy,manual:r=>!r.strategy};
 const SORTS={newest:(a,b)=>(b.exitTs||b.entryTs)-(a.exitTs||a.entryTs),win:(a,b)=>b.net-a.net,loss:(a,b)=>a.net-b.net,hold:(a,b)=>(b.holdMin||0)-(a.holdMin||0),cap:(a,b)=>(b.capture??-1e9)-(a.capture??-1e9),big:(a,b)=>b.notional-a.notional};
@@ -387,9 +428,11 @@ document.getElementById('loadmore').onclick=()=>loadMore();
   const strats=[...new Set(RECS.map(r=>r.strategy).filter(Boolean))];
   document.getElementById('filters2').innerHTML=
     `<select class="fs" id="fStrat"><option value="all">ALL STRATEGIES</option>${strats.map(s=>`<option${s===STRAT?' selected':''}>${s}</option>`).join('')}<option value="_manual"${STRAT==='_manual'?' selected':''}>manual / foreign</option></select>`+
-    `<select class="fs" id="fSort">${[['newest','NEWEST'],['win','BIGGEST WINS'],['loss','BIGGEST LOSSES'],['cap','BEST CAPTURE'],['hold','LONGEST HELD'],['big','BIGGEST SIZE']].map(([k,l])=>`<option value="${k}"${k===SORT?' selected':''}>${l}</option>`).join('')}</select>`;
+    `<select class="fs" id="fSort">${[['newest','NEWEST'],['win','BIGGEST WINS'],['loss','BIGGEST LOSSES'],['cap','BEST CAPTURE'],['hold','LONGEST HELD'],['big','BIGGEST SIZE']].map(([k,l])=>`<option value="${k}"${k===SORT?' selected':''}>${l}</option>`).join('')}</select>`+
+    `<span class="fchip" id="csvBtn" title="export the filtered view — annotations included">⬇ CSV</span>`;
   document.getElementById('fStrat').onchange=e=>{STRAT=e.target.value;applyFilter()};
   document.getElementById('fSort').onchange=e=>{SORT=e.target.value;applyFilter()};
+  document.getElementById('csvBtn').onclick=exportCsv;
   renderEquity();
   applyFilter();
 })();

@@ -298,6 +298,27 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .up{text-shadow:0 0 12px rgba(77,255,166,.55)}
 .dn{text-shadow:0 0 12px rgba(255,77,125,.55)}
 .grade{letter-spacing:.04em}
+/* SETUP BUILDER: operator command surface */
+#setupPanel .sf-l{display:flex;flex-direction:column;gap:3px;font-size:9px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase;font-weight:700}
+#setupPanel input,#setupPanel select{background:var(--bg2);border:1px solid var(--line);border-radius:7px;color:var(--txt);padding:7px 9px;font-size:13px;font-family:var(--mono);outline:none;transition:border-color .2s,box-shadow .2s;width:100%;box-sizing:border-box}
+#setupPanel input:focus,#setupPanel select:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(61,220,255,.15)}
+#setupPanel .sbtn{background:var(--bg2);border:1px solid var(--line);border-radius:7px;color:var(--txt);padding:7px 13px;font-size:11px;font-weight:700;letter-spacing:.05em;cursor:pointer;transition:all .2s;font-family:inherit}
+#setupPanel .sbtn:hover{border-color:var(--cyan);box-shadow:0 0 12px rgba(61,220,255,.2)}
+#setupPanel .sbtn.acc{border-color:rgba(61,220,255,.5);color:var(--cyan)}
+#setupPanel .tprow{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+#setupPanel .tprow input{flex:1}
+#setupPanel .tprow .rm{flex:0 0 auto;padding:6px 9px}
+#setupPanel .sup-row{display:flex;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);margin-bottom:6px;font-size:11.5px;flex-wrap:wrap}
+#setupPanel .sup-badge{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
+#setupPanel .sup-armed{color:var(--warn,#ffd166);border-color:rgba(255,209,102,.4)}
+#setupPanel .sup-wait{color:var(--acc);border-color:rgba(138,91,255,.45)}
+#setupPanel .sup-ok{color:var(--grn);border-color:rgba(46,230,168,.4)}
+#setupPanel .sup-bad{color:var(--red);border-color:rgba(255,77,109,.4)}
+#setupPanel .sup-dim{color:var(--mut)}
+#setupPanel .card{border:1px solid var(--line);border-radius:9px;background:var(--bg2);padding:10px 12px;font-size:12px;line-height:1.7}
+#setupPanel .card b.num{font-size:13px}
+#setupPanel .lvl{height:3px;border-radius:2px;background:rgba(255,255,255,.08);flex:1;position:relative;min-width:60px}
+#setupPanel .lvl i{position:absolute;top:-3px;width:2px;height:9px;border-radius:1px}
 /* VOLCORE: order-flow event cards */
 .vrow{display:flex;flex-wrap:wrap;gap:8px}
 .vcard{flex:1 1 150px;min-width:150px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);text-decoration:none;transition:transform .25s cubic-bezier(.16,1,.3,1),border-color .25s,box-shadow .25s}
@@ -447,6 +468,51 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="liveBench"></div>
     <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px;max-height:300px;overflow-y:auto"></div>
   </div>
+  <div class="panel neon" id="setupPanel" style="margin-top:16px">
+    <div class="ptitle">🛠 Trade setups · operator command <span class="sub">— market / bounce / break-&amp;-retest entries · risk-% sizing · multi-tier take-profits · stop-market SL · break-even after TP1 — every fill rides the same exchange-side rails as the engine</span><span id="setupSub" class="sub" style="float:right"></span></div>
+    <div id="setupBoard"><div class="sub">no armed setups — build one below, send <code>/setup</code> in Telegram, or fire a TradingView alert</div></div>
+    <details id="setupBuild" style="margin-top:10px">
+      <summary style="cursor:pointer;font-weight:700;font-size:12px;letter-spacing:.05em;color:var(--acc)">⚙️ BUILD A SETUP <span class="sub" style="font-weight:400">— the risk card computes live as you type · arming writes straight into the executor queue (webhook) or copies a /setup command for Telegram</span></summary>
+      <div id="sfForm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px">
+        <label class="sf-l">Symbol<input id="sfSym" placeholder="SOLUSDT" list="sfSyms" autocomplete="off"><datalist id="sfSyms"></datalist></label>
+        <label class="sf-l">Side<select id="sfDir"><option value="LONG">▲ LONG</option><option value="SHORT">▼ SHORT</option></select></label>
+        <label class="sf-l">Entry mode<select id="sfMode"><option value="market">⚡ Market — fill now</option><option value="bounce">🏀 Bounce — fill at the level</option><option value="br">💥 Break &amp; Retest — break then pullback fill</option></select></label>
+        <label class="sf-l" id="sfEntryL">Entry px<input id="sfEntry" inputmode="decimal" placeholder="0.00"></label>
+        <label class="sf-l" id="sfBreakL" style="display:none">Break px<input id="sfBreak" inputmode="decimal" placeholder="0.00"></label>
+        <label class="sf-l">Stop-loss px<input id="sfSl" inputmode="decimal" placeholder="0.00"></label>
+        <label class="sf-l">Risk % of equity<input id="sfRisk" inputmode="decimal" value="1"></label>
+        <label class="sf-l">TTL (min)<input id="sfTtl" inputmode="numeric" value="720"></label>
+        <label class="sf-l">Strategy tag<input id="sfStrat" placeholder="vema-setup"></label>
+        <label class="sf-l" style="grid-column:1/-1">Note<input id="sfNote" placeholder="thesis / rationale — lands in the journal"></label>
+      </div>
+      <div style="margin-top:8px">
+        <div class="sub" style="font-size:10px;letter-spacing:.08em;margin-bottom:4px">TAKE-PROFIT LADDER <span class="sub">— pct of position; unallocated remainder rides the stop as the moon bag</span></div>
+        <div id="sfTps"></div>
+        <button id="sfTpAdd" class="sbtn" type="button">+ add TP level</button>
+      </div>
+      <div id="sfCard" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+        <button id="sfCopy" class="sbtn acc" type="button">📋 copy /setup command</button>
+        <button id="sfArm" class="sbtn" type="button">🚀 arm via webhook</button>
+        <button id="sfKey" class="sbtn" type="button" title="the shared secret the webhook requires — stored only in this browser">🔑 webhook key</button>
+        <span id="sfMsg" class="sub"></span>
+      </div>
+      <div class="sub" style="margin-top:8px;font-size:10px">webhook intake: <code>POST {this host}/tv-hook</code> — TradingView alert body template lives in the box under <code>scripts/tv-hook.py</code>. Paper-safe: fills land in demo mode under the same rails as every entry.</div>
+    </details>
+    <details id="calcD" style="margin-top:8px">
+      <summary style="cursor:pointer;font-weight:700;font-size:12px;letter-spacing:.05em;color:var(--acc)">🧮 POSITION SIZE CALCULATOR <span class="sub" style="font-weight:400">— identical math to the executor's risk-% path: what you see is what it sizes</span></summary>
+      <div id="calcForm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px">
+        <label class="sf-l">Account $ <input id="cAcct" inputmode="decimal" placeholder="live equity"></label>
+        <label class="sf-l">Risk %<input id="cRisk" inputmode="decimal" value="1"></label>
+        <label class="sf-l">Side<select id="cDir"><option value="1">▲ LONG</option><option value="-1">▼ SHORT</option></select></label>
+        <label class="sf-l">Entry px<input id="cEntry" inputmode="decimal"></label>
+        <label class="sf-l">Stop px<input id="cSl" inputmode="decimal"></label>
+      </div>
+      <div style="margin-top:8px"><div class="sub" style="font-size:10px;letter-spacing:.08em;margin-bottom:4px">TP TARGETS</div><div id="cTps"></div>
+        <button id="cTpAdd" class="sbtn" type="button">+ add TP</button></div>
+      <div id="calcOut" style="margin-top:10px"></div>
+    </details>
+  </div>
   <div class="panel neon" id="vaultPanel" style="margin-top:16px;display:none">
     <div class="ptitle">🏦 Wealth vault · profits locked forever <span class="sub">— 50% of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever</span><span id="vaultSub" class="sub" style="float:right"></span></div>
     <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -593,6 +659,7 @@ function sigDetail(s,i){
       ${s.betaBtc!=null?`<span>β <b>${s.betaBtc}</b> BTC <span class="sub">· corr ${s.corrBtc??'—'}</span></span>`:''}
       ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
       <span>${LK(BG(s.symbol||s.asset),'Bitget '+SYM(s.symbol||s.asset)+' →')}</span>
+      <span class="echip" style="cursor:pointer" title="prefill the setup builder with this signal" onclick="event.stopPropagation();prefillSetup('${s.asset}','${s.direction}',${s.lastPrice||0},'${esc(s.strategy||'')}')">🛠 setup</span>
     </div>${doc}</td></tr>`;
 }
 const BOOKS={
@@ -759,6 +826,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         <div class="sub" style="font-size:9px">${n} pos${src.marginFreeUsd!=null?' · free $'+(+src.marginFreeUsd).toFixed(2):''}${aud}</div>
         ${src.vaultUsd>0?`<div class="sub" style="font-size:9px;margin-top:2px">🏦 <b style="color:var(--gold)">$${(+src.vaultUsd).toFixed(2)}</b> vaulted — untouchable</div>`:''}
         ${src.edgeLive!=null?`<div class="sub" style="font-size:9px">⚖️ edge ${src.edgeLive} · ${src.edgeSrc||''}</div>`:''}`;
+      window.__eqUsd=+src.equityUsd; // setup builder + calculator size off live equity
     }else ab.style.display='none';
   }
   const o=scan.overview;
@@ -1505,9 +1573,254 @@ const setView=v=>{const pro=v==='pro';document.body.classList.toggle('simple',!p
 $('vSimple').onclick=()=>setView('simple');
 $('vPro').onclick=()=>setView('pro');
 setView(document.body.classList.contains('pro')?'pro':'simple');
+// ================= OPERATOR SETUP BUILDER (VEMA-parity) =================
+// (1) live setup board — the executor's api/setups.json status feed
+// (2) builder — computes the SAME risk card the executor applies, arms
+//     via the nginx-proxied webhook or a Telegram /setup command
+// (3) position-size calculator — identical math to the exec risk-% path
+const FEE_RT=0.0012, SETUP_MIN_RR=1;
+const eqUsd=()=>window.__eqUsd||0;
+const livePx=sym=>{try{return (window.__live&&window.__live.price(sym))||0}catch(_){return 0}};
+function setupNum(id){const v=parseFloat(document.getElementById(id).value);return Number.isFinite(v)?v:null}
+function tprow(px,pct,recalc){
+  const d=document.createElement('div');d.className='tprow';
+  d.innerHTML=`<input inputmode="decimal" placeholder="TP px" value="${px??''}"><input inputmode="decimal" placeholder="%" style="max-width:70px" value="${pct??''}"><button class="sbtn rm" type="button" title="drop level">✕</button>`;
+  d.querySelector('.rm').onclick=()=>{d.remove();recalc()};
+  d.querySelectorAll('input').forEach(i=>i.addEventListener('input',recalc));
+  return d;
+}
+function readTps(wrap){
+  return [...wrap.querySelectorAll('.tprow')].map(r=>{
+    const [a,b]=[...r.querySelectorAll('input')].map(i=>parseFloat(i.value));
+    return {px:Number.isFinite(a)?a:null,pct:Number.isFinite(b)?b:null};
+  }).filter(t=>t.px!=null);
+}
+// shared risk math — mirror of the executor's setup path exactly:
+// notional = riskUsd / (stopFrac + RT-fee), margin = notional/lev,
+// lev = min(40, floor(80/(stopPct+0.64))) — the liq-band bound
+function riskCard({ref,sl,tps,sgn,riskPct,acct}){
+  if(!(ref>0)||!(sl>0)||!tps.length)return null;
+  const stopPct=Math.abs(ref-sl)/ref*100;
+  if(!(stopPct>0))return null;
+  if(sgn>0&&sl>=ref)return{err:`SL ${fmtP(sl)} must be BELOW entry for a long`};
+  if(sgn<0&&sl<=ref)return{err:`SL ${fmtP(sl)} must be ABOVE entry for a short`};
+  const badT=tps.filter(t=>(sgn>0?t.px<=ref:t.px>=ref));
+  if(badT.length)return{err:`TP ${fmtP(badT[0].px)} is on the wrong side of entry`};
+  const alloc=tps.reduce((a,t)=>a+(t.pct||0),0);
+  const unalloc=Math.max(0,100-alloc);
+  const nofrac=tps.filter(t=>t.pct==null);
+  nofrac.forEach(t=>t.pct=+(unalloc/Math.max(1,nofrac.length)).toFixed(2));
+  const allocNow=tps.reduce((a,t)=>a+t.pct,0);
+  if(allocNow>100.01)return{err:`TP allocations ${allocNow.toFixed(0)}% > 100%`};
+  const wsum=tps.reduce((a,t)=>a+t.pct,0)||1;
+  const wtgt=tps.reduce((a,t)=>a+Math.abs(t.px-ref)/ref*100*t.pct,0)/wsum;
+  const netRR=(wtgt-0.20)/(stopPct+0.20);
+  const riskUsd=(acct||0)*riskPct/100;
+  const notional=riskUsd/Math.max(0.0005,stopPct/100+FEE_RT);
+  const lev=Math.min(40,Math.max(1,Math.floor(80/(stopPct+0.64))));
+  const margin=notional/lev;
+  const qty=notional/ref;
+  const lossUsd=notional*(stopPct/100+FEE_RT);
+  const gainUsd=tps.reduce((a,t)=>a+qty*(t.pct/100)*(sgn>0?(t.px-ref):(ref-t.px)),0)-notional*FEE_RT;
+  return{stopPct,wtgt,netRR,riskUsd,notional,lev,margin,qty,lossUsd,gainUsd,moon:Math.max(0,100-allocNow),tps};
+}
+// level map — entry/stop/TPs/mark on one scale: the setup's geometry
+function lvlBar(ref,sl,tps,dir,last){
+  const pts=[ref,sl,...tps.map(t=>t.px),last].filter(v=>Number.isFinite(v)&&v>0);
+  if(pts.length<2)return'';
+  const mn=Math.min(...pts),mx=Math.max(...pts),rg=mx-mn||1;
+  const pc=v=>((v-mn)/rg*100).toFixed(1)+'%';
+  const mk=(v,c,l)=>`<i style="left:${pc(v)};background:${c}" title="${l} ${fmtP(v)}"></i>`;
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="sub" style="font-size:9px">${fmtP(mn)}</span>
+    <div class="lvl">${mk(sl,'#ff4d6d','SL')}${mk(ref,'#e8f1ff','ENTRY')}${tps.map((t,i)=>mk(t.px,'#2ee6a8','TP'+(i+1))).join('')}${last?mk(last,'#3ddcff','MARK'):''}</div>
+    <span class="sub" style="font-size:9px">${fmtP(mx)}</span></div>`;
+}
+function cardHtml(s,dir,rc,ref){
+  if(rc.err)return `<div class="card" style="border-color:rgba(255,77,109,.5)">⛔ ${esc(rc.err)}</div>`;
+  return `<div class="card">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline">
+      <span><b class="num">$${rc.riskUsd.toFixed(2)}</b> at risk (${s.risk}% of $${(s.acct||0).toFixed(2)})</span>
+      <span>size <b class="num">${rc.qty.toPrecision(4)}</b> · notional <b class="num">$${rc.notional.toFixed(2)}</b></span>
+      <span>margin <b class="num">$${rc.margin.toFixed(2)}</b> @ <b class="num">~${rc.lev}x</b></span>
+      <span>net R:R <b class="num ${rc.netRR>=SETUP_MIN_RR?'up':'dn'}">${rc.netRR.toFixed(2)}:1</b></span>
+    </div>
+    <div class="sub" style="margin-top:4px">stop-out ≈ <b class="dn">−$${rc.lossUsd.toFixed(2)}</b> (incl. fees) · full ladder ≈ <b class="up">+$${rc.gainUsd.toFixed(2)}</b>${rc.moon>0.5?` · 🌙 ${rc.moon.toFixed(0)}% moon bag`:''}${rc.netRR<SETUP_MIN_RR?' · ⚠️ <b class="dn">below 1:1 floor — executor rejects</b>':''}</div>
+    ${lvlBar(ref,s.sl,rc.tps,dir)}
+  </div>`;
+}
+const SF={};
+function sfRead(){
+  SF.sym=($('sfSym').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;
+  if(SF.sym&&!SF.sym.endsWith('USDT'))SF.sym+='USDT';
+  SF.dir=$('sfDir').value;SF.mode=$('sfMode').value;
+  SF.entry=setupNum('sfEntry');SF.brk=setupNum('sfBreak');SF.sl=setupNum('sfSl');
+  SF.risk=Math.min(Math.max(setupNum('sfRisk')||1,0.05),10);
+  SF.ttl=Math.min(Math.max(setupNum('sfTtl')||720,5),10080);
+  SF.strat=$('sfStrat').value.trim();SF.note=$('sfNote').value.trim();
+}
+function setupCalc(){
+  sfRead();
+  $('sfBreakL').style.display=SF.mode==='br'?'':'none';
+  $('sfEntryL').style.display=SF.mode==='market'?'none':'';
+  const sgn=SF.dir==='LONG'?1:-1;
+  const ref=SF.entry||livePx(SF.sym)||null;
+  const tps=readTps($('sfTps'));
+  const acct=eqUsd();
+  const rc=ref&&SF.sl?riskCard({ref,sl:SF.sl,tps:tps.map(t=>({...t})),sgn,riskPct:SF.risk,acct}):null;
+  $('sfCard').innerHTML=!SF.sym?'<div class="sub">symbol required</div>'
+    :!SF.sl?'<div class="sub">stop-loss required — the geometry needs an invalidation level</div>'
+    :!tps.length?'<div class="sub">add at least one take-profit level</div>'
+    :!ref?'<div class="sub">entry px required for this mode — or wait for the live feed</div>'
+    :!acct?'<div class="sub">live equity not loaded yet — card needs the account balance</div>'
+    :!rc?'<div class="sub">incomplete geometry</div>'
+    :cardHtml({risk:SF.risk,acct,sl:SF.sl},SF.dir,rc,ref);
+}
+function setupSpec(){
+  return {symbol:SF.sym,direction:SF.dir,mode:SF.mode,
+    entryPx:SF.mode==='market'?null:SF.entry,breakPx:SF.mode==='br'?SF.brk:null,
+    slPx:SF.sl,tps:readTps($('sfTps')),riskPct:SF.risk,ttlMin:SF.ttl,
+    note:SF.note||null,strategy:SF.strat||'vema-setup'};
+}
+function setupCmd(spec){
+  let c=`/setup ${spec.symbol.replace(/USDT$/,'')} ${spec.direction.toLowerCase()} ${spec.mode}`;
+  if(spec.mode!=='market'&&spec.entryPx)c+=` ${spec.entryPx}`;
+  if(spec.mode==='br'&&spec.breakPx)c+=` ${spec.breakPx}`;
+  c+=` sl ${spec.slPx}`;
+  for(const t of spec.tps)c+=` tp ${t.px}${t.pct!=null?' '+t.pct:''}`;
+  c+=` risk ${spec.riskPct} ttl ${spec.ttlMin}`;
+  if(spec.strategy&&spec.strategy!=='vema-setup')c+=` strat ${spec.strategy}`;
+  if(spec.note)c+=` note ${spec.note}`;
+  return c;
+}
+function hookPayload(spec){
+  return {key:localStorage['sent.tvkey']||'',symbol:spec.symbol,direction:spec.direction.toLowerCase(),
+    mode:spec.mode,entry:spec.entryPx,break:spec.breakPx,sl:spec.slPx,
+    tps:spec.tps.map(t=>[t.px,t.pct]),risk:spec.riskPct,ttl:spec.ttlMin,
+    note:spec.note,strategy:spec.strategy,
+    id:'dash-'+Date.now().toString(36),ts:Date.now()};
+}
+function setupMsg(t,bad){const e=$('sfMsg');e.textContent=t||'';e.style.color=bad?'var(--red)':'var(--grn)'}
+function wireSetupUI(){
+  const wrap=$('sfTps');
+  wrap.appendChild(tprow(null,null,setupCalc));wrap.appendChild(tprow(null,null,setupCalc));
+  $('sfTpAdd').onclick=()=>{if(wrap.children.length<5){wrap.appendChild(tprow(null,null,setupCalc));setupCalc()}else setupMsg('5 TP levels max',1)};
+  ['sfSym','sfDir','sfMode','sfEntry','sfBreak','sfSl','sfRisk','sfTtl','sfStrat','sfNote'].forEach(id=>{
+    $(id).addEventListener('input',setupCalc);$(id).addEventListener('change',setupCalc);
+  });
+  $('sfCopy').onclick=async()=>{
+    sfRead();
+    if(!SF.sym||!SF.sl)return setupMsg('symbol + stop-loss first',1);
+    if(!readTps($('sfTps')).length)return setupMsg('needs ≥1 take-profit',1);
+    const cmd=setupCmd(setupSpec());
+    try{await navigator.clipboard.writeText(cmd);setupMsg('copied — paste into Telegram Saved Messages, then reply /setup CONFIRM')}
+    catch(_){setupMsg('clipboard blocked — send manually: '+cmd,1)}
+  };
+  $('sfKey').onclick=()=>{
+    const k=prompt('Webhook secret (state/tv-hook.json on the box — stored in this browser only):',localStorage['sent.tvkey']||'');
+    if(k!==null){localStorage['sent.tvkey']=k.trim();setupMsg(k?'key saved':'key cleared')}
+  };
+  $('sfArm').onclick=async()=>{
+    sfRead();
+    if(!SF.sym||!SF.sl)return setupMsg('symbol + stop-loss first',1);
+    const tps=readTps($('sfTps'));if(!tps.length)return setupMsg('needs ≥1 take-profit',1);
+    if(!localStorage['sent.tvkey'])return setupMsg('set the webhook key first — 🔑 button',1);
+    const ref=SF.mode==='market'?(livePx(SF.sym)||SF.entry):SF.entry;
+    if(SF.mode!=='market'&&!(ref>0))return setupMsg('entry px required',1);
+    const rc=riskCard({ref:ref||0,sl:SF.sl,tps:tps.map(t=>({...t})),sgn:SF.dir==='LONG'?1:-1,riskPct:SF.risk,acct:eqUsd()});
+    if(rc&&rc.err)return setupMsg(rc.err,1);
+    if(rc&&rc.netRR<SETUP_MIN_RR)return setupMsg(`netRR ${rc.netRR.toFixed(2)} below 1:1 — fix the ladder`,1);
+    setupMsg('arming…');
+    try{
+      // same-origin on the VPS mirror; cross-origin (CORS-open, secret-authed)
+      // when served from GitHub Pages — the secret is the credential
+      const hookUrl=location.hostname.endsWith('sslip.io')?'/tv-hook':'https://168-138-102-53.sslip.io/tv-hook';
+      const r=await fetch(hookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(hookPayload(setupSpec()))});
+      const d=await r.json().catch(()=>({}));
+      if(r.ok&&d.ok){setupMsg(`armed → ${d.id||'queued'} — executor picks it up next cycle · track above`);setTimeout(renderSetups,4000)}
+      else setupMsg(`${r.status}: ${d.err||'refused'}`,1);
+    }catch(e){setupMsg('webhook unreachable from this host — use 📋 copy /setup instead',1)}
+  };
+}
+function prefillSetup(asset,dir,px,strat){
+  $('setupBuild').open=true;
+  $('sfSym').value=SYM(asset);$('sfDir').value=dir==='SHORT'?'SHORT':'LONG';
+  if(px>0)$('sfEntry').value=px;
+  if(strat)$('sfStrat').value=strat;
+  setupCalc();
+  $('setupPanel').scrollIntoView({behavior:'smooth',block:'center'});
+}
+// ---- live setup board — api/setups.json refreshed on its own clock so a
+// stale main render can't leave an armed setup looking dead
+const SUP_ICON={armed:'🟡','await-retest':'🟠',triggered:'🔵',filled:'🟢',cancelled:'⚫',expired:'⌛',failed:'🔴',rejected:'⛔',missed:'💨'};
+const SUP_CLS={armed:'sup-wait','await-retest':'sup-wait',triggered:'sup-wait',filled:'sup-ok',cancelled:'sup-dim',expired:'sup-dim',failed:'sup-bad',rejected:'sup-bad',missed:'sup-dim'};
+async function renderSetups(){
+  const board=$('setupBoard');if(!board)return;
+  try{
+    const dl=$('sfSyms');
+    if(dl&&LAST.scan&&LAST.scan.signals){
+      const syms=[...new Set(LAST.scan.signals.map(s=>SYM(s.asset||s.symbol)))];
+      if(dl.children.length!==syms.length)dl.innerHTML=syms.map(s=>`<option value="${s}">`).join('');
+    }
+  }catch(_){}
+  const d=await j(API+'setups.json');
+  if(!d||!d.setups){board.innerHTML='<div class="sub">no armed setups — build one below, send <code>/setup</code> in Telegram, or fire a TradingView alert</div>';$('setupSub').textContent='';return}
+  const arr=d.setups;
+  const live=arr.filter(s=>!['filled','cancelled','expired','failed','rejected','missed'].includes(s.status));
+  $('setupSub').textContent=`${live.length} live · ${arr.length} total · refreshed ${ago(Date.parse(d.refreshedAt||0))} ago`;
+  board.innerHTML=arr.slice(-14).reverse().map(s=>{
+    const st=(s.mode==='br'&&s.stage)||s.status||'armed';
+    const tpTxt=(s.tps||[]).map((t,i)=>`TP${i+1} ${fmtP(t.px)}·${t.pct??''}%`).join(' · ');
+    const dist=s.lastPx&&s.entryPx?` · ${(Math.abs(s.lastPx-s.entryPx)/s.entryPx*100).toFixed(2)}% from trigger`:'';
+    return `<div class="sup-row">
+      <span class="sup-badge ${SUP_CLS[st]||''}">${SUP_ICON[st]||'•'} ${esc(st.toUpperCase())}</span>
+      <b>${esc(s.symbol||'?')}</b> <span class="tag ${s.direction==='LONG'?'long':'short'}">${s.direction==='LONG'?'L':'S'}</span>
+      <span class="sub">${esc(s.mode||'market')}${s.entryPx?` @ ${fmtP(s.entryPx)}`:''}${s.mode==='br'&&s.breakPx?` · break ${fmtP(s.breakPx)}`:''}</span>
+      <span class="sub">SL <b class="dn">${fmtP(s.slPx)}</b> · ${esc(tpTxt)}</span>
+      ${s.lastPx?`<span class="sub">mk <b>${fmtP(s.lastPx)}</b>${dist}</span>`:''}
+      ${s.status==='filled'&&s.fillPx?`<span class="up"><b>filled ${fmtP(s.fillPx)}</b></span>`:''}
+      ${s.reason?`<span class="dn" style="font-size:10px">${esc(String(s.reason))}</span>`:''}
+      ${s.blockedBy?`<span class="sub" style="font-size:10px">${esc(s.blockedBy)}</span>`:''}
+      ${s.riskPct?`<span class="sub">risk ${s.riskPct}%</span>`:''}
+      ${s.note?`<span class="sub" style="font-style:italic">“${esc(s.note).slice(0,60)}”</span>`:''}
+      <span class="sub" style="margin-left:auto">${esc(s.id||'')}${s.by?` · ${esc(s.by)}`:''}${s.createdAt?` · ${ago(Date.parse(s.createdAt))} ago`:''}</span>
+    </div>`;
+  }).join('');
+}
+// ---- position-size calculator — mirrors the exec risk path exactly ----
+function calcRun(){
+  const acct=setupNum('cAcct')||eqUsd();
+  const risk=Math.min(Math.max(setupNum('cRisk')||1,0.05),10);
+  const sgn=+$('cDir').value,entry=setupNum('cEntry'),sl=setupNum('cSl');
+  const tps=readTps($('cTps'));
+  const out=$('calcOut');
+  if(!(acct>0)){out.innerHTML='<div class="sub">account $ required (or wait for live equity)</div>';return}
+  if(!(entry>0)||!(sl>0)||!tps.length){out.innerHTML='<div class="sub">entry + stop + at least one TP</div>';return}
+  const rc=riskCard({ref:entry,sl,tps,sgn,riskPct:risk,acct});
+  if(rc.err){out.innerHTML=`<div class="card" style="border-color:rgba(255,77,109,.5)">⛔ ${esc(rc.err)}</div>`;return}
+  out.innerHTML=`<div class="card">
+    <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
+      <div class="stat"><div class="v num">${rc.qty.toPrecision(4)}</div><div class="k">Size (units)</div></div>
+      <div class="stat"><div class="v num">$${rc.notional.toFixed(2)}</div><div class="k">Notional</div></div>
+      <div class="stat"><div class="v num">$${rc.margin.toFixed(2)}</div><div class="k">Margin @ ~${rc.lev}x</div></div>
+      <div class="stat"><div class="v num dn">−$${rc.lossUsd.toFixed(2)}</div><div class="k">If stopped (w/ fees)</div></div>
+      <div class="stat"><div class="v num up">+$${rc.gainUsd.toFixed(2)}</div><div class="k">Full ladder</div></div>
+      <div class="stat"><div class="v num ${rc.netRR>=1?'up':'dn'}">${rc.netRR.toFixed(2)}:1</div><div class="k">Net R:R</div></div>
+    </div>
+    <div class="sub" style="margin-top:6px">stop ${rc.stopPct.toFixed(2)}% · weighted target ${rc.wtgt.toFixed(2)}% · risk $${rc.riskUsd.toFixed(2)} (${risk}%)${rc.moon>0.5?` · 🌙 ${rc.moon.toFixed(0)}% unallocated rides the stop`:''}</div>
+    ${lvlBar(entry,sl,rc.tps,sgn>0?'LONG':'SHORT')}
+  </div>`;
+}
+function wireCalc(){
+  const w=$('cTps');w.appendChild(tprow(null,null,calcRun));
+  $('cTpAdd').onclick=()=>{if(w.children.length<5){w.appendChild(tprow(null,null,calcRun));calcRun()}};
+  ['cAcct','cRisk','cDir','cEntry','cSl'].forEach(id=>{$(id).addEventListener('input',calcRun);$(id).addEventListener('change',calcRun)});
+}
+wireSetupUI();wireCalc();setupCalc();calcRun();
+
 render();
 if(window.__live)__live.onTick(livePaint);
 setInterval(render,30000);
+setInterval(renderSetups,30000);
 </script>
 </body>
 </html>
