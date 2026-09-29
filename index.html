@@ -374,7 +374,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
   </div>
   <div class="panel pro" style="margin-bottom:16px;border-color:rgba(61,220,255,.45)">
     <div class="ptitle">🧪 Evidence / validation · prospective results only <span class="sub">— emitted signals are measured forward, traded or not · the number that matters is whether predictions precede outcomes</span><span id="evStatus" style="float:right"></span></div>
-    <div class="stats" id="evStats" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div class="stats" id="evStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="evNote" class="sub" style="margin-top:8px;font-size:10px"></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
@@ -737,7 +737,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   $('chips').innerHTML=['BTC','ETH','SOL'].map(s=>{
     const live=sigByAsset[s];const p=live?{price:live.lastPrice,changePct:live.changePct}:majors[s];
     return p?`<span><b>${s}</b> <span class="num" data-px="${s}USDT">$${fmtP(p.price)} USD</span> <span class="num ${p.changePct>=0?'up':'dn'}">${p.changePct>=0?'+':''}${p.changePct}%</span></span>`:'';
-  }).join('');
+  }).join('')+(scan.overview&&scan.overview.mktType?` <span class="sub">🌡 <b style="color:${scan.overview.mktType.startsWith('bull')?'var(--grn)':scan.overview.mktType.startsWith('bear')?'var(--red)':'var(--warn,#ffd166)'}">${scan.overview.mktType}</b> · mktSQN ${scan.overview.marketSQN??'—'}</span>`:'');
   const tick=[...(scan.movers||[]).map(m=>({...m,up:1})),...(scan.laggards||[]).map(m=>({...m,up:0}))];
   const tapeHtml=tick.map(m=>`<span>${LK(BG(m.symbol),m.symbol)} <b class="${m.up?'up':'dn'} num">${m.changePct>=0?'+':''}${m.changePct}%</b></span>`).join('');
   $('tape').innerHTML=tapeHtml+tapeHtml;
@@ -826,6 +826,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         ['TP before SL',es.hitRate24h!=null?es.hitRate24h+'%':'—','24h window · all signals'],
         ['Median alpha',es.medAlpha24h!=null?(es.medAlpha24h>=0?'+':'')+es.medAlpha24h+'%':'—','vs market basket · 24h'],
         [`${curVer} PF / SQN`,`${pf??'—'} / ${sqn??'—'}`,'strategy edge, this ruleset'],
+        ['Sortino-SQN',st.sqnSortino??'—','downside σ only — moon-bag upside not penalized'],
+        ['Deflated SR',st.deflatedSqn?`${st.deflatedSqn.dsr} (${st.deflatedSqn.trials} trials)`:'—','P(edge real) after the config-search haircut'],
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
       // objectives scorecard — Tharp: objectives come before the system
       const obj=st.objectives||{};
@@ -1034,7 +1036,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     if(rrOpt&&rrOpt.winner){
       $('edgePanel').style.display='block';
       const w=rrOpt.winner,src3=src&&src.edgeSrc?src.edgeSrc:'—';
-      $('edgeStats').innerHTML=[['⚖️ fitted edge',src&&src.edgeLive!=null?src.edgeLive:'—','entry quality vs fair coin — '+(src3==='skeptical-prior'?'prior until n≥20':'measured from episodes')],['🏆 ladder',(w.name||'')+' '+(w.legs||[]).map(l=>Math.round(l.f*100)+'%@'+l.r+'R').join(' '),'R:R legs picked by 1M+ roll sim'],['📐 expectancy',(w.expR>=0?'+':'')+w.expR+'R','per trade at fitted edge'],['🎲 SQN',w.sqn??'—','system quality number']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:14px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      $('edgeStats').innerHTML=[['⚖️ fitted edge',src&&src.edgeLive!=null?src.edgeLive:'—','entry quality vs fair coin — '+(src3==='skeptical-prior'?'prior until n≥20':'measured from episodes')],['🏆 ladder',w.profile||(w.name||''),'legs '+(w.legs||[]).map(l=>Math.round(l[1]*100)+'%@'+l[0]+'R').join(' ')+' +'+(w.moon?Math.round(w.moon*100):0)+'% moon'],['📐 expectancy',(w.expR!=null?(w.expR>=0?'+':'')+w.expR+'R':(rrOpt.ranked&&rrOpt.ranked[0]?rrOpt.ranked[0].expectancyR+'R':'—')),'per trade at fitted edge'],['🎲 SQN',rrOpt.ranked&&rrOpt.ranked[0]?rrOpt.ranked[0].sqn100:'—','system quality — max-SQN objective']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:14px">${v}</div><div class="sub">${s}</div></div>`).join('');
       const b=rrBt&&rrBt.fitted;
       $('edgeNote').innerHTML=(b?`🧪 backtest: ep n=${b.episodeN} · win ${((b.epWinShare||0)*100).toFixed(0)}% · MAE ${b.medMaePct}% vs MFE ${b.medMfePct}% — `:'')+'⚙️ recalibrates every 30min: edge fits on real episodes, ladder re-rolls, exec picks it up next cycle';
     }
