@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { integrityNote } from './crc32.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = path.join(__dirname, '..', 'api');
@@ -194,7 +195,12 @@ const out = {
   now,
   feed: feed.filter((t, i) => feed.findIndex((x) => x.text === t.text) === i).slice(0, 30),
 };
-fs.writeFileSync(path.join(API, 'thoughts.json.tmp'), JSON.stringify(out));
+const outBody = JSON.stringify(out);
+fs.writeFileSync(path.join(API, 'thoughts.json.tmp'), outBody);
 fs.renameSync(path.join(API, 'thoughts.json.tmp'), path.join(API, 'thoughts.json'));
-fs.writeFileSync(STATE, JSON.stringify({ seenActs: [...seen].slice(-500), feed: feed.slice(0, 60) }));
+integrityNote(path.join(API, 'thoughts.json'), outBody);
+const stBody = JSON.stringify({ seenActs: [...seen].slice(-500), feed: feed.slice(0, 60) });
+fs.writeFileSync(STATE + '.tmp', stBody);
+fs.renameSync(STATE + '.tmp', STATE);
+integrityNote(STATE, stBody);
 console.log(`[thoughts] ${mood} — ${headline.slice(0, 90)}`);

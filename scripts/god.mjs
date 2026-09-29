@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './load-env.mjs'; // canonical .env loader (audit F2)
+import { integrityNote } from './crc32.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = path.join(__dirname, '..', 'api');
@@ -331,20 +332,28 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
 const interventions = [];
 const interv = (what, res) => interventions.push({ what, res, at: new Date().toISOString() });
 {
-  const KEY = process.env.BITGET_API_KEY || '';
-  const SECRET = process.env.BITGET_API_SECRET || '';
-  const PASS = process.env.BITGET_PASSPHRASE || '';
+  // demo/paper mode: audit and intervene on the SAME account the engine
+  // trades — SENTINEL_EXEC=demo swaps creds to BITGET_DEMO_* + paptrading.
+  const DEMO = (process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo';
+  const KEY = DEMO ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
+                   : (process.env.BITGET_API_KEY || '');
+  const SECRET = DEMO ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
+                   : (process.env.BITGET_API_SECRET || '');
+  const PASS = DEMO ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
+                   : (process.env.BITGET_PASSPHRASE || '');
   const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', MC = 'USDT';
   if (KEY && SECRET && PASS && process.env.GOD_INTERVENE !== '0') {
     const gsign = (method, reqPath, qs, bodyStr) => {
       const ts = String(Date.now());
       const pre = ts + method.toUpperCase() + reqPath + (qs ? '?' + qs : '') + (bodyStr || '');
-      return {
+      const h = {
         'ACCESS-KEY': KEY,
         'ACCESS-SIGN': crypto.createHmac('sha256', SECRET).update(pre).digest('base64'),
         'ACCESS-PASSPHRASE': PASS, 'ACCESS-TIMESTAMP': ts,
         'Content-Type': 'application/json', locale: 'en-US',
       };
+      if (DEMO) h.paptrading = '1';
+      return h;
     };
     const gapi = async (method, reqPath, { qs = '', body = null } = {}) => {
       const bodyStr = body ? JSON.stringify(body) : '';
@@ -459,7 +468,19 @@ const out = {
   interventions,
   note: 'overseer — full trade permissions: audits then repairs. FAIL = invariant violated, WARN = degraded, PASS = held',
 };
-fs.writeFileSync(path.join(API, 'god.json'), JSON.stringify(out));
+// integrity audit — the CRC32 manifest vs on-disk bytes. A corrupt or
+// tampered artifact is a FAIL: downstream decisions trust these files.
+try {
+  const integ = JSON.parse(fs.readFileSync(path.join(API, 'integrity.json'), 'utf8'));
+  const bad = [...(integ.corrupt || []), ...(integ.missing || [])];
+  add('crc32-integrity', bad.length ? 'FAIL' : 'PASS',
+    bad.length ? `${bad.length} file(s) failed CRC32: ${bad.slice(0, 3).join(', ')}` : `${integ.checked ?? 0} artifacts CRC32-verified`);
+} catch { add('crc32-integrity', 'WARN', 'api/integrity.json absent — crc32-verify.mjs not running'); }
+
+const godBody = JSON.stringify(out);
+fs.writeFileSync(path.join(API, 'god.json.tmp'), godBody);
+fs.renameSync(path.join(API, 'god.json.tmp'), path.join(API, 'god.json'));
+integrityNote(path.join(API, 'god.json'), godBody);
 console.log(`[god] ${verdict} — ${out.pass} pass / ${warns.length} warn / ${fails.length} fail`);
 for (const c of checks.filter((c) => c.status !== 'PASS'))
   console.log(`[god] ${c.status} ${c.name}: ${c.detail}`);

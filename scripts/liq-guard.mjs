@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { integrityNote } from './crc32.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 try {
@@ -40,13 +41,29 @@ const NEAR_PCT = +(process.env.LIQ_GUARD_NEAR_PCT || 2.5);   // % from liq = ref
 const SPACING_MS = +(process.env.LIQ_GUARD_SPACING_MS || 4e3); // serialization floor between close orders
 const MIN_SIZE = +(process.env.LIQ_GUARD_MIN_SIZE || 2500);  // residual floor for the seed symbol
 const POLL_MS = +(process.env.LIQ_GUARD_POLL_MS || 300);
+// stop-approach trims: before a position's own pos_loss can kill the WHOLE
+// size, shave contract-minimum clips on new lows inside STOP_ZONE of the
+// trigger and re-pin the stop deeper toward the liq edge — the position
+// bleeds through the dip instead of stopping out all at once.
+const STOP_TRIM = process.env.LIQ_GUARD_STOP_TRIM !== '0';
+const STOP_ZONE = +(process.env.LIQ_GUARD_STOP_ZONE_PCT || 1.2); // % above stop = trim zone
+const DEEPEN_BAND = +(process.env.LIQ_GUARD_DEEPEN_BAND || 0.9); // stop re-pinned at N% of liq band
+const planCache = {}; // sym -> { at, rows } — plans change slowly, poll 20s
 const STATE = path.join(__dirname, '..', 'state', 'liq-guard.json');
 const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', COIN = 'USDT';
 const WS_URL = 'wss://ws.bitget.com/v2/ws/public';
 
-const KEY = process.env.BITGET_API_KEY || '';
-const SECRET = process.env.BITGET_API_SECRET || '';
-const PASS = process.env.BITGET_PASSPHRASE || '';
+// demo/paper mode: same SENTINEL_EXEC switch as the exec — the guard must
+// watch the SAME account the engine trades, or demo positions run naked
+// while the guard stares at an empty live book.
+const MODE = (process.env.SENTINEL_EXEC || 'off').toLowerCase();
+const DEMO = MODE === 'demo';
+const KEY = DEMO ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
+                 : (process.env.BITGET_API_KEY || '');
+const SECRET = DEMO ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
+                 : (process.env.BITGET_API_SECRET || '');
+const PASS = DEMO ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
+                 : (process.env.BITGET_PASSPHRASE || '');
 const log = (...a) => console.log('[liq-guard]', ...a);
 
 if (!ENABLED) { log('LIQ_GUARD not armed — exiting'); process.exit(0); }
@@ -55,7 +72,7 @@ if (!KEY || !SECRET || !PASS) { log('no creds — exiting'); process.exit(1); }
 function hdr(method, reqPath, qs, body) {
   const ts = String(Date.now());
   const pre = ts + method + reqPath + (qs ? '?' + qs : '') + (body || '');
-  return {
+  const h = {
     'ACCESS-KEY': KEY,
     'ACCESS-SIGN': crypto.createHmac('sha256', SECRET).update(pre).digest('base64'),
     'ACCESS-PASSPHRASE': PASS,
@@ -63,6 +80,8 @@ function hdr(method, reqPath, qs, body) {
     'Content-Type': 'application/json',
     locale: 'en-US',
   };
+  if (DEMO) h.paptrading = '1'; // Bitget demo-trading header — same as exec
+  return h;
 }
 async function api(method, reqPath, { qs = '', body = null } = {}) {
   const b = body ? JSON.stringify(body) : '';
@@ -94,9 +113,14 @@ const cancelPlan = (sym, planType, orderId) =>
   api('POST', '/api/v2/mix/order/cancel-plan-order', {
     body: { symbol: sym, productType: PRODUCT, marginCoin: COIN, orderId: String(orderId), planType },
   });
-const planLoss = (sym, side, trigger) =>
+// marginMode is mandatory — it must match the POSITION's real margin mode.
+// Omitting it let Bitget default to 'isolated', which rejects with 40774 on
+// crossed positions (the SNDKUSDT stop-trim failure this fixes) and silently
+// invalidates the plan even when accepted (6 dead pos_loss plans proved it
+// in exec). pos_loss covers the whole position — size stays omitted.
+const planLoss = (sym, side, trigger, marginMode) =>
   api('POST', '/api/v2/mix/order/place-tpsl-order', {
-    body: { symbol: sym, marginCoin: COIN, productType: PRODUCT, planType: 'pos_loss', triggerPrice: String(trigger), holdSide: side, triggerType: 'mark_price', executePrice: '0' },
+    body: { symbol: sym, marginCoin: COIN, productType: PRODUCT, marginMode: marginMode === 'crossed' ? 'crossed' : 'isolated', planType: 'pos_loss', triggerPrice: String(trigger), holdSide: side, triggerType: 'mark_price', executePrice: '0' },
   });
 const closeMarket = async (sym, side, sizeStr, posMode, marginMode) => {
   // the position's REAL margin mode — bot entries are isolated, manual
@@ -198,9 +222,10 @@ const pickMark = async (sym) => {
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return {}; } };
 const API_STATE = path.join(__dirname, '..', 'api', 'liq-guard.json');
 const writeState = (o) => {
-  try { fs.writeFileSync(STATE + '.tmp', JSON.stringify(o)); fs.renameSync(STATE + '.tmp', STATE); } catch {}
+  const body = JSON.stringify(o);
+  try { fs.writeFileSync(STATE + '.tmp', body); fs.renameSync(STATE + '.tmp', STATE); integrityNote(STATE, body); } catch {}
   // publish to api/ too — the dashboard reads artifacts, not state/
-  try { fs.writeFileSync(API_STATE, JSON.stringify(o)); } catch {}
+  try { fs.writeFileSync(API_STATE, body); integrityNote(API_STATE, body); } catch {}
 };
 // outbound alerts — tg-watch drains this JSONL into Saved Messages (~30s lag)
 const OUTBOX = path.join(__dirname, '..', 'state', 'tg-outbox.jsonl');
@@ -271,6 +296,72 @@ async function tick() {
       }
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
     stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
+
+    // ---- stop-approach tier: mark nearing this position's OWN pos_loss —
+    // clip the contract minimum on each new low and push the stop deeper
+    // toward the liq edge. Minimum size, not percentage: the position sheds
+    // risk gradually through the dip instead of dying whole at the trigger.
+    if (STOP_TRIM) {
+      try {
+        const pc = planCache[p.sym] || { at: 0, rows: [] };
+        if (Date.now() - pc.at > 20000) { pc.rows = await getPlans(p.sym).catch(() => pc.rows); pc.at = Date.now(); planCache[p.sym] = pc; }
+        const loss = pc.rows.find((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+        const trig = +loss?.triggerPrice || 0;
+        const sDist = trig > 0 ? (p.side === 'long' ? (mark - trig) / trig * 100 : (trig - mark) / trig * 100) : null;
+        if (sDist != null) stOut.positions[key].stopDist = +sDist.toFixed(3);
+        const newLow = g.lastStopMark == null || (p.side === 'long' ? mark < g.lastStopMark : mark > g.lastStopMark);
+        // sDist > 0.05 required — a mark already THROUGH the trigger means
+        // the stop is mid-fire; clipping then races the exchange's close
+        if (sDist != null && sDist > 0.05 && sDist <= STOP_ZONE && newLow && Date.now() - (g.lastStopTrim || 0) >= SPACING_MS) {
+          // fresh-verify before firing — same discipline as the liq path
+          const fresh = await getAllPos().catch(() => null);
+          if (fresh) { posCache = fresh; posCacheAt = Date.now(); }
+          const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
+          const c = cm[p.sym] || {};
+          const precN = Number.isFinite(+c.sizePlace) ? +c.sizePlace : (+c.volumePlace || 0);
+          const prec = Math.pow(10, precN);
+          // absolute-minimum clip: contract min, or the smallest $-sized
+          // unit the exchange accepts — not a percentage of the position
+          const minClip = Math.max(
+            +c.minTradeNum || 0,
+            Math.ceil(((+c.minTradeUSDT || 5) * 1.02) / mark * prec) / prec
+          );
+          // first clip of a zone-entry front-loads at 3× min (front-cut the
+          // risk when it matters most); subsequent clips run at true minimum
+          const clipMult = g.stopClipN ? 1 : 3;
+          const q = Math.floor(minClip * clipMult * prec) / prec;
+          if (fp && fp.size > minClip && q > 0 && q < fp.size) {
+            await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
+            g.lastStopTrim = Date.now(); g.lastStopMark = mark; g.stopClipN = (g.stopClipN || 0) + 1;
+            trims.push({ at: g.lastStopTrim, sym: p.sym, side: p.side, size: q, mark, kind: 'stop-approach' });
+            dirty = true;
+            log(`STOP-TRIM ${key}: clipped ${q} of ${fp.size} @ ${mark} — ${sDist.toFixed(2)}% above stop ${trig}`);
+            outbox(`✂️ STOP-TRIM — ${p.sym} ${p.side}: clipped ${q} of ${fp.size} @ ${mark} (${sDist.toFixed(2)}% above stop). Shedding, not dying.`);
+            // deepen the stop toward the liq edge — place-first-then-cancel,
+            // never naked; only ever moves the stop FURTHER from price
+            try {
+              const np = (await getAllPos().catch(() => []))?.find((x) => x.sym === p.sym && x.side === p.side);
+              if (np?.liq) {
+                const sgn = np.side === 'long' ? 1 : -1;
+                const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
+                const deepTrig = +(np.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(6);
+                const deeper = np.side === 'long' ? deepTrig < trig : deepTrig > trig;
+                if (deeper && deepTrig > 0) {
+                  await planLoss(p.sym, p.side, deepTrig, np.marginMode || p.marginMode);
+                  for (const x of (await getPlans(p.sym)).filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== deepTrig && (!z.holdSide || z.holdSide === p.side)))
+                    await cancelPlan(p.sym, x.planType, x.orderId).catch(() => {});
+                  pc.at = 0; // force plan refresh next tick
+                  log(`${key} stop deepened -> ${deepTrig} (${bandPct.toFixed(2)}% band)`);
+                }
+              }
+            } catch (e) { log(`${key} stop-deepen failed (stop still armed): ${e.message}`); }
+          }
+        } else if (sDist != null && sDist > STOP_ZONE + 0.8) {
+          g.lastStopMark = null; g.stopClipN = 0; // recovered clear — re-arm gate and first-clip front-load
+        }
+      } catch (e) { log(`${key} stop-trim error: ${e.message}`); }
+    }
+
     if (distPct > ZONE_PCT) continue;                                   // outside danger zone — dormant
     if (Date.now() - g.lastTrim < SPACING_MS) continue;                 // serialization floor
     // deterioration gate: re-arm only when price prints worse than at the
@@ -310,7 +401,7 @@ async function tick() {
         const sgn = np.side === 'long' ? 1 : -1;
         const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
         const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(5);
-        await planLoss(p.sym, p.side, trig);
+        await planLoss(p.sym, p.side, trig, np.marginMode || p.marginMode);
         const plans = await getPlans(p.sym);
         // holdSide filter is mandatory in hedge mode — an unfiltered cancel
         // would strip the OTHER side's stop while resetting this one
