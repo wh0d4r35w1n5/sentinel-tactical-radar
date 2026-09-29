@@ -1,206 +1,210 @@
 {
- "ok": true,
+ "ok": false,
  "checked": 46,
- "corrupt": [],
+ "corrupt": [
+  "api/gate-stats.json",
+  "state/mae-track.json",
+  "api/live-ledger.json"
+ ],
  "missing": [],
  "files": {
   "api/liq-guard.json": {
-   "crc32": "b0f2728e",
+   "crc32": "c18ac7c5",
    "ok": true,
-   "bytes": 28371,
-   "ts": 1790701204236
+   "bytes": 28375,
+   "ts": 1790702102430
   },
   "state/klines-1h.json": {
-   "crc32": "35001936",
+   "crc32": "50583d93",
    "ok": true,
-   "bytes": 1144008,
-   "ts": 1790701179729
+   "bytes": 1143616,
+   "ts": 1790702084337
   },
   "state/liq-guard.json": {
-   "crc32": "b0f2728e",
+   "crc32": "c18ac7c5",
    "ok": true,
-   "bytes": 28371,
-   "ts": 1790701204235
+   "bytes": 28375,
+   "ts": 1790702102423
   },
   "api/mtf.json": {
-   "crc32": "99a8596f",
+   "crc32": "bc85a518",
    "ok": true,
-   "bytes": 8248,
-   "ts": 1790701181125
+   "bytes": 8263,
+   "ts": 1790702085722
   },
   "api/social.json": {
-   "crc32": "33c78315",
+   "crc32": "17f891be",
    "ok": true,
    "bytes": 5128,
-   "ts": 1790701181695
+   "ts": 1790702086206
   },
   "api/market-scanner.json": {
-   "crc32": "a320a9fa",
+   "crc32": "341bea31",
    "ok": true,
-   "bytes": 100954,
-   "ts": 1790701181754
+   "bytes": 100854,
+   "ts": 1790702086269
   },
   "api/volcore.json": {
-   "crc32": "9cf6ae6f",
+   "crc32": "d3b452ae",
    "ok": true,
-   "bytes": 1854,
-   "ts": 1790701181755
+   "bytes": 441,
+   "ts": 1790702086270
   },
   "api/confluence.json": {
-   "crc32": "da4668e9",
+   "crc32": "cee880e8",
    "ok": true,
-   "bytes": 38943,
-   "ts": 1790701181762
+   "bytes": 38524,
+   "ts": 1790702086276
   },
   "api/breakouts.json": {
-   "crc32": "ec585a46",
+   "crc32": "8d0a9f6e",
    "ok": true,
-   "bytes": 1802,
-   "ts": 1790701181771
+   "bytes": 1621,
+   "ts": 1790702086321
   },
   "api/coin-detail.json": {
-   "crc32": "e9589724",
+   "crc32": "736a57fa",
    "ok": true,
    "bytes": 24361,
-   "ts": 1790701181819
+   "ts": 1790702086327
   },
   "api/correlation.json": {
-   "crc32": "fb586859",
+   "crc32": "d549c83c",
    "ok": true,
-   "bytes": 2389,
-   "ts": 1790701181827
+   "bytes": 2359,
+   "ts": 1790702086332
   },
   "api/funding.json": {
-   "crc32": "fa197408",
+   "crc32": "f518586d",
    "ok": true,
    "bytes": 4681,
-   "ts": 1790701181829
+   "ts": 1790702086334
   },
   "api/sentiment.json": {
-   "crc32": "8f7c2753",
+   "crc32": "a761ff9e",
    "ok": true,
    "bytes": 5356,
-   "ts": 1790701181830
+   "ts": 1790702086335
   },
   "api/prices.json": {
-   "crc32": "427a132f",
+   "crc32": "4ae4adbe",
    "ok": true,
-   "bytes": 178,
-   "ts": 1790701181832
+   "bytes": 179,
+   "ts": 1790702086336
   },
   "api/signal-ledger.json": {
-   "crc32": "c4db3fc9",
+   "crc32": "246f817a",
    "ok": true,
-   "bytes": 3825,
-   "ts": 1790701181844
+   "bytes": 3870,
+   "ts": 1790702098654
   },
   "api/history/archive-2026-09.json": {
-   "crc32": "22add4c5",
+   "crc32": "65d4a92b",
    "ok": true,
-   "bytes": 19015672,
-   "ts": 1790701189236
+   "bytes": 19102747,
+   "ts": 1790702090625
   },
   "api/signal-archive.json": {
-   "crc32": "22add4c5",
+   "crc32": "65d4a92b",
    "ok": true,
-   "bytes": 19015672,
-   "ts": 1790701195917
+   "bytes": 19102747,
+   "ts": 1790702093621
   },
   "api/history/eval-2026-09.json": {
-   "crc32": "ee66a287",
+   "crc32": "e6e49763",
    "ok": true,
-   "bytes": 3895247,
-   "ts": 1790701164517
+   "bytes": 4149018,
+   "ts": 1790702098041
   },
   "api/signal-eval.json": {
-   "crc32": "447df1cd",
+   "crc32": "bd4cffcd",
    "ok": true,
-   "bytes": 554956,
-   "ts": 1790701165043
+   "bytes": 554949,
+   "ts": 1790702098627
   },
   "api/hypotheses.json": {
-   "crc32": "9a2dda3c",
+   "crc32": "646785f5",
    "ok": true,
-   "bytes": 93381,
-   "ts": 1790701165117
+   "bytes": 93432,
+   "ts": 1790702098644
   },
   "state/einstein.json": {
-   "crc32": "6894cc91",
+   "crc32": "9845ce07",
    "ok": true,
    "bytes": 514,
-   "ts": 1790701165122
+   "ts": 1790702098649
   },
   "api/einstein.json": {
-   "crc32": "33088a89",
+   "crc32": "c318b19d",
    "ok": true,
    "bytes": 784,
-   "ts": 1790701165123
+   "ts": 1790702098650
   },
   "api/live-plan.json": {
-   "crc32": "77121a69",
+   "crc32": "0255fa65",
    "ok": true,
-   "bytes": 2239,
-   "ts": 1790701165124
+   "bytes": 2242,
+   "ts": 1790702098651
   },
   "api/benchmark.json": {
-   "crc32": "42fc41cd",
+   "crc32": "2f5e0228",
    "ok": true,
-   "bytes": 4068,
-   "ts": 1790701165127
+   "bytes": 4298,
+   "ts": 1790702098653
   },
   "api/health.json": {
-   "crc32": "97b62956",
+   "crc32": "4a096bfc",
    "ok": true,
-   "bytes": 1639,
-   "ts": 1790701165141
+   "bytes": 1641,
+   "ts": 1790702098727
   },
   "api/trades-taken.json": {
-   "crc32": "a7296d37",
+   "crc32": "9a48aeae",
    "ok": true,
-   "bytes": 2428,
-   "ts": 1790701165156
+   "bytes": 2439,
+   "ts": 1790702098740
   },
   "state/equity-peak-demo.json": {
-   "crc32": "59914929",
+   "crc32": "6271fbe5",
    "ok": true,
-   "bytes": 11521,
-   "ts": 1790701167130
+   "bytes": 12431,
+   "ts": 1790702100439
   },
   "api/gate-stats.json": {
-   "crc32": "1f39e3f2",
-   "ok": true,
-   "bytes": 43872,
-   "ts": 1790701168771
+   "crc32": "7c85da5e",
+   "ok": false,
+   "bytes": 46577,
+   "ts": 1790702063828
   },
   "state/mae-track.json": {
-   "crc32": "c83f197d",
-   "ok": true,
+   "crc32": "abf1c149",
+   "ok": false,
    "bytes": 748,
-   "ts": 1790701168896
+   "ts": 1790702064026
   },
   "api/live-ledger.json": {
-   "crc32": "aeefcac4",
-   "ok": true,
-   "bytes": 16490,
-   "ts": 1790701168901
+   "crc32": "963201c6",
+   "ok": false,
+   "bytes": 16494,
+   "ts": 1790702064029
   },
   "api/god.json": {
-   "crc32": "1812d1ca",
+   "crc32": "9c66fa3c",
    "ok": true,
-   "bytes": 2342,
-   "ts": 1790701194639
+   "bytes": 2535,
+   "ts": 1790702072327
   },
   "api/bitget-symbols.json": {
    "crc32": "ff2a6dec",
    "ok": true,
    "bytes": 5641,
-   "ts": 1790701175526
+   "ts": 1790702079929
   },
   "state/klines-4H.json": {
-   "crc32": "47f86ed8",
+   "crc32": "e6ac45bc",
    "ok": true,
    "bytes": 588519,
-   "ts": 1790700905211
+   "ts": 1790701927536
   },
   "state/social-cache.json": {
    "crc32": "f92fd8c4",
@@ -209,16 +213,16 @@
    "ts": 1790700907751
   },
   "api/news.json": {
-   "crc32": "f562624b",
+   "crc32": "f8d457d9",
    "ok": true,
    "bytes": 8343,
-   "ts": 1790700945021
+   "ts": 1790701858363
   },
   "state/klines-15m.json": {
-   "crc32": "c53c20f7",
+   "crc32": "64221ec7",
    "ok": true,
-   "bytes": 584419,
-   "ts": 1790700875339
+   "bytes": 584408,
+   "ts": 1790701888039
   },
   "api/rr-backtest.json": {
    "crc32": "fc5d6acd",
@@ -227,34 +231,34 @@
    "ts": 1790701204034
   },
   "api/integrity.json": {
-   "crc32": "dfd86911",
+   "crc32": "7b9f7edc",
    "ok": true,
    "bytes": 5427,
-   "ts": 1790700304225
+   "ts": 1790701206839
   },
   "api/thoughts.json": {
-   "crc32": "8ac93d9d",
+   "crc32": "5b12402d",
    "ok": true,
-   "bytes": 1951,
-   "ts": 1790701172739
+   "bytes": 1952,
+   "ts": 1790702073734
   },
   "state/thoughts-state.json": {
-   "crc32": "57e6c63d",
+   "crc32": "f2c1f073",
    "ok": true,
-   "bytes": 16124,
-   "ts": 1790701172745
+   "bytes": 16929,
+   "ts": 1790702073818
   },
   "api/rr-optimize.json": {
-   "crc32": "f111772f",
+   "crc32": "84c6a386",
    "ok": true,
-   "bytes": 17774,
-   "ts": 1790699410327
+   "bytes": 17801,
+   "ts": 1790701219143
   },
   "state/rr-config.json": {
-   "crc32": "7dc0cc5b",
+   "crc32": "caf59005",
    "ok": true,
    "bytes": 212,
-   "ts": 1790699410330
+   "ts": 1790701219230
   },
   "state/klines-1D.json": {
    "crc32": "c8daf47d",
@@ -269,16 +273,16 @@
    "ts": 1790700730343
   },
   "api/sqn-report.json": {
-   "crc32": "4e50d7aa",
+   "crc32": "e883ab71",
    "ok": true,
-   "bytes": 1547,
-   "ts": 1790700759725
+   "bytes": 1513,
+   "ts": 1790701976248
   },
   "state/sqn-allowed.json": {
-   "crc32": "9bf5e761",
+   "crc32": "c662da46",
    "ok": true,
    "bytes": 145,
-   "ts": 1790700759725
+   "ts": 1790701976249
   }
  },
  "fillAudit": {
@@ -288,5 +292,5 @@
    "badCount": 0
   }
  },
- "refreshedAt": "2026-09-29T17:00:06.833Z"
+ "refreshedAt": "2026-09-29T17:15:03.822Z"
 }
