@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="color-scheme" content="dark"/>
 <meta name="theme-color" content="#07050f"/>
+<!-- CSP-lite: inline scripts are load-bearing here, so script-src can't be
+     strict — but these directives cost nothing and kill real vectors -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; frame-ancestors 'none'"/>
 <title>Sentinel Tactical Radar</title>
 <meta name="description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
 <meta property="og:title" content="Sentinel Tactical Radar"/>
@@ -22,7 +25,9 @@
 <script src="/sentinel-tactical-radar/live-feed.js" defer></script>
 <script src="/sentinel-tactical-radar/harmonics.js" defer></script>
 <script src="/sentinel-tactical-radar/cps-detect.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js" defer></script>
+<!-- vendored: removes the only third-party runtime dependency — a compromised
+     CDN can't inject JS into the ledger view, and first paint drops a TLS hop -->
+<script src="/sentinel-tactical-radar/vendor/lightweight-charts-4.2.3.js" defer></script>
 <!-- service worker: cache-first statics, SWR on api/*.json, jsDelivr
      failover when Pages is down — the dashboard never renders a hole -->
 <script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sentinel-tactical-radar/sw.js').catch(()=>{})</script>
@@ -554,7 +559,7 @@ const facTable=(fs,title)=>fs&&fs.length?`<div class="sub" style="margin-top:8px
 function sigDetail(s,i){
   const c=(LAST.detail&&LAST.detail.coins||{})[s.asset]||{};
   const e=ledgerEntryFor(s.asset);
-  const drv=(s.drivers||[]).map(d=>`<li>${d}</li>`).join('');
+  const drv=(s.drivers||[]).map(d=>`<li>${esc(d)}</li>`).join('');
   // doctrine strip — the registry mapping for this strategy + its live
   // prospective record, so every signal shows which doctrine fires it and
   // whether that doctrine has actually been paying
@@ -563,7 +568,7 @@ function sigDetail(s,i){
   const doc=B?`<div class="dmeta" style="margin-top:4px;border-top:1px solid var(--line);padding-top:6px"><span>doctrine · ${LK(B.u,'<b>'+B.t+'</b>')} <span class="sub">${B.a}</span></span></div>
     <div class="sub" style="margin:2px 0 4px;font-size:11px;font-style:italic">“${B.d}”${bs?` <span class="sub" style="font-style:normal">— registry record: <b class="num ${bs.winRate>=50?'up':'dn'}">${bs.winRate}% WR</b> · ${bs.avgPnlPct>=0?'+':''}${bs.avgPnlPct}% avg · n=${bs.n}</span>`:''}</div>`:'';
   return `<tr class="detail" data-d="${s.asset}"${OPEN.has(s.asset)?'':' hidden'}><td colspan="9">
-    <div class="dhead"><span class="thesis">${s.thesis||''}</span></div>
+    <div class="dhead"><span class="thesis">${esc(s.thesis||'')}</span></div>
     <ul class="ddrv">${drv}</ul>
     ${s.ta&&s.ta.eng?`<div class="engrow">${['rsi','macd','obv','dow','ichi','mas','brk','minor','major','macro','superMacro','rev','mtf'].map(k=>{const x=s.ta.eng[k];return x?`<span class="echip ${x.dir||'flat'}" title="${esc(x.label)||''}"><b>${({rsi:'RSI',macd:'MACD',obv:'OBV',dow:'DOW',ichi:'ICHI',mas:'MA',brk:'BRK',minor:'MIN',major:'MAJ',macro:'MACRO',superMacro:'SMACRO',rev:'REV',mtf:'MTF'})[k]}</b> ${x.dir==='bull'?'▲':x.dir==='bear'?'▼':'·'}</span>`:''}).join('')}</div>`:''}
     ${s.ta&&s.ta.liquidity?`<div class="engrow" title="Liquidity Levels — resting stop pools above highs (BSL) and below lows (SSL). Sweeps that fail to hold reverse toward the opposing pool.">
@@ -1099,8 +1104,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       $('thMood').innerHTML='<b style="color:'+mc+';letter-spacing:.15em;font-size:12px">&#9679; '+thR.mood+'</b>';
       $('thHead').textContent=thR.headline;
       const tm=t=>{const s=Math.max(0,(Date.now()-t)/1e3);return s<90?Math.round(s)+'s ago':s<5400?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'};
-      $('thNow').innerHTML=(thR.now||[]).map(t=>'<div class="thitem thnow"><span class="thic">'+t.icon+'</span><span class="thtx">'+t.text+'</span></div>').join('');
-      $('thFeed').innerHTML=(thR.feed||[]).slice(0,12).map(t=>'<div class="thitem"><span class="thic">'+t.icon+'</span><span class="thtx">'+t.text+'</span><span class="thtm">'+(t.ts?tm(t.ts):'')+'</span></div>').join('');
+      $('thNow').innerHTML=(thR.now||[]).map(t=>'<div class="thitem thnow"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(t.text)+'</span></div>').join('');
+      $('thFeed').innerHTML=(thR.feed||[]).slice(0,12).map(t=>'<div class="thitem"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(t.text)+'</span><span class="thtm">'+(t.ts?tm(t.ts):'')+'</span></div>').join('');
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};
@@ -1108,7 +1113,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const col=stCol2[h.status]||'var(--mut)';
       const delta=h.prev&&h.prev.value!=null&&h.value!=null?` <span class="sub">(was ${h.prev.value})</span>`:'';
       const hist=(h.history||[]).map(x=>x.value).filter(v=>v!=null);
-      return `<div class="ledger-row"><span style="flex:1"><b style="font-size:11px">${h.claim}</b><br><span class="sub">${h.metric}${delta} · n=${h.n}</span></span>${hist.length>2?`<span style="align-self:center">${sparkSVG(hist,70,20)}</span>`:''}<b class="num" style="color:${col};font-size:9px;letter-spacing:.1em">${h.status}</b></div>`;
+      return `<div class="ledger-row"><span style="flex:1"><b style="font-size:11px">${esc(h.claim)}</b><br><span class="sub">${esc(h.metric)}${delta} · n=${esc(h.n)}</span></span>${hist.length>2?`<span style="align-self:center">${sparkSVG(hist,70,20)}</span>`:''}<b class="num" style="color:${col};font-size:9px;letter-spacing:.1em">${esc(h.status)}</b></div>`;
     }).join('')||'<div class="sub">no claims registered yet — hypotheses land with the next build</div>';
     // ---- intelligence wire: asset-tagged headlines, near-dup deduped ----
     const seenH=new Set();
@@ -1117,10 +1122,13 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const k=(i.title||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,42);
       if(seenH.has(k))return false;seenH.add(k);return true;
     });
+    // wire items are EXTERNAL feed data — every interpolated field escaped,
+    // link scheme-whitelisted (a hostile headline must render as text, not DOM)
+    const safeL=u=>/^https?:\/\//i.test(u||'')?u:'#';
     $('wireBody').innerHTML=wireItems.map(i=>{
-      const tag=(i.tags||[]).map(t=>`<a class="mbadge al" href="${BG(t)}" target="_blank" rel="noopener" style="margin-right:3px;font-size:8px">${t}</a>`).join('');
+      const tag=(i.tags||[]).map(t=>`<a class="mbadge al" href="${BG(t)}" target="_blank" rel="noopener" style="margin-right:3px;font-size:8px">${esc(t)}</a>`).join('');
       const tc=i.tone==='bull'?'var(--grn)':i.tone==='bear'?'var(--red)':'var(--mut)';
-      return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a class="al" href="${i.link}" target="_blank" rel="noopener">${i.title}</a><br>${tag}<span class="sub">${i.src} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${(i.tone||'').toUpperCase()}</span></div>`;
+      return `<div class="ledger-row" style="align-items:flex-start"><span style="flex:1"><a class="al" href="${esc(safeL(i.link))}" target="_blank" rel="noopener">${esc(i.title)}</a><br>${tag}<span class="sub">${esc(i.src)} · ${ago(i.ts)} ago</span></span><span class="num" style="color:${tc};font-size:9px">${esc((i.tone||'').toUpperCase())}</span></div>`;
     }).join('')||'<div class="sub">wire quiet — no fresh headlines in the last 24h</div>';
 
   }
