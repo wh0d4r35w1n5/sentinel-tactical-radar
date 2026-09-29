@@ -208,6 +208,43 @@ footer a{color:var(--cyan)}
 body.simple .pro{display:none!important}
 body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
 @media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before,.godchip .eye,.wrap .panel,.tape{animation:none}}
+/* ---- universal responsiveness — flawless on every viewport & browser ---- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,svg,canvas,video{max-width:100%}
+.wrap>*,.grid>*,.hero>*,.col>*{min-width:0} /* grid children shrink — kills the mobile overflow blowout */
+header{flex-wrap:wrap;row-gap:8px}
+.chips{flex-wrap:wrap;row-gap:6px}
+@media(max-width:1100px){
+  .stats[style*='repeat(6'],.stats[style*='repeat(5']{grid-template-columns:repeat(3,1fr)!important}
+  .stats[style*='repeat(4']{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(max-width:760px){
+  body{font-size:12px}
+  .wrap{padding:12px 10px}
+  .panel{padding:12px 13px;border-radius:10px;margin-bottom:12px!important}
+  .big{font-size:clamp(28px,11vw,44px)}
+  .stat .v{font-size:17px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .stats[style*='repeat(6'],.stats[style*='repeat(5'],.stats[style*='repeat(4'],.stats[style*='repeat(3']{grid-template-columns:repeat(2,1fr)!important}
+  .chips{font-size:10px;gap:8px}
+  .ledger-row{font-size:11px;padding:6px 0}
+  .jscroll table{min-width:700px}
+  .ptitle{font-size:11px}
+  .ptitle .sub{display:block;float:none!important;margin-top:2px;font-size:9px}
+  footer{font-size:10px;padding:14px 12px}
+  .tape-inner{font-size:11px}
+}
+@media(max-width:420px){
+  .stats{grid-template-columns:1fr 1fr!important}
+  .big{font-size:clamp(24px,12vw,36px)}
+  .wrap{padding:8px 6px}
+  .panel{padding:10px 11px}
+  .vtog{order:99}
+}
+@supports(padding:env(safe-area-inset-bottom)){
+  body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  footer{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+}
 
 /* ============ aesthetics layer — Zyzz presence · Apple restraint · Fluent depth ============ */
 /* APPLE: numbers as typography — every figure snaps into its column */
@@ -292,7 +329,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
   </div>
   <div class="hero">
     <div class="panel">
-      <div class="ptitle">Composite market pulse · 24h breadth index</div>
+      <div class="ptitle">🌊 Composite market pulse · 24h breadth index</div>
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
         <div class="big" id="pulseVal">—</div>
         <div id="acctBal" style="text-align:right;display:none;flex-shrink:0"></div>
@@ -301,89 +338,89 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
       <div class="sub" id="pulseSub"></div>
     </div>
     <div class="panel">
-      <div class="ptitle">Market breadth · Bitget USDT-M perps</div>
+      <div class="ptitle">📡 Market breadth · Bitget USDT-M perps</div>
       <div class="stats" id="stats"></div>
     </div>
   </div>
   <div class="tape"><div class="tape-inner" id="tape"></div></div>
   <div class="panel neon" id="thPanel" style="margin-bottom:16px;display:none">
-    <div class="ptitle">SENTINEL MIND · what the bot is doing right now <span class="sub">— every move explained in plain english · updates live each cycle</span><span id="thMood" style="float:right"></span></div>
+    <div class="ptitle">🧠 SENTINEL MIND · what the bot is doing right now <span class="sub">— every move explained in plain english · updates live each cycle</span><span id="thMood" style="float:right"></span></div>
     <div id="thHead" style="font-size:14px;font-weight:700;letter-spacing:.02em;margin-bottom:10px;line-height:1.45"></div>
     <div id="thNow"></div>
     <div id="thFeed" style="margin-top:4px"></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Vol spike core · order-flow radar <span class="sub">— relative volume × effort/result on closed 1h candles · intelligence layer, never an order trigger</span><span id="volCoreSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">⚡ Vol spike core · order-flow radar <span class="sub">— relative volume × effort/result on closed 1h candles · intelligence layer, never an order trigger</span><span id="volCoreSub" class="sub" style="float:right"></span></div>
     <div id="volCore" class="vrow"><div class="sub">scanning for abnormal prints…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Breakout core · coil → break → retest <span class="sub">— 55-bar Donchian close-confirmed · retests rank highest, failed breaks flag the trap · intelligence layer</span><span id="brkSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">🎯 Breakout core · coil → break → retest <span class="sub">— 55-bar Donchian close-confirmed · retests rank highest, failed breaks flag the trap · intelligence layer</span><span id="brkSub" class="sub" style="float:right"></span></div>
     <div id="brkCore" class="vrow"><div class="sub">scanning breakouts…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Multi-timeframe matrix · 15m → 1D alignment <span class="sub">— every frame votes trend + RSI + MACD + EMA posture · STACKED = all frames agree · HTF-LEAD + LTF-pullback = the elite dip/rip context</span><span id="mtfSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">🧮 Multi-timeframe matrix · 15m → 1D alignment <span class="sub">— every frame votes trend + RSI + MACD + EMA posture · STACKED = all frames agree · HTF-LEAD + LTF-pullback = the elite dip/rip context</span><span id="mtfSub" class="sub" style="float:right"></span></div>
     <div id="mtfBody" style="overflow-x:auto"><div class="sub">reading frames…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Social radar · crowd attention + sentiment <span class="sub">— LunarCrush galaxy/altrank when keyed · CoinGecko trending + Fear &amp; Greed + news-wire tone, keyless · heat = attention, dir = directional read — a coin can trend on FUD</span><span id="socSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">📣 Social radar · crowd attention + sentiment <span class="sub">— LunarCrush galaxy/altrank when keyed · CoinGecko trending + Fear &amp; Greed + news-wire tone, keyless · heat = attention, dir = directional read — a coin can trend on FUD</span><span id="socSub" class="sub" style="float:right"></span></div>
     <div id="socFg"></div>
     <div id="socBody" class="vrow"><div class="sub">reading the crowd…</div></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Signal pressure · how close the engine is to firing</div>
+    <div class="ptitle">🔥 Signal pressure · how close the engine is to firing</div>
     <div style="display:flex;justify-content:space-between;font-size:11px"><span class="sub">near-miss candidates, next 10 below the cutoff</span><b class="num" id="pressPct">—</b></div>
     <div class="pressbar"><i id="pressFill" style="width:0%"></i></div>
     <div id="pressList"></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px;border-color:rgba(61,220,255,.45)">
-    <div class="ptitle">Evidence / validation · prospective results only <span class="sub">— emitted signals are measured forward, traded or not · the number that matters is whether predictions precede outcomes</span><span id="evStatus" style="float:right"></span></div>
+    <div class="ptitle">🧪 Evidence / validation · prospective results only <span class="sub">— emitted signals are measured forward, traded or not · the number that matters is whether predictions precede outcomes</span><span id="evStatus" style="float:right"></span></div>
     <div class="stats" id="evStats" style="grid-template-columns:repeat(6,1fr)"></div>
     <div id="evNote" class="sub" style="margin-top:8px;font-size:10px"></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Hypothesis engine · what the evidence currently supports <span class="sub">— claims escalate with sample: UNTESTED &lt;10 · EARLY &lt;30 · SUGGESTIVE &lt;100 · then SUPPORTED/REFUTED</span></div>
+    <div class="ptitle">💡 Hypothesis engine · what the evidence currently supports <span class="sub">— claims escalate with sample: UNTESTED &lt;10 · EARLY &lt;30 · SUGGESTIVE &lt;100 · then SUPPORTED/REFUTED</span></div>
     <div id="hypoBody"></div>
   </div>
   <div class="panel pro" style="margin-bottom:16px">
-    <div class="ptitle">Einstein lab · Head of R&amp;D — IT/DevOps <span class="sub">— autonomous research: per-factor alpha lift, pipeline diagnostics, structural clustering, improvement proposals · intelligence-surface authority, execution stays GOD-gated</span><span id="einSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">🧬 Einstein lab · Head of R&amp;D — IT/DevOps <span class="sub">— autonomous research: per-factor alpha lift, pipeline diagnostics, structural clustering, improvement proposals · intelligence-surface authority, execution stays GOD-gated</span><span id="einSub" class="sub" style="float:right"></span></div>
     <div id="einBody"><div class="sub">lab initialising…</div></div>
   </div>
   <div class="panel" style="margin-bottom:16px">
-    <div class="ptitle">Intelligence wire · live headlines <span class="sub">— public RSS, asset-tagged · context only, never a score input</span></div>
+    <div class="ptitle">📰 Intelligence wire · live headlines <span class="sub">— public RSS, asset-tagged · context only, never a score input</span></div>
     <div id="wireBody" style="max-height:220px;overflow-y:auto"></div>
   </div>
   <div class="grid">
     <div class="panel">
-      <div class="ptitle">Ranked signals · momentum confluence <span class="sub">— click a row for detail · positions open only at score ≥70 (≥75 volatile) + strategy must fit the market type — wrong-family setups stand down</span></div>
+      <div class="ptitle">🏆 Ranked signals · momentum confluence <span class="sub">— click a row for detail · positions open only at score ≥70 (≥75 volatile) + strategy must fit the market type — wrong-family setups stand down</span></div>
       <div style="overflow-x:auto"><table><thead><tr><th class="srt" data-t="sig" data-k="asset">Asset</th><th class="srt" data-t="sig" data-k="side">Side</th><th class="srt" data-t="sig" data-k="grade">Grade</th><th class="srt" data-t="sig" data-k="score">Score</th><th class="srt" data-t="sig" data-k="chg">24h</th><th class="srt" data-t="sig" data-k="rsi">RSI 1h</th><th class="srt" data-t="sig" data-k="px">Price</th><th class="srt" data-t="sig" data-k="tgt">Target</th><th>48h</th></tr></thead><tbody id="sigBody"></tbody></table></div>
     </div>
     <div class="col">
       <div class="panel">
-        <div class="ptitle">Top movers / laggards · 24h</div>
+        <div class="ptitle">📈 Top movers / laggards · 24h</div>
         <div class="ml">
           <div><div class="h">Movers</div><div id="mv"></div></div>
           <div><div class="h">Laggards</div><div id="lg"></div></div>
         </div>
       </div>
       <div class="panel">
-        <div class="ptitle">Funding extremes · 8h rate</div>
+        <div class="ptitle">💰 Funding extremes · 8h rate</div>
         <div class="ml">
           <div><div class="h">Longs pay</div><div id="fundPos"></div></div>
           <div><div class="h">Shorts pay</div><div id="fundNeg"></div></div>
         </div>
       </div>
       <div class="panel">
-        <div class="ptitle">Volume leaders · 24h turnover</div>
+        <div class="ptitle">🔊 Volume leaders · 24h turnover</div>
         <div id="volLead" style="font-size:12px"></div>
       </div>
     </div>
   </div>
   <div class="panel" style="margin-top:16px" id="jPanel">
-    <div class="ptitle">Trade journal <span class="sub">— <b>Taken</b>: real exchange round-trips with fees · <b>Emitted</b>: every signal graded against the tape it predicted (click a row for before/after chartwork)</span><span class="sub" style="float:right"><span class="jtog" data-jm="taken">Taken</span> <span class="jtog" data-jm="emitted">Emitted</span> &nbsp; <span id="jSummary"></span></span></div>
+    <div class="ptitle">📜 Trade journal <span class="sub">— <b>Taken</b>: real exchange round-trips with fees · <b>Emitted</b>: every signal graded against the tape it predicted (click a row for before/after chartwork)</span><span class="sub" style="float:right"><span class="jtog" data-jm="taken">Taken</span> <span class="jtog" data-jm="emitted">Emitted</span> &nbsp; <span id="jSummary"></span></span></div>
     <div class="jscroll"><table><thead id="jHead"></thead><tbody id="journal"></tbody></table></div>
   </div>
   <div class="panel neon" id="livePanel" style="margin-top:16px;display:none">
-    <div class="ptitle">Live execution · real Bitget account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
+    <div class="ptitle">🚀 Live execution · real Bitget account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
     <div class="stats" id="liveStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="liveRows"></div>
     <div id="liveRisk" class="sub" style="margin-top:8px;font-size:10px"></div>
@@ -393,22 +430,36 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="liveBench"></div>
     <div id="liveActs" class="sub" style="margin-top:6px;font-size:10px;max-height:300px;overflow-y:auto"></div>
   </div>
+  <div class="panel neon" id="vaultPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">🏦 Wealth vault · profits locked forever <span class="sub">— 50% of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever</span><span id="vaultSub" class="sub" style="float:right"></span></div>
+    <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="sub" id="vaultNote" style="margin-top:8px;font-size:10px"></div>
+  </div>
+  <div class="panel pro" id="edgePanel" style="margin-top:16px;display:none">
+    <div class="ptitle">⚖️ Payoff engine · empirical edge × Monte Carlo <span class="sub">— fitted entry edge gates and scales every entry · ladder profile re-picked by billion-roll evidence each 30min</span><span id="edgeSub" class="sub" style="float:right"></span></div>
+    <div class="stats" id="edgeStats" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="sub" id="edgeNote" style="margin-top:8px;font-size:10px"></div>
+  </div>
+  <div class="panel pro" id="integPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">✅ Integrity · CRC32 tamper-evident record <span class="sub">— every artifact checksums into the manifest on write, verifies on read, audits on a 15min loop</span><span id="integSub" class="sub" style="float:right"></span></div>
+    <div class="stats" id="integStats" style="grid-template-columns:repeat(4,1fr)"></div>
+  </div>
   <div class="panel neon" id="godPanel" style="margin-top:16px;display:none">
-    <div class="ptitle">GOD · the overseer <span class="sub">— audits every system invariant each cycle · pure read, never mutates, cannot hide</span><span id="godVerdict" style="float:right"></span></div>
+    <div class="ptitle">👁️ GOD · the overseer <span class="sub">— audits every system invariant each cycle · pure read, never mutates, cannot hide</span><span id="godVerdict" style="float:right"></span></div>
     <div id="godChecks" class="pro"></div>
     <div class="sub" id="godAt" style="margin-top:6px;font-size:9px"></div>
   </div>
   <div class="panel pro" style="margin-top:16px">
-    <div class="ptitle">Logic drivers · book-weighted strategy influence</div>
+    <div class="ptitle">🧭 Logic drivers · book-weighted strategy influence</div>
     <div id="drivers"></div>
   </div>
   <div class="panel pro" style="margin-top:16px">
-    <div class="ptitle">Funding radar · Bitget perp funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
+    <div class="ptitle">💸 Funding radar · Bitget perp funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
     <div id="carryStats" class="sub" style="margin-bottom:8px"></div>
     <div class="jscroll"><table><thead><tr><th class="srt" data-t="fund" data-k="asset">Coin</th><th class="srt" data-t="fund" data-k="rate">Funding 8h</th><th class="srt" data-t="fund" data-k="ann">Annualized</th><th class="srt" data-t="fund" data-k="basis">Basis</th><th>Arb play</th><th class="srt" data-t="fund" data-k="be">Breakeven</th></tr></thead><tbody id="fundRows"></tbody></table></div>
   </div>
   <div class="panel" style="margin-top:16px">
-    <div class="ptitle">Benchmark · this engine vs the paid-signal field <span class="sub">— real Bitget account equity vs passive benchmarks, framed by <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
+    <div class="ptitle">📊 Benchmark · this engine vs the paid-signal field <span class="sub">— real Bitget account equity vs passive benchmarks, framed by <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
     <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="ptitle" style="margin-top:14px;font-size:10px">vs boring benchmarks <span class="sub" id="benchSince">— does the intelligence add value beyond doing something trivial?</span></div>
     <div id="benchSvgWrap" style="display:none;margin:6px 0 2px"><svg id="benchSvg" viewBox="0 0 560 80" width="100%" height="70" preserveAspectRatio="none"></svg><div class="sub" style="font-size:9px"><span style="color:var(--grn)">— sentinel</span> vs <span style="color:var(--mut)">- - BTC hold</span> · % since clock start</div></div>
@@ -647,8 +698,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
@@ -667,9 +718,11 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const aud=(scan&&scan.fx&&scan.fx.audPerUsd)?' · A$'+(src.equityUsd*scan.fx.audPerUsd).toFixed(2):'';
       const n=(src.positionsAfter||src.positions||[]).length;
       ab.style.display='block';
-      ab.innerHTML=`<div class="sub" style="letter-spacing:.14em;font-size:9px">ACCOUNT · ${src.mode==='demo'?'DEMO':'LIVE'}</div>
+      ab.innerHTML=`<div class="sub" style="letter-spacing:.14em;font-size:9px">${src.mode==='demo'?'🧪 DEMO':'💰 LIVE'} ACCOUNT</div>
         <div class="num" style="font-size:26px;font-weight:800;line-height:1.1">$${(+src.equityUsd).toLocaleString(void 0,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-        <div class="sub" style="font-size:9px">${n} pos${src.marginFreeUsd!=null?' · free $'+(+src.marginFreeUsd).toFixed(2):''}${aud}</div>`;
+        <div class="sub" style="font-size:9px">${n} pos${src.marginFreeUsd!=null?' · free $'+(+src.marginFreeUsd).toFixed(2):''}${aud}</div>
+        ${src.vaultUsd>0?`<div class="sub" style="font-size:9px;margin-top:2px">🏦 <b style="color:var(--gold)">$${(+src.vaultUsd).toFixed(2)}</b> vaulted — untouchable</div>`:''}
+        ${src.edgeLive!=null?`<div class="sub" style="font-size:9px">⚖️ edge ${src.edgeLive} · ${src.edgeSrc||''}</div>`:''}`;
     }else ab.style.display='none';
   }
   const o=scan.overview;
@@ -970,6 +1023,26 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
             el.map(e=>`<div class="ledger-row"><span class="sub"><b style="color:var(--fg)">${e.symbol}</b> ${e.direction||''} ${e.strategy?'· '+e.strategy:''}${e.rangePosition!=null?' · range '+Math.round(e.rangePosition*100)+'%':''}${e.score!=null?' · score '+e.score:''}${e.notionalUsd?' · $'+e.notionalUsd:''}</span><span class="sub" style="font-size:9px">${ago(e.ts)}</span></div>`).join('');
         }
       }
+    }
+    // ---- wealth vault — the untouchable 50%, front and center ----
+    if(src&&src.vaultUsd>0){
+      $('vaultPanel').style.display='block';
+      $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net','$'+(src.epochNetUsd??'—'),'live P&L of the clean test book'],['💸 cut','50%','of every profitable close']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      $('vaultNote').innerHTML='🔑 <b style="color:var(--gold)">cash-out only, never trade-in</b> — profits leave the firing line the moment they land. Compounding happens in the vault, risk stays in the book.';
+    }
+    // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
+    if(rrOpt&&rrOpt.winner){
+      $('edgePanel').style.display='block';
+      const w=rrOpt.winner,src3=src&&src.edgeSrc?src.edgeSrc:'—';
+      $('edgeStats').innerHTML=[['⚖️ fitted edge',src&&src.edgeLive!=null?src.edgeLive:'—','entry quality vs fair coin — '+(src3==='skeptical-prior'?'prior until n≥20':'measured from episodes')],['🏆 ladder',(w.name||'')+' '+(w.legs||[]).map(l=>Math.round(l.f*100)+'%@'+l.r+'R').join(' '),'R:R legs picked by 1M+ roll sim'],['📐 expectancy',(w.expR>=0?'+':'')+w.expR+'R','per trade at fitted edge'],['🎲 SQN',w.sqn??'—','system quality number']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:14px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      const b=rrBt&&rrBt.fitted;
+      $('edgeNote').innerHTML=(b?`🧪 backtest: ep n=${b.episodeN} · win ${((b.epWinShare||0)*100).toFixed(0)}% · MAE ${b.medMaePct}% vs MFE ${b.medMfePct}% — `:'')+'⚙️ recalibrates every 30min: edge fits on real episodes, ladder re-rolls, exec picks it up next cycle';
+    }
+    // ---- integrity — the tamper-evident ledger, one glance ----
+    if(integ){
+      $('integPanel').style.display='block';
+      const bad=(integ.corrupt||0)+(integ.missing||0);
+      $('integStats').innerHTML=[['✅ verified',integ.checked??'—','files CRC32-matched to manifest'],['🧾 fills fcrc',integ.fillsOk??'—','per-record checksums'],[''+(bad?'🚨 corrupt':'🛡 clean'),bad||0,'tampered or missing'],['⏱ audit',integ.at?ago(Date.parse(integ.at)):'—','standalone verifier, 15min loop']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:17px;color:${bad?'var(--red)':'var(--grn)'}">${v}</div><div class="sub">${s}</div></div>`).join('');
     }
     // ---- GOD overseer — every invariant, audited each cycle ----
     if(god&&god.checks){
