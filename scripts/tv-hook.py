@@ -110,7 +110,7 @@ def normalize(body):
     if mode == "br" and not (brk and brk > 0):
         raise ValueError("br requires break>0")
     tps = []
-    for t in (body.get("tps") or []):
+    for t in (body.get("tps") or body.get("tp") or []):
         if isinstance(t, (list, tuple)) and len(t) >= 1:
             px, pct = _num(t[0]), _num(t[1]) if len(t) > 1 else None
         elif isinstance(t, dict):

@@ -958,6 +958,25 @@ async def main():
         wstate("cmd-setups", f)
         return f"⚫ <b>{a} CANCELLED</b> — executor ignores it next cycle"
 
+    def c_hook():
+        # webhook console — the shared secret is operator-only; this chat IS
+        # the operator channel (Saved Messages), so replying here is safe.
+        f = statef("tv-hook") or {}
+        secret = f.get("secret") or ""
+        if not secret:
+            return ("🔗 <b>TradingView hook not armed</b>\n"
+                    "state/tv-hook.json needs <code>{\"secret\":\"…\"}</code> on the box")
+        url = "https://168-138-102-53.sslip.io/tv-hook"
+        tpl = ('{"key":"%s","symbol":"{{ticker}}","direction":"long",'
+               '"mode":"market","sl":{{close}}*0.97,"tps":[{{close}}*1.03,'
+               '{{close}}*1.06],"risk":0.5,"id":"{{timenow}}"}') % secret
+        return ("🔗 <b>TRADINGVIEW HOOK</b>\n─────────────────────\n"
+                f"URL: <code>{url}</code>\n"
+                f"secret: <code>{esc(secret)}</code>\n\n"
+                "Alert body template:\n<code>" + esc(tpl) + "</code>\n\n"
+                "<i>mode: market | bounce | br · tp[] splits position "
+                "evenly · optional: entry, rr, risk%, ttlMin, note</i>")
+
     # emoji as first-class commands — the OS listens for raw emoji too
     EMOJI_CMDS = {
         "📊": "status", "💰": "vault", "📈": "eq", "📉": "pos",
@@ -983,7 +1002,8 @@ async def main():
             "deny": c_deny, "allow": c_allow, "denied": c_denied,
             "risk": c_risk, "hud": c_hud,
             "setups": c_setups, "builder": c_setups,
-            "unsetup": c_unsetup, "cancelsetup": c_unsetup, "setupcancel": c_unsetup}
+            "unsetup": c_unsetup, "cancelsetup": c_unsetup, "setupcancel": c_unsetup,
+            "hook": c_hook, "webhook": c_hook, "tv": c_hook}
 
     def run_cmd(fn, arg):
         # handlers are mixed-arity — intel commands ignore args, control
@@ -1046,7 +1066,8 @@ async def main():
         [Button.inline("📡 Signals", b"cmd:sig"), Button.inline("🌡 Regime", b"cmd:regime"), Button.inline("🧠 Quant", b"cmd:quant")],
         [Button.inline("📐 SQN", b"cmd:sqn"), Button.inline("📒 Fills", b"cmd:fills"), Button.inline("🏦 Vault", b"cmd:vault")],
         [Button.inline("🗺 Plan", b"cmd:plan"), Button.inline("🚧 Gates", b"cmd:gates"), Button.inline("🌩 GOD", b"cmd:god")],
-        [Button.inline("� Setups", b"cmd:setups"), Button.inline("�💓 Pulse", b"cmd:pulse"), Button.inline("🖥 HUD", b"cmd:hud"), Button.inline("⏸ Pause", b"cmd:pause")],
+        [Button.inline(chr(0x1F6E0)+" Setups", b"cmd:setups"), Button.inline(chr(0x1F517)+" Hook", b"cmd:hook"), Button.inline(chr(0x1F493)+" Pulse", b"cmd:pulse")],
+        [Button.inline(chr(0x1F5A5)+" HUD", b"cmd:hud"), Button.inline(chr(0x23F8)+" Pause", b"cmd:pause"), Button.inline(chr(0x1F198)+" Help", b"cmd:help")],
     ]
 
     async def send_menu():

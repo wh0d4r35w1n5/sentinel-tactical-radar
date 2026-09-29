@@ -4,7 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+# ubuntu, not root: the service writes state/cmd-setups.json which tg-watch
+# (ubuntu) must also write for /unsetup cancels — root-owned file would 403
+# the operator's own board.
+User=ubuntu
 WorkingDirectory=/opt/sentinel
 ExecStart=/usr/bin/python3 /opt/sentinel/scripts/tv-hook.py
 Restart=always
