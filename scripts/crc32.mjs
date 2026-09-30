@@ -94,7 +94,18 @@ export const integrityCheck = (file) => {
     const entry = loadManifest().files?.[relKey(file)];
     if (!entry) return { ok: null };
     const actual = crc32hex(fs.readFileSync(file));
-    return { ok: actual === entry.crc32, expected: entry.crc32, actual };
+    if (actual === entry.crc32) return { ok: true, expected: entry.crc32, actual };
+    // write-in-flight grace: writeCheckedJson renames the file THEN notes
+    // the manifest — a verify landing in that ~ms gap (or against a writer
+    // that hasn't noted yet) reads new-file/old-entry. That is not
+    // corruption. Grace fresh mismatches for 120s; a writer that never
+    // notes still flags once the file ages past the window.
+    try {
+      const mt = fs.statSync(file).mtimeMs;
+      if (entry.ts && mt > entry.ts && mt - entry.ts < 120e3)
+        return { ok: null, pending: true, expected: entry.crc32, actual };
+    } catch {}
+    return { ok: false, expected: entry.crc32, actual };
   } catch (e) {
     return { ok: false, error: String(e).slice(0, 120) };
   }

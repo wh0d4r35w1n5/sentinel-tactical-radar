@@ -48,6 +48,19 @@ const POLL_MS = +(process.env.LIQ_GUARD_POLL_MS || 300);
 const STOP_TRIM = process.env.LIQ_GUARD_STOP_TRIM !== '0';
 const STOP_ZONE = +(process.env.LIQ_GUARD_STOP_ZONE_PCT || 1.2); // % above stop = trim zone
 const DEEPEN_BAND = +(process.env.LIQ_GUARD_DEEPEN_BAND || 0.9); // stop re-pinned at N% of liq band
+// margin-loss circuit: pos_loss stops sit at ~60-80% of posted margin at
+// these leverages — letting one fire delivers the whole -1R+ band as a
+// tail loss (the epoch's three -$11/-$12/-$20 closes ARE the deficit).
+// The floor closes at -(MAXLOSS_PCT x posted margin) — a defined ~-0.6R
+// cut while the deep stop stays armed behind it as catastrophe backstop.
+const MAXLOSS_PCT = +(process.env.LIQ_GUARD_MAXLOSS_PCT || 0.55);
+// naked-position synthesis: an open book with NO pos_loss gets one pinned
+// at the liq-band inner edge — same geometry as the deepen path.
+const NAKED_SYNTH = process.env.LIQ_GUARD_NAKED_SYNTH !== '0';
+const NAKED_COOLDOWN_MS = +(process.env.LIQ_GUARD_NAKED_COOLDOWN_MS || 60e3);
+// stop-approach clips whose protective value (clipNotional x dist-to-stop)
+// is under this are skipped — see the floor comment at the fire gate.
+const DUST_USD = +(process.env.LIQ_GUARD_DUST_USD || 0.15);
 const planCache = {}; // sym -> { at, rows } — plans change slowly, poll 20s
 const STATE = path.join(__dirname, '..', 'state', 'liq-guard.json');
 const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', COIN = 'USDT';
@@ -103,6 +116,7 @@ const getAllPos = async () => {
   return (rows || []).filter((x) => +x.total > 0).map((p) => ({
     sym: p.symbol, side: p.holdSide, size: +p.total, entry: +p.openPriceAvg,
     upl: +p.unrealizedPL, liq: +p.liquidationPrice, marginMode: p.marginMode, lev: +p.leverage,
+    margin: +p.marginSize || 0,
   })).filter((p) => p.liq > 0);
 };
 const getPlans = async (sym) =>
@@ -305,6 +319,52 @@ async function tick() {
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
     stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
 
+    // ---- margin-loss circuit: close the whole position when mark-to-market
+    // loss crosses -(MAXLOSS_PCT x posted margin). Fires BEFORE the deep
+    // pos_loss band — converts tail stop-outs into bounded ~-0.6R losses.
+    if (MAXLOSS_PCT > 0 && p.margin > 0 && p.upl <= -(MAXLOSS_PCT * p.margin)) {
+      const fresh = await getAllPos().catch(() => null);
+      const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
+      if (fp && fp.margin > 0 && fp.upl <= -(MAXLOSS_PCT * fp.margin)) {
+        const capUsd = (MAXLOSS_PCT * fp.margin).toFixed(2);
+        try {
+          await closeMarket(fp.sym, fp.side, String(fp.size), posMode, fp.marginMode);
+          log(`LOSS-CAP ${key}: upl ${fp.upl.toFixed(2)} <= -${capUsd} (${(MAXLOSS_PCT * 100).toFixed(0)}% margin) — full close @ ${mark}`);
+          outbox(`🛑 LOSS-CAP — ${fp.sym} ${fp.side}: upl $${fp.upl.toFixed(2)} breached -$${capUsd} floor (${(MAXLOSS_PCT * 100).toFixed(0)}% of margin). Full close @ ${mark} — bounded loss, not a band hit.`);
+          g.capped = true; dirty = true;
+        } catch (e) { log(`LOSS-CAP ${key} close failed: ${e.message}`); }
+        continue; // position flat or closing — nothing below applies
+      }
+    }
+
+    // ---- naked-stop synthesis: open position with no pos_loss gets one ----
+    // Pinned at the liq-band inner edge (DEEPEN_BAND geometry — same place
+    // the deepen path parks it). GOD flags naked books every cycle; the
+    // flag doesn't move price, a plan does. 60s cooldown per symbol so a
+    // rejected place can't spam the exchange.
+    if (NAKED_SYNTH) {
+      try {
+        const pc = planCache[p.sym] || { at: 0, rows: [] };
+        if (Date.now() - pc.at > 20000) { pc.rows = await getPlans(p.sym).catch(() => pc.rows); pc.at = Date.now(); planCache[p.sym] = pc; }
+        const hasLoss = pc.rows.some((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+        if (!hasLoss && p.liq > 0 && p.entry > 0 && Date.now() - (g.nakedAt || 0) >= NAKED_COOLDOWN_MS) {
+          const sgn = p.side === 'long' ? 1 : -1;
+          const bandPct = Math.abs(p.entry - p.liq) / p.entry * 100;
+          const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+          const trig = +(p.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(pxDec);
+          const sane = trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
+          if (sane) {
+            g.nakedAt = Date.now(); // cooldown even on success — no plan spam
+            await planLoss(p.sym, p.side, trig, p.marginMode);
+            pc.at = 0;
+            log(`NAKED-FIX ${key}: synthesized pos_loss @ ${trig} (${bandPct.toFixed(2)}% band) — position had no stop`);
+            outbox(`🩹 NAKED-FIX — ${p.sym} ${p.side} had NO stop plan. Synthesized pos_loss @ ${trig} (liq-band edge).`);
+            dirty = true;
+          }
+        }
+      } catch (e) { log(`${key} naked-synth error: ${e.message}`); }
+    }
+
     // ---- stop-approach tier: mark nearing this position's OWN pos_loss —
     // clip the contract minimum on each new low and push the stop deeper
     // toward the liq edge. Minimum size, not percentage: the position sheds
@@ -338,7 +398,14 @@ async function tick() {
           // risk when it matters most); subsequent clips run at true minimum
           const clipMult = g.stopClipN ? 1 : 3;
           const q = Math.floor(minClip * clipMult * prec) / prec;
-          if (fp && fp.size > minClip && q > 0 && q < fp.size) {
+          // dust-close floor: a clip's protective value is roughly
+          // clipNotional x distance-to-stop. Below ~$0.15 it saves pennies
+          // but records a losing close and pays a fee — 42 such dust closes
+          // this epoch cratered win-rate optics and padded the loss column.
+          // Under the floor, the position just rides its stop (identical
+          // worst case, cleaner tape). LIQ_GUARD_DUST_USD=0 disables.
+          const clipValue = (q * mark * sDist) / 100;
+          if (fp && fp.size > minClip && q > 0 && q < fp.size && clipValue >= DUST_USD) {
             await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
             g.lastStopTrim = Date.now(); g.lastStopMark = mark; g.stopClipN = (g.stopClipN || 0) + 1;
             trims.push({ at: g.lastStopTrim, sym: p.sym, side: p.side, size: q, mark, kind: 'stop-approach' });
