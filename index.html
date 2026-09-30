@@ -1131,6 +1131,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       }
     }
     // ---- wealth vault — the untouchable 50%, front and center ----
+    // src lives at render scope: the live-panel block's const died with it
+    const src=liveLedger;
     if(src&&src.vaultUsd>0){
       $('vaultPanel').style.display='block';
       $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net','$'+(src.epochNetUsd??'—'),'live P&L of the clean test book'],['💸 cut','50%','of every profitable close']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
