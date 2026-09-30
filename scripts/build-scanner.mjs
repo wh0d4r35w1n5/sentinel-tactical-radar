@@ -57,7 +57,13 @@ const FILLS_FILE =
 // test epoch: fills older than this are pre-test history on a shared
 // demo account — excluded from cooldowns and journal pairing.
 const FILLS_SINCE = +(process.env.SENTINEL_FILLS_SINCE_MS || 0);
-const KLINE_CANDIDATES = RAPID ? 16 : 48; // top-volume pairs get 1h momentum metrics
+// Deep-scan budget split into a fixed head (volume leaders, enriched every
+// cycle) + a rotating tail window that sweeps the rest of the liquid
+// universe (~425 names) — the old flat top-16 in rapid mode meant assets
+// ranked 17+ were never even scored. Cursor persists on disk because rapid
+// spawns a fresh scanner process per cycle.
+const KLINE_HEAD = RAPID ? 12 : 24;
+const KLINE_TAIL = RAPID ? 12 : 24;
 const MAX_SIGNALS = 12;
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
@@ -496,7 +502,16 @@ async function main() {
 
   // hourly klines for the top-volume candidates -> real momentum metrics
   const enriched = new Map();
-  const candidates = rows.slice(0, KLINE_CANDIDATES);
+  const head = rows.slice(0, KLINE_HEAD);
+  const tail = rows.slice(KLINE_HEAD);
+  const cursorPath = path.join(API, '..', 'state', 'scan-cursor.json');
+  let cursor = 0;
+  try { cursor = +JSON.parse(fs.readFileSync(cursorPath, 'utf8')).i || 0; } catch {}
+  if (cursor >= tail.length) cursor = 0;
+  // wrap-around window: tail[cursor..] + tail[..cursor] keeps exactly
+  // KLINE_TAIL deep-scans per cycle while covering the whole tail
+  const candidates = [...head, ...tail.slice(cursor), ...tail.slice(0, cursor)].slice(0, KLINE_HEAD + KLINE_TAIL);
+  try { writeJson(cursorPath, { i: (cursor + KLINE_TAIL) % Math.max(1, tail.length), at: Date.now(), tailN: tail.length }); } catch {}
   for (const r of rows)
     if (TG_VIP[r.asset] && !candidates.includes(r)) candidates.push(r);
   // 6-wide batches with spacing + two backoff retries — the 15s daemon
@@ -640,7 +655,7 @@ async function main() {
     for (const t of perps)
       if ((t.symbol || '').endsWith('USDT'))
         perpPx[t.symbol.replace('USDT', '')] = +t.lastPr;
-    const fundSyms = rows.slice(0, KLINE_CANDIDATES).map((r) => r.pair);
+    const fundSyms = candidates.map((r) => r.pair);
     for (let i = 0; i < fundSyms.length; i += 12) {
       await Promise.all(
         fundSyms.slice(i, i + 12).map(async (sym) => {
@@ -1051,7 +1066,7 @@ async function main() {
   // ranks are computed INSIDE the candidate pool — the old version ranked
   // the top-48-by-volume against all ~515 pairs, so every candidate scored
   // ~95th percentile on volume for free and everything graded "A"
-  const cands = rows.slice(0, KLINE_CANDIDATES);
+  const cands = candidates;
   const vols = cands.map((r) => r.quoteVolume).sort((a, b) => a - b);
   const spreads = cands.map((r) => r.spreadPct).sort((a, b) => a - b);
   const surges = [...enriched.values()].map((k) => k.volRatio).sort((a, b) => a - b);
@@ -1253,8 +1268,7 @@ async function main() {
   // signals need momentum metrics; pairs whose kline fetch failed get a
   // neutral profile instead of being dropped from the board entirely
   const neutral = { rsi14: 50, volRatio: 1, closes: null };
-  const ranked = rows
-    .slice(0, KLINE_CANDIDATES)
+  const ranked = candidates
     .map((r) => {
       const k = enriched.get(r.asset) ?? neutral;
       const dir0 = dirOf(r, k);
@@ -1831,7 +1845,7 @@ async function main() {
   const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
   const coinDetail = {};
   const detailAssets = new Set([
-    ...rows.slice(0, KLINE_CANDIDATES).map((r) => r.asset),
+    ...candidates.map((r) => r.asset),
     ...signals.map((s) => s.asset),
   ]);
   for (const asset of detailAssets) {
@@ -1991,7 +2005,7 @@ async function main() {
           const tags = [];
           for (const [a, re] of Object.entries(NAME_MAP)) if (re.test(t)) tags.push(a);
           // also tag any universe symbol explicitly named in the headline
-          for (const r of rows.slice(0, KLINE_CANDIDATES))
+          for (const r of candidates)
             if (new RegExp(`\\b${r.asset}\\b`, 'i').test(t) && !tags.includes(r.asset)) tags.push(r.asset);
           const tone = BULL.test(t) ? 'bull' : BEAR.test(t) ? 'bear' : 'neutral';
           items.push({ ts, src: f.src, title: t.slice(0, 140), link: cleanUrl(link), tags: tags.slice(0, 6), tone });
