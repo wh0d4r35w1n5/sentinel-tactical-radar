@@ -1061,6 +1061,54 @@ async function main() {
     globalThis.__mcaps = mcaps; globalThis.__events = events;
   } catch {}
 
+  // ---- factor IC engine: every factor votes its MEASURED edge ----
+  // The composite score treated ~25 factor rows as equal votes; the
+  // 14k-signal eval panel splits them cleanly — structure/reversal factors
+  // (elliott/pattern/macro-tr/structure/SFP) predict, lagging-trend factors
+  // (MTF stack/MA stack/MTF 1D/4H/ichimoku/wyckoff/RSI/VWAP/breakout)
+  // anti-predict. Each factor's vote is weighted by its measured
+  // directional lift (agree-mean − disagree-mean on forward alpha4h), so
+  // anti-predictive factors vote contrarian automatically — the social
+  // fade generalised. Recomputed ≤ every 30min; the table is slow-moving.
+  const IC_FILE = path.join(API, '..', 'state', 'factor-ic.json');
+  let factorIC = {}, icFresh = false;
+  try {
+    const c = JSON.parse(fs.readFileSync(IC_FILE, 'utf8'));
+    if (Date.now() - (c.at || 0) < 30 * 60e3) { factorIC = c.ic || {}; icFresh = true; }
+  } catch {}
+  if (!icFresh) {
+    try {
+      const agg = {};
+      for (const mf of fs.readdirSync(path.join(API, 'history'))) {
+        if (!/^eval-\d{4}-\d{2}\.json$/.test(mf)) continue;
+        for (const r of JSON.parse(fs.readFileSync(path.join(API, 'history', mf), 'utf8')).records || []) {
+          if (!r.complete || r.alpha4h == null) continue;
+          const want = r.direction === 'LONG' ? 'bull' : 'bear';
+          const seen = new Set();
+          for (const f of r.confl || []) {
+            if (!f.k || f.k === 'BIAS' || f.k === 'confluence' || seen.has(f.k)) continue;
+            if (f.dir !== 'bull' && f.dir !== 'bear') continue;
+            seen.add(f.k);
+            (agg[f.k] ||= { ag: [], dis: [] })[f.dir === want ? 'ag' : 'dis'].push(r.alpha4h);
+          }
+        }
+      }
+      const ic = {};
+      for (const [k2, v] of Object.entries(agg)) {
+        if (v.ag.length < 40 || v.dis.length < 40) continue;
+        const ma = v.ag.reduce((a, x) => a + x, 0) / v.ag.length;
+        const mb = v.dis.reduce((a, x) => a + x, 0) / v.dis.length;
+        const va = v.ag.reduce((a, x) => a + (x - ma) ** 2, 0) / v.ag.length;
+        const vb = v.dis.reduce((a, x) => a + (x - mb) ** 2, 0) / v.dis.length;
+        const t = (ma - mb) / Math.sqrt(va / v.ag.length + vb / v.dis.length);
+        if (Math.abs(t) >= 2)
+          ic[k2] = { lift: +(ma - mb).toFixed(3), t: +t.toFixed(1), n: v.ag.length + v.dis.length };
+      }
+      factorIC = ic;
+      writeJson(IC_FILE, { at: Date.now(), ic });
+    } catch {}
+  }
+
   const rank = (arr, v) =>
     arr.length ? arr.filter((x) => x <= v).length / arr.length : 0.5;
   // ranks are computed INSIDE the candidate pool — the old version ranked
@@ -1336,6 +1384,24 @@ async function main() {
         dir0 === 'LONG'
           ? k.rsi14 > 75 || r.changePct > 8
           : k.rsi14 < 25 || r.changePct < -8;
+      // factor IC: every confl row votes with its measured directional
+      // lift — predictors reward agreement, anti-predictors reward
+      // disagreement (fade). ±2.5 per factor, bounded ±8 total.
+      const wantDir = dir0 === 'LONG' ? 'bull' : 'bear';
+      let icAdj = 0;
+      for (const f of k?.ta?.factors || []) {
+        const ic = factorIC[f.k];
+        if (!ic || (f.dir !== 'bull' && f.dir !== 'bear')) continue;
+        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1);
+      }
+      icAdj = clamp(icAdj, -8, 8);
+      // extreme funding — contrarian: the paying side is crowded. Lit:
+      // extreme-neg funding → +~0.5% next-24h (Binance intraday study);
+      // top-decile positive funding → −1.18% median 72h on BTC.
+      const fr = funding[r.asset]?.ratePct;
+      const fundBoost = fr != null && Math.abs(fr) >= 0.05
+        ? (dir0 === 'LONG' ? (fr < 0 ? 2 : -2) : (fr > 0 ? 2 : -2))
+        : 0;
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -1349,6 +1415,8 @@ async function main() {
             vipBoost +
             socialBoost +
             socialPenalty +
+            icAdj +
+            fundBoost +
             (climax ? -10 : 0),
           0,
           100
