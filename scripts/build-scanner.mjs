@@ -2216,13 +2216,14 @@ async function main() {
   const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
   const mktAllows = (s) => {
     if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
-    // evidence (signal-eval, n=1584): SHORT class avgFwd24h −0.44 / alpha
-    // −0.35 on n=826 — bull tape is where they bleed (the demo pair of ETH
-    // shorts was exactly this). Verified 1h public strats (TrendRider)
-    // run can_short=false in bull tape. Sideways/mixed chops everything
-    // (10.2% hit, −1.03 alpha on n=960) — only the mean-reversion family
-    // earns entry; momentum-in-chop was the forensic bleeder.
     if (mktType.startsWith('bull')) return s.direction === 'LONG';
+    // eval n=14,952 full-history split: sideways tape is where the P&L is
+    // decided (~92% of the record) — and LONG entries of BOTH families
+    // bleed it (meanrev −0.44%, t=−9.2 on n=7,026 — the single largest
+    // losing cell ever measured; trend −0.06% on n=186). SHORT entries are
+    // the only proven side-tape cell (trend +0.13%, t=+6.2 on n=361;
+    // meanrev +0.04% flat on n=6,791). Side tape = shorts only.
+    if (mktType.startsWith('side')) return s.direction === 'SHORT';
     return MEANREV.has(s.strategy);
   };
   const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
@@ -2237,13 +2238,13 @@ async function main() {
   // so the trade score is what adjusts. Shared by the gate + freshDir.
   const carryPenaltyOf = (s) =>
     s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
-  // prospective record: SHORTs as a class hit 7-11% of targets (n=826,
-  // avgFwd −0.44) — a sideways/bull short is the bleed. +10 surcharge vs
-  // floor outside bear tapes. Liquidity Sweep's exemption removed — its
-  // n=10 record (40% hit) is a small sample, not a rebuttal of the class
-  // record, and its exempted bull-tape shorts were the live bleed vector.
+  // prospective record (full-history split, n=14,952): SHORTs in side
+  // tape are a PROVEN cell (trend +0.13%, t=+6.2) — the old class-wide
+  // claim (n=826, sideways+bull pooled) was refuted by the regime split.
+  // The surcharge now binds only where shorts are vetoed anyway (bull/
+  // mixed) — bear and side tapes are the legal short cells.
   const shortPenaltyOf = (s) =>
-    s.direction === 'SHORT' && !mktType.startsWith('bear')
+    s.direction === 'SHORT' && !mktType.startsWith('bear') && !mktType.startsWith('side')
       ? 10
       : 0;
   // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
@@ -2612,7 +2613,10 @@ async function main() {
     gate(RELAX || !(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1), 'funding-drag');
     gate(ddNow < ddKillPct, 'dd-kill');
     gate(mktAllows(s), 'mkt-type');
-    gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || regime === 'risk-off' ||
+    // short-class: shorts are legal where the eval record says they earn —
+    // bear tape and side tape (trend +0.13% t=6.2, meanrev +0.04% flat) —
+    // plus the two exempt sweep strategies and any risk-off regime.
+    gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
     // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
