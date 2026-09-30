@@ -2048,7 +2048,14 @@ async function main() {
     const riskPct = stop
       ? Math.max(0, (sgn * (p.entry - +stop.triggerPrice)) / p.entry)
       : 0.012;
-    return notional * riskPct;
+    const stopUsd = notional * riskPct;
+    // liq-guard LOSS-CAP: upl <= -(MAXLOSS_PCT x posted margin) force-closes
+    // the position BEFORE the band fires. True tail risk is the smaller of
+    // stop-distance and the margin cap — the raw stop distance overstates
+    // heat on every book the floor protects.
+    const capPct = +(process.env.LIQ_GUARD_MAXLOSS_PCT || 0.55);
+    const capUsd = (+p.margin || +p.marginSize || 0) * capPct;
+    return capUsd > 0 ? Math.min(stopUsd, capUsd) : stopUsd;
   };
   const clusterOfSym = (a) =>
     clusterOf({
