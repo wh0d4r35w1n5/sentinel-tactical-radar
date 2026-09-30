@@ -1029,6 +1029,15 @@ async function main() {
               + (sc.galaxy != null ? ' · galaxy ' + sc.galaxy : '')
               + (sc.newsTone != null ? ' · news ' + (sc.newsTone - 50 >= 0 ? '+' : '') + (sc.newsTone - 50) + '%' : ''),
           });
+        // the live normie channel needs the same IC audit trail — the ±6
+        // vipBoost touches the score in rapid mode but was never journaled
+        // into confl, so its predictive power was unmeasurable until now
+        const v2 = TG_VIP[a];
+        if (v2 && k.ta && k.ta.factors)
+          k.ta.factors.push({
+            k: 'vip', dir: v2.side === 'long' ? 'bull' : 'bear',
+            s: 'tg call ' + (v2.side || '?') + ' ' + Math.round((Date.now() - (v2.ts || 0)) / 60e3) + 'm ago',
+          });
       }
     } catch {}
     deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
@@ -1289,6 +1298,22 @@ async function main() {
       const vipBoost = vip
         ? (dir0 === 'LONG' ? 'long' : 'short') === vip.side ? 6 : -6
         : 0;
+      // social sentiment — CONTRARIAN evidence (14k graded eval signals,
+      // Welch t=-7.8): signals where crowd direction agrees with ours mean
+      // -0.15% alpha4h vs +0.07% when it disagrees; CoinGecko-trending
+      // top5 names mean -0.32% vs +0.38%; attention heat>=50 means -1.01%
+      // vs +0.18%. The crowd is fade material, never a trigger — social
+      // dir is scored AGAINST agreement, and attention-rich names pay a
+      // hard penalty stacked like the climax rule.
+      const sc2 = (globalThis.__social || {})[r.asset];
+      const socialBoost = sc2 && sc2.dir
+        ? ((dir0 === 'LONG' ? 'bull' : 'bear') === sc2.dir ? -3 : 3)
+        : 0;
+      const socialPenalty = sc2
+        ? Math.max(-8,
+            (sc2.trending != null && sc2.trending <= 5 ? -4 : 0)
+            + (sc2.heat >= 50 ? -4 : 0))
+        : 0;
       // climax-entry penalty: the ledger's forensic finding — the highest
       // scores fired on overextended moves and entered late (85+ bucket
       // avg +0.03% vs <75 bucket +0.72%). A LONG at RSI>75 or already +8%
@@ -1308,6 +1333,8 @@ async function main() {
             newsBoost +
             mcapBoost +
             vipBoost +
+            socialBoost +
+            socialPenalty +
             (climax ? -10 : 0),
           0,
           100
