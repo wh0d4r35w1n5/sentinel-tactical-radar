@@ -1071,6 +1071,12 @@ async function main() {
   // anti-predictive factors vote contrarian automatically — the social
   // fade generalised. Recomputed ≤ every 30min; the table is slow-moving.
   const IC_FILE = path.join(API, '..', 'state', 'factor-ic.json');
+  // entry gates armed on this table: ic-evidence vetoes net-negative factor
+  // evidence (icAdj floor) and ic-sponsor requires at least one measured-
+  // predictive factor (lift >= this) voting with the signal. Both stay
+  // OFF when the table is stale — no fresh evidence, no evidence veto.
+  const IC_VETO = +(process.env.SENTINEL_IC_VETO ?? -2);
+  const IC_SPONSOR_LIFT = +(process.env.SENTINEL_IC_SPONSOR_LIFT ?? 0.4);
   let factorIC = {}, icFresh = false;
   try {
     const c = JSON.parse(fs.readFileSync(IC_FILE, 'utf8'));
@@ -1388,11 +1394,14 @@ async function main() {
       // lift — predictors reward agreement, anti-predictors reward
       // disagreement (fade). ±2.5 per factor, bounded ±8 total.
       const wantDir = dir0 === 'LONG' ? 'bull' : 'bear';
-      let icAdj = 0;
+      let icAdj = 0, icSponsor = false;
       for (const f of k?.ta?.factors || []) {
         const ic = factorIC[f.k];
         if (!ic || (f.dir !== 'bull' && f.dir !== 'bear')) continue;
         icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1);
+        // sponsor = a factor with a MEASURED positive lift voting with the
+        // signal — without one, the setup is built of noise + anti-predictors
+        if (f.dir === wantDir && ic.lift >= IC_SPONSOR_LIFT) icSponsor = true;
       }
       icAdj = clamp(icAdj, -8, 8);
       // extreme funding — contrarian: the paying side is crowded. Lit:
@@ -1423,6 +1432,7 @@ async function main() {
         )
       );
       return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score,
+        icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
     .sort((a, b) => b.score - a.score);
@@ -1511,6 +1521,10 @@ async function main() {
         corrBtc: corrTo(r.asset, 'BTC') != null ? round(corrTo(r.asset, 'BTC'), 2) : null,
         mktType,
         direction,
+        // measured factor-evidence for the ic gates: net IC contribution +
+        // whether any proven-predictive factor sponsors this direction
+        icAdj: r.icAdj ?? null,
+        icSponsor: r.icSponsor === true,
         highPrice: r.highPrice,
         lastPrice: r.lastPrice,
         spreadPct: pct(r.spreadPct),
@@ -2613,6 +2627,14 @@ async function main() {
     gate(RELAX || !recentReversed(s.asset), 'recent-reversed');
     gate(RELAX || !lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
     gate(RELAX || sqnAllows(s), 'sqn-chain');
+    // measured-evidence gates — the IC table is the engine's own record of
+    // which votes predict. Net-negative factor evidence (icAdj < IC_VETO)
+    // is a veto; so is a signal with no measured-predictive sponsor. Hard
+    // gates (no RELAX bypass): the Monte-Carlo already proved trading at
+    // negative edge loses — the veto IS the profit. Eval still grades every
+    // vetoed signal, so a wrong veto shows up in the record itself.
+    gate(!icFresh || (s.icAdj ?? 0) >= IC_VETO, 'ic-evidence');
+    gate(!icFresh || s.icSponsor === true, 'ic-sponsor');
     gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
     gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
     gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
