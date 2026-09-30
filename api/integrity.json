@@ -4,224 +4,231 @@
  "corrupt": [],
  "missing": [],
  "renoted": [
-  "api/rr-backtest.json"
+  "state/liq-guard.json",
+  "state/klines-4H.json",
+  "api/rr-backtest.json",
+  "api/integrity.json",
+  "api/rr-optimize.json",
+  "state/rr-config.json"
  ],
  "files": {
   "api/liq-guard.json": {
-   "crc32": "1452374b",
+   "crc32": "07f8992f",
    "ok": true,
    "bytes": 34379,
-   "ts": 1790809205536
+   "ts": 1790810104726
   },
   "state/klines-1h.json": {
-   "crc32": "882b9f67",
+   "crc32": "bfcb0e6e",
    "ok": true,
-   "bytes": 9772042,
-   "ts": 1790809094317
+   "bytes": 9776288,
+   "ts": 1790810072232
   },
   "state/liq-guard.json": {
-   "crc32": "1452374b",
-   "ok": true,
+   "crc32": "0ad4de2a",
+   "ok": false,
    "bytes": 34379,
-   "ts": 1790809205524
+   "ts": 1790810104724,
+   "renoted": true
   },
   "api/mtf.json": {
-   "crc32": "5311ee74",
+   "crc32": "9374f4db",
    "ok": true,
-   "bytes": 12095,
-   "ts": 1790809117631
+   "bytes": 12167,
+   "ts": 1790809862930
   },
   "api/social.json": {
-   "crc32": "fc09456c",
+   "crc32": "4dc7375b",
    "ok": true,
-   "bytes": 5557,
-   "ts": 1790809118197
+   "bytes": 5371,
+   "ts": 1790809865337
   },
   "api/market-scanner.json": {
-   "crc32": "7c7784b9",
+   "crc32": "29973d1a",
    "ok": true,
-   "bytes": 101387,
-   "ts": 1790809118279
+   "bytes": 101909,
+   "ts": 1790809865722
   },
   "api/volcore.json": {
-   "crc32": "b301c903",
+   "crc32": "f0c60707",
    "ok": true,
-   "bytes": 283,
-   "ts": 1790809118280
+   "bytes": 127,
+   "ts": 1790809865723
   },
   "api/confluence.json": {
-   "crc32": "e733bcf9",
+   "crc32": "f45d6ba5",
    "ok": true,
-   "bytes": 60250,
-   "ts": 1790809118283
+   "bytes": 59768,
+   "ts": 1790809865730
   },
   "api/breakouts.json": {
-   "crc32": "2124c563",
-   "ok": true,
-   "bytes": 2673,
-   "ts": 1790809118284
-  },
-  "api/coin-detail.json": {
-   "crc32": "93d20a04",
-   "ok": true,
-   "bytes": 214519,
-   "ts": 1790809118344
-  },
-  "api/correlation.json": {
-   "crc32": "15b454d5",
+   "crc32": "4f3d7183",
    "ok": true,
    "bytes": 3020,
-   "ts": 1790809118351
+   "ts": 1790809865733
+  },
+  "api/coin-detail.json": {
+   "crc32": "d7f23cd8",
+   "ok": true,
+   "bytes": 214532,
+   "ts": 1790809865939
+  },
+  "api/correlation.json": {
+   "crc32": "bee35326",
+   "ok": true,
+   "bytes": 3007,
+   "ts": 1790809865952
   },
   "api/funding.json": {
-   "crc32": "952b17e4",
+   "crc32": "66288c08",
    "ok": true,
-   "bytes": 5936,
-   "ts": 1790809118353
+   "bytes": 5762,
+   "ts": 1790809865954
   },
   "api/sentiment.json": {
-   "crc32": "84898ca5",
+   "crc32": "16809494",
    "ok": true,
-   "bytes": 5830,
-   "ts": 1790809118354
+   "bytes": 5616,
+   "ts": 1790809865956
   },
   "api/prices.json": {
-   "crc32": "37468681",
+   "crc32": "dba6be2c",
    "ok": true,
-   "bytes": 175,
-   "ts": 1790809118356
+   "bytes": 178,
+   "ts": 1790809866532
   },
   "api/signal-ledger.json": {
-   "crc32": "4bdd238d",
+   "crc32": "f2be5e83",
    "ok": true,
-   "bytes": 3862,
-   "ts": 1790809118422
+   "bytes": 3905,
+   "ts": 1790809971330
   },
   "api/history/archive-2026-09.json": {
-   "crc32": "187317b9",
+   "crc32": "20690dad",
    "ok": true,
-   "bytes": 29616986,
-   "ts": 1790809128226
+   "bytes": 29675896,
+   "ts": 1790809874960
   },
   "api/signal-archive.json": {
-   "crc32": "a5be4ef0",
+   "crc32": "fdece177",
    "ok": true,
-   "bytes": 29588862,
-   "ts": 1790809139340
+   "bytes": 29647772,
+   "ts": 1790809881059
   },
   "api/history/eval-2026-09.json": {
-   "crc32": "37bef4a9",
+   "crc32": "e0dc663f",
    "ok": true,
-   "bytes": 26247519,
-   "ts": 1790808953033
+   "bytes": 26335486,
+   "ts": 1790809897116
   },
   "api/signal-eval.json": {
-   "crc32": "dedfb7eb",
+   "crc32": "4e5c17cf",
    "ok": true,
-   "bytes": 549033,
-   "ts": 1790808992221
+   "bytes": 551872,
+   "ts": 1790809967537
   },
   "api/hypotheses.json": {
-   "crc32": "b81d6434",
+   "crc32": "425bf788",
    "ok": true,
-   "bytes": 94781,
-   "ts": 1790808992437
+   "bytes": 94789,
+   "ts": 1790809968630
   },
   "state/einstein.json": {
-   "crc32": "1e06cc8d",
+   "crc32": "db22b3f3",
    "ok": true,
    "bytes": 7040,
-   "ts": 1790808993322
+   "ts": 1790809971164
   },
   "api/einstein.json": {
-   "crc32": "8e30aa71",
+   "crc32": "e7b5f99a",
    "ok": true,
    "bytes": 10845,
-   "ts": 1790808993324
+   "ts": 1790809971248
   },
   "api/live-plan.json": {
-   "crc32": "09c36452",
+   "crc32": "0db75964",
    "ok": true,
-   "bytes": 2275,
-   "ts": 1790808993325
+   "bytes": 2647,
+   "ts": 1790809971253
   },
   "api/benchmark.json": {
-   "crc32": "7e6c9a3c",
+   "crc32": "0464ee9b",
    "ok": true,
-   "bytes": 32034,
-   "ts": 1790808993334
+   "bytes": 32188,
+   "ts": 1790809971325
   },
   "api/health.json": {
-   "crc32": "a9c8f90f",
+   "crc32": "7f6ed4ae",
    "ok": true,
    "bytes": 1631,
-   "ts": 1790808993542
+   "ts": 1790809971729
   },
   "api/trades-taken.json": {
-   "crc32": "53bcfe45",
+   "crc32": "fb1bf405",
    "ok": true,
-   "bytes": 5862,
-   "ts": 1790808993726
+   "bytes": 5864,
+   "ts": 1790809972046
   },
   "state/equity-peak-demo.json": {
-   "crc32": "9e10b11b",
+   "crc32": "723a921f",
    "ok": true,
-   "bytes": 33595,
-   "ts": 1790809001320
+   "bytes": 32902,
+   "ts": 1790809977225
   },
   "api/gate-stats.json": {
-   "crc32": "2870e898",
+   "crc32": "623d8a22",
    "ok": true,
-   "bytes": 119208,
-   "ts": 1790809020221
+   "bytes": 116564,
+   "ts": 1790809995812
   },
   "state/mae-track.json": {
-   "crc32": "e715ca3e",
+   "crc32": "10201360",
    "ok": true,
    "bytes": 298,
-   "ts": 1790809020346
+   "ts": 1790809995936
   },
   "api/live-ledger.json": {
-   "crc32": "525bda89",
+   "crc32": "812179ee",
    "ok": true,
-   "bytes": 17483,
-   "ts": 1790809020347
+   "bytes": 17642,
+   "ts": 1790809995938
   },
   "api/god.json": {
-   "crc32": "2451a69c",
+   "crc32": "e0746303",
    "ok": true,
-   "bytes": 2389,
-   "ts": 1790809198535
+   "bytes": 2465,
+   "ts": 1790810050117
   },
   "api/bitget-symbols.json": {
    "crc32": "c97c6bc1",
    "ok": true,
    "bytes": 5699,
-   "ts": 1790809030136
+   "ts": 1790810003519
   },
   "state/klines-4H.json": {
-   "crc32": "815ed69a",
-   "ok": true,
-   "bytes": 4560774,
-   "ts": 1790809115166
+   "crc32": "545a9b3b",
+   "ok": false,
+   "bytes": 4560773,
+   "ts": 1790810103523,
+   "renoted": true
   },
   "state/social-cache.json": {
-   "crc32": "f9755074",
+   "crc32": "3559d7f1",
    "ok": true,
-   "bytes": 1803,
-   "ts": 1790808498283
+   "bytes": 1805,
+   "ts": 1790809865332
   },
   "api/news.json": {
-   "crc32": "a8154c01",
+   "crc32": "d4d908fd",
    "ok": true,
    "bytes": 10826,
-   "ts": 1790808889008
+   "ts": 1790809866531
   },
   "state/klines-15m.json": {
-   "crc32": "11678477",
+   "crc32": "866a69c6",
    "ok": true,
-   "bytes": 4520780,
-   "ts": 1790809106334
+   "bytes": 4520560,
+   "ts": 1790810086734
   },
   "api/rr-backtest.json": {
    "crc32": "87e2e282",
@@ -231,40 +238,43 @@
    "renoted": true
   },
   "api/integrity.json": {
-   "crc32": "6a1f4ee9",
-   "ok": true,
+   "crc32": "cd027b0c",
+   "ok": false,
    "bytes": 6171,
-   "ts": 1790808311231
+   "ts": 1790808311231,
+   "renoted": true
   },
   "api/thoughts.json": {
-   "crc32": "49c77b9d",
+   "crc32": "dd78abf4",
    "ok": true,
-   "bytes": 2565,
-   "ts": 1790809026046
+   "bytes": 2523,
+   "ts": 1790810000651
   },
   "state/thoughts-state.json": {
    "crc32": "91b634e4",
    "ok": true,
    "bytes": 48524,
-   "ts": 1790809026118
+   "ts": 1790810000722
   },
   "api/rr-optimize.json": {
-   "crc32": "aef7ed99",
-   "ok": true,
+   "crc32": "79699c2e",
+   "ok": false,
    "bytes": 17754,
-   "ts": 1790807431321
+   "ts": 1790807431321,
+   "renoted": true
   },
   "state/rr-config.json": {
-   "crc32": "0708d51a",
-   "ok": true,
+   "crc32": "1f9b0cf2",
+   "ok": false,
    "bytes": 212,
-   "ts": 1790807431325
+   "ts": 1790807431325,
+   "renoted": true
   },
   "state/klines-1D.json": {
-   "crc32": "269d17b8",
+   "crc32": "c2efead3",
    "ok": true,
    "bytes": 3279665,
-   "ts": 1790809117250
+   "ts": 1790809860529
   },
   "state/demo-fills.json": {
    "crc32": "07341f82",
@@ -273,22 +283,22 @@
    "ts": 1790778267321
   },
   "api/sqn-report.json": {
-   "crc32": "2b9663b2",
+   "crc32": "96814255",
    "ok": true,
-   "bytes": 2183,
-   "ts": 1790808996124
+   "bytes": 1925,
+   "ts": 1790809973323
   },
   "state/sqn-allowed.json": {
-   "crc32": "ec832e4d",
+   "crc32": "be5fb261",
    "ok": true,
    "bytes": 145,
-   "ts": 1790808996127
+   "ts": 1790809973325
   },
   "api/setups.json": {
-   "crc32": "10d61e6e",
+   "crc32": "39641760",
    "ok": true,
    "bytes": 907,
-   "ts": 1790809019517
+   "ts": 1790809995257
   },
   "state/wealth-vault.json": {
    "crc32": "ba484d58",
@@ -309,10 +319,10 @@
    "ts": 1790778268046
   },
   "state/scan-cursor.json": {
-   "crc32": "14efbe01",
+   "crc32": "ed745167",
    "ok": true,
    "bytes": 40,
-   "ts": 1790809030225
+   "ts": 1790810003536
   },
   "state/factor-ic.json": {
    "crc32": "ac9a62af",
@@ -328,5 +338,5 @@
    "badCount": 0
   }
  },
- "refreshedAt": "2026-09-30T23:00:12.234Z"
+ "refreshedAt": "2026-09-30T23:15:13.147Z"
 }
