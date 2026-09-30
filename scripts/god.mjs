@@ -431,13 +431,33 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
           interv('profit-leg ' + p.symbol, r === true ? 'pos_profit @' + trig + ' placed' : 'FAILED: ' + r);
         }
       }
-      // --- b) dead-capital audit: the mandate says margin works or dies
+      // --- b) dead-capital audit: the mandate says margin works or dies.
+      // In DEMO the account's `available` is fake minted dust ($6k the $38
+      // virtual book can never deploy) — measuring it warns forever and
+      // trains the operator to ignore GOD. The honest demo audit: the exec
+      // must have *accounted* for its undeployed margin (idleMargin.reason —
+      // gate stand-down, caps, contract minimums). Unexplained idle warns.
       const eq = +(acct.usdtEquity || acct.equity || 0), av = +(acct.available || 0);
       const idleFloor = Math.max(eq * 0.15, 8);
-      add('capital-deployed', av > idleFloor ? 'WARN' : 'PASS',
-        av > idleFloor
-          ? '$' + av.toFixed(2) + ' free margin idle (floor $' + idleFloor.toFixed(2) + ') — dead capital, deployment mandate'
-          : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+      const idle = ll?.idleMargin;
+      const bookEq = +(ll?.equityUsd || 0);
+      const bookDeployed = (ll?.positions || ll?.positionsAfter || [])
+        .reduce((s, p) => s + (+p.margin || 0), 0);
+      if (DEMO) {
+        const accounted = idle && Number.isFinite(idle.usd) && typeof idle.reason === 'string' && idle.reason.length > 0;
+        add('capital-deployed', av > idleFloor && !accounted ? 'WARN' : 'PASS',
+          accounted
+            ? '$' + av.toFixed(2) + ' acct free is demo dust — book $' + bookEq.toFixed(2) +
+              ' governs ($' + bookDeployed.toFixed(2) + ' deployed); idle accounted: ' + idle.reason
+            : av > idleFloor
+              ? '$' + av.toFixed(2) + ' free margin idle and live-ledger gives no reason — unexplained dead capital'
+              : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+      } else {
+        add('capital-deployed', av > idleFloor ? 'WARN' : 'PASS',
+          av > idleFloor
+            ? '$' + av.toFixed(2) + ' free margin idle (floor $' + idleFloor.toFixed(2) + ') — dead capital, deployment mandate'
+            : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+      }
       // --- c) untracked positions: fills the ledger doesn't know
       const llx = readJson('live-ledger.json');
       const known = new Set((llx?.positions || llx?.positionsAfter || []).map((p) => p.symbol));
