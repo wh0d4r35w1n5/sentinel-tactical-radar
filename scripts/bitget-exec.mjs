@@ -101,6 +101,11 @@ const RR_MAX_ALLOC = Math.max(...RR.alloc);
 // book is equity MINUS vault. (Ledger-level in demo; on live this is the
 // sizing boundary — a real subaccount transfer wires on top later.)
 const VAULT_SHARE = Math.min(0.9, Math.max(0, +(process.env.SENTINEL_VAULT_SHARE ?? 0.5)));
+// SENTINEL_VAULT_TRANSFER=1 makes sweeps MOVE funds futures->spot — the
+// carry physically leaves the tradable account. Live-only: the demo env
+// has no wallet layer (endpoint 404s, demo keys are futures-scoped), so
+// accounting carve-out is the only possible behavior there.
+const VAULT_TRANSFER = MODE !== 'demo' && process.env.SENTINEL_VAULT_TRANSFER === '1';
 const VAULT_PATH = path.join(__dirname, '..', 'state', 'wealth-vault.json');
 const loadVault = () => {
   try { return { balanceUsd: 0, sweptIds: {}, sweeps: [], ...JSON.parse(fs.readFileSync(VAULT_PATH, 'utf8')) }; }
@@ -380,6 +385,18 @@ const planOrder = (symbol, planType, triggerPrice, size, holdSide, marginMode) =
       // OMITTED for those, not a literal '0' (a zero-size param can read as
       // an invalid order, not "full position")
       ...(size === '0' || size == null ? {} : { size: String(size) }),
+    },
+  });
+// real vault segregation (live only — SENTINEL_VAULT_TRANSFER=1): the
+// sweep MOVES funds futures->spot so vaulted carry physically leaves the
+// tradable account. api() throws on non-00000 codes and never retries
+// POSTs — a failed transfer surfaces as an error, never double-moves.
+const vaultTransfer = (amtUsd) =>
+  api('POST', '/api/v2/spot/wallet/transfer', {
+    body: {
+      fromType: 'usdt_futures', toType: 'spot',
+      amount: String(round(amtUsd, 2)), coin: 'USDT',
+      clientOid: `vault-${Date.now()}-${Math.round(amtUsd * 100)}`,
     },
   });
 // Transient placement errors: 43023 'Insufficient position' fires when the
@@ -662,10 +679,15 @@ async function main() {
   // account compounds/suffers its own realized record: book = base +
   // epoch net (every journaled fill: open fees + close P&L) - the vault.
   const epochNet = EQ_OVERRIDE > 0 ? loadFills().reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) : 0;
-  const vaultNow = +loadVault().balanceUsd || 0;
+  const vaultState0 = loadVault();
+  const vaultNow = +vaultState0.balanceUsd || 0;
+  // subtract only the UNMOVED vault balance: funds already transferred to
+  // spot left the futures account — acct.equity excludes them, so a blind
+  // subtraction would double-count the carry out of the book.
+  const vaultUnmoved = vaultNow - (+vaultState0.transferredUsd || 0);
   const equityUsd = EQ_OVERRIDE > 0
-    ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultNow)
-    : Math.max(0, acct.equity - vaultNow);
+    ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultUnmoved)
+    : Math.max(0, acct.equity - vaultUnmoved);
   state.epochNetUsd = EQ_OVERRIDE ? round(epochNet, 2) : undefined;
   state.vaultUsd = round(vaultNow, 2);
   state.vaultSweeps = (loadVault().sweeps || []).length;
@@ -2829,11 +2851,24 @@ async function main() {
           if (vault.sweptIds[f.tradeId]) continue;
           const net = (+f.profit || 0) - (+f.fee || 0);
           if (!(net > 0)) continue;
-          vault.sweptIds[f.tradeId] = 1;
           const amt = Math.max(0, Math.min(net * VAULT_SHARE, room));
           room = Math.max(0, room - net);
-          if (!(amt > 0)) continue;
-          vault.sweeps.push({ ts: f.ts || Date.now(), tradeId: f.tradeId, symbol: f.symbol, amountUsd: round(amt, 4), hwm: round(navNow, 2) });
+          if (!(amt > 0)) { vault.sweptIds[f.tradeId] = 1; continue; }
+          // transfer mode: the carry must actually MOVE to spot before it
+          // counts as vaulted — a failed transfer records an error and the
+          // fill stays unswept for next cycle's retry (dedup marks only on
+          // success, so nothing mints phantom carry).
+          if (VAULT_TRANSFER) {
+            try {
+              await vaultTransfer(amt);
+              vault.transferredUsd = round((vault.transferredUsd || 0) + amt, 4);
+            } catch (e) {
+              state.errors.push(`vault transfer ${f.symbol} $${round(amt, 2)}: ${String(e.message || e).slice(0, 100)}`);
+              continue;
+            }
+          }
+          vault.sweptIds[f.tradeId] = 1;
+          vault.sweeps.push({ ts: f.ts || Date.now(), tradeId: f.tradeId, symbol: f.symbol, amountUsd: round(amt, 4), hwm: round(navNow, 2), moved: VAULT_TRANSFER ? 'spot' : 'accounting' });
           vault.balanceUsd = round(vault.balanceUsd + amt, 4);
           chg += amt;
         }
