@@ -2776,30 +2776,45 @@ async function main() {
     }
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
-    // ---- wealth vault sweep — VAULT_SHARE of every profitable close
-    // moves out of the tradable book, permanently. SweptIds dedupes so a
-    // fill can never double-pay; the balance subtracts from equity at
-    // the top of every cycle, so the engine cannot size with it.
+    // ---- wealth vault — high-water-mark incentive fee ----
+    // VAULT_SHARE of net-new total-equity highs moves out of the tradable
+    // book, permanently: the engine collects carry only when NAV (epoch
+    // baseline + cumulative journaled net, or live exchange equity) makes
+    // a new high — nothing is banked while the book is underwater.
+    // SweptIds dedupes so a fill can never double-pay; the balance
+    // subtracts from equity at the top of every cycle.
     if (VAULT_SHARE > 0) {
       try {
         const vault = loadVault();
         vault.sweptIds ||= {}; vault.sweeps ||= [];
+        vault.hwmUsd = Math.max(vault.hwmUsd || 0, EQ_OVERRIDE || 0);
+        const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + vault.balanceUsd;
+        // room = the above-water tranche created since the last high.
+        // Each profitable fill consumes `net` of it (swept or not) — total
+        // carry lands at exactly SHARE × net-new-high NAV across a cycle.
+        let room = Math.max(0, navNow - vault.hwmUsd);
         let chg = 0;
         for (const f of store.fills) {
           if (vault.sweptIds[f.tradeId]) continue;
           const net = (+f.profit || 0) - (+f.fee || 0);
           if (!(net > 0)) continue;
           vault.sweptIds[f.tradeId] = 1;
-          vault.sweeps.push({ ts: f.ts || Date.now(), tradeId: f.tradeId, symbol: f.symbol, amountUsd: round(net * VAULT_SHARE, 4) });
-          vault.balanceUsd = round(vault.balanceUsd + net * VAULT_SHARE, 4);
-          chg += net * VAULT_SHARE;
+          const amt = Math.max(0, Math.min(net * VAULT_SHARE, room));
+          room = Math.max(0, room - net);
+          if (!(amt > 0)) continue;
+          vault.sweeps.push({ ts: f.ts || Date.now(), tradeId: f.tradeId, symbol: f.symbol, amountUsd: round(amt, 4), hwm: round(navNow, 2) });
+          vault.balanceUsd = round(vault.balanceUsd + amt, 4);
+          chg += amt;
         }
-        if (chg > 0) {
+        vault.hwmUsd = round(Math.max(vault.hwmUsd, navNow), 4);
+        state.vaultHwmUsd = vault.hwmUsd;
+        if (chg > 0 || !vault.updatedAt) {
           vault.sweeps = vault.sweeps.slice(-1000);
           vault.updatedAt = new Date().toISOString();
           writeJson(VAULT_PATH, vault);
-          state.actions.push(`🏦 vault sweep: +$${round(chg, 2)} banked — untouchable total $${round(vault.balanceUsd, 2)}`);
         }
+        if (chg > 0)
+          state.actions.push(`🏦 vault carry: +$${round(chg, 2)} banked at HWM $${round(vault.hwmUsd, 2)} — untouchable total $${round(vault.balanceUsd, 2)}`);
       } catch (e) {
         state.errors.push('vault sweep failed: ' + String(e).slice(0, 100));
       }

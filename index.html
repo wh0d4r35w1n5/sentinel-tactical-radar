@@ -1135,8 +1135,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     const src=liveLedger;
     if(src&&src.vaultUsd>0){
       $('vaultPanel').style.display='block';
-      $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net','$'+(src.epochNetUsd??'—'),'live P&L of the clean test book'],['💸 cut','50%','of every profitable close']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
-      $('vaultNote').innerHTML='🔑 <b style="color:var(--gold)">cash-out only, never trade-in</b> — profits leave the firing line the moment they land. Compounding happens in the vault, risk stays in the book.';
+      $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['📈 high-water',src.vaultHwmUsd!=null?'$'+(+src.vaultHwmUsd).toFixed(2):'—','nothing banks below the mark'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net','$'+(src.epochNetUsd??'—'),'live P&L of the clean test book'],['💸 carry','50%','of net-new equity highs only']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      $('vaultNote').innerHTML='🔑 <b style="color:var(--gold)">incentive-fee structure</b> — the engine pays itself 50% carry on net-new equity highs and nothing while underwater. Cash-out only, never trade-in; compounding happens in the vault, risk stays in the book.';
     }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
     if(rrOpt&&rrOpt.winner){
