@@ -2578,7 +2578,11 @@ async function main() {
     // enforced regardless: price sanity, cost floor, spread, anti-chase,
     // dd-kill, mkt-type, duplicate/position caps.
     const RELAX = process.env.SENTINEL_GATES_RELAX === '1';
-    gate(RELAX ? tradeScore >= 35 : scorePass(s, tradeScore), `score ${tradeScore}${inLsSideCell(s) ? ` outside band ${LS_SIDE_BAND[0]}-${LS_SIDE_BAND[1]}` : `<${RELAX ? 35 : entryFloor}`}`);
+    // RELAX lowers the generic floor to 35 — but the measured side-LS-short
+    // band is evidence, not advisory: score >=80 in that cell is a
+    // measured-losing bucket (-0.14% n=34), same class as ic-evidence.
+    gate(inLsSideCell(s) ? scorePass(s, tradeScore) : tradeScore >= (RELAX ? 35 : entryFloor),
+      `score ${tradeScore}${inLsSideCell(s) ? ` outside band ${LS_SIDE_BAND[0]}-${LS_SIDE_BAND[1]}` : `<${RELAX ? 35 : entryFloor}`}`);
     gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
     // net-of-cost floor, proportional: costs can't eat more than 60% of
     // the target AND the net must still be worth taking. An absolute 2%
