@@ -2228,6 +2228,18 @@ async function main() {
   };
   const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
   const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
+  // measured inversion: side-tape Liquidity Sweep shorts EARN at score
+  // 50-79 (60-69: +3.81% alpha4h n=32; <60: +1.24% n=34) and LOSE at
+  // >=80 (-0.14% n=34). For that cell the composite floor is
+  // anti-predictive — high-confluence fades are the late ones — so it
+  // gets a two-sided band instead of the global floor. Every other gate
+  // (icAdj, sponsor, funding, chasing, chain) still applies; eval grades
+  // band-rejected signals so the carve-out is falsifiable.
+  const LS_SIDE_BAND = String(process.env.SENTINEL_LS_SIDE_BAND || '50,80').split(',').map(Number);
+  const inLsSideCell = (s) => mktType.startsWith('side') && s.direction === 'SHORT' && s.strategy === 'Liquidity Sweep';
+  const scorePass = (s, score) => inLsSideCell(s)
+    ? score >= LS_SIDE_BAND[0] && score < LS_SIDE_BAND[1]
+    : score >= entryFloor;
   // sponsorship waiver — an A-grade composite (>=80) clears the fake-move
   // veto: OBV/Dow disagreement is one factor voting no inside a stack of
   // yes. Below the waiver it stays a hard veto (chop-chase protection).
@@ -2566,7 +2578,7 @@ async function main() {
     // enforced regardless: price sanity, cost floor, spread, anti-chase,
     // dd-kill, mkt-type, duplicate/position caps.
     const RELAX = process.env.SENTINEL_GATES_RELAX === '1';
-    gate(tradeScore >= (RELAX ? 35 : entryFloor), `score ${tradeScore}<${RELAX ? 35 : entryFloor}`);
+    gate(RELAX ? tradeScore >= 35 : scorePass(s, tradeScore), `score ${tradeScore}${inLsSideCell(s) ? ` outside band ${LS_SIDE_BAND[0]}-${LS_SIDE_BAND[1]}` : `<${RELAX ? 35 : entryFloor}`}`);
     gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
     // net-of-cost floor, proportional: costs can't eat more than 60% of
     // the target AND the net must still be worth taking. An absolute 2%
@@ -2724,7 +2736,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => tradeScoreOf(s) >= entryFloor && mktAllows(s) && (!stratBlock.has(s.strategy) || tradeScoreOf(s) >= STRAT_OVERRIDE))
+      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!stratBlock.has(s.strategy) || tradeScoreOf(s) >= STRAT_OVERRIDE))
       .map((s) => [s.asset, s.direction])
   );
 
