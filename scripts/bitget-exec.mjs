@@ -834,6 +834,9 @@ async function main() {
     eqTrack.deposits = +prior.deposits || 0;
     eqTrack.lastEq = +prior.lastEq || 0;
     eqTrack.lastUpl = +prior.lastUpl || 0;
+    eqTrack.lastEqAt = +prior.lastEqAt || 0;
+    eqTrack.lastVault = Number.isFinite(+prior.lastVault) ? +prior.lastVault : null;
+    eqTrack.netIds = Array.isArray(prior.netIds) ? prior.netIds : [];
   } catch {}
   const nowMs = Date.now();
   // deposit detection: equity moves unexplained by the change in open UPL
@@ -846,7 +849,26 @@ async function main() {
   // balance move would masquerade as a deposit — tracking stays off so
   // peak/dd run on the test book, not the demo account's actual balance.
   if (eqTrack.lastEq > 0 && !EQ_OVERRIDE) {
-    const unexplained = equityUsd - eqTrack.lastEq - (uplNow - eqTrack.lastUpl);
+    // realized flows explain the equity move: fills banked since the last
+    // check land in balance, and vault sweeps leave tradable equity without
+    // touching balance. Without both terms a >$5 win books as a "deposit"
+    // and a >$15 loss as a "withdrawal" — tradingEq stays flat and the dd
+    // tape never sees the loss (kill-switch blindness). 2min overlap +
+    // tradeId dedupe tolerates out-of-order/late fill delivery.
+    const prevAt = eqTrack.lastEqAt || nowMs;
+    const netIdSet = new Set(eqTrack.netIds);
+    let tradeNet = 0;
+    try {
+      for (const f of loadFills()) {
+        const ts = +f.ts || 0;
+        if (ts <= prevAt - 120e3 || netIdSet.has(f.tradeId)) continue;
+        netIdSet.add(f.tradeId);
+        tradeNet += (+f.profit || 0) - (+f.fee || 0);
+      }
+    } catch {}
+    eqTrack.netIds = [...netIdSet].slice(-400);
+    const dVault = vaultNow - (eqTrack.lastVault ?? vaultNow);
+    const unexplained = equityUsd - eqTrack.lastEq - (uplNow - eqTrack.lastUpl) - tradeNet + dVault;
     if (unexplained > 5) {
       eqTrack.deposits += unexplained;
       state.actions.push(`💰 deposit detected +$${round(unexplained, 2)} (total funding $${round(eqTrack.deposits, 2)})`);
@@ -861,13 +883,15 @@ async function main() {
   }
   eqTrack.lastEq = equityUsd;
   eqTrack.lastUpl = uplNow;
+  eqTrack.lastEqAt = nowMs;
+  eqTrack.lastVault = vaultNow;
   const tradingEq = equityUsd - eqTrack.deposits;
   eqTrack.peak = Math.max(tradingEq, eqTrack.peak);
   // a failed account read returns equity=0 — pushing that sample would fake
   // a total wipeout on the rolling DD tape. Only record real reads.
   if (equityUsd > 0) eqTrack.samples.push([nowMs, tradingEq]);
   eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
-  try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, deposits: eqTrack.deposits, lastEq: eqTrack.lastEq, lastUpl: eqTrack.lastUpl, at: new Date().toISOString() }); } catch {}
+  try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, deposits: eqTrack.deposits, lastEq: eqTrack.lastEq, lastUpl: eqTrack.lastUpl, lastEqAt: eqTrack.lastEqAt, lastVault: eqTrack.lastVault, netIds: eqTrack.netIds, at: new Date().toISOString() }); } catch {}
   const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - tradingEq) / eqTrack.peak) * 100 : 0;
   const peak24 = Math.max(tradingEq, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
   const dd24 = peak24 > 0 ? ((peak24 - tradingEq) / peak24) * 100 : 0;
@@ -919,7 +943,7 @@ async function main() {
     const fills = loadFills().filter((f) => !f.src || f.src === 'api');
     const day = fills.filter((f) => Date.now() - (f.ts || 0) < 86400e3);
     const closes = fills.filter((f) => f.tradeSide === 'close');
-    const last20 = closes.slice(-20);
+    const last20 = closes.slice(0, 20); // journal is newest-first — [0..N) are the RECENT closes
     const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
     const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
     const net24 = dayPnl - fees24;
@@ -937,7 +961,7 @@ async function main() {
     else if (fees24 > equityUsd * FEE_HALT_PCT / 100)
       cbReason = `circuit-breaker: 24h fee burn $${round(fees24, 2)} > ${FEE_HALT_PCT}% of equity — churning`;
     else if (closes.length >= STREAK_HALT &&
-             closes.slice(-STREAK_HALT).every((f) => (f.profit || 0) - (f.fee || 0) <= 0))
+             closes.slice(0, STREAK_HALT).every((f) => (f.profit || 0) - (f.fee || 0) <= 0))
       cbReason = `circuit-breaker: last ${STREAK_HALT} closes all losers — stand-down`;
     else if (RESERVE_USD > 0 && equityUsd < RESERVE_USD)
       cbReason = `circuit-breaker: equity $${round(equityUsd, 2)} below reserve floor $${RESERVE_USD}`;
@@ -1188,8 +1212,10 @@ async function main() {
   // fee-burn halt: commissions >5% of equity in a day stands the book
   // down — a fee-churn day is always a regime the engine can't read, and
   // the only winning move is to stop paying.
-  const FEE_HALT_PCT = +(process.env.SENTINEL_FEE_HALT_PCT || 0.05);
-  const feeHalted = equityUsd > 0 && feesToday >= equityUsd * FEE_HALT_PCT;
+  // NOTE: percent units, distinct env from the breaker's SENTINEL_FEE_HALT_PCT
+  // (that one is also a percent but gates 24h burn at a different threshold)
+  const FEE_DAY_HALT_PCT = +(process.env.SENTINEL_FEE_DAY_HALT_PCT || 5);
+  const feeHalted = equityUsd > 0 && feesToday >= equityUsd * FEE_DAY_HALT_PCT / 100;
 
   // ---- regime-chop gate: trailing-4h closes running negative net means the
   // tape is unreadable for this engine right now — stand new entries down
@@ -1417,7 +1443,7 @@ async function main() {
         (planQty > p.size * 1.001 ||
           (lossPlan &&
             /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
-            Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size));
+            Number.isFinite(+lossPlan.size) && +lossPlan.size >= p.size * 0.999));
       if (planDrift) {
         let trig = lossPlan && +lossPlan.triggerPrice > 0 ? +lossPlan.triggerPrice : null;
         const sgn = p.side === 'long' ? 1 : -1;
@@ -1445,9 +1471,14 @@ async function main() {
           // swaps into a whole-position pos_loss — place-first so the book
           // is never uncovered on the downside; only on an exchange refusal
           // (qty-cap reject) does it fall back to cancel-then-place.
+          // a sized loss_plan at >= live size covers the whole book but
+          // still counts its qty in planQty — which keeps planDrift true
+          // every cycle, resyncing forever and starving the ratchet below.
+          // Whole-cover sized stops get swapped into the size-0 pos_loss
+          // form (the canonical "protect everything, count nothing" leg).
           const sizedLoss = lossPlan &&
             /loss_plan|moving_plan/i.test(lossPlan.planType || '') &&
-            Number.isFinite(+lossPlan.size) && +lossPlan.size > p.size;
+            Number.isFinite(+lossPlan.size) && +lossPlan.size >= p.size * 0.999;
           if (!lossPlan || sizedLoss) {
             const newTrig = trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
             let placed = false;
@@ -1504,6 +1535,7 @@ async function main() {
           state.actions.push(`🔄 reladdered ${p.symbol}: legs sized for ~${round(impliedSize, 4)} -> position ${p.size}`);
         } catch (e) { state.errors.push(`reladder ${p.symbol}: ${e.message}`); }
       }
+      let stopWritten = false; // a fresher stop write this cycle beats stale-snapshot checks below
       if (lossPlan && p.size > 0 && !manualHold) {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
@@ -1532,6 +1564,22 @@ async function main() {
           wantPx = round(mark * (1 - (sgn * 1.0) / 100), pp);
           why = `trail ${p.symbol}: stop following winner @ ${wantPx}`;
         }
+        // move-lock — deep winners bank BEFORE the ladder reaches them:
+        // once price has run >=1.5% in favor, floor the stop at +55% of the
+        // move regardless of how far the next TP sits. The TP-progress
+        // ratchet only arms near a target, so a +119% ROE short with a far
+        // ladder used to ride all the way back to a -$9 stop-out. That
+        // retrace-to-loser path is the expectancy leak this tier closes.
+        const movePct = (sgn * (mark - p.entry)) / p.entry * 100;
+        if (movePct >= 1.5) {
+          const lockPct = Math.max(0.2, 0.55 * movePct);
+          const cand = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
+          const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+          if (candBetter) {
+            wantPx = cand;
+            why = `move-lock ${p.symbol}: +${round(movePct, 2)}% run — stop locked at +${round(lockPct, 2)}% (${wantPx})`;
+          }
+        }
         const slBetter =
           wantPx != null && slTrig > 0 &&
           (sgn === 1 ? wantPx > slTrig : wantPx < slTrig);
@@ -1539,16 +1587,24 @@ async function main() {
           const planId = lossPlan.orderId || lossPlan.planId || lossPlan.id;
           const newSize = /pos_/.test(lossPlan.planType) ? '0' : sizeStr;
           // place-then-cancel — cancel-first leaves the position naked for
-          // ~200ms every ratchet. If the exchange refuses a second stop on
-          // the same side, fall back to the old order (cancel then place).
+          // ~200ms every ratchet. pos_loss is a singleton slot (a new place
+          // replaces the incumbent and retires its orderId), so the cleanup
+          // must run off a FRESH list — cancelling by the stale id can
+          // alias onto the just-placed plan and wipe the stop entirely.
           try {
             await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side, p.marginMode);
-            if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
+            const live = await getPlans(p.symbol).catch(() => []);
+            for (const x of live.filter((z) =>
+              /loss|stop|moving/i.test(z.planType || '') &&
+              +z.triggerPrice !== +wantPx &&
+              (!z.holdSide || z.holdSide === p.side)))
+              await cancelPlanOrders(p.symbol, x.planType, [String(x.orderId || x.planId || x.id)]).catch(() => {});
           } catch {
-            if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]);
+            if (planId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(planId)]).catch(() => {});
             await planOrder(p.symbol, lossPlan.planType, wantPx, newSize, p.side, p.marginMode);
           }
           state.actions.push(why);
+          stopWritten = true;
         }
         // verdict ladder — hours-scale to match the 1h signal horizon:
         //   216s : genuinely adverse (>0.4% on notional) -> thesis instantly
@@ -1634,18 +1690,34 @@ async function main() {
       const bandPct = p.liq > 0
         ? (Math.abs(p.entry - p.liq) / p.entry) * 100
         : (p.lev > 0 ? Math.max(0.2, 90 / p.lev) : 0); // liq field absent → estimate band from leverage
-      if (lossPlan && bandPct > 0) {
+      // skip when a stop was already written this cycle — lossPlan here is a
+      // stale snapshot; re-banding it after a ratchet/lock write would
+      // overwrite the fresh (better) stop with band-edge geometry.
+      if (!stopWritten && lossPlan && bandPct > 0) {
         const armedStopPct = (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100;
-        if (armedStopPct >= bandPct * 0.8) {
+        // a stop past entry in the WIN direction is a profit lock, not a
+        // risk stop — the liquidation band is irrelevant to it. Without
+        // this gate the abs() distance makes a deep lock look
+        // liq-adjacent and the re-band un-locks it every cycle.
+        const lossSide = p.side === 'long'
+          ? +lossPlan.triggerPrice < p.entry
+          : +lossPlan.triggerPrice > p.entry;
+        if (lossSide && armedStopPct >= bandPct * 0.8) {
           const sgn0 = p.side === 'long' ? 1 : -1;
           const pp0 = cm[p.symbol]?.pricePlace ?? 6;
           const newStop = round(p.entry * (1 - (sgn0 * Math.max(bandPct * 0.75, 0.05)) / 100), pp0);
           try {
             // place-then-cancel, same rule as the ratchet — cancel-first
-            // leaves the position naked for the round-trip gap
-            const oldId = lossPlan.orderId || lossPlan.planId;
+            // leaves the position naked for the round-trip gap. Cleanup
+            // runs off a fresh list: pos_loss is a singleton slot and a
+            // stale id can alias onto the plan just written.
             await planWithRetry(() => planOrder(p.symbol, 'pos_loss', newStop, '0', p.side, p.marginMode));
-            if (oldId) await cancelPlanOrders(p.symbol, lossPlan.planType, [String(oldId)]);
+            const live = await getPlans(p.symbol).catch(() => []);
+            for (const x of live.filter((z) =>
+              /loss|stop|moving/i.test(z.planType || '') &&
+              +z.triggerPrice !== +newStop &&
+              (!z.holdSide || z.holdSide === p.side)))
+              await cancelPlanOrders(p.symbol, x.planType, [String(x.orderId || x.planId || x.id)]).catch(() => {});
             state.actions.push(`📏 re-banded ${p.symbol}: stop ${+lossPlan.triggerPrice} at/past liq edge (${round(bandPct, 2)}% band) -> ${newStop}`);
           } catch (e) {
             state.errors.push(`re-band ${p.symbol}: ${e.message}`);
@@ -1654,7 +1726,12 @@ async function main() {
       }
       if (manualHold && lossPlan && bandPct > 1.5) {
         const armedPct = (Math.abs(p.entry - +lossPlan.triggerPrice) / p.entry) * 100;
-        if (armedPct < bandPct * 0.5) {
+        // same profit-lock carve-out: an operator stop parked in the win
+        // direction is their locked profit — never drag it back to risk.
+        const opLossSide = p.side === 'long'
+          ? +lossPlan.triggerPrice < p.entry
+          : +lossPlan.triggerPrice > p.entry;
+        if (opLossSide && armedPct < bandPct * 0.5) {
           const sgn2 = p.side === 'long' ? 1 : -1;
           const pp2 = cm[p.symbol]?.pricePlace ?? 6;
           const wStop = round(p.entry * (1 - (sgn2 * bandPct * 0.7) / 100), pp2);
@@ -2151,6 +2228,14 @@ async function main() {
             // qualifying shot while still banking one reload. Ruin is the
             // only unrecoverable outcome; every other loss is tuition.
             equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85),
+            // Van Tharp sizing ceiling: a stop-out may not cost more than
+            // MAX_RISK_PCT of equity. Margin-share sizing let -$20 losses
+            // land on a $33 book (~60% risk/trade) — R-variance that no
+            // edge survives. Same formula the operator setups use.
+            Number.isFinite(o.stopPct) && o.stopPct > 0
+              ? (equityUsd * +(process.env.SENTINEL_MAX_RISK_PCT || 0.12)) /
+                Math.max(0.0005, o.stopPct / 100 + FEE_RT) / lev
+              : Infinity,
             // half-Kelly ceiling: equity-at-risk (margin×lev×stopPct) stays
             // under half the realized record's optimal fraction — dormant
             // until n>=15 closes; f*<=0 collapses it to zero = full stand-down
@@ -2273,6 +2358,13 @@ async function main() {
           score: Number.isFinite(o.score) ? o.score : null,
           conv: Number.isFinite(o.conv) ? o.conv : null,
           marginUsd: round(marginUsd, 2), lev, notionalUsd: round(notional, 2),
+          // Van Tharp R-basis: the $ the position loses if the entry stop
+          // fires (stop distance + round-trip fee drag on notional). The
+          // fills journal joins entries -> closes and grades each close in
+          // true R — SQN is only confirmable in R units.
+          stopPct: Number.isFinite(o.stopPct) ? o.stopPct : null,
+          riskUsd: Number.isFinite(o.stopPct)
+            ? round(notional * (o.stopPct / 100 + FEE_RT), 2) : null,
           mktType: o.mktType ?? null,
           // structural evidence — the indicator thesis + the level that
           // would falsify it (EW W1 / wyckoff spring-UTAD extreme)
@@ -2606,7 +2698,13 @@ async function main() {
       if (!id) continue;
       // pre-epoch exchange fills never enter the test journal
       if (FILLS_SINCE && +(f.cTime ?? f.uTime ?? 0) < FILLS_SINCE) continue;
-      const fee = Math.abs(+((f.feeDetail || [])[0]?.totalFee ?? f.fee ?? f.totalFee ?? 0));
+      // exchange fees arrive NEGATIVE (a charge) — journal stores the
+      // positive magnitude; every consumer subtracts it. feeDetail can hold
+      // several legs (multi-coin splits) — sum them all, not just [0].
+      const feeRaw = Array.isArray(f.feeDetail) && f.feeDetail.length
+        ? f.feeDetail.reduce((a, d) => a + (+d.totalFee || 0), 0)
+        : +(f.fee ?? f.totalFee ?? 0);
+      const fee = Math.abs(feeRaw);
       const size = +(f.baseVolume ?? f.size ?? f.volume ?? f.qty ?? 0);
       // backfill: entries recorded before the feeDetail/baseVolume fix
       // carry fee=0/size=0 — patch them from the exchange record
@@ -2621,6 +2719,11 @@ async function main() {
           if (f.quoteVolume) old.notionalUsd = +f.quoteVolume;
           if (f.tradeSide) old.tradeSide = f.tradeSide;
           if (!old.src && f.enterPointSource) old.src = f.enterPointSource;
+          // patched fields change the record — recompute fcrc exactly as
+          // crc32-verify does (strip the tag, checksum the rest) or every
+          // repaired fill flags as corrupt on the next audit pass
+          const { fcrc: _stale, ...rest } = old;
+          old.fcrc = crc32hex(JSON.stringify(rest));
           repaired++;
         }
         continue;
@@ -2648,6 +2751,13 @@ async function main() {
         // close so expectancy can be sliced by evidence type later
         structInvalid: f.tradeSide === 'close'
           ? (state.entriesLog || []).filter((e) => e.symbol === f.symbol && e.ts <= +(f.cTime ?? f.uTime ?? Date.now())).pop()?.structInvalid ?? null
+          : null,
+        // R-basis: the $ risk the entry planned (top-ups don't log riskUsd,
+        // so the join naturally lands on the primary entry). The SQN block
+        // below only counts closes whose R-unit is on the record — foreign
+        // or pre-instrumentation closes are ungraded, not guessed.
+        riskUsd: f.tradeSide === 'close'
+          ? (state.entriesLog || []).filter((e) => e.symbol === f.symbol && e.ts <= +(f.cTime ?? f.uTime ?? Date.now()) && e.riskUsd > 0).pop()?.riskUsd ?? null
           : null,
       };
       // per-record checksum — proves WHICH fill changed, not just that
@@ -2740,6 +2850,26 @@ async function main() {
         legacy: statsFor(store.fills.filter((f) => !f.src)),
       },
     };
+    // Van Tharp SQN — every graded close in true R: R = netPnl / riskUsd.
+    // Only closes whose entry logged its risk basis count; the number is
+    // forward-confirmed, not simulated. n>=30 is the honest sample floor —
+    // report it alongside so the dashboard can't flatter a tiny sample.
+    const rRows = netCloses.filter((f) => f.riskUsd > 0);
+    if (rRows.length) {
+      const rs = rRows.map((f) => netOfFee(f) / f.riskUsd);
+      const m = rs.reduce((a, x) => a + x, 0) / rs.length;
+      const sd = rs.length > 1 ? Math.sqrt(rs.reduce((a, x) => a + (x - m) ** 2, 0) / (rs.length - 1)) : 0;
+      state.sqnR = {
+        n: rRows.length,
+        meanR: round(m, 3),
+        sdR: round(sd, 3),
+        sqn: sd > 0 ? round((m / sd) * Math.sqrt(rRows.length), 2) : null,
+        winRatePct: round((rs.filter((x) => x > 0).length / rs.length) * 100, 1),
+        avgWinR: (() => { const w = rs.filter((x) => x > 0); return w.length ? round(w.reduce((a, x) => a + x, 0) / w.length, 3) : null; })(),
+        avgLossR: (() => { const l = rs.filter((x) => x <= 0); return l.length ? round(l.reduce((a, x) => a + x, 0) / l.length, 3) : null; })(),
+        note: 'engine-attributed closes graded in true R (net-of-fee / entry risk). n>=30 before trusting the point estimate.',
+      };
+    } else delete state.sqnR;
   } catch (e) {
     state.errors.push(`fills journal: ${e.message}`);
   }

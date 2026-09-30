@@ -58,6 +58,9 @@ const MAXLOSS_PCT = +(process.env.LIQ_GUARD_MAXLOSS_PCT || 0.55);
 // at the liq-band inner edge — same geometry as the deepen path.
 const NAKED_SYNTH = process.env.LIQ_GUARD_NAKED_SYNTH !== '0';
 const NAKED_COOLDOWN_MS = +(process.env.LIQ_GUARD_NAKED_COOLDOWN_MS || 60e3);
+// rebuild gaps last seconds — nakedness must persist across guard cycles
+// before it's real enough to write a plan over
+const NAKED_CONFIRM_MS = +(process.env.LIQ_GUARD_NAKED_CONFIRM_MS || 9e3);
 // stop-approach clips whose protective value (clipNotional x dist-to-stop)
 // is under this are skipped — see the floor comment at the fire gate.
 const DUST_USD = +(process.env.LIQ_GUARD_DUST_USD || 0.15);
@@ -346,11 +349,21 @@ async function tick() {
       try {
         const pc = planCache[p.sym] || { at: 0, rows: [] };
         if (Date.now() - pc.at > 20000) { pc.rows = await getPlans(p.sym).catch(() => pc.rows); pc.at = Date.now(); planCache[p.sym] = pc; }
-        const hasLoss = pc.rows.some((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
-        if (!hasLoss && p.liq > 0 && p.entry > 0 && Date.now() - (g.nakedAt || 0) >= NAKED_COOLDOWN_MS) {
+        let hasLoss = pc.rows.some((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+        // false-naked guard: the exec's rebuild cancels plans then re-places
+        // them over several seconds — a single read (cached OR fresh) can
+        // land inside the teardown window. Nakedness is only real when it
+        // persists across cycles (~9s > any rebuild); verify fresh each pass.
+        if (!hasLoss) {
+          const fresh = await getPlans(p.sym).catch(() => pc.rows);
+          hasLoss = fresh.some((x) => /loss|stop|moving/i.test(x.planType || '') && (!x.holdSide || x.holdSide === p.side));
+        }
+        if (hasLoss) g.nakedSeen = 0;
+        const confirmedNaked = !hasLoss && (g.nakedSeen ? Date.now() - g.nakedSeen >= NAKED_CONFIRM_MS : (g.nakedSeen = Date.now(), false));
+        if (confirmedNaked && p.liq > 0 && p.entry > 0 && Date.now() - (g.nakedAt || 0) >= NAKED_COOLDOWN_MS) {
           const sgn = p.side === 'long' ? 1 : -1;
           const bandPct = Math.abs(p.entry - p.liq) / p.entry * 100;
-          const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+          const pxDec = +(cm[p.sym]?.pricePlace ?? 6); // parens: +x ?? 6 yields NaN on a contract-map miss
           const trig = +(p.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(pxDec);
           const sane = trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
           if (sane) {
@@ -421,12 +434,18 @@ async function tick() {
                 const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
                 // trigger must land on the contract's price grid — a blanket
                 // toFixed(6) violates checkBDScale (SNDK=2dp, CLU=3dp -> 40808)
-                const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+                const pxDec = +(cm[p.sym]?.pricePlace ?? 6);
                 const deepTrig = +(np.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(pxDec);
-                const deeper = np.side === 'long' ? deepTrig < trig : deepTrig > trig;
+                // a stop past entry in the win direction is a profit lock —
+                // the band edge is the LOSS side, so "deepening" would
+                // release locked profit back to risk. Never touch those.
+                const armedLossSide = np.side === 'long' ? trig < np.entry : trig > np.entry;
+                const deeper = armedLossSide && (np.side === 'long' ? deepTrig < trig : deepTrig > trig);
                 if (deeper && deepTrig > 0) {
                   await planLoss(p.sym, p.side, deepTrig, np.marginMode || p.marginMode);
-                  for (const x of (await getPlans(p.sym)).filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== deepTrig && (!z.holdSide || z.holdSide === p.side)))
+                  // loss-SIDE plans only — a profit-side loss-typed plan
+                  // (a lock) must never be stripped by the reset sweep
+                  for (const x of (await getPlans(p.sym)).filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== deepTrig && (!z.holdSide || z.holdSide === p.side) && (np.side === 'long' ? +z.triggerPrice < np.entry : +z.triggerPrice > np.entry)))
                     await cancelPlan(p.sym, x.planType, x.orderId).catch(() => {});
                   pc.at = 0; // force plan refresh next tick
                   log(`${key} stop deepened -> ${deepTrig} (${bandPct.toFixed(2)}% band)`);
@@ -478,13 +497,14 @@ async function tick() {
       if (np?.liq) {
         const sgn = np.side === 'long' ? 1 : -1;
         const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
-        const pxDec = +cm[p.sym]?.pricePlace ?? 6;
+        const pxDec = +(cm[p.sym]?.pricePlace ?? 6);
         const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(pxDec);
         await planLoss(p.sym, p.side, trig, np.marginMode || p.marginMode);
         const plans = await getPlans(p.sym);
         // holdSide filter is mandatory in hedge mode — an unfiltered cancel
-        // would strip the OTHER side's stop while resetting this one
-        for (const x of plans.filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== trig && (!z.holdSide || z.holdSide === p.side)))
+        // would strip the OTHER side's stop while resetting this one. The
+        // loss-side trigger test does the same for profit locks on THIS side.
+        for (const x of plans.filter((z) => /loss/i.test(z.planType || '') && +z.triggerPrice !== trig && (!z.holdSide || z.holdSide === p.side) && (p.side === 'long' ? +z.triggerPrice < np.entry : +z.triggerPrice > np.entry)))
           await cancelPlan(p.sym, x.planType, x.orderId).catch(() => {});
         log(`${key} stop reset -> ${trig} (liq ${np.liq}, band ${bandPct.toFixed(2)}%)`);
       }

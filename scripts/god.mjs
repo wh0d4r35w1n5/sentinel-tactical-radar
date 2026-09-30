@@ -400,7 +400,10 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
           // never wider than 3%.
           const liq = +(p.liquidationPrice || 0);
           const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
-          const shieldPct = Math.min(0.03, bandPct * 0.7);
+          // bandPct is PERCENT — convert before comparing against the 0.03
+          // fraction cap, else the cap always wins and a 3% shield can land
+          // PAST liquidation on high-leverage positions
+          const shieldPct = Math.min(0.03, (bandPct / 100) * 0.7);
           if (!(shieldPct > 0)) continue;
           const trig = +(entry * (1 - sgn * shieldPct)).toPrecision(6);
           const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
@@ -417,7 +420,7 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
         if (!hasProfit) {
           const liq = +(p.liquidationPrice || 0);
           const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
-          const tpPct = Math.min(0.045, bandPct * 0.9); // keep the target inside a reachable band too
+          const tpPct = Math.min(0.045, (bandPct / 100) * 0.9); // keep the target inside a reachable band too (percent -> fraction)
           if (!(tpPct > 0)) continue;
           const trig = +(entry * (1 + sgn * tpPct)).toPrecision(6);
           const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {

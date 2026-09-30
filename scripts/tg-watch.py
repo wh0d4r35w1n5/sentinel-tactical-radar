@@ -233,7 +233,7 @@ async def main():
             return "📭 <b>No open positions</b>"
         out = ["<b>📊 OPEN POSITIONS</b>", "─────────────────────"]
         for p in pos:
-            mk = p.get("entry", 0) + (p.get("upl") or 0) / max(p.get("size") or 1e-9, 1e-9)
+            mk = p.get("entry", 0) + (p.get("upl") or 0) / max(p.get("size") or 1e-9, 1e-9) * (1 if p.get("side") == "long" else -1)
             liqd = abs(mk - (p.get("liq") or mk)) / mk * 100 if mk else 0
             arrow = "▲" if (p.get("upl") or 0) >= 0 else "▼"
             out.append(f"{arrow} <b>{p.get('symbol','?')}</b> {p.get('side','?').upper()} ×{p.get('size','?')}"
@@ -458,11 +458,11 @@ async def main():
         return statef("demo-fills" if ll.get("mode") == "demo" else "real-fills") or {}
 
     def c_fills():
-        fs = (fills_file().get("fills") or [])[-8:]
+        fs = (fills_file().get("fills") or [])[:8]  # journal is newest-first
         if not fs:
             return "📒 <b>No fills yet this epoch</b>"
         out = ["<b>📒 REAL FILLS</b>", "─────────────────────"]
-        for f in reversed(fs):
+        for f in fs:
             p = (f.get("profit") or 0) - (f.get("fee") or 0)
             ts = f.get("ts", 0)
             out.append(f"{'🟢' if p > 0 else '🔴' if p < 0 else '⚪'} <b>{f.get('symbol','?')}</b> {f.get('tradeSide','?')} "
@@ -905,7 +905,7 @@ async def main():
             lev = min(40, max(1, int(80 / (stop_pct + 0.64))))
             card.append(f"SL {fmtp(sl)} (−{stop_pct:.2f}%)")
             for j, (px, p) in enumerate(tps, 1):
-                card.append(f"TP{j} {fmtp(px)} · {p:g}% · {'+' if (px - ref) * sgn > 0 else ''}{(px - ref) / ref * 100:.2f}%")
+                card.append(f"TP{j} {fmtp(px)} · {p:g}% · {sgn * (px - ref) / ref * 100:+.2f}%")
             moon = 100 - sum(p for _, p in tps)
             if moon > 0.5:
                 card.append(f"🌙 {moon:.0f}% rides the stop as moon bag")

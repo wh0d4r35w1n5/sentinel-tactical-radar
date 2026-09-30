@@ -2337,7 +2337,18 @@ async function main() {
   // at signal build time (TP1 distance / ATR velocity, discounted when a
   // breakout is already running) — pursue whichever reaches TP1 first in
   // TIME, not just space.
-  const rankedByEta = [...signals].sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
+  // phantom candidates — scored signals on symbols the active account's
+  // contract catalog can't even hold (Bitget demo lists ~45 of ~200 scanned
+  // names). They were never real opportunities: their rejections bury the
+  // feed's actual decisions and their scoring work is waste. Dropped before
+  // gating, kept as a compact tally so the digest stays honest about why
+  // the universe looks thin. The 'untradeable' gate below stays as the net.
+  const phantoms = signals.filter((s) => untradeable.has(s.asset.toUpperCase()));
+  if (phantoms.length)
+    livePlan.phantom = phantoms.map((s) => `${s.asset}:${s.direction}`);
+  const rankedByEta = signals
+    .filter((s) => !untradeable.has(s.asset.toUpperCase()))
+    .sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
   for (const s of rankedByEta) {
     // dynamic leverage — scales with MEASURED regime alignment and
     // conviction, never with narrative. Under 1%-risk sizing leverage
@@ -2674,7 +2685,7 @@ async function main() {
         : x.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (x.runner ?? 0);
     const fundPnlNow = (tsC) =>
       e.funding && e.carry && e.carry !== 'flat'
-        ? (e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
+        ? Math.abs(e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
         : 0;
     const settle = (status, exitPx, rawPnl, tsC) => {
       // market exits slip past the level — only limit TP fills ('won',
@@ -4193,9 +4204,13 @@ async function main() {
           ep.qty += qty; ep.qty0 += qty; ep.cost0 += px * qty; ep.fees += fee; ep.notional0 += qty * px;
         } else if (f.tradeSide === 'close' && ep && ep.qty > 0) {
           const portion = Math.min(qty, ep.qty);
+          // a close can exceed the tracked remainder (foreign/missed opens)
+          // — credit only this episode's share of the fill's pnl and fee,
+          // not the whole fill's values
+          const frac = qty > 0 ? portion / qty : 1;
           ep.closeQty += portion; ep.closeCost += px * portion;
-          ep.fees += fee; ep.pnl += pnl;
-          ep.exits.push({ ts: f.ts, px, qty: portion, pnl: pct(pnl * 10000) / 10000 });
+          ep.fees += fee * frac; ep.pnl += pnl * frac;
+          ep.exits.push({ ts: f.ts, px, qty: portion, pnl: pct(pnl * frac * 10000) / 10000 });
           ep.qty -= portion;
           if (ep.qty <= 1e-9) finish(f);
         }
