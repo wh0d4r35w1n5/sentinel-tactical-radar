@@ -925,6 +925,31 @@ async function main() {
       } catch (e) { state.errors.push(`cmd-close ${p.symbol}: ${e.message}`); }
     } else state.actions.push(`cmd-close ${cmdClose.symbol}: no open position`);
   }
+  // Position-level grading: the journal counts close FILLS, but the trim
+  // ladder means one position journals many closes (a 6-leg TP ladder is one
+  // trade, not six wins). Every consumer of the record — breakers, CUSUM,
+  // Kelly, realizedStats, sqnR — must grade grouped POSITIONS or the
+  // architecture flatters itself. Group key = the risk-bearing entriesLog
+  // entry the close joins back to (top-ups carry no riskUsd so they never
+  // split a position); fills with no joinable entry cluster into
+  // 'campaign' buckets by (symbol, close-side) — coarse but honest.
+  const groupIntoPositions = (rows, entries, netFn) => {
+    const groups = new Map();
+    for (const f of rows) {
+      const fTs = +(f.ts || f.cTime || 0);
+      const ent = (entries || []).filter(
+        (e) => e.symbol === f.symbol && e.ts <= fTs && e.riskUsd > 0
+      ).pop();
+      const key = ent ? `pos:${f.symbol}:${ent.ts}` : `campaign:${f.symbol}:${f.side}`;
+      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0 };
+      g.fills += 1;
+      g.netUsd += netFn(f);
+      g.lastTs = Math.max(g.lastTs, fTs);
+      groups.set(key, g);
+    }
+    return [...groups.values()].sort((a, b) => b.lastTs - a.lastTs); // newest-first, like the journal
+  };
+
   // ---- account-level circuit breakers: per-trade stops protect single
   // positions; these stop the ENGINE from grinding the account down via
   // redeploy-after-loss churn (the 181-closes / -$176 / 16% win bleed that
@@ -943,11 +968,16 @@ async function main() {
     const fills = loadFills().filter((f) => !f.src || f.src === 'api');
     const day = fills.filter((f) => Date.now() - (f.ts || 0) < 86400e3);
     const closes = fills.filter((f) => f.tradeSide === 'close');
-    const last20 = closes.slice(0, 20); // journal is newest-first — [0..N) are the RECENT closes
+    // grade POSITIONS, not fills: a winning position paying out through a
+    // 6-leg trim ladder used to read as 6/6 wins and could hold the
+    // win-rate breaker open through a bleed — the same flattery bug in
+    // reverse. Groups are newest-first like the journal.
+    const pos = groupIntoPositions(closes, state.entriesLog, (f) => (+f.profit || 0) - (+f.fee || 0));
+    const last20 = pos.slice(0, 20);
     const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
     const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
     const net24 = dayPnl - fees24;
-    const wr = last20.length ? last20.filter((f) => (f.profit || 0) - (f.fee || 0) > 0).length / last20.length : null;
+    const wr = last20.length ? last20.filter((g) => g.netUsd > 0).length / last20.length : null;
     const LOSS_HALT_PCT = +(process.env.SENTINEL_LOSS_HALT_PCT || 8);   // realized bleed vs equity
     const WR_HALT_PCT = +(process.env.SENTINEL_WR_HALT_PCT || 30);      // rolling win-rate floor
     const WR_MIN_N = +(process.env.SENTINEL_WR_MIN_N || 12);            // sample size before WR gates
@@ -957,23 +987,24 @@ async function main() {
     if (net24 < -lossBasis * LOSS_HALT_PCT / 100)
       cbReason = `circuit-breaker: 24h bot realized -$${round(-net24, 2)} >= ${LOSS_HALT_PCT}% of window-start equity $${round(lossBasis, 2)}`;
     else if (last20.length >= WR_MIN_N && wr != null && wr < WR_HALT_PCT / 100)
-      cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} closes < ${WR_HALT_PCT}%`;
+      cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} positions < ${WR_HALT_PCT}%`;
     else if (fees24 > equityUsd * FEE_HALT_PCT / 100)
       cbReason = `circuit-breaker: 24h fee burn $${round(fees24, 2)} > ${FEE_HALT_PCT}% of equity — churning`;
-    else if (closes.length >= STREAK_HALT &&
-             closes.slice(0, STREAK_HALT).every((f) => (f.profit || 0) - (f.fee || 0) <= 0))
-      cbReason = `circuit-breaker: last ${STREAK_HALT} closes all losers — stand-down`;
+    else if (pos.length >= STREAK_HALT &&
+             pos.slice(0, STREAK_HALT).every((g) => g.netUsd <= 0))
+      cbReason = `circuit-breaker: last ${STREAK_HALT} positions all losers — stand-down`;
     else if (RESERVE_USD > 0 && equityUsd < RESERVE_USD)
       cbReason = `circuit-breaker: equity $${round(equityUsd, 2)} below reserve floor $${RESERVE_USD}`;
     // CUSUM edge-death detector (Page's sequential test, the quant
     // standard for "when to stop trading a strategy"): accumulates the
-    // per-close shortfall below the null mean 0 — k=0.25σ slack keeps
+    // per-position shortfall below the null mean 0 — k=0.25σ slack keeps
     // ordinary noise from accumulating, h=4σ threshold. Detects a
     // persistent MEAN shift (edge evaporation) that magnitude breakers
-    // can't see — a slow bleed never trips a streak rule.
+    // can't see — a slow bleed never trips a streak rule. Runs on
+    // position nets so a trim ladder can't smear the distribution.
     let cusum = null;
-    if (closes.length >= 10) {
-      const nets = closes.slice().reverse().map((f) => (+f.profit || 0) - (+f.fee || 0));
+    if (pos.length >= 10) {
+      const nets = pos.slice().reverse().map((g) => g.netUsd); // oldest -> newest
       const m = nets.reduce((a, b) => a + b, 0) / nets.length;
       const sd = Math.sqrt(nets.reduce((a, b) => a + (b - m) ** 2, 0) / (nets.length - 1)) || 1e-9;
       const k = 0.25 * sd, h = 4 * sd;
@@ -981,27 +1012,27 @@ async function main() {
       for (const x of nets) S = Math.max(0, S - x - k);
       cusum = { n: nets.length, meanUsd: round(m, 4), sdUsd: round(sd, 4), S: round(S, 3), h: round(h, 3) };
       if (S > h && !cbReason)
-        cbReason = `edge-death CUSUM: close-stream mean shifted negative (S ${round(S, 2)} > h ${round(h, 2)} · mean $${round(m, 3)}/close, n=${nets.length})`;
+        cbReason = `edge-death CUSUM: position-stream mean shifted negative (S ${round(S, 2)} > h ${round(h, 2)} · mean $${round(m, 3)}/position, n=${nets.length})`;
     }
-    // half-Kelly risk ceiling — the realized close record implies an
+    // half-Kelly risk ceiling — the realized position record implies an
     // optimal risk fraction f* = p − q/b; we deploy at most half of it
     // (fractional Kelly — the variance-robust textbook choice). f*≤0
     // means the account's own record says negative edge: hard floor.
     let kelly = null;
-    if (closes.length >= 15) {
-      const wins = closes.filter((f) => (+f.profit || 0) - (+f.fee || 0) > 0);
-      const losses = closes.filter((f) => (+f.profit || 0) - (+f.fee || 0) <= 0);
+    if (pos.length >= 15) {
+      const wins = pos.filter((g) => g.netUsd > 0);
+      const losses = pos.filter((g) => g.netUsd <= 0);
       if (wins.length && losses.length) {
-        const p = wins.length / closes.length;
-        const avgW = wins.reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) / wins.length;
-        const avgL = Math.abs(losses.reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) / losses.length);
+        const p = wins.length / pos.length;
+        const avgW = wins.reduce((a, g) => a + g.netUsd, 0) / wins.length;
+        const avgL = Math.abs(losses.reduce((a, g) => a + g.netUsd, 0) / losses.length);
         const fStar = p - (1 - p) / Math.max(0.05, avgW / avgL);
-        kelly = { fStar: round(fStar, 3), n: closes.length, halfKellyRiskUsd: round(Math.max(0, 0.5 * fStar * equityUsd), 2) };
+        kelly = { fStar: round(fStar, 3), n: pos.length, halfKellyRiskUsd: round(Math.max(0, 0.5 * fStar * equityUsd), 2) };
       }
     }
     state.circuitBreakers = {
       net24Usd: round(net24, 2), fees24Usd: round(fees24, 2), basisUsd: round(lossBasis, 2),
-      winRate20: wr != null ? round(wr * 100, 1) : null, closes20: last20.length,
+      winRate20: wr != null ? round(wr * 100, 1) : null, positions20: last20.length,
       edgeDeath: cusum, kelly,
       thresholds: { lossHaltPct: LOSS_HALT_PCT, wrHaltPct: WR_HALT_PCT, feeHaltPct: FEE_HALT_PCT, streakHalt: STREAK_HALT, reserveUsd: RESERVE_USD },
       tripped: cbReason,
@@ -2846,6 +2877,7 @@ async function main() {
         profitFactor: gL > 0 ? round(gW / gL, 2) : null,
       };
     };
+    const posGroups = groupIntoPositions(netCloses, state.entriesLog, netOfFee);
     state.realizedStats = {
       // scope: every close-side fill incl. foreign/manual fills — the raw
       // journal total. trades-taken.json episodes aggregate differently.
@@ -2864,25 +2896,45 @@ async function main() {
         manual: statsFor(store.fills.filter((f) => f.src && f.src !== 'api')),
         legacy: statsFor(store.fills.filter((f) => !f.src)),
       },
+      // the headline number an investor should quote — per-POSITION record.
+      // The fill-level stats above stay (every realized dollar is real) but
+      // their win rate is architecture-biased: the trim ladder fragments one
+      // trade into many journaled 'closes'.
+      byPosition: (() => {
+        const pg = posGroups;
+        const pW = pg.filter((g) => g.netUsd > 0), pL = pg.filter((g) => g.netUsd <= 0);
+        return {
+          scope: 'close fills grouped into positions via entriesLog join (riskUsd entry anchor); campaign:* = pre-instrumentation clusters by symbol+side',
+          positions: pg.length,
+          winners: pW.length,
+          winRatePct: pg.length ? round((pW.length / pg.length) * 100, 1) : null,
+          netUsd: round(pg.reduce((a, g) => a + g.netUsd, 0), 4),
+          expectancyUsd: pg.length ? round(pg.reduce((a, g) => a + g.netUsd, 0) / pg.length, 4) : null,
+          avgWinUsd: pW.length ? round(pW.reduce((a, g) => a + g.netUsd, 0) / pW.length, 4) : null,
+          avgLossUsd: pL.length ? round(pL.reduce((a, g) => a + g.netUsd, 0) / pL.length, 4) : null,
+          rows: pg.slice(0, 15).map((g) => ({ symbol: g.symbol, side: g.side, fills: g.fills, netUsd: round(g.netUsd, 4), riskUsd: g.riskUsd, key: g.key.startsWith('pos:') ? null : 'campaign' })),
+        };
+      })(),
     };
-    // Van Tharp SQN — every graded close in true R: R = netPnl / riskUsd.
-    // Only closes whose entry logged its risk basis count; the number is
-    // forward-confirmed, not simulated. n>=30 is the honest sample floor —
-    // report it alongside so the dashboard can't flatter a tiny sample.
-    const rRows = netCloses.filter((f) => f.riskUsd > 0);
-    if (rRows.length) {
-      const rs = rRows.map((f) => netOfFee(f) / f.riskUsd);
+    // Van Tharp SQN — graded in true R at POSITION level: a position's total
+    // net divided by the risk its entry planned. Per-fill R fragments one
+    // trade's R across its trim ladder (12 trims at +0.7R each is one
+    // +8.4R trade, not twelve +1R trades). n>=30 is the honest sample floor.
+    const rGroups = posGroups.filter((g) => g.riskUsd > 0);
+    if (rGroups.length) {
+      const rs = rGroups.map((g) => g.netUsd / g.riskUsd);
       const m = rs.reduce((a, x) => a + x, 0) / rs.length;
       const sd = rs.length > 1 ? Math.sqrt(rs.reduce((a, x) => a + (x - m) ** 2, 0) / (rs.length - 1)) : 0;
       state.sqnR = {
-        n: rRows.length,
+        unit: 'position',
+        n: rGroups.length,
         meanR: round(m, 3),
         sdR: round(sd, 3),
-        sqn: sd > 0 ? round((m / sd) * Math.sqrt(rRows.length), 2) : null,
+        sqn: sd > 0 ? round((m / sd) * Math.sqrt(rGroups.length), 2) : null,
         winRatePct: round((rs.filter((x) => x > 0).length / rs.length) * 100, 1),
         avgWinR: (() => { const w = rs.filter((x) => x > 0); return w.length ? round(w.reduce((a, x) => a + x, 0) / w.length, 3) : null; })(),
         avgLossR: (() => { const l = rs.filter((x) => x <= 0); return l.length ? round(l.reduce((a, x) => a + x, 0) / l.length, 3) : null; })(),
-        note: 'engine-attributed closes graded in true R (net-of-fee / entry risk). n>=30 before trusting the point estimate.',
+        note: 'positions graded in true R (total net-of-fee / entry risk). n>=30 before trusting the point estimate.',
       };
     } else delete state.sqnR;
   } catch (e) {

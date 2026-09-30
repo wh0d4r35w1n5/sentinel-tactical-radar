@@ -1074,7 +1074,9 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           // attribution split — the engine's record vs manual fills, kept
           // separate so neither can borrow the other's PnL
           const bs=rs&&rs.bySource,bsStr=bs?' · bot '+(bs.bot.closes||0)+'c $'+(bs.bot.netUsd??'—')+' · manual '+(bs.manual.closes||0)+'c $'+(bs.manual.netUsd??'—')+(bs.legacy&&bs.legacy.closes?' · legacy '+bs.legacy.closes+'c $'+bs.legacy.netUsd:''):'';
-          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?' · '+rs.winRatePct+'% win over '+rs.closes+' closes · net $'+rs.netUsd+' · PF '+rs.profitFactor:'')+(src.sqnR!=null?' · SQN(R) '+(+src.sqnR).toFixed(2)+' over risk-graded closes':' · SQN(R) pending — needs a risk-stamped entry→close')+bsStr+'</span></div>')+
+          const bp=rs&&rs.byPosition;
+          const posStr=bp?' · '+bp.positions+' positions · '+bp.winRatePct+'% pos-win · exp $'+bp.expectancyUsd+'/pos':'';
+          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?posStr+' · net $'+rs.netUsd+' · PF '+rs.profitFactor+' · '+rs.winRatePct+'% per-fill':'')+(src.sqnR&&src.sqnR.sqn!=null?' · SQN(R) '+(+src.sqnR.sqn).toFixed(2)+' over '+src.sqnR.n+' risk-graded positions':' · SQN(R) pending — needs a risk-stamped entry→close')+bsStr+'</span></div>')+
             rf.map(f=>{const net=(f.profit||0)-(f.fee||0);return `<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.tradeSide||''} ${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · net ${net>=0?'+':''}${net.toFixed(4)} · ${ago(f.ts)}</span></span><span class="num ${net>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`}).join('');
         }
         // gate-reject transparency — 'why didn't it trade' answers itself

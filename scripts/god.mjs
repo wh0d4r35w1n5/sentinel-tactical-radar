@@ -205,7 +205,7 @@ if (ll) {
         add('breakers-armed', allDead ? 'FAIL' : cb.tripped ? 'WARN' : 'PASS',
           allDead ? 'ALL account breakers disabled — nothing stops a churn bleed'
           : cb.tripped ? `TRIPPED: ${cb.tripped}`
-          : `armed · 24h net $${cb.net24Usd} · fees $${cb.fees24Usd} · wr20 ${cb.winRate20 ?? '—'}% (n=${cb.closes20})`);
+          : `armed · 24h net $${cb.net24Usd} · fees $${cb.fees24Usd} · posWr20 ${cb.winRate20 ?? '—'}% (n=${cb.positions20 ?? cb.closes20} positions)`);
       }
     }
   }
