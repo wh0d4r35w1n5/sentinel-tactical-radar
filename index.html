@@ -30,7 +30,16 @@
 <script src="/sentinel-tactical-radar/vendor/lightweight-charts-4.2.3.js" defer></script>
 <!-- service worker: cache-first statics, SWR on api/*.json, jsDelivr
      failover when Pages is down — the dashboard never renders a hole -->
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sentinel-tactical-radar/sw.js').catch(()=>{})</script>
+<script>
+if('serviceWorker' in navigator){
+  var swBooted=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){if(!swBooted){swBooted=true;location.reload();}});
+  navigator.serviceWorker.register('/sentinel-tactical-radar/sw.js').then(function(r){
+    r.update();
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)r.update().catch(()=>{})});
+  }).catch(()=>{});
+}
+</script>
 <style>
 @property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
 :root{--bg:#07050f;--bg2:#0d0820;--panel:rgba(19,13,38,.82);--line:rgba(140,120,255,.2);--line2:rgba(140,120,255,.42);

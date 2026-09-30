@@ -7,7 +7,7 @@
 //                     a Pages outage shows last-known-good data, never a hole.
 //   fallback CDN   -> jsDelivr gh mirror, only when Pages itself is down
 //                     (cached ~12h upstream; stale beats absent)
-var VER = 'str-v6';
+var VER = 'str-v7';
 var STATIC = [
   '/sentinel-tactical-radar/',
   '/sentinel-tactical-radar/index.html',
@@ -67,6 +67,27 @@ self.addEventListener('fetch', function (e) {
       }).catch(function () { return new Response('null', { headers: { 'Content-Type': 'application/json' } }); })
     );
     return;
+  }
+
+  // HTML shell / navigations — network-first. A stale cached shell pins the
+  // whole dashboard on dead render code; falling back to cache when offline
+  // preserves the last-known-good behavior.
+  if (e.request.mode === 'navigate' || url.pathname.slice(-5) === '.html' || url.pathname.slice(-1) === '/') {
+    if (url.origin === location.origin) {
+      e.respondWith(
+        fetch(e.request).then(function (res) {
+          if (res.ok) {
+            var cl = res.clone();
+            caches.open(VER).then(function (c) { c.put(e.request, cl); });
+            return res;
+          }
+          throw new Error('http ' + res.status);
+        }).catch(function () {
+          return caches.match(e.request).then(function (cached) { return cached || Response.error(); });
+        })
+      );
+      return;
+    }
   }
 
   // same-origin static — cache-first, background revalidate
