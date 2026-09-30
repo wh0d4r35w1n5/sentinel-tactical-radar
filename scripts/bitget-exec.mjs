@@ -2841,6 +2841,7 @@ async function main() {
         const vault = loadVault();
         vault.sweptIds ||= {}; vault.sweeps ||= [];
         vault.hwmUsd = Math.max(vault.hwmUsd || 0, EQ_OVERRIDE || 0);
+        const hwmLoaded = vault.hwmUsd;
         const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + vault.balanceUsd;
         // room = the above-water tranche created since the last high.
         // Each profitable fill consumes `net` of it (swept or not) — total
@@ -2874,7 +2875,10 @@ async function main() {
         }
         vault.hwmUsd = round(Math.max(vault.hwmUsd, navNow), 4);
         state.vaultHwmUsd = vault.hwmUsd;
-        if (chg > 0 || !vault.updatedAt) {
+        // persist on ANY state change — hwmUsd must survive the per-cycle
+        // reload or the mark never ratchets: every cycle would re-open
+        // `navNow - 65` room and keep paying carry on the same tranche.
+        if (chg > 0 || vault.hwmUsd !== hwmLoaded || !vault.updatedAt) {
           vault.sweeps = vault.sweeps.slice(-1000);
           vault.updatedAt = new Date().toISOString();
           writeJson(VAULT_PATH, vault);
