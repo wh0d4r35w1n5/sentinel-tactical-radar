@@ -73,6 +73,7 @@ jobs:
           CONFIRM_LIVE: ${{ vars.CONFIRM_LIVE }}
           LIVE_MAX_NOTIONAL_USD: ${{ vars.LIVE_MAX_NOTIONAL_USD }}
           LIVE_MAX_POSITIONS: ${{ vars.LIVE_MAX_POSITIONS }}
+          LIVE_TARGET_POSITIONS: ${{ vars.LIVE_TARGET_POSITIONS }}
         continue-on-error: true # an exec failure must never block the snapshot commit
 
       # Overseer: audits every invariant after exec — writes api/god.json.
