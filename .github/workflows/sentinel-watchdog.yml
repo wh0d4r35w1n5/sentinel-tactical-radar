@@ -32,7 +32,7 @@ jobs:
           set +e
           FAIL=""
           # 1) dashboard reachable — any HTTP reply (incl. 301/404) = nginx alive
-          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://168.138.102.53/ || echo 000)
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://54.66.217.111/ || echo 000)
           [ "$CODE" = "000" ] && FAIL="$FAIL dashboard_unreachable" || true
           # 2) pushbot commit freshness — last api/ commit must be <15min old
           TS=$(gh api "repos/$REPO/commits?path=api/live-ledger.json&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null)
@@ -75,7 +75,7 @@ jobs:
             gh issue comment "$OPEN" -R "$REPO" -b "Still down: $FAIL ($(date -u +%FT%TZ))" || true
           else
             gh issue create -R "$REPO" --title "SENTINEL DOWN" \
-              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — standby auto-promotion attempted; check https://168-138-102-53.sslip.io and http://$STANDBY_HOST/" || true
+              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — standby auto-promotion attempted; check https://54-66-217-111.sslip.io and http://$STANDBY_HOST/" || true
           fi
           echo "::error::SENTINEL DOWN: $FAIL"
           exit 1

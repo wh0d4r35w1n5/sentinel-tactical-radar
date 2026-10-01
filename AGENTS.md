@@ -32,7 +32,7 @@
 
 - Repo: `C:\Users\beaue\sentinel-clone` (git, pushes to GitHub).
 - Live dir: `C:\Users\beaue\sentinel-live` (not a repo — sync to clone to commit).
-- VPS: `ssh -i ~/.ssh/sentinel_vm_key ubuntu@168.138.102.53`
+- VPS: `ssh -i ~/.ssh/sentinel_vm_key ubuntu@54.66.217.111`
 - Deploy file: `scp` to `~`, then `sudo mv` into `/opt/sentinel/` (root-owned),
   `node --check`, `sudo systemctl restart sentinel-rapid`.
 - Verify: `/opt/sentinel/api/god.json` (PERFECT = 22 pass),

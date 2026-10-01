@@ -1754,7 +1754,7 @@ function wireSetupUI(){
     try{
       // same-origin on the VPS mirror; cross-origin (CORS-open, secret-authed)
       // when served from GitHub Pages — the secret is the credential
-      const hookUrl=location.hostname.endsWith('sslip.io')?'/tv-hook':'https://168-138-102-53.sslip.io/tv-hook';
+      const hookUrl=location.hostname.endsWith('sslip.io')?'/tv-hook':'https://54-66-217-111.sslip.io/tv-hook';
       const r=await fetch(hookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(hookPayload(setupSpec()))});
       const d=await r.json().catch(()=>({}));
       if(r.ok&&d.ok){setupMsg(`armed → ${d.id||'queued'} — executor picks it up next cycle · track above`);setTimeout(renderSetups,4000)}

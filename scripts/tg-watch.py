@@ -171,7 +171,7 @@ async def main():
     me = await client.get_me()
     API_DIR = ROOT / "api"
     STATE_DIR = ROOT / "state"
-    LINKS = "https://168-138-102-53.sslip.io"
+    LINKS = "https://54-66-217-111.sslip.io"
 
     def api(name):
         try:
@@ -966,7 +966,7 @@ async def main():
         if not secret:
             return ("🔗 <b>TradingView hook not armed</b>\n"
                     "state/tv-hook.json needs <code>{\"secret\":\"…\"}</code> on the box")
-        url = "https://168-138-102-53.sslip.io/tv-hook"
+        url = "https://54-66-217-111.sslip.io/tv-hook"
         tpl = ('{"key":"%s","symbol":"{{ticker}}","direction":"long",'
                '"mode":"market","sl":{{close}}*0.97,"tps":[{{close}}*1.03,'
                '{{close}}*1.06],"risk":0.5,"id":"{{timenow}}"}') % secret
