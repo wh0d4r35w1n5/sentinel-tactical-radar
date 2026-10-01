@@ -1330,6 +1330,7 @@ async function main() {
       if (ta.reasons[0] === 'ignition') return 'Momentum Ignition';
       if (ta.reasons[0] === 'vwap-reversion') return 'VWAP Reversion';
       if (ta.reasons[0] === 'eq-edge') return 'PA Quartile';
+      if (ta.reasons[0] === 'tsmom') return 'TS Momentum';
     }
     return strategyFor(r, k);
   };
@@ -2281,6 +2282,13 @@ async function main() {
   // so the trade score is what adjusts. Shared by the gate + freshDir.
   const carryPenaltyOf = (s) =>
     s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
+  // positive carry tilt — funding is income: between otherwise-equal
+  // candidates the one that COLLECTS the 8h rate ranks ahead (operator
+  // mandate: exploit funding for extra income). Continuous bonus ~1pt per
+  // 0.05%/8h, capped +5 — symmetric to the payer penalty, tilts without
+  // overriding evidence gates.
+  const carryBonusOf = (s) =>
+    s.carry === 'earn' ? Math.min(5, Math.abs(s.funding?.ratePct ?? 0) * 20) : 0;
   // prospective record (full-history split, n=14,952): SHORTs in side
   // tape are a PROVEN cell (trend +0.13%, t=+6.2) — the old class-wide
   // claim (n=826, sideways+bull pooled) was refuted by the regime split.
@@ -2293,7 +2301,7 @@ async function main() {
   // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
   // stack needs extra score to justify the entry (confirmation layer)
   const mtfPenaltyOf = (s) => (s.ta?.eng?.mtf && s.ta.eng.mtf.aligned === false ? 4 : 0);
-  const tradeScoreOf = (s) => s.score - carryPenaltyOf(s) - shortPenaltyOf(s) - mtfPenaltyOf(s);
+  const tradeScoreOf = (s) => s.score + carryBonusOf(s) - carryPenaltyOf(s) - shortPenaltyOf(s) - mtfPenaltyOf(s);
   const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
   // taker slippage beyond the half-spread already priced on entry — market
   // exits (stops, trails, time-outs, reversals, liq) never fill the level.
@@ -2516,6 +2524,12 @@ async function main() {
   const rankedByEta = signals
     .filter((s) => !untradeable.has(s.asset.toUpperCase()))
     .sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
+  // balanced-book mandate: the operator's structure is up to 5 longs + 5
+  // shorts held concurrently — per-direction plan cap keeps one tape bias
+  // from crowding the whole book. Capacity, not quota: only gate-passing
+  // cells fill slots — an empty side is better than a forced loser.
+  const SIDE_CAP = +(process.env.SENTINEL_SIDE_CAP || 5);
+  const dirPlanned = { LONG: 0, SHORT: 0 };
   for (const s of rankedByEta) {
     // dynamic leverage — scales with MEASURED regime alignment and
     // conviction, never with narrative. Under 1%-risk sizing leverage
@@ -2666,6 +2680,7 @@ async function main() {
     gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
+    gate(dirPlanned[s.direction] < SIDE_CAP, 'side-cap');
     // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
     // the eval block — the strategy's record stays on the board for
     // evidence, but exceptional confluence may still route. Default 75;
@@ -2715,6 +2730,7 @@ async function main() {
       // executor (bitget-exec.mjs) routes exactly this, sized from the real
       // account equity it reads from the exchange. No paper position is
       // recorded — the exchange fill IS the position record.
+      dirPlanned[s.direction]++;
       livePlan.orders.push({
         symbol: s.asset + 'USDT',
         asset: s.asset,
@@ -2731,6 +2747,15 @@ async function main() {
         // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
         runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
         conv,
+        // funding-carry income — expected daily yield while held (8h x3).
+        // 'earn' = the position collects; journaled so the book's carry
+        // income is auditable per position against realized funding.
+        carry: s.carry ?? null,
+        carryYieldDayPct: s.carry === 'earn' && s.funding?.ratePct != null
+          ? pct(Math.abs(s.funding.ratePct) * 3)
+          : s.carry === 'pay' && s.funding?.ratePct != null
+            ? -pct(Math.abs(s.funding.ratePct) * 3)
+            : null,
         reason: s.ta?.reasons?.[0] || null,
         ver: s.ver ?? ENGINE_VERSION,
         // entry-quality telemetry — the exec journals these so the

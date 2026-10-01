@@ -18,6 +18,13 @@
   `hwmUsd` must persist — fixed 2026-10-01).
 - Shorts allowed (`SENTINEL_LONG_ONLY=0`); BTC/ETH/majors tradable
   (`SENTINEL_DENY_SYMS=` empty).
+- **Balanced book**: up to 5 longs + 5 shorts held concurrently
+  (`SENTINEL_SIDE_CAP=5` per direction, `LIVE_TARGET_POSITIONS=10` when
+  the env is editable). Capacity, not quota — only gate-passing cells
+  fill slots; never force a measured-loser to balance.
+- **Exploit funding as income**: carry earners rank up in trade score
+  (+0–5 tilt by |rate|), payers penalized; `carryYieldDayPct` is journaled
+  per order so carry income is auditable.
 - Never loosen evidence gates into measured-negative cells. Widen the
   funnel (candidate count, coverage), never the proof bar.
 
