@@ -131,6 +131,22 @@ const EDGE_LIVE = (() => {
 const EDGE_MIN_TRADE = +(process.env.SENTINEL_EDGE_MIN || 0.35);
 const CHASE_EDGE = +(process.env.SENTINEL_CHASE_EDGE || 0.8);
 const PULLBACK_PCT = +(process.env.SENTINEL_PULLBACK_PCT || 0.4);
+// fee-lock calibration — the system's own excursion record knows how deep
+// winners dip after going green (medMaePct). Locking below that band is
+// the documented "death by early breakeven": positions scratch at
+// entry+fines then run to target without us. Arm above the noise; lock
+// above fees. env overrides beat calibration.
+const FEE_LOCK_MAE = (() => {
+  try {
+    const bt = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'rr-backtest.json'), 'utf8'));
+    const m = +bt?.observed?.medMaePct;
+    return m > 0 ? m : null;
+  } catch { return null; }
+})();
+const FEE_LOCK_AT = +(process.env.SENTINEL_FEE_LOCK_AT || 0) ||
+  Math.max(0.3, 1.5 * (FEE_LOCK_MAE || 0.58));
+const FEE_LOCK_PCT = +(process.env.SENTINEL_FEE_LOCK_PCT || 0) ||
+  Math.max(0.15, 0.5 * (FEE_LOCK_MAE || 0.58));
 // ---- meta-label (López de Prado, AFML ch.3): the primary model decides
 // SIDE; a secondary model answers "will following it make money" and
 // scales SIZE. Ours is a shrunk bucketed classifier over the graded
@@ -1654,6 +1670,21 @@ async function main() {
           if (candBetter) {
             wantPx = cand;
             why = `move-lock ${p.symbol}: +${round(movePct, 2)}% run — stop locked at +${round(lockPct, 2)}% (${wantPx})`;
+          }
+        }
+        // fee-lock — the operator's standing rule mechanized: "no one went
+        // broke taking profit." Trigger calibrated to the measured noise
+        // band (1.5x medMAE — early-EM locks are the documented expectancy
+        // killer), lock level covers fees + half the noise so a normal dip
+        // doesn't scratch it. The position cannot lose once armed while
+        // the ladder keeps the full upside. Higher tiers (0.9-to-TP,
+        // move-lock) still override whenever they offer a better stop.
+        if (movePct >= FEE_LOCK_AT) {
+          const cand = round(p.entry * (1 + (sgn * FEE_LOCK_PCT) / 100), pp);
+          const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+          if (candBetter) {
+            wantPx = cand;
+            why = `fee-lock ${p.symbol}: +${round(movePct, 2)}% run — stop floored at entry+${FEE_LOCK_PCT}% (${wantPx})`;
           }
         }
         const slBetter =

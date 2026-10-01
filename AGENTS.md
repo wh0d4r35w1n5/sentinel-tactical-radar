@@ -40,6 +40,12 @@
   generic fades (vwap/effort/eq-edge). Strategy name "TS Momentum".
 - Leverage: 40940 low-liquidity caps parsed from the error message —
   retry at announced max, resize notional onto the same margin slice.
+- Zero-risk ratchet stack (stop only ever moves in the trade's favor):
+  fee-lock (move ≥ max(0.3%, 1.5×medMAE) → stop entry+max(0.15%,0.5×medMAE),
+  calibrated from rr-backtest.json observed.medMaePct — early-EM locks are
+  the documented expectancy killer, never arm inside the noise band) →
+  move-lock (≥1.5% run → lock 55%) → TP-progress ratchet (≥90% to next
+  level → lock ~55% of it) → moon-bag trail (all TPs banked → trail −1%).
 - Risk: `MAX_RISK_PCT` is a ceiling; realized tier follows persisted
   position SQN (`priorSqnR` → `riskCapPct`, Model 17). Floor-min path
   enforces the same cap — skip rather than over-risk.
