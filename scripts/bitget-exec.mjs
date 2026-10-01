@@ -531,6 +531,9 @@ async function main() {
       // drains the account on retries that can't succeed
       if (prior.mode === MODE && Number.isFinite(prior.protectionHaltUntil))
         state.protectionHaltUntil = Math.max(state.protectionHaltUntil || 0, prior.protectionHaltUntil);
+      // Van Tharp Model 17 carry-over: last cycle's position-level SQN
+      // sets this cycle's risk tier — risk follows demonstrated quality.
+      if (prior.mode === MODE && prior.sqnR) state.priorSqnR = prior.sqnR;
       // entry-attempt log rides the ledger too — the fills journal lags
       // ~30s behind live order routing, so a probe loop can slip extra
       // opens under the rate cap before the fills ever record. Attempts
@@ -1061,6 +1064,19 @@ async function main() {
     };
     var kellyRiskUsd = kelly ? kelly.halfKellyRiskUsd : null;
   } catch {}
+  // Van Tharp Model 17 — risk tier follows demonstrated SQN, never leads
+  // it. priorSqnR is last cycle's persisted position-level SQN: unproven
+  // records (n<15 instrumented epochs) or poor quality (<1.6) get the
+  // minimum tier; quality earns size. SENTINEL_MAX_RISK_PCT is the
+  // absolute ceiling — tiers only ever scale DOWN from it.
+  const sqnPrev = state.priorSqnR;
+  const sqnN = +(sqnPrev && sqnPrev.n) || 0, sqnV = sqnPrev && sqnPrev.sqn;
+  const RISK_CAP_PCT = Math.min(
+    +(process.env.SENTINEL_MAX_RISK_PCT || 0.12),
+    sqnN < 15 || sqnV == null ? +(process.env.SENTINEL_RISK_TIER_MIN || 0.05)
+      : sqnV < 1.6 ? 0.05
+      : sqnV < 2.5 ? 0.08
+      : +(process.env.SENTINEL_MAX_RISK_PCT || 0.12));
   const entriesBlocked =
     cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
     : realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
@@ -1084,6 +1100,8 @@ async function main() {
     leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
     killSwitchPct: DD_KILL,
     dailyHaltPct: DAILY_HALT,
+    riskCapPct: RISK_CAP_PCT, // Model 17 tier — scaled by prior cycle's position SQN
+    sqnTier: { n: sqnN, sqn: sqnV ?? null },
     ddPct: state.ddPct,
     dd24Pct: state.dd24Pct,
     protectionRule: 'exactly one TP + one SL per position; orphan positions get protection synthesized; entry emergency-closes if protection placement fails — never naked',
@@ -2286,7 +2304,7 @@ async function main() {
             // land on a $33 book (~60% risk/trade) — R-variance that no
             // edge survives. Same formula the operator setups use.
             Number.isFinite(o.stopPct) && o.stopPct > 0
-              ? (equityUsd * +(process.env.SENTINEL_MAX_RISK_PCT || 0.12)) /
+              ? (equityUsd * RISK_CAP_PCT) /
                 Math.max(0.0005, o.stopPct / 100 + FEE_RT) / lev
               : Infinity,
             // half-Kelly ceiling: equity-at-risk (margin×lev×stopPct) stays
@@ -2319,6 +2337,13 @@ async function main() {
         const feeNeeded = minNotional * 0.0006;
         const budget = marginFree - (RISK_MAX ? 0 : equityUsd * 0.2);
         if (marginNeeded + feeNeeded <= budget) {
+          // Van Tharp cap applies to floored size too — a position that can
+          // only exist by over-risking is a σ[R] leak, not a trade.
+          const riskIfStopped = minNotional * (o.stopPct / 100 + FEE_RT);
+          if (riskIfStopped > equityUsd * RISK_CAP_PCT) {
+            state.actions.push(`${o.symbol}: ⛔ min-size risk $${round(riskIfStopped, 2)} > ${round(RISK_CAP_PCT * 100, 1)}% equity cap — not floored`);
+            continue;
+          }
           const p = Math.pow(10, c.sizePlace);
           size = Math.ceil(minQty * p) / p; // round UP to clear the minimum
           state.actions.push(`${o.symbol}: 📏 scaled size below min — floored to contract minimum $${round(minNotional, 2)} notional`);
