@@ -62,9 +62,9 @@ const FILLS_SINCE = +(process.env.SENTINEL_FILLS_SINCE_MS || 0);
 // universe (~425 names) — the old flat top-16 in rapid mode meant assets
 // ranked 17+ were never even scored. Cursor persists on disk because rapid
 // spawns a fresh scanner process per cycle.
-const KLINE_HEAD = RAPID ? 12 : 24;
-const KLINE_TAIL = RAPID ? 12 : 24;
-const MAX_SIGNALS = 12;
+const KLINE_HEAD = +(process.env.SENTINEL_KLINE_HEAD || (RAPID ? 12 : 24));
+const KLINE_TAIL = +(process.env.SENTINEL_KLINE_TAIL || (RAPID ? 12 : 24));
+const MAX_SIGNALS = +(process.env.SENTINEL_MAX_SIGNALS || 12);
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
