@@ -22,6 +22,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Failover: if the VPS pushbot's last `vps:` commit on the live ledger
+      # is stale (>25min), CI takes ownership of state and trades demo.
+      # When fresh `vps:` commits resume, CI steps back to shadow + restore.
+      - name: Failover detect
+        id: fo
+        run: |
+          LAST=$(git log -1 --format='%ct|%s' -- api/live-ledger.json)
+          TS=$(echo "$LAST" | cut -d'|' -f1); MSG=$(echo "$LAST" | cut -d'|' -f2)
+          AGE=$(( $(date -u +%s) - ${TS:-0} ))
+          case "$MSG" in vps:*) VPSSIG=1;; *) VPSSIG=0;; esac
+          echo "last='$MSG' age=${AGE}s vpssig=$VPSSIG"
+          if [ "$AGE" -lt 1500 ] && [ "$VPSSIG" = "1" ]; then
+            echo "mode=${{ vars.SENTINEL_EXEC || 'shadow' }}" >> $GITHUB_OUTPUT
+            echo "own=0" >> $GITHUB_OUTPUT
+          else
+            echo "mode=demo" >> $GITHUB_OUTPUT
+            echo "own=1" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build scanner snapshot from Bitget
         run: node scripts/build-scanner.mjs
         env:
@@ -38,7 +57,7 @@ jobs:
       - name: Route live plan (shadow/demo/live per config)
         run: node scripts/bitget-exec.mjs
         env:
-          SENTINEL_EXEC: ${{ vars.SENTINEL_EXEC || 'shadow' }}
+          SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
           BITGET_API_KEY: ${{ secrets.BITGET_API_KEY }}
           BITGET_API_SECRET: ${{ secrets.BITGET_API_SECRET }}
           BITGET_PASSPHRASE: ${{ secrets.BITGET_PASSPHRASE }}
@@ -64,8 +83,18 @@ jobs:
           # VPS-owned artifacts: the live VPS pushes authoritative versions of
           # these every ~2min via sentinel-push.timer. CI builds from repo
           # state that lags the exchange — it must never overwrite them.
-          git checkout -- api/god.json api/live-plan.json api/live-ledger.json api/health.json api/exec-catalog.json api/market-scanner.json api/coin-detail.json api/signal-ledger.json api/signal-eval.json api/signal-archive.json api/prices.json api/funding.json api/sentiment.json api/news.json api/hypotheses.json api/correlation.json api/benchmark.json api/pulse-history.json api/trades-taken.json api/sqn-report.json api/thoughts.json 2>/dev/null || true
+          # Except during failover (own=1): VPS is dead, CI owns the state.
+          if [ "${{ steps.fo.outputs.own }}" != "1" ]; then
+            git checkout -- api/god.json api/live-plan.json api/live-ledger.json api/health.json api/exec-catalog.json api/market-scanner.json api/coin-detail.json api/signal-ledger.json api/signal-eval.json api/signal-archive.json api/prices.json api/funding.json api/sentiment.json api/news.json api/hypotheses.json api/correlation.json api/benchmark.json api/pulse-history.json api/trades-taken.json api/sqn-report.json api/thoughts.json 2>/dev/null || true
+          else
+            echo "failover: CI owns state — keeping CI-built artifacts"
+          fi
           git add api/
+          # failover persistence: fills log / vault / exec state must carry
+          # between runs (state/ is gitignored — VPS keeps its own on disk)
+          if [ "${{ steps.fo.outputs.own }}" = "1" ]; then
+            git add -f state/ 2>/dev/null || true
+          fi
           if git diff --cached --quiet; then
             echo "no changes"
           else
