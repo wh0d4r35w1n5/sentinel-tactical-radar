@@ -2337,7 +2337,26 @@ async function main() {
       const t0 = Date.now();
       try {
         await setIsolated(o.symbol);
-        await setLeverage(o.symbol, lev);
+        try {
+          await setLeverage(o.symbol, lev);
+        } catch (le) {
+          // 40940: the exchange drops the leverage ceiling below contract
+          // maxLev during low-liquidity windows. Retry at the announced
+          // max and shrink notional onto the same margin slice — a smaller
+          // entry beats a dead one, and the tighter leverage only reduces
+          // the designed risk. Any other set-leverage failure is fatal.
+          const cap = /leverage is (\d+)x/i.exec(String((le && le.message) || le));
+          if (!cap) throw le;
+          const levEff = Math.min(lev, +cap[1]);
+          await setLeverage(o.symbol, levEff);
+          const n2 = marginUsd * levEff;
+          size = sizeFor(cm, o.symbol, n2, o.refEntry);
+          if (!size) {
+            state.actions.push(`${o.symbol}: lev capped ${levEff}x — notional below contract min — skipped`);
+            continue;
+          }
+          state.actions.push(`${o.symbol}: ⚠️ lev ${lev}→${levEff}x (exchange cap) — notional → $${round(n2, 2)}`);
+        }
         let needSize = size;
         // operator setups fill at market on trigger (VEMA semantics:
         // condition met → market order) — the pullback quote could leave

@@ -1447,6 +1447,21 @@
         brk = breakout(cs), er = effortResult(cs), ep = elliottProj(cs),
         prz = H && H.project ? H.project(cs) : null, sk = sakata(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
+    // TSMOM — time-series momentum, the strongest documented crypto
+    // anomaly (Moskowitz-Ooi-Pedersen family; volume-weighted TSMOM
+    // Sharpe ~2.17 in crypto studies). 12h + 48h returns must agree in
+    // sign with the 48h leg >= ~1% — below that it is noise, not trend.
+    // Precomputed: sits above the generic fades (vwap/effort/eq) — a
+    // stretched move is exactly where the documented edge lives — but
+    // below every structural setup, which carries a defined entry.
+    var tm = null;
+    if (cs.length >= 49) {
+      var c0 = cs[cs.length - 1].c,
+          r12 = (c0 / cs[cs.length - 13].c - 1) * 100,
+          r48 = (c0 / cs[cs.length - 49].c - 1) * 100,
+          min48 = +(typeof process !== 'undefined' && process.env && process.env.SENTINEL_TSMOM_MIN48) || 1;
+      if (Math.abs(r48) >= min48 && Math.sign(r12) === Math.sign(r48)) tm = r48 > 0 ? 'LONG' : 'SHORT';
+    }
     // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
     // signal), then SFP, completed W5, wyckoff event, smc choch, then
     // ignition — each lower rung only fires when the stronger ones are silent
@@ -1461,6 +1476,7 @@
     else if (mc && mc.choch) { bias = mc.choch === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-choch'); }
     else if (mc && mc.bos) { bias = mc.bos === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-bos'); }
     else if (ig) { bias = ig.dir; reasons.push('ignition'); }
+    else if (tm) { bias = tm; reasons.push('tsmom'); }
     else if (vw && vw.stretched) { bias = vw.fade; reasons.push('vwap-reversion'); }
     else if (ep && ep.live) { bias = ep.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('elliott-w5-proj'); }
     else if (er && er.dir && er.strength >= 0.5) { bias = er.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('effort-result'); }
