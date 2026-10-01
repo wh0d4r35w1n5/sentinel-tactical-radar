@@ -1011,8 +1011,13 @@ async function main() {
     const RESERVE_USD = +(process.env.SENTINEL_RESERVE_USD || 0);       // equity reserved from deployment
     if (net24 < -lossBasis * LOSS_HALT_PCT / 100)
       cbReason = `circuit-breaker: 24h bot realized -$${round(-net24, 2)} >= ${LOSS_HALT_PCT}% of window-start equity $${round(lossBasis, 2)}`;
-    else if (last20.length >= WR_MIN_N && wr != null && wr < WR_HALT_PCT / 100)
-      cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} positions < ${WR_HALT_PCT}%`;
+    // profit is the metric, not hit-rate: a low-WR stream only halts when
+    // it's actually losing money — profitable asymmetry (few big winners)
+    // must never trip a win-rate fetish breaker. Net-negative + collapsed
+    // WR = genuinely broken; that case still halts.
+    else if (last20.length >= WR_MIN_N && wr != null && wr < WR_HALT_PCT / 100 &&
+             last20.reduce((a, g) => a + g.netUsd, 0) <= 0)
+      cbReason = `circuit-breaker: rolling win-rate ${round(wr * 100, 0)}% over last ${last20.length} positions < ${WR_HALT_PCT}% AND net $${round(last20.reduce((a, g) => a + g.netUsd, 0), 2)} <= 0`;
     else if (fees24 > equityUsd * FEE_HALT_PCT / 100)
       cbReason = `circuit-breaker: 24h fee burn $${round(fees24, 2)} > ${FEE_HALT_PCT}% of equity — churning`;
     else if (pos.length >= STREAK_HALT &&

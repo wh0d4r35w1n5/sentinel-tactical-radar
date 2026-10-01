@@ -2,6 +2,10 @@
 
 ## Standing operator mandates
 
+- **Profit is the #1 metric — never win rate.** Grade everything in net
+  dollars/R: a low-WR asymmetric system is welcome, a high-WR bleeder is not.
+  Never gate, halt, or rank on hit-rate alone (WR breaker now requires
+  net-negative too — 2026-10-01).
 - **Take profit**: "No one ever went broke taking profit." If an open position's
   unrealized P&L covers its round-trip fees plus more, and there is no strong
   reason to hold (live target thesis, active runner), close it. Operator close
