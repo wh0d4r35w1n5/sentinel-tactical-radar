@@ -58,6 +58,11 @@ jobs:
         run: node scripts/bitget-exec.mjs
         env:
           SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
+          # epoch anchors — same constraints the VPS env carried
+          SENTINEL_EQUITY_OVERRIDE_USD: "65"
+          SENTINEL_VAULT_SHARE: "0.25"
+          SENTINEL_LONG_ONLY: "0"
+          SENTINEL_DENY_SYMS: ""
           BITGET_API_KEY: ${{ secrets.BITGET_API_KEY }}
           BITGET_API_SECRET: ${{ secrets.BITGET_API_SECRET }}
           BITGET_PASSPHRASE: ${{ secrets.BITGET_PASSPHRASE }}
