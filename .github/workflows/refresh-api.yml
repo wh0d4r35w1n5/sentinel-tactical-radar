@@ -100,6 +100,8 @@ jobs:
           else
             git commit -m "chore: refresh api snapshots"
             # a queued run can land its commit while another was pushing —
-            # rebase onto whatever the remote gained, then push once more
-            git pull --rebase && git push
+            # rebase onto whatever the remote gained, then push once more.
+            # -X ours: freshly-built api/state artifacts win conflicts —
+            # they are authoritative over whatever raced us
+            git pull --rebase -X ours && git push || { git rebase --abort; git pull --rebase -X ours && git push; }
           fi
