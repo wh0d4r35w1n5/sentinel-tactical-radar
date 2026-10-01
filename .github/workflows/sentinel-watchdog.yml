@@ -53,15 +53,17 @@ jobs:
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${{ secrets.STANDBY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan "$STANDBY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # unguarded keyscan under bash -e used to kill this step before arming
+          ssh-keyscan -T 10 "$STANDBY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           # standby-arm.sh independently refuses if primary is alive — double guard
-          ssh -o StrictHostKeyChecking=accept-new ubuntu@"$STANDBY_HOST" 'bash ~/standby-arm.sh' || echo "standby refused or unreachable"
+          ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new ubuntu@"$STANDBY_HOST" 'bash ~/standby-arm.sh' || echo "standby refused or unreachable"
           sleep 20
           CODE2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "http://$STANDBY_HOST/" || echo 000)
           echo "standby_http=$CODE2"
 
       - name: Raise the alarm
-        if: steps.check.outputs.fail != ''
+        # always() — a failed promote step must not silence the alert
+        if: always() && steps.check.outputs.fail != ''
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -79,7 +81,7 @@ jobs:
           exit 1
 
       - name: Clear the alarm on recovery
-        if: steps.check.outputs.fail == ''
+        if: always() && steps.check.outputs.fail == '' && steps.check.conclusion == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
