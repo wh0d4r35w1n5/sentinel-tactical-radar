@@ -502,8 +502,23 @@ async function main() {
 
   // hourly klines for the top-volume candidates -> real momentum metrics
   const enriched = new Map();
-  const head = rows.slice(0, KLINE_HEAD);
-  const tail = rows.slice(KLINE_HEAD);
+  // environment-aware scan window: exec-catalog.json is the authoritative
+  // contract list for the ACTIVE mode. Demo lists ~45 contracts vs ~435
+  // scanned rows — letting phantoms consume the deep-scan budget starved
+  // the legal pool (only ~8 of 24 emitted signals could ever fill). In a
+  // constrained env the window is catalog-members only; on live the
+  // catalog is the full contract list so nothing changes.
+  let legalCatalog = null;
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live')
+      legalCatalog = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+  } catch {}
+  const scanRows = legalCatalog?.size
+    ? rows.filter((r) => legalCatalog.has(String(r.asset).toUpperCase()))
+    : rows;
+  const head = scanRows.slice(0, KLINE_HEAD);
+  const tail = scanRows.slice(KLINE_HEAD);
   const cursorPath = path.join(API, '..', 'state', 'scan-cursor.json');
   let cursor = 0;
   try { cursor = +JSON.parse(fs.readFileSync(cursorPath, 'utf8')).i || 0; } catch {}
@@ -1436,7 +1451,23 @@ async function main() {
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
     .sort((a, b) => b.score - a.score);
-  const signals = ranked
+  // fillable-first emission: the active environment's contract catalog
+  // (exec-catalog.json) is authoritative — a signal that can't route is
+  // board intel, not a candidate. Demo lists ~45 contracts vs the ~435
+  // scanned; letting phantoms occupy top-N slots starved the legal pool.
+  // Tradeable symbols take the slots first; phantoms pad any remainder so
+  // the eval engine still grades them and the veto stays falsifiable.
+  let legalSyms = null;
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live')
+      legalSyms = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+  } catch {}
+  const rankedEmit = legalSyms?.size
+    ? [...ranked.filter((r) => legalSyms.has(String(r.asset).toUpperCase())),
+       ...ranked.filter((r) => !legalSyms.has(String(r.asset).toUpperCase()))]
+    : ranked;
+  const signals = rankedEmit
     .slice(0, MAX_SIGNALS)
     .map((r, boardIdx) => {
       const ta = r.k.ta ?? null;
@@ -1735,7 +1766,7 @@ async function main() {
     ['surgeScore', 'vol surge'],
   ];
   const cutoff = ranked[MAX_SIGNALS - 1]?.score ?? 0;
-  const pressureList = ranked
+  const pressureList = rankedEmit
     .slice(MAX_SIGNALS, MAX_SIGNALS + 10)
     .map((r) => ({
       asset: r.asset,
