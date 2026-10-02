@@ -18,12 +18,12 @@
 // calls only inside the watch band or on the 30s anchor refresh, fresh again
 // at fire time.
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { integrityNote } from './crc32.mjs';
+import { makeExchange } from './exchange/index.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 try {
@@ -48,6 +48,14 @@ const POLL_MS = +(process.env.LIQ_GUARD_POLL_MS || 300);
 const STOP_TRIM = process.env.LIQ_GUARD_STOP_TRIM !== '0';
 const STOP_ZONE = +(process.env.LIQ_GUARD_STOP_ZONE_PCT || 1.2); // % above stop = trim zone
 const DEEPEN_BAND = +(process.env.LIQ_GUARD_DEEPEN_BAND || 0.9); // stop re-pinned at N% of liq band
+// degenerate-liq guard: on cross-margin accounts with collateral far bigger
+// than the position, the exchange's liqPrice sits hundreds of % from entry
+// (Bybit demo cross: XRP liq $842 vs entry $1.53 -> band 55046%). Pinning a
+// stop at N% of THAT band writes a trigger at absurd prices and the cancel
+// sweep then strips the REAL stop. Any band beyond the cap is unusable for
+// stop geometry — skip deepen/synth for it (MAXLOSS still applies; it's
+// margin-based, not liq-based). Isolated bands are ~100/lev ≈ 2-15%.
+const BAND_CAP_PCT = +(process.env.LIQ_GUARD_BAND_CAP_PCT || 40);
 // margin-loss circuit: pos_loss stops sit at ~60-80% of posted margin at
 // these leverages — letting one fire delivers the whole -1R+ band as a
 // tail loss (the epoch's three -$11/-$12/-$20 closes ARE the deficit).
@@ -66,139 +74,108 @@ const NAKED_CONFIRM_MS = +(process.env.LIQ_GUARD_NAKED_CONFIRM_MS || 9e3);
 const DUST_USD = +(process.env.LIQ_GUARD_DUST_USD || 0.15);
 const planCache = {}; // sym -> { at, rows } — plans change slowly, poll 20s
 const STATE = path.join(__dirname, '..', 'state', 'liq-guard.json');
-const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', COIN = 'USDT';
-const WS_URL = 'wss://ws.bitget.com/v2/ws/public';
 
 // demo/paper mode: same SENTINEL_EXEC switch as the exec — the guard must
 // watch the SAME account the engine trades, or demo positions run naked
-// while the guard stares at an empty live book.
+// while the guard stares at an empty live book. SENTINEL_EXCHANGE picks
+// the driver; all signed wire ops go through scripts/exchange/ so hedge
+// semantics, margin-mode params and plan verbs stay consistent with exec.
 const MODE = (process.env.SENTINEL_EXEC || 'off').toLowerCase();
 const DEMO = MODE === 'demo';
-const KEY = DEMO ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
-                 : (process.env.BITGET_API_KEY || '');
-const SECRET = DEMO ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
-                 : (process.env.BITGET_API_SECRET || '');
-const PASS = DEMO ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
-                 : (process.env.BITGET_PASSPHRASE || '');
+const X = makeExchange(process.env);
 const log = (...a) => console.log('[liq-guard]', ...a);
 
 if (!ENABLED) { log('LIQ_GUARD not armed — exiting'); process.exit(0); }
-if (!KEY || !SECRET || !PASS) { log('no creds — exiting'); process.exit(1); }
+if (!X.hasCreds) { log(`no ${X.name} ${MODE} creds — exiting`); process.exit(1); }
 
-function hdr(method, reqPath, qs, body) {
-  const ts = String(Date.now());
-  const pre = ts + method + reqPath + (qs ? '?' + qs : '') + (body || '');
-  const h = {
-    'ACCESS-KEY': KEY,
-    'ACCESS-SIGN': crypto.createHmac('sha256', SECRET).update(pre).digest('base64'),
-    'ACCESS-PASSPHRASE': PASS,
-    'ACCESS-TIMESTAMP': ts,
-    'Content-Type': 'application/json',
-    locale: 'en-US',
-  };
-  if (DEMO) h.paptrading = '1'; // Bitget demo-trading header — same as exec
-  return h;
-}
-async function api(method, reqPath, { qs = '', body = null } = {}) {
-  const b = body ? JSON.stringify(body) : '';
-  const r = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
-    method, headers: hdr(method, reqPath, qs, b), body: b || undefined,
-    signal: AbortSignal.timeout(10000),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (j.code && j.code !== '00000') throw new Error(`${reqPath} -> ${j.code} ${j.msg || ''}`);
-  return j.data;
-}
 const pubTicker = async (sym) => {
-  const r = await fetch(`${HOST}/api/v2/mix/market/ticker?symbol=${sym}&productType=${PRODUCT}`, { signal: AbortSignal.timeout(8000) });
-  const j = await r.json();
-  return +(j?.data?.[0]?.markPrice || j?.data?.[0]?.lastPr || 0);
+  const t = await X.ticker(sym).catch(() => null);
+  const row = Array.isArray(t) ? t[0] : t;
+  return +(row?.markPrice || row?.lastPr || row?.lastPrice || 0);
 };
 const getAllPos = async () => {
-  const rows = await api('GET', '/api/v2/mix/position/all-position', { qs: `productType=${PRODUCT}&marginCoin=${COIN}` });
+  const rows = await X.getPos();
   return (rows || []).filter((x) => +x.total > 0).map((p) => ({
-    sym: p.symbol, side: p.holdSide, size: +p.total, entry: +p.openPriceAvg,
-    upl: +p.unrealizedPL, liq: +p.liquidationPrice, marginMode: p.marginMode, lev: +p.leverage,
+    sym: p.symbol, side: p.holdSide || p.side, size: +p.total, entry: +p.openPriceAvg,
+    upl: +p.unrealizedPL, liq: +p.liquidationPrice || 0, marginMode: p.marginMode, lev: +p.leverage,
     margin: +p.marginSize || 0,
-  })).filter((p) => p.liq > 0);
+  }));
+  // no liq>0 filter: Bybit cross positions can report empty liqPrice
+  // (collateral >> position => effectively un-liquidatable). liq-geometry
+  // paths treat liq=0 as infinite distance; margin-based circuits still run.
 };
-const getPlans = async (sym) =>
-  api('GET', '/api/v2/mix/order/orders-plan-pending', {
-    qs: `symbol=${sym}&productType=${PRODUCT}&marginCoin=${COIN}&planType=profit_loss`,
-  }).then((d) => d?.entrustedList || []);
+const getPlans = (sym) => X.getPlans(sym);
 const cancelPlan = (sym, planType, orderId) =>
-  api('POST', '/api/v2/mix/order/cancel-plan-order', {
-    body: { symbol: sym, productType: PRODUCT, marginCoin: COIN, orderId: String(orderId), planType },
-  });
-// marginMode is mandatory — it must match the POSITION's real margin mode.
-// Omitting it let Bitget default to 'isolated', which rejects with 40774 on
-// crossed positions (the SNDKUSDT stop-trim failure this fixes) and silently
-// invalidates the plan even when accepted (6 dead pos_loss plans proved it
-// in exec). pos_loss covers the whole position — size stays omitted.
+  X.cancelPlanOrders(sym, planType, [String(orderId)]);
+// pos_loss covers the whole position — size stays '0' so both adapters omit it.
 const planLoss = (sym, side, trigger, marginMode) =>
-  api('POST', '/api/v2/mix/order/place-tpsl-order', {
-    body: { symbol: sym, marginCoin: COIN, productType: PRODUCT, marginMode: marginMode === 'crossed' ? 'crossed' : 'isolated', planType: 'pos_loss', triggerPrice: String(trigger), holdSide: side, triggerType: 'mark_price', executePrice: '0' },
-  });
+  X.planOrder(sym, 'pos_loss', trigger, '0', side, marginMode);
 const closeMarket = async (sym, side, sizeStr, posMode, marginMode) => {
+  const closeSide = side === 'long' ? 'sell' : 'buy'; // order side — adapters map close semantics
   // the position's REAL margin mode — bot entries are isolated, manual
-  // positions are usually crossed. A hardcoded mode gets the emergency
-  // close rejected (40774) exactly when the guard exists to fire.
-  const mm = marginMode === 'crossed' ? 'crossed' : 'isolated';
-  const alt = mm === 'crossed' ? 'isolated' : 'crossed';
-  const base = { symbol: sym, productType: PRODUCT, marginCoin: COIN, size: sizeStr, orderType: 'market' };
-  // hedge-mode `side` is the POSITION direction: close long = buy+close.
-  // (side:'sell' asks to close a short -> 22002 'No position to close')
-  const hedgeBody = (m) => ({ ...base, side: side === 'long' ? 'buy' : 'sell', tradeSide: 'close', marginMode: m });
-  const onewayBody = (m) => ({ ...base, side: side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES', marginMode: m });
-  // posMode detection can silently default wrong (a failed boot probe falls
-  // back to 'oneway' forever — the SNDK/CLU 40774 loop was exactly that:
-  // hedge account + reduceOnly). 40774 IS the mode mismatch signal, so try
-  // the detected convention first, then the other — self-healing without
-  // trusting the probe.
-  const attempts = posMode === 'hedge'
-    ? [hedgeBody(mm), hedgeBody(alt), onewayBody(mm), onewayBody(alt)]
-    : [onewayBody(mm), onewayBody(alt), hedgeBody(mm), hedgeBody(alt)];
-  let lastErr;
-  for (const body of attempts) {
-    try {
-      return await api('POST', '/api/v2/mix/order/place-order', { body });
-    } catch (e) {
-      lastErr = e;
-      // only a mode/margin mismatch justifies the next convention — a real
-      // rejection (size, no-position) must surface, not be retried blind
-      if (!/margin ?mode|40774/.test(e.message)) throw e;
-    }
+  // positions are usually crossed. Bitget rejects a mismatched mode (40774)
+  // exactly when the guard exists to fire; Bybit ignores the field entirely.
+  const extra = X.name === 'bitget' ? { marginMode: marginMode === 'crossed' ? 'crossed' : 'isolated' } : {};
+  try {
+    return await X.marketOrder(sym, closeSide, sizeStr, 'close', extra);
+  } catch (e) {
+    // margin-mode mismatch is the only retryable close failure — flip and
+    // try once. posMode side semantics live inside the adapter.
+    if (X.name !== 'bitget' || !/margin ?mode|40774/.test(e.message)) throw e;
+    return X.marketOrder(sym, closeSide, sizeStr, 'close', {
+      marginMode: marginMode === 'crossed' ? 'isolated' : 'crossed',
+    });
   }
-  throw lastErr;
 };
 
-// --- realtime mark feed: Bitget public WS, REST ticker stays the fallback ---
+// --- realtime mark feed: exchange public WS, REST ticker stays the fallback ---
 // READ-ONLY public channel — no credentials near it, cannot place orders.
 //   * no ws mark accepted until a REST anchor exists; a frame >5% off the
 //     anchor is rejected and the socket resyncs — a poisoned/garbled feed can
 //     never reach the trigger math
 //   * ws mark stale >1.5s => treated as dead; REST polling resumes
+const WS_DRIVERS = {
+  bitget: {
+    url: 'wss://ws.bitget.com/v2/ws/public',
+    subMsg: (syms) => ({ op: 'subscribe', args: syms.map((s) => ({ instType: 'USDT-FUTURES', channel: 'ticker', instId: s })) }),
+    ping: 'ping', // raw text heartbeat
+    parse: (m) => {
+      const d = m?.data?.[0];
+      return { sym: m?.arg?.instId, px: +(d?.markPrice || d?.lastPr || 0) };
+    },
+  },
+  bybit: {
+    url: DEMO ? 'wss://stream-demo.bybit.com/v5/public/linear' : 'wss://stream.bybit.com/v5/public/linear',
+    subMsg: (syms) => ({ op: 'subscribe', args: syms.map((s) => `tickers.${s}`) }),
+    ping: { op: 'ping' }, // v5 wants a JSON op frame
+    parse: (m) => ({
+      sym: (m?.topic || '').startsWith('tickers.') ? m.topic.slice(8) : null,
+      px: +(m?.data?.markPrice || m?.data?.lastPrice || 0),
+    }),
+  },
+};
+const WSD = WS_DRIVERS[X.name] || WS_DRIVERS.bitget;
+
 const wsMarks = new Map();   // sym -> { px, at }
 const restMarks = new Map(); // sym -> { px, at }  (sanity anchor + fallback)
 const subbed = new Set();
 let wsRef = null, wsRetryMs = 1000;
 function startWs() {
-  const ws = new WebSocket(WS_URL);
+  const ws = new WebSocket(WSD.url);
   wsRef = ws;
   let ping = null, watchdog = null;
   const arm = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { try { ws.terminate(); } catch {} }, 60e3); };
   ws.on('open', () => {
     wsRetryMs = 1000;
-    ws.send(JSON.stringify({ op: 'subscribe', args: [...subbed].map((s) => ({ instType: PRODUCT, channel: 'ticker', instId: s })) }));
-    ping = setInterval(() => { try { ws.send('ping'); } catch {} }, 20e3);
+    if (subbed.size) ws.send(JSON.stringify(WSD.subMsg([...subbed])));
+    ping = setInterval(() => { try { ws.send(typeof WSD.ping === 'string' ? WSD.ping : JSON.stringify(WSD.ping)); } catch {} }, 20e3);
     arm();
-    log(`ws feed connected — ${subbed.size} ticker(s)`);
+    log(`ws feed connected (${X.name}) — ${subbed.size} ticker(s)`);
   });
   ws.on('message', (buf) => {
     arm();
-    let m; try { m = JSON.parse(buf.toString()); } catch { return; } // 'pong' heartbeat
-    const sym = m?.arg?.instId, d = m?.data?.[0];
-    const px = +(d?.markPrice || d?.lastPr || 0);
+    let m; try { m = JSON.parse(buf.toString()); } catch { return; } // heartbeat
+    const { sym, px } = WSD.parse(m);
     if (!sym || !(px > 0)) return;
     const anchor = restMarks.get(sym)?.px || 0;
     if (!anchor) return; // untrusted until a REST anchor exists for this symbol
@@ -223,7 +200,7 @@ const ensureSub = (sym) => {
   if (subbed.has(sym)) return;
   subbed.add(sym);
   if (wsRef?.readyState === WebSocket.OPEN)
-    try { wsRef.send(JSON.stringify({ op: 'subscribe', args: [{ instType: PRODUCT, channel: 'ticker', instId: sym }] })); } catch {}
+    try { wsRef.send(JSON.stringify(WSD.subMsg([sym]))); } catch {}
 };
 const pickMark = async (sym) => {
   const w = wsMarks.get(sym);
@@ -268,7 +245,7 @@ const anyNear = () =>
   posCache.some((p) => {
     const m = wsMarks.get(p.sym)?.px || restMarks.get(p.sym)?.px || 0;
     if (!m) return true; // unknown mark — stay awake
-    const g = p.side === 'long' ? (m - p.liq) / p.liq * 100 : (p.liq - m) / p.liq * 100;
+    const g = p.liq > 0 ? (p.side === 'long' ? (m - p.liq) / p.liq * 100 : (p.liq - m) / p.liq * 100) : Infinity;
     return g <= NEAR_PCT;
   });
 
@@ -288,7 +265,11 @@ async function tick() {
     const key = `${p.sym}:${p.side}`;
     const mark = await pickMark(p.sym);
     if (!mark) continue;
-    const distPct = p.side === 'long' ? (mark - p.liq) / p.liq * 100 : (p.liq - mark) / p.liq * 100;
+    // liq=0 => un-liquidatable book math (cross collateral >> position) —
+    // report infinite distance so proximity/danger paths stay dormant.
+    const distPct = p.liq > 0
+      ? (p.side === 'long' ? (mark - p.liq) / p.liq * 100 : (p.liq - mark) / p.liq * 100)
+      : Infinity;
     const g = (gates[key] ||= { lastTrim: 0, lastTrimMark: null });
     // new-arrival alert: a position the guard has never seen gets a
     // one-time "now watching" ping — silent arming meant the operator
@@ -320,7 +301,7 @@ async function tick() {
         }
       }
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
-    stOut.positions[key] = { size: p.size, liq: p.liq, mark, distPct: +distPct.toFixed(3), lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
+    stOut.positions[key] = { size: p.size, liq: p.liq || null, mark, distPct: Number.isFinite(distPct) ? +distPct.toFixed(3) : null, lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark };
 
     // ---- margin-loss circuit: close the whole position when mark-to-market
     // loss crosses -(MAXLOSS_PCT x posted margin). Fires BEFORE the deep
@@ -365,7 +346,7 @@ async function tick() {
           const bandPct = Math.abs(p.entry - p.liq) / p.entry * 100;
           const pxDec = +(cm[p.sym]?.pricePlace ?? 6); // parens: +x ?? 6 yields NaN on a contract-map miss
           const trig = +(p.entry * (1 - (sgn * bandPct * DEEPEN_BAND) / 100)).toFixed(pxDec);
-          const sane = trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
+          const sane = bandPct <= BAND_CAP_PCT && trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
           if (sane) {
             g.nakedAt = Date.now(); // cooldown even on success — no plan spam
             await planLoss(p.sym, p.side, trig, p.marginMode);
@@ -440,7 +421,7 @@ async function tick() {
                 // the band edge is the LOSS side, so "deepening" would
                 // release locked profit back to risk. Never touch those.
                 const armedLossSide = np.side === 'long' ? trig < np.entry : trig > np.entry;
-                const deeper = armedLossSide && (np.side === 'long' ? deepTrig < trig : deepTrig > trig);
+                const deeper = bandPct <= BAND_CAP_PCT && armedLossSide && (np.side === 'long' ? deepTrig < trig : deepTrig > trig);
                 if (deeper && deepTrig > 0) {
                   await planLoss(p.sym, p.side, deepTrig, np.marginMode || p.marginMode);
                   // loss-SIDE plans only — a profit-side loss-typed plan
@@ -499,6 +480,7 @@ async function tick() {
         const bandPct = Math.abs(np.entry - np.liq) / np.entry * 100;
         const pxDec = +(cm[p.sym]?.pricePlace ?? 6);
         const trig = +(np.entry * (1 - (sgn * bandPct * 0.75) / 100)).toFixed(pxDec);
+        if (bandPct > BAND_CAP_PCT) throw new Error(`band ${bandPct.toFixed(0)}% degenerate — keeping existing stop`);
         await planLoss(p.sym, p.side, trig, np.marginMode || p.marginMode);
         const plans = await getPlans(p.sym);
         // holdSide filter is mandatory in hedge mode — an unfiltered cancel
@@ -528,15 +510,15 @@ async function tick() {
 let posModeConfirmed = false, probeLogged = false;
 const probePosMode = async () => {
   const sym = cm[SEED_SYM] ? SEED_SYM : Object.keys(cm)[0] || SEED_SYM;
-  const acc = await api('GET', '/api/v2/mix/account/account', { qs: `symbol=${sym}&productType=${PRODUCT}&marginCoin=${COIN}` })
+  const m = await X.getPosMode(sym)
     .catch((e) => { if (!probeLogged) { probeLogged = true; log(`posMode probe on ${sym}: ${e.message}`); } return null; });
-  if (acc?.posMode) { posModeConfirmed = true; return acc.posMode === 'hedge_mode' ? 'hedge' : 'oneway'; }
+  if (m) { posModeConfirmed = true; X.setPosMode(m); return m; }
   return posMode;
 };
 
 async function boot() {
-  const cs = await api('GET', '/api/v2/mix/market/contracts', { qs: `productType=${PRODUCT}` }).catch(() => []);
-  for (const c of cs || []) cm[c.symbol] = c;
+  const cs = await X.contractMap().catch(() => ({}));
+  Object.assign(cm, cs);
   let pm = posMode;
   for (let i = 0; i < 3 && !posModeConfirmed; i++) {
     pm = await probePosMode();

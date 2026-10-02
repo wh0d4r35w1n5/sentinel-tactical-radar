@@ -72,12 +72,103 @@ const MAX_SIGNALS = +(process.env.SENTINEL_MAX_SIGNALS || 12);
 const PULSE_FILE = path.join(API, 'pulse-history.json');
 const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
 const LEDGER_FILE = path.join(API, 'signal-ledger.json');
-const PERP_TICKERS_URL =
-  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
 const FUND_URL = 'https://api.bitget.com/api/v2/mix/market/current-fund-rate';
 const FUND_HIST_URL =
   'https://api.bitget.com/api/v2/mix/market/history-fund-rate';
 const OI_URL = 'https://api.bitget.com/api/v2/mix/market/open-interest';
+
+// ---------- venue-shimmed market data ----------
+// SENTINEL_EXCHANGE picks the public-data venue so scanned prices are the
+// SAME market the executor fills on — a Bitget-priced signal landing on a
+// Bybit book sizes/routes off a different order book. Every call returns
+// {ok,status,json()} where json() yields the BITGET-SHAPED `{data}` the
+// pipeline was built against — zero downstream churn.
+const XCHG = (process.env.SENTINEL_EXCHANGE || 'bitget').toLowerCase();
+const BYBIT_MD = XCHG === 'bybit';
+const MD_HOST = BYBIT_MD
+  ? ((process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo'
+      ? 'https://api-demo.bybit.com'
+      : 'https://api.bybit.com')
+  : 'https://api.bitget.com';
+const BYBIT_GRAN = { '5m': '5', '15m': '15', '30m': '30', '1H': '60', '2H': '120', '4H': '240', '6H': '360', '12H': '720', '1D': 'D' };
+// v5 has no isRwa flag — demo stock-perps are enumerated so assetClass()
+// still files them under 'stock'. Extend when the demo list grows.
+const BYBIT_STOCK = new Set('AAPL AMZN COIN GOOGL HOOD META MSTR MSFT NVDA TSLA'.split(' '));
+async function mdGet(kind, p = {}) {
+  if (!BYBIT_MD) {
+    // Bitget passthrough — identical wire as before the shim
+    let url;
+    switch (kind) {
+      case 'contracts': url = CONTRACTS_URL; break;
+      case 'tickers':   url = TICKERS_URL; break;
+      case 'candles':   url = `${CANDLES_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&granularity=${p.granularity}&limit=${p.limit || 200}` +
+                        (p.startTime ? `&startTime=${p.startTime}` : '') + (p.endTime ? `&endTime=${p.endTime}` : ''); break;
+      case 'fundNow':   url = `${FUND_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+      case 'fundHist':  url = `${FUND_HIST_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&pageSize=${p.limit || 8}`; break;
+      case 'oi':        url = `${OI_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+      default: throw new Error('mdGet unknown kind ' + kind);
+    }
+    const res = await fetch(url, { signal: TF() });
+    const data = await res.json().then((j) => j.data).catch(() => null);
+    return { ok: res.ok && data != null, status: res.status, json: async () => ({ data }) };
+  }
+  const q = new URLSearchParams({ category: 'linear' });
+  let ep, norm;
+  switch (kind) {
+    case 'contracts':
+      ep = '/v5/market/instruments-info'; q.set('limit', '1000');
+      norm = (list) => list.map((i) => ({
+        symbol: i.symbol, baseCoin: i.baseCoin, quoteCoin: i.quoteCoin,
+        symbolStatus: i.status === 'Trading' ? 'normal' : i.status,
+        maxLever: i.leverageFilter?.maxLeverage,
+        isRwa: BYBIT_STOCK.has((i.baseCoin || '').toUpperCase()) ? 'YES' : undefined,
+      }));
+      break;
+    case 'tickers':
+      ep = '/v5/market/tickers';
+      norm = (list) => list.map((t) => ({
+        symbol: t.symbol, lastPr: t.lastPrice, high24h: t.highPrice24h,
+        low24h: t.lowPrice24h, bidPr: t.bid1Price, askPr: t.ask1Price,
+        indexPrice: t.indexPrice, markPrice: t.markPrice,
+        changeUtc24h: t.price24hPcnt, quoteVolume: t.turnover24h,
+      }));
+      break;
+    case 'fundNow': // single-symbol ticker — fundingRate rides the tickers payload
+      ep = '/v5/market/tickers'; q.set('symbol', p.symbol);
+      norm = (list) => ({
+        fundingRate: list[0]?.fundingRate,
+        nextUpdate: list[0]?.nextFundingTime,
+      });
+      break;
+    case 'candles':
+      ep = '/v5/market/kline'; q.set('symbol', p.symbol);
+      q.set('interval', BYBIT_GRAN[p.granularity] || p.granularity);
+      q.set('limit', String(p.limit || 200));
+      if (p.startTime) q.set('start', String(p.startTime));
+      if (p.endTime) q.set('end', String(p.endTime));
+      // v5 rows [startTs,o,h,l,c,baseVol,turnover] — same index layout the
+      // consumers read (c[6] = quote volume); they sort ascending anyway.
+      norm = (list) => list;
+      break;
+    case 'fundHist':
+      ep = '/v5/market/funding/history'; q.set('symbol', p.symbol);
+      q.set('limit', String(p.limit || 8));
+      norm = (list) => list.map((f) => ({ fundingRate: f.fundingRate }));
+      break;
+    case 'oi':
+      ep = '/v5/market/open-interest'; q.set('symbol', p.symbol);
+      q.set('intervalTime', '5min'); q.set('limit', '1');
+      norm = (list) => ({ openInterestList: [{ size: list[0]?.openInterest }] });
+      break;
+    default: throw new Error('mdGet unknown kind ' + kind);
+  }
+  const res = await fetch(`${MD_HOST}${ep}?${q}`, { signal: TF() });
+  const j = await res.json().catch(() => ({}));
+  const ok = res.ok && (j.retCode === 0 || j.retCode === '0');
+  const data = ok ? norm(j.result?.list ?? j.result ?? []) : null;
+  return { ok, status: res.status, json: async () => ({ data }) };
+}
+
 const LEDGER_MAX = 1_000_000_000;
 const LEDGER_TTL_MS = 24 * 3600 * 1000;
 const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
@@ -242,10 +333,7 @@ async function fetchTF(symbol, gran) {
   const cache = tfCache[gran], hit = cache[symbol], ttl = TF_TTLS[gran] || 600e3;
   if (hit && hit.rows && Date.now() - hit.at < ttl) return hit.rows;
   try {
-    const res = await fetch(
-      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=${gran}&limit=120`,
-      { signal: TF() }
-    );
+    const res = await mdGet('candles', { symbol, granularity: gran, limit: 120 });
     if (!res.ok) return hit?.rows ?? null;
     const { data } = await res.json();
     if (!Array.isArray(data) || data.length < 20) return hit?.rows ?? null;
@@ -270,10 +358,7 @@ async function fetchKlines(symbol, light = false) {
   // a light caller needs only the 1h payload; a full caller also needs the
   // 5m tape — a cached light payload can't serve TA, so full callers refetch
   if (fresh && (light || hit.payload.candles5m)) return hit.payload;
-  const res = await fetch(
-    `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=1H&limit=120`,
-    { signal: TF() }
-  );
+  const res = await mdGet('candles', { symbol, granularity: '1H', limit: 120 });
   // stale cache beats a blank cell — a rate-limited cycle shouldn't erase
   // TA that was valid 6 minutes ago
   if (!res.ok) return hit?.payload ?? null;
@@ -284,10 +369,7 @@ async function fetchKlines(symbol, light = false) {
     // (48 × 5m ≈ 4h window). sparkTf marks the swap so nothing pretends
     // it's looking at 48h.
     try {
-      const r5 = await fetch(
-        `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`,
-        { signal: TF() }
-      );
+      const r5 = await mdGet('candles', { symbol, granularity: '5m', limit: 120 });
       const d5 = r5.ok ? await r5.json() : null;
       if (Array.isArray(d5?.data) && d5.data.length >= 20) {
         const r5rows = d5.data
@@ -335,10 +417,7 @@ async function fetchKlines(symbol, light = false) {
   const candles = rows.map(({ t, o, h, l, c, qv }) => ({ t, o, h, l, c, qv }));
   let candles5m = null;
   try {
-    const r5 = light ? { ok: false } : await fetch(
-      `${CANDLES_URL}?symbol=${symbol}&productType=USDT-FUTURES&granularity=5m&limit=120`,
-      { signal: TF() }
-    );
+    const r5 = light ? { ok: false } : await mdGet('candles', { symbol, granularity: '5m', limit: 120 });
     if (r5.ok) {
       const d5 = await r5.json();
       if (Array.isArray(d5.data))
@@ -372,10 +451,10 @@ async function fetchEntryCandles(e) {
   const out = [];
   let start = e.ts;
   for (let page = 0; page < 3; page++) {
-    const res = await fetch(
-      `${CANDLES_URL}?symbol=${e.asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${start}&endTime=${Date.now()}&limit=200`,
-      { signal: TF() }
-    );
+    const res = await mdGet('candles', {
+      symbol: e.asset + 'USDT', granularity: '5m',
+      startTime: start, endTime: Date.now(), limit: 200,
+    });
     if (!res.ok) return null;
     const { data } = await res.json();
     if (!Array.isArray(data) || !data.length) break;
@@ -404,10 +483,10 @@ async function fetch5mRange(asset, fromMs, toMs) {
   const pages = [];
   let end = toMs;
   for (let page = 0; page < 12; page++) {
-    const res = await fetch(
-      `${CANDLES_URL}?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=5m&startTime=${fromMs}&endTime=${end}&limit=200`,
-      { signal: TF() }
-    );
+    const res = await mdGet('candles', {
+      symbol: asset + 'USDT', granularity: '5m',
+      startTime: fromMs, endTime: end, limit: 200,
+    });
     if (!res.ok) return null;
     const { data } = await res.json();
     if (!Array.isArray(data) || !data.length) break;
@@ -430,11 +509,11 @@ async function fetch5mRange(asset, fromMs, toMs) {
 async function main() {
   const now = Date.now();
   const [symbolsRes, tickersRes] = await Promise.all([
-    fetch(CONTRACTS_URL, { signal: TF() }),
-    fetch(TICKERS_URL, { signal: TF() }),
+    mdGet('contracts'),
+    mdGet('tickers'),
   ]);
   if (!symbolsRes.ok || !tickersRes.ok)
-    throw new Error(`bitget http ${symbolsRes.status}/${tickersRes.status}`);
+    throw new Error(`${XCHG} http ${symbolsRes.status}/${tickersRes.status}`);
   const { data: symbols } = await symbolsRes.json();
   const { data: tickers } = await tickersRes.json();
 
@@ -444,7 +523,7 @@ async function main() {
     (s) => s.symbolStatus === 'normal' && s.quoteCoin === 'USDT'
   );
   const listed = new Set(online.map((s) => (s.baseCoin ?? '').toUpperCase()));
-  writeJson(path.join(API, 'bitget-symbols.json'), [...listed].sort());
+  writeJson(path.join(API, `${XCHG}-symbols.json`), [...listed].sort());
   const contractBySymbol = new Map(
     online.map((s) => [s.symbol.toUpperCase(), s])
   );
@@ -668,7 +747,7 @@ async function main() {
   // ---- funding intelligence: perp funding rates + spot/perp basis ----
   const funding = {};
   try {
-    const perpRes = await fetch(PERP_TICKERS_URL, { signal: TF() });
+    const perpRes = await mdGet('tickers');
     const perps = perpRes.ok ? (await perpRes.json()).data || [] : [];
     const perpPx = {};
     for (const t of perps)
@@ -679,10 +758,7 @@ async function main() {
       await Promise.all(
         fundSyms.slice(i, i + 12).map(async (sym) => {
           try {
-            const r = await fetch(
-              `${FUND_URL}?symbol=${sym}&productType=USDT-FUTURES`,
-              { signal: TF() }
-            );
+            const r = await mdGet('fundNow', { symbol: sym });
             if (!r.ok) return;
             const d = (await r.json()).data;
             const f = Array.isArray(d) ? d[0] : d;
@@ -732,8 +808,8 @@ async function main() {
     const CMCAL_ID = process.env.COINMARKETCAL_CLIENT_ID || KEYS.coinmarketcalId || null;
     const CMCAL_SECRET = process.env.COINMARKETCAL_CLIENT_SECRET || KEYS.coinmarketcalSecret || null;
     const deriv = {}, social = {}, news = {}, mcaps = {}, events = {};
-    const feedStatus = { bitget: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key', coingecko: 'live', coinmarketcap: CMC_KEY ? 'live' : 'no-key', coinmarketcal: CMCAL_ID && CMCAL_SECRET ? 'live' : 'no-key' };
-    if (RAPID) for (const k of Object.keys(feedStatus)) if (k !== 'bitget') feedStatus[k] = 'rapid';
+    const feedStatus = { [XCHG]: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key', coingecko: 'live', coinmarketcap: CMC_KEY ? 'live' : 'no-key', coinmarketcal: CMCAL_ID && CMCAL_SECRET ? 'live' : 'no-key' };
+    if (RAPID) for (const k of Object.keys(feedStatus)) if (k !== XCHG) feedStatus[k] = 'rapid';
     if (!RAPID)
     for (let i = 0; i < fundSyms.length; i += 12) {
       await Promise.all(
@@ -742,7 +818,7 @@ async function main() {
           const d = {};
           try {
             // open interest — size of open perp positions (Bitget public)
-            const oi = await fetch(`${OI_URL}?symbol=${sym}&productType=USDT-FUTURES`, { signal: TF() });
+            const oi = await mdGet('oi', { symbol: sym });
             if (oi.ok) {
               const od = (await oi.json()).data;
               const sz = +((od && od.openInterestList && od.openInterestList[0]) || {}).size;
@@ -750,7 +826,7 @@ async function main() {
               if (isFinite(sz) && px) { d.oiUsd = Math.round(sz * px); }
             }
             // funding history → trend (rising = longs paying more, crowding)
-            const fh = await fetch(`${FUND_HIST_URL}?symbol=${sym}&productType=USDT-FUTURES&pageSize=8`, { signal: TF() });
+            const fh = await mdGet('fundHist', { symbol: sym, limit: 8 });
             if (fh.ok) {
               const hist = (await fh.json()).data || [];
               const rates = hist.map((x) => +x.fundingRate).filter((x) => isFinite(x));
@@ -769,7 +845,7 @@ async function main() {
               const H = { headers: { 'CG-API-KEY': CG_KEY } };
               const [lq, ls] = await Promise.all([
                 fetch(`https://open-api-v4.coinglass.com/api/futures/liquidation/aggregated-history?symbol=${asset}&interval=1d&limit=1`, { ...H, signal: TF() }),
-                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=${sym}&interval=1h&limit=1`, { ...H, signal: TF() }),
+                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=${XCHG === 'bybit' ? 'Bybit' : 'Bitget'}&symbol=${sym}&interval=1h&limit=1`, { ...H, signal: TF() }),
               ]);
               if (lq.ok) {
                 const dd = (await lq.json()).data || [];
@@ -1828,8 +1904,8 @@ async function main() {
     refreshedAt: new Date().toISOString(),
     scanWindowSeconds: 600,
     error: null,
-    source: 'bitget-direct',
-    universeFilter: 'bitget-usdt-m-futures',
+    source: `${XCHG}-direct`,
+    universeFilter: `${XCHG}-usdt-m-futures`,
   };
 
   // ---- board enrichment: every ranked signal gets klines too — the board
@@ -2026,7 +2102,7 @@ async function main() {
         if (matrix[i][j] != null) pairs.push(matrix[i][j]);
     writeJson(path.join(API, 'correlation.json'), {
         refreshedAt: snap.refreshedAt,
-        note: 'realized 48h pairwise correlation of 1h returns, Bitget USDT-M candidates. The risk governor treats corr>=0.6 as the same bet.',
+        note: `realized 48h pairwise correlation of 1h returns, ${XCHG} USDT-M candidates. The risk governor treats corr>=0.6 as the same bet.`,
         windowHours: 48,
         boardAssets: board,
         boardMatrix: matrix,
@@ -2042,7 +2118,7 @@ async function main() {
       .sort((a, b) => Math.abs(b.annualPct) - Math.abs(a.annualPct));
     writeJson(path.join(API, 'funding.json'), {
         refreshedAt: snap.refreshedAt,
-        note: 'delta-neutral funding harvest: long spot + short perp collects positive 8h funding. indicative estimates, Bitget USDT-FUTURES.',
+        note: `delta-neutral funding harvest: long spot + short perp collects positive 8h funding. indicative estimates, ${XCHG} USDT-FUTURES.`,
         best: rows2.slice(0, 10),
         rows: rows2,
       });
@@ -2060,7 +2136,7 @@ async function main() {
     writeJson(path.join(API, 'sentiment.json'), {
         refreshedAt: snap.refreshedAt,
         feeds: dv._feeds || {},
-        note: 'positioning pressure: open interest + funding trend (Bitget public futures). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment activate when API keys are configured (scripts/api-keys.json or env). Crowded positioning is treated as squeeze fuel against the crowd.',
+        note: `positioning pressure: open interest + funding trend (${XCHG} public futures). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment activate when API keys are configured (scripts/api-keys.json or env). Crowded positioning is treated as squeeze fuel against the crowd.`,
         assets,
       });
   } catch {}
@@ -4157,15 +4233,16 @@ async function main() {
     let bench = { startedAt: null, series: [] };
     try { bench = JSON.parse(fs.readFileSync(BENCH_FILE, 'utf8')); } catch {}
     bench.series ??= [];
-    // Sentinel's curve is the REAL Bitget account — equityUsd from
+    // Sentinel's curve is the REAL exchange account — equityUsd from
     // live-ledger.json against the first real-equity observation this file
     // recorded. No simulated book feeds this number.
     let sentPctNow = null;
     try {
       const ll = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      const baseKey = `sentBase_${XCHG}`;
       if (ll?.equityUsd > 0) {
-        bench.sentBase ??= ll.equityUsd;
-        sentPctNow = pct(((ll.equityUsd - bench.sentBase) / bench.sentBase) * 100);
+        bench[baseKey] ??= ll.equityUsd;
+        sentPctNow = pct(((ll.equityUsd - bench[baseKey]) / bench[baseKey]) * 100);
       }
     } catch {}
     const lastB = bench.series.length ? bench.series[bench.series.length - 1].ts : 0;
@@ -4210,7 +4287,7 @@ async function main() {
     bench.sentinelPct = sentPctNow;
     delete bench.combinedPct;
     bench.note =
-      'BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = real Bitget account equity return since first observation.';
+      `BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = real ${XCHG} account equity return since first observation.`;
     writeJson(BENCH_FILE, { refreshedAt: snap.refreshedAt, ...bench });
   } catch {}
 

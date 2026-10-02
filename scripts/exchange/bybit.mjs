@@ -139,6 +139,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     unrealizedPL: p.unrealisedPnl,
     leverage: p.leverage,
     marginMode: +p.positionIM > 0 || p.tradeMode === 1 ? 'isolated' : 'crossed',
+    marginSize: p.positionIM, // posted initial margin — liq-guard's MAXLOSS circuit keys off this
     liquidationPrice: p.liqPrice,
     markPrice: p.markPrice,
     cTime: p.createdTime,

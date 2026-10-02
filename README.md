@@ -79,7 +79,7 @@ Runs every 10 minutes + on demand:
 | `api/signal-archive.json` | **Append-only prospective record** — every run appends the full emitted board (all signals, traded or not) with parameters and universe context. |
 | `api/history/archive-YYYY-MM.json` | **Permanent record** — every emitted run is also written to its monthly archive file. The hot `signal-archive.json` may trim old runs; these monthly files are the unbounded, never-rewritten evidence set. |
 | `api/signal-eval.json` + `api/history/eval-YYYY-MM.json` | **Forward-outcome labels for every emitted signal** — +1h/+4h/+24h direction-adjusted returns, TP-before-SL inside 24h (5m replay, adverse-first), and alpha vs a BTC/ETH/SOL median over the identical window. Complete records seal into monthly eval files. This measures predictive power on the *whole board*, ~10× faster than the traded ledger. |
-| `api/bitget-symbols.json` | The Bitget-listed contract universe used for filtering. |
+| `api/{exchange}-symbols.json` | The active exchange's listed contract universe used for filtering. |
 | `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
 | `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
 | `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
