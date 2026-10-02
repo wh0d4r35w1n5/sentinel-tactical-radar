@@ -24,11 +24,11 @@
 // position is closed immediately — a naked position is a worse error than a
 // missed trade. Stale plans (>ttlMs) are refused entirely.
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32hex, integrityCheck, integrityNote } from './crc32.mjs';
+import { makeExchange } from './exchange/index.mjs';
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,23 +45,9 @@ const writeJson = (file, obj) => {
   integrityNote(file, body);
 };
 
-const HOST = 'https://api.bitget.com';
-const PRODUCT = 'USDT-FUTURES';
-const MARGIN_COIN = 'USDT';
-
 const MODE = (process.env.SENTINEL_EXEC || 'off').toLowerCase();
-// Bitget demo trading requires a SEPARATE key created inside demo mode —
-// a live key + paptrading header gets 40099 "environment incorrect".
-// Demo mode reads BITGET_DEMO_*; falls back to the main set if absent.
-const KEY = MODE === 'demo'
-  ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
-  : (process.env.BITGET_API_KEY || '');
-const SECRET = MODE === 'demo'
-  ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
-  : (process.env.BITGET_API_SECRET || '');
-const PASS = MODE === 'demo'
-  ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
-  : (process.env.BITGET_PASSPHRASE || '');
+// credentials live inside the exchange adapter — SENTINEL_EXCHANGE picks the
+// driver; each env reads its own *_API_KEY/SECRET(+PASSPHRASE) set.
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
 // mode-scoped fills journal: demo/paper fills must never contaminate the
@@ -263,163 +249,43 @@ const DENY_SYMS = new Set(
 const log = (...a) => console.log('[exec]', ...a);
 const round = (x, p = 6) => +(+x).toFixed(p);
 
-// ---------- signed REST ----------
-function signHeaders(method, reqPath, qs, bodyStr) {
-  const ts = String(Date.now());
-  const pre = ts + method.toUpperCase() + reqPath + (qs ? '?' + qs : '') + (bodyStr || '');
-  const sign = crypto.createHmac('sha256', SECRET).update(pre).digest('base64');
-  const h = {
-    'ACCESS-KEY': KEY,
-    'ACCESS-SIGN': sign,
-    'ACCESS-PASSPHRASE': PASS,
-    'ACCESS-TIMESTAMP': ts,
-    'Content-Type': 'application/json',
-    locale: 'en-US',
-  };
-  if (MODE === 'demo') h.paptrading = '1'; // Bitget demo-trading header
-  return h;
-}
-async function api(method, reqPath, { qs = '', body = null } = {}) {
-  const bodyStr = body ? JSON.stringify(body) : '';
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
-        method,
-        headers: signHeaders(method, reqPath, qs, bodyStr),
-        body: bodyStr || undefined,
-        signal: AbortSignal.timeout(15000), // a hung call must not stall the cycle
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || (j.code && j.code !== '00000'))
-        throw new Error(`${reqPath} ${method} -> ${j.code || res.status} ${j.msg || ''}`);
-      return j.data;
-    } catch (e) {
-      // retry only transport failures on GETs — API rejections carry the
-      // '->' marker, and a retried POST could double-fill an order that
-      // actually executed before its response was lost
-      if (attempt === 1 || e.message.includes('->') || method !== 'GET') throw e;
-      await new Promise((r) => setTimeout(r, 700));
-    }
-  }
-}
-const getPos = () =>
-  api('GET', '/api/v2/mix/position/all-position', {
-    qs: `productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
-  });
-const getAccount = async () => {
-  const rows = await api('GET', '/api/v2/mix/account/accounts', {
-    qs: `productType=${PRODUCT}`,
-  });
-  const acc = (rows || []).find((a) => a.marginCoin === MARGIN_COIN) || {};
-  return {
-    equity: +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0),
-    available: +(acc.available ?? acc.usdtEquity ?? 0),
-    // Bitget's own "max margin spendable on a new position" per mode — the
-    // same numbers its order validator uses. `available` is the flattering
-    // raw balance; these are the authoritative spendable (0 while a crossed
-    // position's upl/margin encumbrance soaks the account).
-    isoMax: +acc.isolatedMaxAvailable,
-    crossMax: +acc.crossedMaxAvailable,
-  };
-};
-// pending-plan query REQUIRES planType — 'profit_loss' is the umbrella that
-// covers profit_plan/loss_plan/moving_plan/pos_profit/pos_loss
-const getPlans = (symbol) =>
-  api('GET', '/api/v2/mix/order/orders-plan-pending', {
-    qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}&planType=profit_loss`,
-  }).then((d) => {
-    const l = d?.entrustedList || d?.orders || d;
-    return Array.isArray(l) ? l : []; // never hand callers a non-array
-  });
-// position mode is account-wide per product type: one_way_mode needs
-// reduceOnly closes; hedge_mode needs tradeSide. Passing the wrong
-// convention errors (40774) — or worse, silently opens a reverse position
-// instead of closing. Detect it once per run, never assume.
+// ---------- exchange adapter ----------
+// All wire ops delegate to scripts/exchange/ — SENTINEL_EXCHANGE selects the
+// driver (bitget default, bybit for V5). Aliases keep every call site below
+// unchanged; the adapters return identical normalized shapes.
+const X = makeExchange(process.env);
+const getPos = () => X.getPos();
+const getAccount = () => X.getAccount();
+const getPlans = (symbol) => X.getPlans(symbol);
+let POS_MODE = 'oneway'; // mirrored into the adapter via setPosMode below
+// getPosMode also pushes the detected mode into the adapter so its
+// marketOrder emits the right close semantics (reduceOnly vs tradeSide)
 const getPosMode = (symbol) =>
-  api('GET', '/api/v2/mix/account/account', {
-    qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
-  }).then((d) => (d?.posMode === 'hedge_mode' ? 'hedge' : 'oneway'));
-
-// ---------- order placement ----------
-const setIsolated = (symbol) =>
-  api('POST', '/api/v2/mix/account/set-margin-mode', {
-    body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
-  }).catch(() => {}); // already-isolated errors are harmless
-const setLeverage = (symbol, leverage) =>
-  api('POST', '/api/v2/mix/account/set-leverage', {
-    body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, leverage: String(leverage) },
-  });
-let POS_MODE = 'oneway'; // set by getPosMode before any order is placed
+  X.getPosMode(symbol).then((m) => { X.setPosMode?.(m); return m; });
+const setIsolated = (symbol) => X.setIsolated(symbol);
+const setLeverage = (symbol, leverage) => X.setLeverage(symbol, leverage);
 const marketOrder = (symbol, side, size, intent, extra = {}) =>
-  api('POST', '/api/v2/mix/order/place-order', {
-    body: {
-      symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-      size: String(size), side, orderType: 'market',
-      ...(intent === 'close'
-        ? POS_MODE === 'hedge'
-          ? { tradeSide: 'close' }
-          : { reduceOnly: 'YES' }
-        : POS_MODE === 'hedge'
-          ? { tradeSide: 'open' }
-          : {}),
-      ...extra,
-    },
-  });
+  X.marketOrder(symbol, side, size, intent, extra);
 // EXEC_MAKER_ENTRIES (default ON — fee mandate: save max on fees). Entries
 // route through a post-only limit at touch when the book allows (maker
 // ~0.02% vs taker ~0.06%); an unfilled/rejected attempt falls back to market
 // for the REMAINDER — a certified entry is never sacrificed for a bp.
 const MAKER_ENTRIES = process.env.EXEC_MAKER_ENTRIES !== '0';
 const limitOrder = (symbol, side, size, price, extra = {}) =>
-  api('POST', '/api/v2/mix/order/place-order', {
-    body: {
-      symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-      size: String(size), side, orderType: 'limit', price: String(price),
-      timeInForceValue: 'post_only',
-      ...(POS_MODE === 'hedge' ? { tradeSide: 'open' } : {}),
-      ...extra,
-    },
-  });
-const pendingOrders = (symbol) =>
-  api('GET', '/api/v2/mix/order/orders-pending', { qs: `symbol=${symbol}&productType=${PRODUCT}` })
-    .then((d) => { const l = d?.orders || d?.entrustedList || d; return Array.isArray(l) ? l : []; });
-// TP/SL plans go through place-tpsl-order — profit_plan/loss_plan are
-// illegal on place-plan-order (that endpoint is for trigger/moving orders).
-// holdSide identifies the protected side; no side/orderType needed.
+  X.limitOrder(symbol, side, size, price, extra);
+const pendingOrders = (symbol) => X.pendingOrders(symbol);
 const planOrder = (symbol, planType, triggerPrice, size, holdSide, marginMode) =>
-  api('POST', '/api/v2/mix/order/place-tpsl-order', {
-    body: {
-      symbol, productType: PRODUCT,
-      // must match the POSITION's real margin mode — an 'isolated' plan on a
-      // crossed position is accepted by the API then silently invalidated
-      // seconds later, leaving the book naked while logging 'repaired'.
-      // (6 dead pos_loss plans in plan history proved this live.)
-      marginMode: marginMode === 'crossed' ? 'crossed' : 'isolated', marginCoin: MARGIN_COIN,
-      planType, triggerPrice: String(triggerPrice), executePrice: /profit/.test(planType) ? String(triggerPrice) : '0', // TP legs limit@trigger — fee mandate; loss legs market (must fill)
-      triggerType: 'mark_price', holdSide,
-      // pos_profit/pos_loss cover the whole position — the API wants size
-      // OMITTED for those, not a literal '0' (a zero-size param can read as
-      // an invalid order, not "full position")
-      ...(size === '0' || size == null ? {} : { size: String(size) }),
-    },
-  });
+  X.planOrder(symbol, planType, triggerPrice, size, holdSide, marginMode);
 // real vault segregation (live only — SENTINEL_VAULT_TRANSFER=1): the
-// sweep MOVES funds futures->spot so vaulted carry physically leaves the
-// tradable account. api() throws on non-00000 codes and never retries
-// POSTs — a failed transfer surfaces as an error, never double-moves.
-const vaultTransfer = (amtUsd) =>
-  api('POST', '/api/v2/spot/wallet/transfer', {
-    body: {
-      fromType: 'usdt_futures', toType: 'spot',
-      amount: String(round(amtUsd, 2)), coin: 'USDT',
-      clientOid: `vault-${Date.now()}-${Math.round(amtUsd * 100)}`,
-    },
-  });
-// Transient placement errors: 43023 'Insufficient position' fires when the
-// position index hasn't caught up to a fresh fill; 43059 'Request failed'
-// is Bitget's generic transient. Retry up to 2x with backoff before
-// declaring protection failed (the emergency-close path relies on this
-// being a real failure, not an indexing race or endpoint blip).
+// sweep MOVES funds out of the tradable account (futures->spot on Bitget,
+// UNIFIED->FUND on Bybit). api() never retries POSTs — a failed transfer
+// surfaces as an error, never double-moves.
+const vaultTransfer = (amtUsd) => X.vaultTransfer(amtUsd);
+// Transient placement errors: Bitget 43023 'Insufficient position' fires
+// when the position index hasn't caught up to a fresh fill; 43059 is the
+// generic transient. Bybit equivalents: 10016 (server busy), 170213 (order
+// race), 110025 (position idx sync). Retry 2x with backoff before declaring
+// protection failed — the emergency-close path relies on a real failure.
 const planWithRetry = async (fn) => {
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -427,40 +293,21 @@ const planWithRetry = async (fn) => {
       return await fn();
     } catch (e) {
       lastErr = e;
-      if (!/43023|43059/.test(e.message)) throw e;
+      if (!/43023|43059|10016|110025|170213/.test(e.message)) throw e;
       await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
     }
   }
   throw lastErr;
 };
 // recent fills — the REAL trade journal: every actual fill the exchange
-// recorded, deduped into state/real-fills.json so the public ledger shows
-// real entries/exits with real fees, not just the sim's paper model
-const getFills = () =>
-  api('GET', '/api/v2/mix/order/fills', {
-    // bounded window — an unbounded 'latest 100' can miss today's fills when
-    // a churn burst fills the window with plan-order traffic
-    qs: `productType=${PRODUCT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
-  }).then((d) => {
-    const l = d?.fillList || d?.fills || d;
-    return Array.isArray(l) ? l : [];
-  });
-// full-position close — dedicated endpoint, works in both position modes
-// (place-order close got 22002 on hedge mode even with holdSide)
-const closePosition = (symbol, holdSide) =>
-  api('POST', '/api/v2/mix/order/close-positions', {
-    body: { symbol, productType: PRODUCT, holdSide },
-  });
-// cancel-plan-order requires the SPECIFIC planType (loss_plan, profit_plan,
-// pos_profit...) — 'profit_loss' is a query-only umbrella; sending it makes
-// the cancel silently no-op (returns 00000, cancels nothing).
+// recorded, deduped into the mode-scoped fills file so the public ledger
+// shows real entries/exits with real fees, not just the sim's paper model
+const getFills = () => X.getFills();
+// full-position close — dedicated endpoint on Bitget; Bybit adapter
+// resolves size itself and sends a reduceOnly market order
+const closePosition = (symbol, holdSide) => X.closePosition(symbol, holdSide);
 const cancelPlanOrders = (symbol, planType, orderIds) =>
-  api('POST', '/api/v2/mix/order/cancel-plan-order', {
-    body: {
-      symbol, productType: PRODUCT, marginCoin: MARGIN_COIN,
-      planType, orderIdList: orderIds.map((id) => ({ orderId: id })),
-    },
-  });
+  X.cancelPlanOrders(symbol, planType, orderIds);
 const cancelByType = async (symbol, pred) => {
   const plans = await getPlans(symbol).catch(() => []);
   const byType = {};
@@ -475,39 +322,17 @@ const cancelByType = async (symbol, pred) => {
 };
 const cancelPlans = (symbol) => cancelByType(symbol, () => true);
 // cancel ONLY loss-side plans — a blanket cancel was wiping the TP ladder
-// off the exchange every time a trail ratcheted. 'moving_plan' is Bitget's
+// off the exchange every time a trail ratcheted. 'moving_plan' is the
 // trailing-stop type — it stops the same side a loss plan does, so it must
 // match too (a /loss|stop/ regex alone leaves it orphaned).
 const cancelLossPlans = (symbol) =>
   cancelByType(symbol, (p) => /loss|stop|moving/i.test(p.planType || ''));
 
 // ---------- contracts: size rounding + minimums ----------
-async function contractMap() {
-  // the demo environment lists a SUBSET of the live catalog (45 vs 805
-  // symbols) — fetching the live list unsigned would size orders for
-  // symbols this environment can't route (40805/40034 on every attempt)
-  const res = await fetch(
-    `${HOST}/api/v2/mix/market/contracts?productType=${PRODUCT}`,
-    {
-      headers: MODE === 'demo' ? { paptrading: '1' } : {},
-      signal: AbortSignal.timeout(15000),
-    }
-  );
-  if (!res.ok) throw new Error(`contracts fetch -> HTTP ${res.status}`);
-  const j = await res.json();
-  if (!Array.isArray(j.data) || !j.data.length)
-    throw new Error(`contracts map empty (${j.code || res.status}) — refusing to size blind`);
-  const m = {};
-  for (const c of j.data || [])
-    m[c.symbol] = {
-      sizePlace: +c.volumePlace || 0, // volume rounding — field is volumePlace, NOT sizePlace
-      pricePlace: +c.pricePlace ?? 6, // trigger/execute price precision (XRP=4, BTC=1, ...)
-      minTradeNum: +c.minTradeNum || 0,
-      minTradeUSDT: +c.minTradeUSDT || 0,
-      maxLev: +c.maxLever || 0,
-    };
-  return m;
-}
+// demo environments list a SUBSET of the live catalog — the adapter sources
+// contracts from the ACTIVE environment so orders never size for symbols
+// this environment can't route
+const contractMap = () => X.contractMap();
 const sizeFor = (cm, symbol, notionalUsd, price) => {
   const c = cm[symbol];
   if (!c) return null;
@@ -523,7 +348,7 @@ async function main() {
   const tRun = Date.now();
   const planPath = path.join(API_DIR, 'live-plan.json');
   const outPath = path.join(API_DIR, 'live-ledger.json');
-  const state = { mode: MODE, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
+  const state = { mode: MODE, exchange: X.name, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
   // untradeable symbols persist across runs — the scanner blocks entries on
   // them, so the executor never re-attempts and never re-fails. Without the
   // merge the block would flap off every other cycle. Authoritative store is
@@ -537,24 +362,25 @@ async function main() {
   // protection but never expose to scanner-driven exits.
   const managed = new Set();
   try {
+    const sameBook = (prior) => prior.mode === MODE && (prior.exchange || 'bitget') === X.name;
     for (const f of [outPath, catPath]) {
       const prior = JSON.parse(fs.readFileSync(f, 'utf8'));
-      if (prior.mode === MODE && prior.untradeable?.length)
+      if (sameBook(prior) && prior.untradeable?.length)
         state.untradeable = [...new Set([...(state.untradeable || []), ...prior.untradeable])];
       // protection-failure circuit breaker rides in the ledger: after a
       // TPSL placement failure that forced an emergency close, entries halt
       // until the timestamp — one 30min probe costs a fee, a 15s probe loop
       // drains the account on retries that can't succeed
-      if (prior.mode === MODE && Number.isFinite(prior.protectionHaltUntil))
+      if (sameBook(prior) && Number.isFinite(prior.protectionHaltUntil))
         state.protectionHaltUntil = Math.max(state.protectionHaltUntil || 0, prior.protectionHaltUntil);
       // Van Tharp Model 17 carry-over: last cycle's position-level SQN
       // sets this cycle's risk tier — risk follows demonstrated quality.
-      if (prior.mode === MODE && prior.sqnR) state.priorSqnR = prior.sqnR;
+      if (sameBook(prior) && prior.sqnR) state.priorSqnR = prior.sqnR;
       // entry-attempt log rides the ledger too — the fills journal lags
       // ~30s behind live order routing, so a probe loop can slip extra
       // opens under the rate cap before the fills ever record. Attempts
       // (not fills) are what cost fees; count them locally.
-      if (prior.mode === MODE && Array.isArray(prior.entriesLog))
+      if (sameBook(prior) && Array.isArray(prior.entriesLog))
         state.entriesLog = prior.entriesLog.filter(
           // entries may be bare timestamps (legacy) or {ts,symbol,direction}.
           // 24h retention — the hourly cap filters to the window itself; a
@@ -563,9 +389,9 @@ async function main() {
         );
       // symbols that carried pending plans last cycle — orphan-plan sweep
       // uses this to find triggers still live on symbols now flat
-      if (prior.mode === MODE && prior.plans)
+      if (sameBook(prior) && prior.plans)
         for (const s of Object.keys(prior.plans)) priorPlanSyms.add(s);
-      if (prior.mode === MODE && Array.isArray(prior.managed))
+      if (sameBook(prior) && Array.isArray(prior.managed))
         for (const s of prior.managed) managed.add(s);
     }
   } catch {}
@@ -649,8 +475,8 @@ async function main() {
     log('unknown mode — refusing');
     return;
   }
-  if (!KEY || !SECRET || !PASS) {
-    state.errors.push('missing BITGET_API_KEY/SECRET/PASSPHRASE');
+  if (!X.hasCreds) {
+    state.errors.push(`missing ${X.name.toUpperCase()} API credentials (${X.name === 'bybit' ? 'BYBIT_DEMO_API_KEY/SECRET' : 'BITGET_DEMO_API_KEY/SECRET/PASSPHRASE'})`);
     writeJson(outPath, state);
     log('no credentials — set env keys');
     return;
@@ -668,7 +494,7 @@ async function main() {
   // environment can never hold (demo lists ~45 symbols vs live's ~800)
   try {
     fs.writeFileSync(catPath, JSON.stringify({
-      mode: MODE, at: new Date().toISOString(),
+      mode: MODE, exchange: X.name, at: new Date().toISOString(),
       symbols: Object.keys(cm),
       untradeable: state.untradeable || [],
     }));
@@ -1179,19 +1005,11 @@ async function main() {
         await closePosition(p.symbol, p.side);
         state.actions.push(`⚖️ rebalanced ${p.symbol}: closed fully (remainder under min ${minSz})`);
       } else {
-        // close-positions ignores `size` (whole-side only — a 'partial' call
-        // flattened a live position). True partial = place-order market close:
-        // hedge mode needs side = POSITION direction (close long = buy+close).
-        await api('POST', '/api/v2/mix/order/place-order', {
-          body: {
-            symbol: p.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN,
-            size: String(closeSize), orderType: 'market',
-            marginMode: p.marginMode === 'crossed' ? 'crossed' : 'isolated',
-            ...(POS_MODE === 'hedge'
-              ? { side: p.side === 'long' ? 'buy' : 'sell', tradeSide: 'close' }
-              : { side: p.side === 'long' ? 'sell' : 'buy', reduceOnly: 'YES' }),
-          },
-        });
+        // full-close endpoints ignore `size` (whole-side only — a 'partial'
+        // call flattened a live position). True partial = market close order;
+        // the adapter resolves the reduceOnly/hedge-side convention itself.
+        await marketOrder(p.symbol, p.side === 'long' ? 'sell' : 'buy', closeSize, 'close',
+          { marginMode: p.marginMode === 'crossed' ? 'crossed' : 'isolated' });
         state.actions.push(`⚖️ rebalanced ${p.symbol}: closed ${closeSize}/${p.size} — margin ~$${round(marginEst, 2)} -> slot ~$${round(slotMargin, 2)}`);
         p.size -= closeSize;
         p.marginFreed = (closeSize * p.entry) / levNow;
@@ -2000,9 +1818,7 @@ async function main() {
       const SETUP_RR_FLOOR = +(process.env.SENTINEL_SETUP_MIN_RR || 1);
       const tickLast = async (sym) => {
         try {
-          const q = await api('GET', '/api/v2/mix/market/ticker', {
-            qs: `symbol=${sym}&productType=${PRODUCT}`,
-          });
+          const q = await X.ticker(sym);
           const tk = Array.isArray(q) ? q[0] : q;
           return +(tk?.lastPr || 0);
         } catch { return 0; }
@@ -2104,9 +1920,7 @@ async function main() {
       for (const sym of CORE_SYMS) {
         if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || !cm[sym]) continue;
         try {
-          const tk = await api('GET', '/api/v2/mix/market/ticker', {
-            qs: 'symbol=' + sym + '&productType=' + PRODUCT,
-          });
+          const tk = await X.ticker(sym);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
           if (!(last > 0)) continue;
           plan.orders.push({
@@ -2252,9 +2066,7 @@ async function main() {
       // price that already ran past the modeled entry breaks the 3:1
       // geometry the scanner certified. Chase-fade tolerance: 0.6%.
       try {
-        const tk = await api('GET', '/api/v2/mix/market/ticker', {
-          qs: `symbol=${o.symbol}&productType=${PRODUCT}`,
-        });
+        const tk = await X.ticker(o.symbol);
         const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
         const drift = (o.direction === 'LONG' ? last - o.refEntry : o.refEntry - last) / o.refEntry;
         if (last > 0 && drift > (o.setup ? +(process.env.SENTINEL_SETUP_DRIFT || 0.015) : 0.006)) {
@@ -2441,7 +2253,7 @@ async function main() {
         // a triggered setup unfilled while the level runs away
         if (MAKER_ENTRIES && !o.setup) {
           try {
-            const q = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${o.symbol}&productType=${PRODUCT}` });
+            const q = await X.ticker(o.symbol);
             const tk = Array.isArray(q) ? q[0] : q;
             const touch = sgn > 0 ? +tk?.bidPr : +tk?.askPr; // join own side — post-only, never crosses
             if (touch > 0) {
@@ -2459,13 +2271,13 @@ async function main() {
                 const filled = +(still.filledVolume ?? still.filledQty ?? 0) || 0;
                 const sp2 = Math.pow(10, cm[o.symbol]?.sizePlace ?? 4);
                 needSize = filled > 0 ? Math.floor((size - filled) * sp2) / sp2 : size;
-                await api('POST', '/api/v2/mix/order/cancel-order', { body: { symbol: o.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, orderId: oid } }).catch(() => {});
+                await X.cancelOrder(o.symbol, oid).catch(() => {});
                 // second bite: requote the REMAINDER at touch — still a
                 // passive maker fill, just no pullback discount. Below
                 // CHASE_EDGE we never cross the spread, but an unearned
                 // discount isn't a reason to skip a qualified entry.
                 if (needSize > 0 && EDGE_LIVE.v < CHASE_EDGE) {
-                  const q2 = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${o.symbol}&productType=${PRODUCT}` }).catch(() => null);
+                  const q2 = await X.ticker(o.symbol).catch(() => null);
                   const tk2 = Array.isArray(q2) ? q2[0] : q2;
                   const touch2 = sgn > 0 ? +tk2?.bidPr : +tk2?.askPr;
                   if (touch2 > 0) {
@@ -2476,7 +2288,7 @@ async function main() {
                     if (still2) {
                       const f2 = +(still2.filledVolume ?? still2.filledQty ?? 0) || 0;
                       needSize = f2 > 0 ? Math.floor((needSize - f2) * sp2) / sp2 : needSize;
-                      await api('POST', '/api/v2/mix/order/cancel-order', { body: { symbol: o.symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, orderId: oid2 } }).catch(() => {});
+                      await X.cancelOrder(o.symbol, oid2).catch(() => {});
                     } else if (oid2) needSize = 0;
                   }
                 }
@@ -2786,8 +2598,9 @@ async function main() {
     for (const p of winners) {
       if (!(marginFree > TOPUP_FLOOR_USD)) break;
       try {
-        const tk = await api('GET', '/api/v2/mix/market/ticker', { qs: `symbol=${p.symbol}&productType=${PRODUCT}` });
-        const px = +((tk.data || [])[0]?.lastPr || (tk.data || [])[0]?.markPrice || 0);
+        const tk = await X.ticker(p.symbol);
+        const t0 = Array.isArray(tk) ? tk[0] : tk; // adapters return the array row shape
+        const px = +(t0?.lastPr || t0?.markPr || 0);
         if (!(px > 0)) continue;
         const lev = Math.max(1, Math.min(+p.lev || 10, +(process.env.SENTINEL_MAX_LEV || 40)));
         // the cap is per-position TOTAL margin — subtract what's already
