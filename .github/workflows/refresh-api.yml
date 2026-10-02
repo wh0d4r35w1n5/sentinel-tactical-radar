@@ -51,6 +51,8 @@ jobs:
           # Scanner must use api-demo.bybit.com even in healthy-VPS shadow runs.
           SENTINEL_EXEC: demo
           SENTINEL_EXCHANGE: bybit
+          BYBIT_DEMO_API_KEY: ${{ secrets.BYBIT_DEMO_API_KEY }}
+          BYBIT_DEMO_API_SECRET: ${{ secrets.BYBIT_DEMO_API_SECRET }}
           COINGLASS_API_KEY: ${{ secrets.COINGLASS_API_KEY }}
           LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
           CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}
