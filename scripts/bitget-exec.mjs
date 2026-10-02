@@ -975,6 +975,14 @@ async function main() {
   // split a position); fills with no joinable entry cluster into
   // 'campaign' buckets by (symbol, close-side) — coarse but honest.
   const groupIntoPositions = (rows, entries, netFn) => {
+    // epoch boundary = first instrumented entry. Closes with no joinable
+    // entry (campaign:*) that precede it are pre-epoch legacy positions —
+    // opened under a different sizing regime (pre equity-anchor, e.g. the
+    // raw ~$6k demo balance) and not this model's record. They're kept in
+    // the ledger totals but excluded from WR/CUSUM/Kelly/SQN gates.
+    const epochTs = (entries || []).length
+      ? Math.min(...entries.map((e) => +(e.ts ?? e) || Infinity))
+      : Infinity;
     const groups = new Map();
     for (const f of rows) {
       const fTs = +(f.ts || f.cTime || 0);
@@ -982,12 +990,15 @@ async function main() {
         (e) => e.symbol === f.symbol && e.ts <= fTs && e.riskUsd > 0
       ).pop();
       const key = ent ? `pos:${f.symbol}:${ent.ts}` : `campaign:${f.symbol}:${f.side}`;
-      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0 };
+      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, firstTs: Infinity, lastTs: 0 };
       g.fills += 1;
       g.netUsd += netFn(f);
+      g.firstTs = Math.min(g.firstTs, fTs);
       g.lastTs = Math.max(g.lastTs, fTs);
       groups.set(key, g);
     }
+    for (const g of groups.values())
+      g.preEpoch = g.key.startsWith('campaign:') && Number.isFinite(epochTs) && g.firstTs < epochTs;
     return [...groups.values()].sort((a, b) => b.lastTs - a.lastTs); // newest-first, like the journal
   };
 
@@ -1013,7 +1024,11 @@ async function main() {
     // 6-leg trim ladder used to read as 6/6 wins and could hold the
     // win-rate breaker open through a bleed — the same flattery bug in
     // reverse. Groups are newest-first like the journal.
-    const pos = groupIntoPositions(closes, state.entriesLog, (f) => (+f.profit || 0) - (+f.fee || 0));
+    const posAll = groupIntoPositions(closes, state.entriesLog, (f) => (+f.profit || 0) - (+f.fee || 0));
+    // pre-epoch positions (opened before journaled entries existed — e.g.
+    // legacy fills from the pre-equity-anchor ~$6k book) are real dollars
+    // but not THIS model's record — they can't trip or defend the breakers.
+    const pos = posAll.filter((g) => !g.preEpoch);
     const last20 = pos.slice(0, 20);
     const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
     const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
@@ -3020,10 +3035,11 @@ async function main() {
       // their win rate is architecture-biased: the trim ladder fragments one
       // trade into many journaled 'closes'.
       byPosition: (() => {
-        const pg = posGroups;
+        const pg = posGroups.filter((g) => !g.preEpoch);
+        const pre = posGroups.filter((g) => g.preEpoch);
         const pW = pg.filter((g) => g.netUsd > 0), pL = pg.filter((g) => g.netUsd <= 0);
         return {
-          scope: 'close fills grouped into positions via entriesLog join (riskUsd entry anchor); campaign:* = pre-instrumentation clusters by symbol+side',
+          scope: 'close fills grouped into positions via entriesLog join (riskUsd entry anchor); campaign:* = pre-instrumentation clusters by symbol+side; preEpoch excluded from headline',
           positions: pg.length,
           winners: pW.length,
           winRatePct: pg.length ? round((pW.length / pg.length) * 100, 1) : null,
@@ -3031,6 +3047,12 @@ async function main() {
           expectancyUsd: pg.length ? round(pg.reduce((a, g) => a + g.netUsd, 0) / pg.length, 4) : null,
           avgWinUsd: pW.length ? round(pW.reduce((a, g) => a + g.netUsd, 0) / pW.length, 4) : null,
           avgLossUsd: pL.length ? round(pL.reduce((a, g) => a + g.netUsd, 0) / pL.length, 4) : null,
+          // pre-epoch legacy closes (opened before journaled entries) — real
+          // dollars on the ledger, excluded from the model's WR/expectancy
+          preEpoch: pre.length ? {
+            positions: pre.length,
+            netUsd: round(pre.reduce((a, g) => a + g.netUsd, 0), 4),
+          } : undefined,
           rows: pg.slice(0, 15).map((g) => ({ symbol: g.symbol, side: g.side, fills: g.fills, netUsd: round(g.netUsd, 4), riskUsd: g.riskUsd, key: g.key.startsWith('pos:') ? null : 'campaign' })),
         };
       })(),
