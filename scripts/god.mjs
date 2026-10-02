@@ -1,21 +1,21 @@
 // god.mjs — the overseer. Watches every subsystem each cycle and renders a
 // verdict on every invariant the system claims to uphold.
 //
-// Design: PURE AUDITOR. Reads api/*.json only. No credentials, no exchange
-// calls, no mutations — it cannot trade, cannot close, cannot hide. The
-// scanner decides, the executor acts, God watches and reports.
+// Design: audit artifacts, then inspect the configured exchange through its
+// venue adapter. It never opens/closes positions; it repairs missing exchange
+// protection only, and reports each read/repair result in api/god.json.
 //
 // Output: api/god.json { at, verdict, checks[] } consumed by the dashboard.
 // Verdict: PERFECT (all pass) / ATTENTION (warns) / BROKEN (any fail).
 // Always exits 0 — a red God must never block the snapshot commit that
 // would show it.
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './load-env.mjs'; // canonical .env loader (audit F2)
 import { integrityNote } from './crc32.mjs';
+import { makeExchange } from './exchange/index.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = path.join(__dirname, '..', 'api');
@@ -330,160 +330,160 @@ if (ll && (ll.mode === 'demo' || ll.mode === 'live')) {
     issues.length ? issues.join('; ') : 'no measured claim exceeds its evidence');
 }
 
-// ---------- 12. OVERSEER ACTIONS — elevated: full trade permissions ----------
-// Operator mandate: God holds the exchange credentials and ACTS. The audit
-// above stays pure-read; this layer enforces invariants with power. God
-// never invents directional trades — it shields naked positions, restores
-// missing protection legs, and flags dead capital. Full permission, used
-// with discipline: repairs only.
+// ---------- 12. OVERSEER ACTIONS — protection repair only ----------
+// God never opens or closes positions. It may attach missing stop/target
+// protection to existing positions on the configured exchange, then audits
+// coverage and reports any repair failures.
 const interventions = [];
 const interv = (what, res) => interventions.push({ what, res, at: new Date().toISOString() });
 {
-  // demo/paper mode: audit and intervene on the SAME account the engine
-  // trades — SENTINEL_EXEC=demo swaps creds to BITGET_DEMO_* + paptrading.
-  const DEMO = (process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo';
-  const KEY = DEMO ? (process.env.BITGET_DEMO_API_KEY || process.env.BITGET_API_KEY || '')
-                   : (process.env.BITGET_API_KEY || '');
-  const SECRET = DEMO ? (process.env.BITGET_DEMO_API_SECRET || process.env.BITGET_API_SECRET || '')
-                   : (process.env.BITGET_API_SECRET || '');
-  const PASS = DEMO ? (process.env.BITGET_DEMO_PASSPHRASE || process.env.BITGET_PASSPHRASE || '')
-                   : (process.env.BITGET_PASSPHRASE || '');
-  const HOST = 'https://api.bitget.com', PRODUCT = 'USDT-FUTURES', MC = 'USDT';
-  if (KEY && SECRET && PASS && process.env.GOD_INTERVENE !== '0') {
-    const gsign = (method, reqPath, qs, bodyStr) => {
-      const ts = String(Date.now());
-      const pre = ts + method.toUpperCase() + reqPath + (qs ? '?' + qs : '') + (bodyStr || '');
-      const h = {
-        'ACCESS-KEY': KEY,
-        'ACCESS-SIGN': crypto.createHmac('sha256', SECRET).update(pre).digest('base64'),
-        'ACCESS-PASSPHRASE': PASS, 'ACCESS-TIMESTAMP': ts,
-        'Content-Type': 'application/json', locale: 'en-US',
-      };
-      if (DEMO) h.paptrading = '1';
-      return h;
-    };
-    const gapi = async (method, reqPath, { qs = '', body = null } = {}) => {
-      const bodyStr = body ? JSON.stringify(body) : '';
-      const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
-        method, headers: gsign(method, reqPath, qs, bodyStr),
-        body: bodyStr || undefined, signal: AbortSignal.timeout(12000),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || (j.code && j.code !== '00000'))
-        throw new Error(reqPath + ' ' + method + ' -> ' + (j.code || res.status) + ' ' + (j.msg || ''));
-      return j.data;
-    };
+  // Audit/repair the exact exchange and mode selected by the executor.
+  // Adapter centralizes signing and endpoint selection, so demo oversight
+  // cannot accidentally query or repair a different exchange/account.
+  const MODE = (process.env.SENTINEL_EXEC || '').toLowerCase();
+  const DEMO = MODE === 'demo';
+  let X = null;
+  try {
+    X = makeExchange(process.env);
+  } catch (e) {
+    add('god-powers', 'FAIL', 'exchange configuration refused: ' + e.message);
+  }
+  if (X && MODE !== 'demo' && MODE !== 'live') {
+    add('god-powers', 'WARN', `mode=${MODE || 'off'} — exchange inspection/repair disabled outside demo/live`);
+  } else if (X && !X.hasCreds) {
+    add('god-powers', 'WARN', `no ${X.name.toUpperCase()} credentials in env — running degraded audit-only`);
+  } else if (X && process.env.GOD_INTERVENE === '0') {
+    add('god-powers', 'WARN', 'GOD_INTERVENE=0 — powers disabled');
+  } else if (X) {
     try {
-      const positions = await gapi('GET', '/api/v2/mix/position/all-position', {
-        qs: 'productType=' + PRODUCT + '&marginCoin=' + MC,
-      });
-      const accRows = await gapi('GET', '/api/v2/mix/account/accounts', { qs: 'productType=' + PRODUCT });
-      const acct = (accRows || []).find((a) => a.marginCoin === MC) || {};
+      const [positions, acct] = await Promise.all([X.getPos(), X.getAccount()]);
+      if (positions.length) {
+        const mode = await X.getPosMode('BTCUSDT');
+        X.setPosMode?.(mode);
+      }
+      const contracts = positions.length ? await X.contractMap() : {};
+      const roundPrice = (symbol, price) => {
+        const c = contracts[symbol] || {};
+        const decimals = Number.isInteger(c.pricePlace) ? c.pricePlace : 6;
+        const tick = +c.tickSize || 0;
+        const rounded = tick > 0 ? Math.round(Number(price) / tick) * tick : Number(price);
+        return +rounded.toFixed(decimals);
+      };
       // --- a) shield check: every real position carries loss + profit plans
       for (const p of positions || []) {
-        const plans = await gapi('GET', '/api/v2/mix/order/orders-plan-pending', {
-          qs: 'symbol=' + p.symbol + '&productType=' + PRODUCT + '&marginCoin=' + MC + '&planType=profit_loss',
-        }).then((d) => {
-          const l = d?.entrustedList || d?.orders || d;
-          return Array.isArray(l) ? l : [];
-        }).catch(() => []);
-        // per-side matching — a hedged symbol needs a stop on EACH side; a
-        // plan on the long must not count as cover for a naked short
         const hold = (p.holdSide || p.side || '').toLowerCase();
-        const hasLoss = plans.some((x) => /loss|moving/i.test(x.planType || '') &&
-          (!x.holdSide || (x.holdSide || '').toLowerCase() === hold));
-        const hasProfit = plans.some((x) => /profit/i.test(x.planType || '') &&
-          (!x.holdSide || (x.holdSide || '').toLowerCase() === hold));
-        const entry = +(p.openPriceAvg || p.averageOpenPrice || p.entry || 0);
-        const sgn = hold === 'long' ? 1 : -1;
-        const holdSide = sgn > 0 ? 'long' : 'short';
-        // the position's real margin mode — a hardcoded 'isolated' shield
-        // gets rejected on crossed positions, exactly the ones most in need
+        const holdSide = hold === 'long' ? 'long' : 'short';
+        let plans;
+        try {
+          plans = await X.getPlans(p.symbol);
+        } catch (e) {
+          add(`god-plans-${p.symbol}-${holdSide}`, 'FAIL', `cannot verify existing exchange protection; refusing to overwrite blind: ${e.message}`);
+          continue;
+        }
+        const sidePlans = plans.filter((x) => !x.holdSide || x.holdSide.toLowerCase() === hold);
+        const hasLoss = sidePlans.some((x) => /loss|moving/i.test(x.planType || ''));
+        const hasProfit = sidePlans.some((x) => /profit/i.test(x.planType || ''));
+        const entry = +(p.openPriceAvg || p.entry || 0);
+        const sgn = holdSide === 'long' ? 1 : -1;
         const mm = (p.marginMode || '').toLowerCase() === 'crossed' ? 'crossed' : 'isolated';
-        if (!(entry > 0)) continue;
+        if (!(entry > 0)) {
+          add(`god-shield-${p.symbol}-${holdSide}`, 'FAIL', 'open position has no valid entry price; refusing to invent protection levels');
+          continue;
+        }
         if (!hasLoss) {
-          // clamp the shield INSIDE the liquidation band — a 3% stop on a
-          // 50x position sits past liq and protects nothing. 70% of the band,
-          // never wider than 3%.
           const liq = +(p.liquidationPrice || 0);
           const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
-          // bandPct is PERCENT — convert before comparing against the 0.03
-          // fraction cap, else the cap always wins and a 3% shield can land
-          // PAST liquidation on high-leverage positions
           const shieldPct = Math.min(0.03, (bandPct / 100) * 0.7);
-          if (!(shieldPct > 0)) continue;
-          const trig = +(entry * (1 - sgn * shieldPct)).toPrecision(6);
-          const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
-            // pos_loss covers the whole position — size must be OMITTED
-            // (a literal '0' reads as an invalid order, not "full position")
-            body: { symbol: p.symbol, productType: PRODUCT, marginMode: mm, marginCoin: MC,
-              planType: 'pos_loss', triggerPrice: String(trig), triggerType: 'mark_price',
-              holdSide },
-          }).then(() => true).catch((e) => e.message);
-          interv('shield ' + p.symbol, r === true ? 'pos_loss @' + trig + ' placed' : 'FAILED: ' + r);
-          add('god-shield-' + p.symbol, r === true ? 'PASS' : 'FAIL',
-            r === true ? 'naked position shielded — pos_loss @' + trig : 'shield failed: ' + r);
+          if (!(shieldPct > 0)) {
+            add(`god-shield-${p.symbol}-${holdSide}`, 'FAIL', 'cannot calculate a protective stop inside the liquidation band');
+          } else {
+            const trig = roundPrice(p.symbol, entry * (1 - sgn * shieldPct));
+            const insideLiqBand = liq > 0 && (holdSide === 'long' ? trig > liq : trig < liq);
+            const correctSide = holdSide === 'long' ? trig < entry : trig > entry;
+            if (!insideLiqBand || !correctSide) {
+              add(`god-shield-${p.symbol}-${holdSide}`, 'FAIL', 'tick rounding would place stop outside the protective side/liquidation band');
+              continue;
+            }
+            const r = await X.planOrder(p.symbol, 'pos_loss', trig, '0', holdSide, mm)
+              .then(() => true).catch((e) => e.message);
+            interv(`shield ${p.symbol} ${holdSide}`, r === true ? `pos_loss @${trig} placed` : `FAILED: ${r}`);
+            add(`god-shield-${p.symbol}-${holdSide}`, r === true ? 'PASS' : 'FAIL',
+              r === true ? `naked position shielded — pos_loss @${trig}` : `shield failed: ${r}`);
+          }
         }
         if (!hasProfit) {
           const liq = +(p.liquidationPrice || 0);
           const bandPct = liq > 0 ? Math.abs(entry - liq) / entry * 100 : Infinity;
-          const tpPct = Math.min(0.045, (bandPct / 100) * 0.9); // keep the target inside a reachable band too (percent -> fraction)
-          if (!(tpPct > 0)) continue;
-          const trig = +(entry * (1 + sgn * tpPct)).toPrecision(6);
-          const r = await gapi('POST', '/api/v2/mix/order/place-tpsl-order', {
-            body: { symbol: p.symbol, productType: PRODUCT, marginMode: mm, marginCoin: MC,
-              planType: 'pos_profit', triggerPrice: String(trig), triggerType: 'mark_price',
-              holdSide },
-          }).then(() => true).catch((e) => e.message);
-          interv('profit-leg ' + p.symbol, r === true ? 'pos_profit @' + trig + ' placed' : 'FAILED: ' + r);
+          const tpPct = Math.min(0.045, (bandPct / 100) * 0.9);
+          if (tpPct > 0) {
+            const trig = roundPrice(p.symbol, entry * (1 + sgn * tpPct));
+            const correctSide = holdSide === 'long' ? trig > entry : trig < entry;
+            if (!correctSide) {
+              add(`god-profit-${p.symbol}-${holdSide}`, 'WARN', 'tick rounding would place take-profit on the wrong side of entry');
+              continue;
+            }
+            const r = await X.planOrder(p.symbol, 'pos_profit', trig, '0', holdSide, mm)
+              .then(() => true).catch((e) => e.message);
+            interv(`profit-leg ${p.symbol} ${holdSide}`, r === true ? `pos_profit @${trig} placed` : `FAILED: ${r}`);
+            if (r !== true)
+              add(`god-profit-${p.symbol}-${holdSide}`, 'WARN', `take-profit repair failed: ${r}`);
+          } else {
+            add(`god-profit-${p.symbol}-${holdSide}`, 'WARN', 'cannot calculate a take-profit within the liquidation band');
+          }
         }
       }
-      // --- b) dead-capital audit: the mandate says margin works or dies.
-      // In DEMO the account's `available` is fake minted dust ($6k the $38
-      // virtual book can never deploy) — measuring it warns forever and
-      // trains the operator to ignore GOD. The honest demo audit: the exec
-      // must have *accounted* for its undeployed margin (idleMargin.reason —
-      // gate stand-down, caps, contract minimums). Unexplained idle warns.
-      const eq = +(acct.usdtEquity || acct.equity || 0), av = +(acct.available || 0);
-      const idleFloor = Math.max(eq * 0.15, 8);
-      const idle = ll?.idleMargin;
+      // --- b) dead-capital audit. Demo equity is account-minted sandbox
+      // balance; compare only against the executor's small anchored test book.
+      const eq = +(acct.equity || 0), av = +(acct.available || 0);
       const bookEq = +(ll?.equityUsd || 0);
+      const idleFloor = Math.max((DEMO ? bookEq : eq) * 0.15, 8);
+      const idle = ll?.idleMargin;
       const bookDeployed = (ll?.positions || ll?.positionsAfter || [])
         .reduce((s, p) => s + (+p.margin || 0), 0);
+      // In demo, raw exchange availability is minted sandbox balance, not
+      // the $65-anchored test book used by executor sizing.
+      const bookFree = Math.max(0, bookEq - bookDeployed);
       if (DEMO) {
         const accounted = idle && Number.isFinite(idle.usd) && typeof idle.reason === 'string' && idle.reason.length > 0;
-        add('capital-deployed', av > idleFloor && !accounted ? 'WARN' : 'PASS',
+        add('capital-deployed', bookFree > idleFloor && !accounted ? 'WARN' : 'PASS',
           accounted
-            ? '$' + av.toFixed(2) + ' acct free is demo dust — book $' + bookEq.toFixed(2) +
-              ' governs ($' + bookDeployed.toFixed(2) + ' deployed); idle accounted: ' + idle.reason
-            : av > idleFloor
-              ? '$' + av.toFixed(2) + ' free margin idle and live-ledger gives no reason — unexplained dead capital'
-              : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+            ? `$${bookFree.toFixed(2)} free on the $${bookEq.toFixed(2)} demo book ($${bookDeployed.toFixed(2)} deployed); idle accounted: ${idle.reason}`
+            : bookFree > idleFloor
+              ? `$${bookFree.toFixed(2)} free on the demo book with no idle-margin explanation`
+              : `$${bookFree.toFixed(2)} free — within book gas floor`);
       } else {
         add('capital-deployed', av > idleFloor ? 'WARN' : 'PASS',
           av > idleFloor
-            ? '$' + av.toFixed(2) + ' free margin idle (floor $' + idleFloor.toFixed(2) + ') — dead capital, deployment mandate'
-            : '$' + av.toFixed(2) + ' free — within gas floor, book deployed');
+            ? `$${av.toFixed(2)} free margin idle (floor $${idleFloor.toFixed(2)}) — dead capital, deployment mandate`
+            : `$${av.toFixed(2)} free — within gas floor, book deployed`);
       }
-      // --- c) untracked positions: fills the ledger doesn't know
+      // --- c) position coverage is side-aware for hedge-mode books.
       const llx = readJson('live-ledger.json');
-      const known = new Set((llx?.positions || llx?.positionsAfter || []).map((p) => p.symbol));
-      const unknown = (positions || []).filter((p) => !known.has(p.symbol));
+      const known = new Set((llx?.positions || llx?.positionsAfter || [])
+        .map((p) => `${p.symbol}:${String(p.side || '').toLowerCase()}`));
+      const unknown = (positions || []).filter((p) =>
+        !known.has(`${p.symbol}:${String(p.holdSide || p.side || '').toLowerCase()}`));
       add('position-coverage', unknown.length ? 'WARN' : 'PASS',
         unknown.length
-          ? 'untracked positions: ' + unknown.map((p) => p.symbol).join(',')
-          : (positions || []).length + ' exchange positions all ledger-visible');
-      add('god-powers', 'PASS', 'armed — credentialed watch + repair active every cycle');
+          ? 'untracked positions: ' + unknown.map((p) => `${p.symbol}:${p.holdSide || p.side}`).join(',')
+          : `${(positions || []).length} exchange positions all ledger-visible`);
+      add('god-powers', 'PASS', `armed — ${X.name} ${MODE} watch + protection repair active every cycle`);
     } catch (e) {
       add('god-powers', 'FAIL', 'credentialed layer error: ' + (e.message || e));
     }
-  } else {
-    add('god-powers', 'WARN',
-      !KEY ? 'no BITGET_API_KEY in env — running degraded audit-only' : 'GOD_INTERVENE=0 — powers disabled');
   }
 }
 
 // ---------- verdict ----------
+// integrity audit — do this before calculating the verdict/counts so CRC
+// failures and missing manifests are reflected in the published status.
+try {
+  const integ = JSON.parse(fs.readFileSync(path.join(API, 'integrity.json'), 'utf8'));
+  const bad = [...(integ.corrupt || []), ...(integ.missing || [])];
+  add('crc32-integrity', bad.length ? 'FAIL' : 'PASS',
+    bad.length ? `${bad.length} file(s) failed CRC32: ${bad.slice(0, 3).join(', ')}` : `${integ.checked ?? 0} artifacts CRC32-verified`);
+} catch { add('crc32-integrity', 'WARN', 'api/integrity.json absent — crc32-verify.mjs not running'); }
+
 const fails = checks.filter((c) => c.status === 'FAIL');
 const warns = checks.filter((c) => c.status === 'WARN');
 const verdict = fails.length ? 'BROKEN' : warns.length ? 'ATTENTION' : 'PERFECT';
@@ -496,17 +496,8 @@ const out = {
   fail: fails.length,
   checks,
   interventions,
-  note: 'overseer — full trade permissions: audits then repairs. FAIL = invariant violated, WARN = degraded, PASS = held',
+  note: 'overseer — audits artifacts and the configured demo/live exchange; only repairs missing protection. FAIL = invariant violated, WARN = degraded, PASS = held',
 };
-// integrity audit — the CRC32 manifest vs on-disk bytes. A corrupt or
-// tampered artifact is a FAIL: downstream decisions trust these files.
-try {
-  const integ = JSON.parse(fs.readFileSync(path.join(API, 'integrity.json'), 'utf8'));
-  const bad = [...(integ.corrupt || []), ...(integ.missing || [])];
-  add('crc32-integrity', bad.length ? 'FAIL' : 'PASS',
-    bad.length ? `${bad.length} file(s) failed CRC32: ${bad.slice(0, 3).join(', ')}` : `${integ.checked ?? 0} artifacts CRC32-verified`);
-} catch { add('crc32-integrity', 'WARN', 'api/integrity.json absent — crc32-verify.mjs not running'); }
-
 const godBody = JSON.stringify(out);
 fs.writeFileSync(path.join(API, 'god.json.tmp'), godBody);
 fs.renameSync(path.join(API, 'god.json.tmp'), path.join(API, 'god.json'));

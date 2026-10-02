@@ -326,13 +326,13 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     const [ord, ord2, pos] = await Promise.all([
       api('GET', '/v5/order/realtime', {
         qs: `category=${CAT}&symbol=${symbol}&orderFilter=StopOrder&openOnly=0&limit=50`,
-      }).catch(() => null),
+      }),
       api('GET', '/v5/order/realtime', {
         qs: `category=${CAT}&symbol=${symbol}&orderFilter=tpslOrder&openOnly=0&limit=50`,
-      }).catch(() => null),
+      }),
       api('GET', '/v5/position/list', {
         qs: `category=${CAT}&symbol=${symbol}`,
-      }).catch(() => null),
+      }),
     ]);
     for (const o of [...(ord?.list || []), ...(ord2?.list || [])]) {
       const st = o.stopOrderType || '';
