@@ -1614,6 +1614,6 @@
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
                  mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng,
                  effortResult: effortResult, elliottProj: elliottProj,
-                 sakata: sakata };
+                 sakata: sakata, maStack: maStack };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

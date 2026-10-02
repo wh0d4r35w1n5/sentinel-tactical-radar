@@ -3,26 +3,29 @@
 Live: **https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/**
 
 - `/` — the dashboard: pulse chart, breadth stats, ticker tape, ranked
-  signals with sparklines, live Bitget execution state and the real fill
+  signals with sparklines, active-venue execution state and the real fill
   journal (vanilla JS, no build).
 
 Vanilla-JS static app served by GitHub Pages with a self-contained data
 layer — `live-feed.js` shims `/api/*` calls to static `api/*.json` snapshots
-and a live Bitget futures websocket overlay.
+and a live public futures websocket overlay for the active venue.
 
 ## How it works
 
 - Everything runs client-side; the only backend is the refresh workflow that
   regenerates `api/*.json` every ~10 minutes.
 - `.nojekyll` keeps GitHub Pages serving all assets.
-- `live-feed.js` subscribes `wss://ws.bitget.com/v2/ws/public`
-  (`USDT-FUTURES` tickers) for tick-level repaints between snapshots.
+- `live-feed.js` chooses the active venue from `api/live-ledger.json` and
+  overlays its public ticker websocket for tick-level repaints between
+  snapshots (`wss://ws.bitget.com/v2/ws/public` or Bybit V5 public linear).
 
 ## The live book
 
 The VPS executor (`scripts/bitget-exec.mjs` under `sentinel-rapid`) trades the
-**real Bitget USDT-M account** — the exchange's own fills and plan records are
-the only trade journal (`api/live-ledger.json` + `state/real-fills.json`):
+configured exchange account (currently **Bybit demo**; set
+`SENTINEL_EXCHANGE=bybit` and `SENTINEL_EXEC=demo`) — the exchange's own
+fills and plan records are the only trade journal (`api/live-ledger.json` +
+the mode-scoped fills file):
 
 - **Margin-based sizing** — free margin is split across the target slot count
   (4 target / 10 max positions); there is no notional cap.
@@ -72,16 +75,16 @@ Runs every 10 minutes + on demand:
 
 | File | Source |
 |---|---|
-| `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from Bitget public futures data (USDT-M contracts + tickers + closed 1h/5m klines for top candidates). Universe = every tradable USDT-M perpetual — crypto plus RWA stock/index/metal/FX perps — excluding fiat-stable bases, ≥ $250k 24h volume. Signals score direction-aware momentum (Wilder RSI-14, signed 24h change ranked within the candidate pool), volume surge, spread tightness, and bounded TA/derivatives/news confluence. |
+| `api/market-scanner.json` | **Built natively** by `scripts/build-scanner.mjs` from the configured venue’s public futures data (currently Bybit V5 linear in demo mode; USDT-M contracts + tickers + closed 1h/5m klines for top candidates). Universe = every tradable USDT-M perpetual — crypto plus RWA stock/index/metal/FX perps — excluding fiat-stable bases, ≥ $250k 24h volume. Signals score direction-aware momentum (Wilder RSI-14, signed 24h change ranked within the candidate pool), volume surge, spread tightness, and bounded TA/derivatives/news confluence. |
 | `api/pulse-history.json` | Rolling breadth index (~24h of points) accumulated each run. |
 | `api/coin-detail.json` | Per-coin metrics + 48h sparkline closes for kline-enriched pairs. |
 | `api/signal-ledger.json` | Signal track record — open entries marked live, settled as won/stopped/breakeven/trailed/reversed/expired/liquidated with P&L and alpha. Entries carry engine version, board rank, spread, slippage estimate, universe size and pool depth at signal time. |
 | `api/signal-archive.json` | **Append-only prospective record** — every run appends the full emitted board (all signals, traded or not) with parameters and universe context. |
 | `api/history/archive-YYYY-MM.json` | **Permanent record** — every emitted run is also written to its monthly archive file. The hot `signal-archive.json` may trim old runs; these monthly files are the unbounded, never-rewritten evidence set. |
 | `api/signal-eval.json` + `api/history/eval-YYYY-MM.json` | **Forward-outcome labels for every emitted signal** — +1h/+4h/+24h direction-adjusted returns, TP-before-SL inside 24h (5m replay, adverse-first), and alpha vs a BTC/ETH/SOL median over the identical window. Complete records seal into monthly eval files. This measures predictive power on the *whole board*, ~10× faster than the traded ledger. |
-| `api/bitget-symbols.json` | The Bitget-listed contract universe used for filtering. |
-| `api/funding.json` | Bitget USDT-FUTURES funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
-| `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (Bitget public futures, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
+| `api/{exchange}-symbols.json` | The active exchange's listed contract universe used for filtering. |
+| `api/funding.json` | Active-venue perpetual funding rates → delta-neutral arb math (direction, breakeven hours, annualized carry). |
+| `api/sentiment.json` | Derivatives + social intelligence: per-asset open interest, funding trend, crowding state (active venue’s public futures API, keyless). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment join when keys exist — see below. |
 | `api/prices.json` | Majors (BTC/ETH/SOL) marks for the header chips. |
 | `api/health.json` | Pipeline health: last build timestamp, pair count, kline coverage. |
 
@@ -115,7 +118,11 @@ report `no-key` and are skipped:
 `scripts/api-keys.json` is gitignored. For CI, add them as GitHub repo
 secrets named identically — the workflow passes env through.
 
-Live execution runs on the VPS (`SENTINEL_EXEC=live`, `CONFIRM_LIVE=YES`)
-with the exchange's isolated-margin TP/SL plans attached to every position —
-orders route to the real Bitget account; nothing simulated is booked or
-displayed.
+The VPS runs the Bybit demo executor (`SENTINEL_EXEC=demo`,
+`SENTINEL_EXCHANGE=bybit`) with exchange-side TP/SL protection. GitHub Actions
+uses Bybit demo market data, stays shadow-only while VPS pushes are fresh, and
+can use demo credentials only during failover. Bybit demo credentials must be
+minted in Bybit demo mode and loaded as
+`BYBIT_DEMO_API_KEY`/`BYBIT_DEMO_API_SECRET`; demo mode defaults to
+`https://api-demo.bybit.com` and refuses a mainnet host. The live workflow is
+separately gated by `SENTINEL_LIVE=1` and `CONFIRM_LIVE=YES`.

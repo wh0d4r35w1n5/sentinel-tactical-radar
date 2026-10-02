@@ -24,7 +24,8 @@ jobs:
 
       # Failover: if the VPS pushbot's last `vps:` commit on the live ledger
       # is stale (>25min), CI takes ownership of state and trades demo.
-      # When fresh `vps:` commits resume, CI steps back to shadow + restore.
+      # While VPS commits are fresh, CI is shadow-only — never a second live
+      # executor. CI is hard-limited to demo/shadow, regardless of repo vars.
       - name: Failover detect
         id: fo
         run: |
@@ -34,16 +35,19 @@ jobs:
           case "$MSG" in vps:*) VPSSIG=1;; *) VPSSIG=0;; esac
           echo "last='$MSG' age=${AGE}s vpssig=$VPSSIG"
           if [ "$AGE" -lt 1500 ] && [ "$VPSSIG" = "1" ]; then
-            echo "mode=${{ vars.SENTINEL_EXEC || 'shadow' }}" >> $GITHUB_OUTPUT
+            echo "mode=shadow" >> $GITHUB_OUTPUT
             echo "own=0" >> $GITHUB_OUTPUT
           else
             echo "mode=demo" >> $GITHUB_OUTPUT
             echo "own=1" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build scanner snapshot from Bitget
+      - name: Build Bybit demo scanner snapshot
         run: node scripts/build-scanner.mjs
         env:
+          # Scanner must use api-demo.bybit.com even in healthy-VPS shadow runs.
+          SENTINEL_EXEC: demo
+          SENTINEL_EXCHANGE: bybit
           COINGLASS_API_KEY: ${{ secrets.COINGLASS_API_KEY }}
           LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
           CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}
@@ -52,35 +56,39 @@ jobs:
           COINMARKETCAL_CLIENT_SECRET: ${{ secrets.COINMARKETCAL_CLIENT_SECRET }}
 
       # Executor runs AFTER the scanner so live-plan.json is fresh.
-      # SENTINEL_EXEC=shadow (repo var) writes intended orders only — no keys
-      # needed. demo/live require the BITGET_* secrets + the live arming pair.
-      - name: Route live plan (shadow/demo/live per config)
+      # CI is restricted to shadow while VPS commits are healthy, and Bybit demo
+      # only during failover; it can never reach a live account.
+      - name: Route plan (shadow or Bybit demo only)
         run: node scripts/bitget-exec.mjs
         env:
           SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
+          SENTINEL_EXCHANGE: bybit
           # epoch anchors — same constraints the VPS env carried
           SENTINEL_EQUITY_OVERRIDE_USD: "65"
           SENTINEL_VAULT_SHARE: "0.25"
           SENTINEL_LONG_ONLY: "0"
           SENTINEL_DENY_SYMS: ""
-          BITGET_API_KEY: ${{ secrets.BITGET_API_KEY }}
-          BITGET_API_SECRET: ${{ secrets.BITGET_API_SECRET }}
-          BITGET_PASSPHRASE: ${{ secrets.BITGET_PASSPHRASE }}
-          BITGET_DEMO_API_KEY: ${{ secrets.BITGET_DEMO_API_KEY }}
-          BITGET_DEMO_API_SECRET: ${{ secrets.BITGET_DEMO_API_SECRET }}
-          BITGET_DEMO_PASSPHRASE: ${{ secrets.BITGET_DEMO_PASSPHRASE }}
-          SENTINEL_LIVE: ${{ vars.SENTINEL_LIVE }}
-          CONFIRM_LIVE: ${{ vars.CONFIRM_LIVE }}
-          LIVE_MAX_NOTIONAL_USD: ${{ vars.LIVE_MAX_NOTIONAL_USD }}
-          LIVE_MAX_POSITIONS: ${{ vars.LIVE_MAX_POSITIONS }}
-          LIVE_TARGET_POSITIONS: ${{ vars.LIVE_TARGET_POSITIONS }}
+          BYBIT_DEMO_API_KEY: ${{ secrets.BYBIT_DEMO_API_KEY }}
+          BYBIT_DEMO_API_SECRET: ${{ secrets.BYBIT_DEMO_API_SECRET }}
         continue-on-error: true # an exec failure must never block the snapshot commit
 
       # Overseer: audits every invariant after exec — writes api/god.json.
-      # Pure read of artifacts; always exits 0 so a red verdict still commits.
+      # Always exits 0 so a red verdict still commits.
       - name: God audit
         run: node scripts/god.mjs
+        env:
+          SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
+          SENTINEL_EXCHANGE: bybit
+          BYBIT_DEMO_API_KEY: ${{ secrets.BYBIT_DEMO_API_KEY }}
+          BYBIT_DEMO_API_SECRET: ${{ secrets.BYBIT_DEMO_API_SECRET }}
         continue-on-error: true
+
+      # Scanner/executor maintain tracked caches/checksums under state/.
+      # Restore those runtime-only edits on shadow runs so they don't obstruct
+      # the snapshot commit's remote sync; failover persists its demo state.
+      - name: Clean shadow runtime state
+        if: steps.fo.outputs.own != '1'
+        run: git restore --worktree -- state/
 
       - name: Commit if changed
         run: |
@@ -96,18 +104,34 @@ jobs:
             echo "failover: CI owns state — keeping CI-built artifacts"
           fi
           git add api/
-          # failover persistence: fills log / vault / exec state must carry
-          # between runs (state/ is gitignored — VPS keeps its own on disk)
+          # Persist only the small demo-book state needed across CI failover
+          # runs. Never force-add command/control files or runtime caches.
           if [ "${{ steps.fo.outputs.own }}" = "1" ]; then
-            git add -f state/ 2>/dev/null || true
+            for f in state/demo-fills-bybit.json state/wealth-vault-bybit.json state/rr-config.json state/checksums.json; do
+              if [ -f "$f" ]; then git add -f "$f"; fi
+            done
           fi
           if git diff --cached --quiet; then
             echo "no changes"
           else
             git commit -m "chore: refresh api snapshots"
-            # a queued run can land its commit while another was pushing —
-            # rebase onto whatever the remote gained, then push once more.
-            # -X ours: freshly-built api/state artifacts win conflicts —
-            # they are authoritative over whatever raced us
-            git pull --rebase -X ours && git push || { git rebase --abort; git pull --rebase -X ours && git push; }
+            # CI and VPS can publish concurrently. Restore post-commit runtime
+            # writes before any merge; the committed failover state stays in
+            # the index/commit while transient caches return to their versioned
+            # baseline. Fail loudly rather than rebase a dirty tree.
+            git restore --worktree -- state/
+            if ! git diff --quiet; then
+              git status --short
+              echo "unexpected tracked edits remain after snapshot commit" >&2
+              exit 1
+            fi
+            # VPS/main wins any same-path race; our commit remains in history
+            # and the next scheduled snapshot retries if needed.
+            git push origin HEAD:main || {
+              git fetch origin main
+              git merge --no-edit -X theirs origin/main
+              git restore --worktree -- state/
+              git diff --quiet
+              git push origin HEAD:main
+            }
           fi

@@ -9,9 +9,9 @@
      strict — but these directives cost nothing and kill real vectors -->
 <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; frame-ancestors 'none'"/>
 <title>Sentinel Tactical Radar</title>
-<meta name="description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
+<meta name="description" content="Live signal scanner — USDT-M perp futures breadth, ranked setups, real-account ledger."/>
 <meta property="og:title" content="Sentinel Tactical Radar"/>
-<meta property="og:description" content="Live signal scanner — Bitget USDT-M futures breadth, ranked setups, real-account ledger."/>
+<meta property="og:description" content="Live signal scanner — USDT-M perp futures breadth, ranked setups, real-account ledger."/>
 <link rel="icon" href="/sentinel-tactical-radar/favicon.ico"/>
 <link rel="manifest" href="/sentinel-tactical-radar/manifest.webmanifest"/>
 <!-- pre-warm the three origins the terminal actually talks to: kills the
@@ -19,7 +19,9 @@
      each on cold start, more on mobile radio -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
 <link rel="preconnect" href="https://api.bitget.com" crossorigin/>
+<link rel="preconnect" href="https://api.bybit.com" crossorigin/>
 <link rel="dns-prefetch" href="https://ws.bitget.com"/>
+<link rel="dns-prefetch" href="https://stream.bybit.com"/>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net"/>
 <!-- defer every script — nothing above should block first paint -->
 <script src="/sentinel-tactical-radar/live-feed.js" defer></script>
@@ -35,8 +37,11 @@ if('serviceWorker' in navigator){
   var swBooted=false;
   navigator.serviceWorker.addEventListener('controllerchange',function(){if(!swBooted){swBooted=true;location.reload();}});
   navigator.serviceWorker.register('/sentinel-tactical-radar/sw.js').then(function(r){
-    r.update();
-    document.addEventListener('visibilitychange',function(){if(!document.hidden)r.update().catch(()=>{})});
+    // register() already fetches the script; update() while the first install
+    // is still in flight hits a registration with no worker — Chromium logs
+    // "script ('Unknown'): Not found". Only update once a worker exists.
+    if(r.active)r.update().catch(()=>{});
+    document.addEventListener('visibilitychange',function(){if(!document.hidden&&r.active)r.update().catch(()=>{})});
   }).catch(()=>{});
 }
 </script>
@@ -108,7 +113,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px
 .panel:hover::after{opacity:1}
 /* neon orbit ring — a conic spark circling the border (@property driven) */
 .neon{border-color:transparent;isolation:isolate}
-.neon::before{content:"";position:absolute;inset:-1px;border-radius:13px;z-index:-1;background:conic-gradient(from var(--ang),transparent 0 38%,var(--cyan) 47%,var(--mag) 55%,transparent 64% 100%);animation:spin 4.5s linear infinite;filter:drop-shadow(0 0 10px rgba(138,91,255,.5))}
+.neon::before{content:"";position:absolute;inset:-1px;border-radius:13px;z-index:-1;padding:2px;background:conic-gradient(from var(--ang),transparent 0 38%,var(--cyan) 47%,var(--mag) 55%,transparent 64% 100%);animation:spin 4.5s linear infinite;filter:drop-shadow(0 0 10px rgba(138,91,255,.5));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 .ptitle{font-size:10px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-bottom:10px;text-shadow:0 0 14px rgba(138,91,255,.3)}
 .big{font-size:38px;font-weight:800;letter-spacing:.02em;background:var(--rainbow);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 6s linear infinite,breathe 4.5s ease-in-out infinite}
 .sub{color:var(--mut);font-size:11px}
@@ -385,7 +390,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
       <div class="sub" id="pulseSub"></div>
     </div>
     <div class="panel">
-      <div class="ptitle">📡 Market breadth · Bitget USDT-M perps</div>
+      <div class="ptitle">📡 Market breadth · <span id="vBreadth">USDT-M perps</span></div>
       <div class="stats" id="stats"></div>
     </div>
   </div>
@@ -467,7 +472,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div class="jscroll"><table><thead id="jHead"></thead><tbody id="journal"></tbody></table></div>
   </div>
   <div class="panel neon" id="livePanel" style="margin-top:16px;display:none">
-    <div class="ptitle">🚀 Live execution · real Bitget account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
+    <div class="ptitle">🚀 Live execution · real <span id="vExec">exchange</span> account <span class="sub">— exchange state is ground truth</span><span id="liveMode" style="float:right"></span></div>
     <div class="stats" id="liveStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="liveRows"></div>
     <div id="liveRisk" class="sub" style="margin-top:8px;font-size:10px"></div>
@@ -546,21 +551,21 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="drivers"></div>
   </div>
   <div class="panel pro" style="margin-top:16px">
-    <div class="ptitle">💸 Funding radar · Bitget perp funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
+    <div class="ptitle">💸 Funding radar · <span id="vFund">perp</span> funding arb scan <span class="sub">— delta-neutral harvest candidates + carry exposure of open trades</span></div>
     <div id="carryStats" class="sub" style="margin-bottom:8px"></div>
     <div class="jscroll"><table><thead><tr><th class="srt" data-t="fund" data-k="asset">Coin</th><th class="srt" data-t="fund" data-k="rate">Funding 8h</th><th class="srt" data-t="fund" data-k="ann">Annualized</th><th class="srt" data-t="fund" data-k="basis">Basis</th><th>Arb play</th><th class="srt" data-t="fund" data-k="be">Breakeven</th></tr></thead><tbody id="fundRows"></tbody></table></div>
   </div>
   <div class="panel" style="margin-top:16px">
-    <div class="ptitle">📊 Benchmark · this engine vs the paid-signal field <span class="sub">— real Bitget account equity vs passive benchmarks, framed by <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
+    <div class="ptitle">📊 Benchmark · this engine vs the paid-signal field <span class="sub">— real <span id="vBench1">exchange</span> account equity vs passive benchmarks, framed by <a href="https://michael-sloggett.com/articles/crypto-risk-management-framework-separates-pros-and-gamblers.html" target="_blank" rel="noopener" style="color:var(--acc)">Sloggett's published framework</a></span></div>
     <div id="bench" class="stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="ptitle" style="margin-top:14px;font-size:10px">vs boring benchmarks <span class="sub" id="benchSince">— does the intelligence add value beyond doing something trivial?</span></div>
     <div id="benchSvgWrap" style="display:none;margin:6px 0 2px"><svg id="benchSvg" viewBox="0 0 560 80" width="100%" height="70" preserveAspectRatio="none"></svg><div class="sub" style="font-size:9px"><span style="color:var(--grn)">— sentinel</span> vs <span style="color:var(--mut)">- - BTC hold</span> · % since clock start</div></div>
     <div id="benchVs" class="stats" style="grid-template-columns:repeat(5,1fr)"></div>
-    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable record, R-multiples, or SQN. This engine's entire record is public: every signal is timestamped and archived, and every fill comes straight from the Bitget exchange — committed to git and independently verifiable against Bitget candles. The performance benchmark gets earned by the real account.</div>
+    <div class="sub" style="margin-top:8px">Paid signal services (Alpha Signals included) publish entries and marketing — not an auditable record, R-multiples, or SQN. This engine's entire record is public: every signal is timestamped and archived, and every fill comes straight from the <span id="vBench2">exchange</span> exchange — committed to git and independently verifiable against <span id="vBench3">exchange</span> candles. The performance benchmark gets earned by the real account.</div>
   </div>
 </div>
 <footer>
-  <span>Data: <a href="https://www.bitget.com/futures/usdt" target="_blank" rel="noopener">Bitget USDT-M futures</a> (live WS stream) · snapshots via <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar/actions" target="_blank" rel="noopener">Actions</a></span>
+  <span>Data: <a id="vDataLink" href="https://www.bitget.com/futures/usdt" target="_blank" rel="noopener">USDT-M futures</a> (live WS stream) · snapshots via <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar/actions" target="_blank" rel="noopener">Actions</a></span>
   <span>Snapshots rebuilt every ~10 min via <a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar/actions" target="_blank" rel="noopener">GitHub Actions</a> · browser overlay is tick-level</span>
   <span><a href="https://github.com/wh0d4r35w1n5/sentinel-tactical-radar">source repo</a> · mirrored frontend, self-hosted data layer</span>
   <span id="health"></span>
@@ -571,7 +576,39 @@ const API='/sentinel-tactical-radar/api/';
 const $=id=>document.getElementById(id);
 // link helpers — every symbol/strategy/headline resolves somewhere real
 const SYM=x=>/USDT$/i.test(x||'')?x:(x||'')+'USDT';
-const BG=x=>'https://www.bitget.com/futures/usdt/'+SYM(x);
+// venue — resolved once per render from the live-ledger artifact; every
+// label, link and market-data call below keys off it so the board never
+// mixes venues (bitget labels over bybit fills is how audits get failed)
+let VEX='bitget';
+const VTITLE=()=>VEX==='bybit'?'Bybit':'Bitget';
+const BG=x=>VEX==='bybit'?'https://www.bybit.com/trade/usdt/'+SYM(x):'https://www.bitget.com/futures/usdt/'+SYM(x);
+// venue-aware public klines — both venues answer [ts,o,h,l,c,vol,qv]
+// newest-first; normalize to ascending so every consumer sees one shape
+const MD_GRAN={bitget:{'5m':'5m','15m':'15m','1H':'1H','4H':'4H','1D':'1D'},bybit:{'5m':'5','15m':'15','1H':'60','4H':'240','1D':'D'}};
+const mdCandles=(sym,g,limit,start,end)=>{
+  if(VEX==='bybit'){
+    let u=`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=${MD_GRAN.bybit[g]||'60'}&limit=${limit||200}`;
+    if(start!=null)u+=`&start=${Math.round(start)}`;if(end!=null)u+=`&end=${Math.round(end)}`;
+    return fetch(u).then(r=>r.json()).then(j=>((j.result&&j.result.list)||[]).slice().reverse());
+  }
+  let u=`https://api.bitget.com/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=${g}&limit=${limit||200}`;
+  if(start!=null)u+=`&startTime=${Math.round(start)}`;if(end!=null)u+=`&endTime=${Math.round(end)}`;
+  return fetch(u).then(r=>r.json()).then(j=>j.data||[]);
+};
+// raw exchange errors are operator-facing, not human-facing — translate the
+// numeric codes the venues emit into plain language before they hit the feed
+const errTxt=e=>String(e)
+  .replace(/\b40808\b[^\n]*/i,'venue rejected the request parameters')
+  .replace(/\b34040\b[^\n]*/i,'order already at requested state — nothing to change')
+  .replace(/\b43023\b[^\n]*/i,'order quantity exceeds venue limit');
+// stamp every venue-sensitive label once the active exchange is known
+function applyVenue(){
+  const T=VTITLE(),set=(id,txt)=>{const el=$(id);if(el)el.textContent=txt};
+  set('vBreadth',`${T} USDT-M perps`);set('vExec',T);
+  set('vFund',`${T} perp`);set('vBench1',T);set('vBench2',T);set('vBench3',T);
+  const dl=$('vDataLink');
+  if(dl){dl.href=VEX==='bybit'?'https://www.bybit.com/trade/usdt/BTCUSDT':'https://www.bitget.com/futures/usdt';dl.textContent=`${T} USDT-M futures`}
+}
 const LK=(h,t)=>`<a class="al" href="${h}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t}</a>`;
 const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
 const ago=t=>{const s=(Date.now()-t)/1e3;return !Number.isFinite(s)?'—':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
@@ -667,7 +704,7 @@ function sigDetail(s,i){
       <span>risk <b>${s.riskPct}%</b></span>
       ${s.betaBtc!=null?`<span>β <b>${s.betaBtc}</b> BTC <span class="sub">· corr ${s.corrBtc??'—'}</span></span>`:''}
       ${e?`<span>ledger P&amp;L <b class="${e.pnlPct>=0?'up':'dn'}">${e.pnlPct>=0?'+':''}${e.pnlPct}%</b> since ${ago(e.ts)} ago</span>`:''}
-      <span>${LK(BG(s.symbol||s.asset),'Bitget '+SYM(s.symbol||s.asset)+' →')}</span>
+      <span>${LK(BG(s.symbol||s.asset),VTITLE()+' '+SYM(s.symbol||s.asset)+' →')}</span>
       <span class="echip" style="cursor:pointer" title="prefill the setup builder with this signal" onclick="event.stopPropagation();prefillSetup('${s.asset}','${s.direction}',${s.lastPrice||0},'${esc(s.strategy||'')}')">🛠 setup</span>
     </div>${doc}</td></tr>`;
 }
@@ -742,8 +779,8 @@ function renderJournalTaken(){
   const d=LAST.taken,trades=(d&&d.trades)||[],stats=(d&&d.stats)||{};
   const rows=sortRows(trades.slice(0,40),SORTS.tkn,TKEYS);
   const open=trades.filter(t=>t.status==='open').length;
-  $('jSummary').textContent=stats.n!=null?`${stats.wins}/${stats.n} won · net $${stats.net} · fees $${stats.fees}${open?` · ${open} open`:''}`:'no fill data yet';
-  const usd=v=>v==null?'<span class="sub">—</span>':`<span class="${v>=0?'up':'dn'}">${v>=0?'+':''}$${v}</span>`;
+  $('jSummary').textContent=stats.n!=null?`${stats.wins}/${stats.n} won · net $${(+stats.net).toFixed(2)} · fees $${(+stats.fees).toFixed(2)}${open?` · ${open} open`:''}`:'no fill data yet';
+  const usd=v=>v==null?'<span class="sub">—</span>':`<span class="${v>=0?'up':'dn'}">${v>=0?'+':''}$${(+v).toFixed(2)}</span>`;
   $('journal').innerHTML=rows.map(t=>{
     const openRow=t.status==='open';
     return `<tr class="trow"><td><b>${t.symbol}</b></td>
@@ -751,8 +788,8 @@ function renderJournalTaken(){
       <td class="num">$${fmtP(t.entryPx)}</td>
       <td class="num">${openRow?'<span class="tag long">OPEN</span>':'$'+fmtP(t.exitPx)}</td>
       <td class="num">${t.qty}</td>
-      <td class="num">$${t.notional}</td>
-      <td class="num sub">$${t.fees}</td>
+      <td class="num">$${(+t.notional).toFixed(2)}</td>
+      <td class="num sub">$${(+t.fees).toFixed(2)}</td>
       <td class="num">${openRow?'<span class="sub">—</span>':usd(t.pnl)}</td>
       <td class="num">${openRow?'<span class="sub">—</span>':usd(t.net)}</td>
       <td class="num sub">${t.holdMin!=null?t.holdMin+'m':'—'}</td>
@@ -814,11 +851,13 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
+  VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
+  applyVenue();
   const t=Date.parse(scan.refreshedAt),stale=Date.now()-t>15*60*1e3;
-  const isLive=scan.source==='bitget-live';
+  const isLive=(scan.source||'').startsWith(VEX);
   const next=Math.max(0,Math.round((t+600e3-Date.now())/6e4));
   $('liveChip').className='live'+(stale?' stale':'');
-  $('liveTxt').textContent=isLive?'LIVE · bitget stream':(stale?'STALE · ':'LIVE · ')+ago(t)+' ago'+(stale?'':` · next sync ~${next}m`);
+  $('liveTxt').textContent=isLive?`LIVE · ${VEX} stream`:(stale?'STALE · ':'LIVE · ')+ago(t)+' ago'+(stale?'':` · next sync ~${next}m`);
   const p=scan.pulse||{};
   $('pulseVal').textContent=(p.series&&p.series.length?p.series.at(-1).value:'—')+(p.delta!=null?` (${p.delta>=0?'+':''}${p.delta})`:'');
   pulseSVG(p.series);
@@ -865,7 +904,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   const coins=(detail&&detail.coins)||{};
   renderSigs();
   // ---- lazy spark backfill: a row the artifact left chartless pulls its own
-  // tape from Bitget public klines — 1h first, 5m fallback for thin history.
+  // tape from venue public klines — 1h first, 5m fallback for thin history.
   // Writes land in the DATA model (s.spark / coin spark), not just the DOM —
   // the 30s re-render would wipe a DOM-only injection and discard in-flight
   // fetches into detached nodes. A cached spark survives every render.
@@ -879,7 +918,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     if(!sym||SPARK_INFLIGHT.has(sym))return;
     SPARK_INFLIGHT.add(sym);
     try{
-      const pull=g=>fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=${g}&limit=48`).then(r=>r.json()).then(j=>(j.data||[]).map(k=>+k[4]).reverse());
+      const pull=g=>mdCandles(sym,g,48).then(rows=>rows.map(k=>+k[4]));
       let cl=await pull('1H'),tf='1h';
       if(cl.length<20){const c5=await pull('5m');if(c5.length>cl.length){cl=c5;tf='5m';}}
       if(cl.length>1){
@@ -975,7 +1014,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const f=v=>v==null?'—':(v>=0?'+':'')+v+'%';
       const cls=v=>v==null?'':v>=0?'up':'dn';
       $('benchVs').innerHTML=[
-        ['Sentinel engine',bench.sentinelPct,'real Bitget account equity · since first observation'],
+        ['Sentinel engine',bench.sentinelPct,`real ${VTITLE()} account equity · since first observation`],
         ['BTC buy & hold',bench.btcHoldPct,'the benchmark to beat'],
         ['BTC/ETH/SOL basket',bench.basketHoldPct,'equal-weight passive'],
         ['Naive top-3 board',bench.naiveBoardPct,`mechanical 1h holds · ${bench.naiveRuns||0} runs`],
@@ -1093,7 +1132,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         // veto at range 92% explains itself without reading the scanner
         const rj=(src.rejects||[]).map(r=>`· <span class="sub">rejected</span> ${r.symbol} ${r.direction} <span class="sub">${(r.gates||[]).join(', ')}${r.rangePosition!=null?` · range ${Math.round(r.rangePosition*100)}%`:''}${r.changePct!=null?` · 24h ${r.changePct>=0?'+':''}${r.changePct}%`:''}</span>`);
         if((src.manualHoldStale||[]).length)rj.unshift(`· <span class="sub" style="color:var(--warn,#ffd166)">stale manual-hold on flat ${src.manualHoldStale.join(',')} — future entries on it go unmanaged</span>`);
-        $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+a),...rj,...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+e+'</span>')].join('<br>');
+        $('liveActs').innerHTML=[...(src.actions||[]).map(a=>'· '+errTxt(a)),...rj,...(src.errors||[]).map(e=>'<span style="color:var(--red)">ERR '+errTxt(e)+'</span>')].join('<br>');
 
         // ---- liquidation guard — per-position distance-to-liq ladder +
         // the trim history, straight from the guard's own api artifact
@@ -1186,8 +1225,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       $('thMood').innerHTML='<b style="color:'+mc+';letter-spacing:.15em;font-size:12px">&#9679; '+thR.mood+'</b>';
       $('thHead').textContent=thR.headline;
       const tm=t=>{const s=Math.max(0,(Date.now()-t)/1e3);return s<90?Math.round(s)+'s ago':s<5400?Math.round(s/60)+'m ago':Math.round(s/3600)+'h ago'};
-      $('thNow').innerHTML=(thR.now||[]).map(t=>'<div class="thitem thnow"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(t.text)+'</span></div>').join('');
-      $('thFeed').innerHTML=(thR.feed||[]).slice(0,12).map(t=>'<div class="thitem"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(t.text)+'</span><span class="thtm">'+(t.ts?tm(t.ts):'')+'</span></div>').join('');
+      $('thNow').innerHTML=(thR.now||[]).map(t=>'<div class="thitem thnow"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(errTxt(t.text))+'</span></div>').join('');
+      $('thFeed').innerHTML=(thR.feed||[]).slice(0,12).map(t=>'<div class="thitem"><span class="thic">'+esc(t.icon)+'</span><span class="thtx">'+esc(errTxt(t.text))+'</span><span class="thtm">'+(t.ts?tm(t.ts):'')+'</span></div>').join('');
     }
     // ---- hypothesis engine: falsifiable claims, evidence-scored ----
     const stCol2={SUPPORTED:'var(--grn)',REFUTED:'var(--red)','EARLY SIGNAL':'var(--warn,#ffd166)',SUGGESTIVE:'var(--warn,#ffd166)',WEAKENING:'var(--red)',UNTESTED:'var(--mut)',MIXED:'var(--mut)'};
@@ -1238,7 +1277,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
   if(funding&&funding.best){
     const co=ledger&&ledger.stats&&ledger.stats.discipline?ledger.stats.discipline.carryOpen:null;
     const feeds=sent&&sent.feeds?sent.feeds:{};
-    const feedStr=`feeds: bitget <b class="up">live</b> · coingecko <b class="up">live</b> · coinglass <b class="${feeds.coinglass==='live'?'up':'dn'}">${feeds.coinglass||'no-key'}</b> · lunarcrush <b class="${feeds.lunarcrush==='live'?'up':'dn'}">${feeds.lunarcrush||'no-key'}</b> · cryptopanic <b class="${feeds.cryptopanic==='live'?'up':'dn'}">${feeds.cryptopanic||'no-key'}</b> · cmc <b class="${feeds.coinmarketcap==='live'?'up':'dn'}">${feeds.coinmarketcap||'no-key'}</b> · cmc-cal <b class="${feeds.coinmarketcal==='live'?'up':'dn'}">${feeds.coinmarketcal||'no-key'}</b>`;
+    const feedStr=`feeds: ${VEX} <b class="up">live</b> · coingecko <b class="up">live</b> · coinglass <b class="${feeds.coinglass==='live'?'up':'dn'}">${feeds.coinglass||'no-key'}</b> · lunarcrush <b class="${feeds.lunarcrush==='live'?'up':'dn'}">${feeds.lunarcrush||'no-key'}</b> · cryptopanic <b class="${feeds.cryptopanic==='live'?'up':'dn'}">${feeds.cryptopanic||'no-key'}</b> · cmc <b class="${feeds.coinmarketcap==='live'?'up':'dn'}">${feeds.coinmarketcap||'no-key'}</b> · cmc-cal <b class="${feeds.coinmarketcal==='live'?'up':'dn'}">${feeds.coinmarketcal||'no-key'}</b>`;
     const crowded=sent&&sent.assets?Object.entries(sent.assets).filter(([a,x])=>x.crowding&&x.crowding!=='balanced'):[];
     const crowdStr=crowded.length?' · '+crowded.slice(0,6).map(([a,x])=>`<b class="${x.crowding==='longs-crowded'?'dn':'up'}">${a}</b> ${x.crowding==='longs-crowded'?'longs crowded':'shorts crowded'}${x.oiUsd?' · OI $'+(x.oiUsd/1e6).toFixed(0)+'M':''}`).join(' · '):'';
     $('carryStats').innerHTML=(co?`open positions: <b class="up">${co.earn} earning carry</b> · <b class="dn">${co.pay} paying carry</b> · modeled fees paid $${ledger.stats.discipline.feesPaidUsd??0} USD · `:'')+`rates as of ${ago(Date.parse(funding.refreshedAt))} ago · ${feedStr}${crowdStr}`;
@@ -1371,9 +1410,7 @@ async function candlesFor(asset,fromMs,toMs,gran){
   const out=[],seen=new Set();
   let cur=Math.round(fromMs);
   for(let page=0;page<5&&cur<toMs;page++){
-    const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${cur}&endTime=${Math.round(toMs)}&limit=200`);
-    const j=await r.json();
-    const raw=j.data||[];
+    const raw=await mdCandles(asset+'USDT',gran||'1H',200,cur,toMs).catch(()=>[]);
     const rows=raw.map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4],v:+c[5]}))
       .sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
     if(!rows.length)break;
