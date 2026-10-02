@@ -2594,6 +2594,15 @@ async function main() {
   // strongest open positions — pyramiding winners, NEVER averaging losers.
   if (!protectionHalted && !cmdFlat && marginFree > TOPUP_FLOOR_USD) {
     const capUsd = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
+    // pyramiding throttle: persisted because rapid mode respawns the process
+    // each cycle. One add per position per window, and only while the trade
+    // keeps paying (upl above the last add's mark). Without it the loop
+    // churns — observed on the Bybit book: ~10 adds/trims in an hour.
+    const TOPUP_GAP_MS = +(process.env.SENTINEL_TOPUP_GAP_MS || 15 * 60e3);
+    const throttlePath = path.join(__dirname, '..', 'state', `topup-throttle${BOOK_TAG}.json`);
+    let throttle = {};
+    try { throttle = JSON.parse(fs.readFileSync(throttlePath, 'utf8')); } catch {}
+    let throttleDirty = false;
     const winners = [...posBySym.values()]
       .filter((p) => +p.upl > 0 && !MANUAL.has(p.symbol) && !DENY_SYMS.has(p.symbol) && (p.marginMode || '') !== 'crossed')
       .sort((a, b) => (b.upl / (b.size * b.entry)) - (a.upl / (a.size * a.entry)))
@@ -2606,16 +2615,26 @@ async function main() {
         const px = +(t0?.lastPr || t0?.markPr || 0);
         if (!(px > 0)) continue;
         const lev = Math.max(1, Math.min(+p.lev || 10, +(process.env.SENTINEL_MAX_LEV || 40)));
-        // the cap is per-position TOTAL margin — subtract what's already
-        // posted so a big position can't pyramid past it. All remaining
-        // free margin flows to the strongest winner first: no asymptotic
-        // idle split like the old /winners.length math
-        const room = Math.max(0, capUsd - (+p.margin || 0));
+        // room is measured with the SAME ruler the margin-rebalance gate
+        // uses (size*entry/lev), not the exchange-reported marginSize: on
+        // cross-margin venues positionIM diverges from posted margin during
+        // flux, so top-up saw room where rebalance saw excess and the two
+        // fought every cycle — buy ~$1.2k notional, trim it back, repeat.
+        // Same ruler => top-up can never push past what rebalance tolerates.
+        const levNow = Math.max(1, p.lev || 1);
+        const marginEst = (p.size * p.entry) / levNow;
+        const room = Math.max(0, capUsd - marginEst);
+        if (room <= Math.max(0.5, capUsd * 0.15)) continue; // at cap — same tolerance as rebalance
+        const lt = throttle[p.symbol];
+        if (lt && Date.now() - lt.ts < TOPUP_GAP_MS) continue;
+        if (lt && +p.upl <= +lt.upl) continue; // add only while the trade keeps improving
         const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3); // same fee headroom as entries
         const size = sizeFor(cm, p.symbol, marginUsd * lev, px);
         if (!size) { state.actions.push(`${p.symbol}: top-up skipped — below contract minimum`); continue; }
         await marketOrder(p.symbol, p.side === 'short' ? 'sell' : 'buy', size, 'open');
         marginFree -= marginUsd;
+        throttle[p.symbol] = { ts: Date.now(), upl: +p.upl };
+        throttleDirty = true;
         // top-ups are real entries — journal them so dedup, rate stats and
         // the calibration layer count the deployment, strategy:'top-up'
         // keeps them separable from signal entries
@@ -2625,9 +2644,11 @@ async function main() {
           mktType: (plan?.mktType) ?? null,
         });
         p.margin = (+p.margin || 0) + marginUsd;
+        p.size += +size || 0; // keep the in-cycle ruler honest on repeat adds
         state.actions.push(`➕ top-up ${p.symbol}: +${size} ${p.side} @~${px} — deployed leftover margin (upl ${round(p.upl, 2)})`);
       } catch (e) { state.errors.push(`➕ top-up ${p.symbol}: ${e.message}`); }
     }
+    if (throttleDirty) try { fs.writeFileSync(throttlePath, JSON.stringify(throttle)); } catch {}
   }
   // idle-margin explainer: capital left undeployed carries its reason on
   // the ledger — the dashboard answers "why is money sitting" itself
