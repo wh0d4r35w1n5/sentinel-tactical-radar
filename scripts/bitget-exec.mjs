@@ -48,11 +48,15 @@ const writeJson = (file, obj) => {
 const MODE = (process.env.SENTINEL_EXEC || 'off').toLowerCase();
 // credentials live inside the exchange adapter — SENTINEL_EXCHANGE picks the
 // driver; each env reads its own *_API_KEY/SECRET(+PASSPHRASE) set.
+const X = makeExchange(process.env);
+// each exchange book is its own epoch: bybit demo fills/vault/peaks must
+// never blend into the bitget record (stats would lie about both books).
+const BOOK_TAG = X.name === 'bitget' ? '' : `-${X.name}`;
 const LIVE_ARMED =
   process.env.SENTINEL_LIVE === '1' && process.env.CONFIRM_LIVE === 'YES';
 // mode-scoped fills journal: demo/paper fills must never contaminate the
 // live loss record (breakers, streak cooldowns, digest all read this).
-const FILLS_FILE = MODE === 'demo' ? 'demo-fills.json' : 'real-fills.json';
+const FILLS_FILE = MODE === 'demo' ? `demo-fills${BOOK_TAG}.json` : 'real-fills.json';
 // SENTINEL_FILLS_SINCE_MS — test epoch: exchange fills older than this are
 // pre-test account history — never journaled, never counted by breakers,
 // streaks, cooldowns or rate caps. Lets a shared demo account run a clean
@@ -92,7 +96,7 @@ const VAULT_SHARE = Math.min(0.9, Math.max(0, +(process.env.SENTINEL_VAULT_SHARE
 // has no wallet layer (endpoint 404s, demo keys are futures-scoped), so
 // accounting carve-out is the only possible behavior there.
 const VAULT_TRANSFER = MODE !== 'demo' && process.env.SENTINEL_VAULT_TRANSFER === '1';
-const VAULT_PATH = path.join(__dirname, '..', 'state', 'wealth-vault.json');
+const VAULT_PATH = path.join(__dirname, '..', 'state', `wealth-vault${BOOK_TAG}.json`);
 const loadVault = () => {
   try { return { balanceUsd: 0, sweptIds: {}, sweeps: [], ...JSON.parse(fs.readFileSync(VAULT_PATH, 'utf8')) }; }
   catch { return { balanceUsd: 0, sweptIds: {}, sweeps: [] }; }
@@ -253,7 +257,6 @@ const round = (x, p = 6) => +(+x).toFixed(p);
 // All wire ops delegate to scripts/exchange/ — SENTINEL_EXCHANGE selects the
 // driver (bitget default, bybit for V5). Aliases keep every call site below
 // unchanged; the adapters return identical normalized shapes.
-const X = makeExchange(process.env);
 const getPos = () => X.getPos();
 const getAccount = () => X.getAccount();
 const getPlans = (symbol) => X.getPlans(symbol);
@@ -692,7 +695,7 @@ async function main() {
   // mode-scoped DD tape: demo equity must never contaminate the live
   // drawdown series — a $10k demo peak against a $6 live book reads as a
   // permanent ~99.9% wipeout and trips every DD rail on return to live.
-  const peakPath = path.join(__dirname, '..', 'state', `equity-peak-${MODE}.json`);
+  const peakPath = path.join(__dirname, '..', 'state', `equity-peak-${MODE}${BOOK_TAG}.json`);
   let eqTrack = { peak: equityUsd, samples: [], deposits: 0, lastEq: 0, lastUpl: 0 };
   try {
     const prior = JSON.parse(fs.readFileSync(peakPath, 'utf8'));

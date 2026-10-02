@@ -24,7 +24,8 @@ const episodes = (() => {
 })();
 const seen = new Set();
 const closes = [];
-for (const f of ['real-fills.json', 'real-fills.live-archive.json', 'demo-fills.pretest.json', 'demo-fills.json']) {
+for (const f of ['real-fills.json', 'real-fills.live-archive.json', 'demo-fills.pretest.json',
+    ...fs.readdirSync(S('.')).filter((f) => /^demo-fills.*\.json$/.test(f))]) {
   try {
     for (const x of JSON.parse(fs.readFileSync(S(f), 'utf8')).fills || []) {
       if (x.tradeSide !== 'close') continue;

@@ -50,9 +50,13 @@ const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
 // mode-scoped fills journal — demo fills/cooldowns must never read the
 // live loss record (and vice versa).
+const BOOK_TAG =
+  (process.env.SENTINEL_EXCHANGE || 'bitget').toLowerCase() === 'bitget'
+    ? ''
+    : `-${(process.env.SENTINEL_EXCHANGE || '').toLowerCase()}`;
 const FILLS_FILE =
   (process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo'
-    ? 'demo-fills.json'
+    ? `demo-fills${BOOK_TAG}.json`
     : 'real-fills.json';
 // test epoch: fills older than this are pre-test history on a shared
 // demo account — excluded from cooldowns and journal pairing.
@@ -2487,7 +2491,8 @@ async function main() {
       const live = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
       // the executor scopes its DD tape by mode — read the tape matching the
       // ledger's mode so demo equity can't read as a live wipeout
-      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', `equity-peak-${live.mode || 'live'}.json`), 'utf8'));
+      const bookTag = (live.exchange || 'bitget') === 'bitget' ? '' : `-${live.exchange}`;
+      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', `equity-peak-${live.mode || 'live'}${bookTag}.json`), 'utf8'));
       if (peakFile.peak > 0 && live.equityUsd > 0)
         return ((peakFile.peak - live.equityUsd) / peakFile.peak) * 100;
     } catch {}

@@ -59,6 +59,24 @@
 - SQN = position-level `netUsd/riskUsd`; needs n>=30 for a trustworthy
   estimate. Ledger resets are normal — demo-fills.json is the journal.
 
+## Exchange drivers
+
+- `SENTINEL_EXCHANGE=bitget` (default) or `bybit` — scripts/exchange/
+  adapters normalize both into identical internal shapes; the executor,
+  journal, stats, and catalog gate don't care which driver is active.
+- Per-exchange demo state: bybit demo writes `demo-fills-bybit.json`,
+  `wealth-vault-bybit.json`, `equity-peak-demo-bybit.json` — books never mix.
+- Bybit demo: `api-demo.bybit.com`, keys minted in demo.bybit.com (no
+  passphrase). Demo mode hard-refuses a mainnet BYBIT_API_HOST.
+- Verify a new driver before any real cycle:
+  `SENTINEL_EXEC=demo SENTINEL_EXCHANGE=bybit node scripts/exchange/verify-demo.mjs [--write]`
+- Not yet ported: scanner market data (still Bitget public feeds), liq-guard
+  WS, force-trade/force-near ops tools.
+- Live-phase addition: Bybit vault sweep routes UNIFIED->FUND — the funding
+  account backs the Bybit Card, so `SENTINEL_VAULT_SHARE` sweeps become
+  card-spendable. Card spends drain FUND outside the bot's view — reconcile
+  the vault ledger against actual FUND balance, not just sweptIds.
+
 ## Credentials
 
 - `/opt/sentinel/.env` contains live Bitget keys — never echo, never commit,

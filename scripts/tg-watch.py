@@ -455,7 +455,8 @@ async def main():
 
     def fills_file():
         ll = api("live-ledger") or {}
-        return statef("demo-fills" if ll.get("mode") == "demo" else "real-fills") or {}
+        tag = "" if ll.get("exchange", "bitget") == "bitget" else "-" + ll.get("exchange", "")
+        return statef(f"demo-fills{tag}" if ll.get("mode") == "demo" else "real-fills") or {}
 
     def c_fills():
         fs = (fills_file().get("fills") or [])[:8]  # journal is newest-first
@@ -470,8 +471,9 @@ async def main():
         return "\n".join(out)
 
     def c_vault():
-        v = statef("wealth-vault") or {}
         ll = api("live-ledger") or {}
+        tag = "" if ll.get("exchange", "bitget") == "bitget" else "-" + ll.get("exchange", "")
+        v = statef(f"wealth-vault{tag}") or {}
         sw = (v.get("sweeps") or [])[-5:]
         out = ["<b>🏦 WEALTH VAULT</b>", "─────────────────────",
                f"Locked: <b>${fmtp(v.get('balanceUsd'))}</b> — untouchable, 50% of every profitable close",
@@ -1099,7 +1101,8 @@ async def main():
         cb = ll.get("circuitBreakers") or {}
         pv = [(r.get("v") if isinstance(r, dict) else r) for r in ((api("pulse-history") or {}).get("runs") or [])][-20:]
         alert = "🚨 HALTED" if (statef("cmd-halt") or {}).get("halted") else ("⚠️ " + esc(str(cb.get("tripped"))[:30]) if cb.get("tripped") else "✅ armed")
-        vv = statef("wealth-vault") or {}
+        _tag = "" if (ll.get("exchange", "bitget") == "bitget") else "-" + ll.get("exchange", "")
+        vv = statef(f"wealth-vault{_tag}") or {}
         return ("<b>🛰 SENTINEL LIVE HUD</b>\n"
                 f"💵 ${fmtp(eq_usd)} · upl <b>${upl:+.2f}</b> · 🏦 ${fmtp(ll.get('vaultUsd') or vv.get('balanceUsd'))}\n"
                 f"<code>{spark(pv)}</code>\n"
@@ -1212,9 +1215,10 @@ async def main():
                     await say(f"🧠 <b>EDGE DEATH — CUSUM FIRED</b>\nS={round(ed.get('S',0),2)} crossed h={round(ed.get('h',0),1)} at n={ed.get('n')}\n"
                               "<i>the tape stopped paying — risk pinned to floor</i>")
                 try:
-                    vs = len(((statef("wealth-vault") or {}).get("sweptIds") or {}))
+                    _tag = "" if (api("live-ledger") or {}).get("exchange", "bitget") == "bitget" else "-" + (api("live-ledger") or {}).get("exchange", "")
+                    vs = len(((statef(f"wealth-vault{_tag}") or {}).get("sweptIds") or {}))
                     if prev_vault is not None and vs > prev_vault:
-                        await say(f"🏦 <b>VAULT SWEEP</b> — {vs - prev_vault} fill(s) taxed 50% → vault <b>${fmtp((statef('wealth-vault') or {}).get('balanceUsd'))}</b> locked")
+                        await say(f"🏦 <b>VAULT SWEEP</b> — {vs - prev_vault} fill(s) taxed 50% → vault <b>${fmtp((statef(f'wealth-vault{_tag}') or {}).get('balanceUsd'))}</b> locked")
                     prev_vault = vs
                 except Exception:
                     pass

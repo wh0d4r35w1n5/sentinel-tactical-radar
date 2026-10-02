@@ -52,7 +52,8 @@ for (const [rel, ent] of Object.entries(files)) {
 // deep verify: per-fill fcrc inside the fills journals — a tampered or
 // corrupted record fails its own checksum even if the file's does not
 const fillAudit = {};
-for (const jf of ['demo-fills.json', 'real-fills.json']) {
+for (const jf of ['real-fills.json',
+    ...fs.readdirSync(S('.')).filter((f) => /^demo-fills.*\.json$/.test(f))]) {
   try {
     const j = JSON.parse(fs.readFileSync(S(jf), 'utf8'));
     const bad = [];
