@@ -1367,7 +1367,23 @@ async function main() {
       // re-splits the TP next cycle.
       const sp = Math.pow(10, cm[p.symbol]?.sizePlace ?? 4);
       const sizeStr = String(Math.floor(p.size * sp) / sp);
-      const planQty = existing.reduce((a, x) => a + (+x.size || 0), 0);
+      // Bitget counts CUMULATIVE pending plan qty against the position, so
+      // the drift guard sums every sized leg. Bybit reduce-only conditionals
+      // don't reserve position qty — there the defect is only a stop quoting
+      // more than the live book (stale oversized leg). Counting profit legs
+      // into the budget made a full-size stop + a partial TP ladder read as
+      // permanent drift (1.12 vs 0.8) and resynced every cycle forever.
+      const lossQty = existing
+        .filter((x) => /loss|stop|moving/i.test(x.planType || ''))
+        .reduce((a, x) => a + (+x.size || 0), 0);
+      const profitQty = existing
+        .filter((x) => /profit/i.test(x.planType || ''))
+        .reduce((a, x) => a + (+x.size || 0), 0);
+      // On Bybit only the LOSS side can over-cover — TP legs are a sized
+      // subset of the same position (reduce-only, capped at fill), so a
+      // full-size stop + a partial ladder is a valid 1.12-quoted book, not
+      // drift. Summing them resynced every cycle forever.
+      const planQty = X.name === 'bitget' ? lossQty + profitQty : lossQty;
       const planDrift =
         p.size > 0 &&
         (planQty > p.size * 1.001 ||
@@ -1411,15 +1427,23 @@ async function main() {
             Number.isFinite(+lossPlan.size) && +lossPlan.size >= p.size * 0.999;
           if (!lossPlan || sizedLoss) {
             const newTrig = trig || round(p.entry * (1 - (sgn * stopPct) / 100), pp0);
-            let placed = false;
-            try {
-              await planWithRetry(() =>
-                planOrder(p.symbol, 'pos_loss', newTrig, '0', p.side, p.marginMode));
-              placed = true;
-            } catch (e) {
-              if (!sizedLoss) throw e;
-              state.errors.push(`resync ${p.symbol}: second pos_loss refused (${e.message}) — swapping stale leg`);
-            }
+            // if a whole-position stop already covers this trigger, the only
+            // defect is the redundant sized leg — cancel it and skip the
+            // place entirely. Re-placing gets '34040 not modified' forever
+            // (observed: ZEC pos_loss at the same trigger refused every cycle).
+            const covered = sizedLoss && existing.some((x) =>
+              x.planType === 'pos_loss' &&
+              Math.abs(+x.triggerPrice - newTrig) <= p.entry * 0.0005);
+            let placed = covered;
+            if (!covered)
+              try {
+                await planWithRetry(() =>
+                  planOrder(p.symbol, 'pos_loss', newTrig, '0', p.side, p.marginMode));
+                placed = true;
+              } catch (e) {
+                if (!sizedLoss) throw e;
+                state.errors.push(`resync ${p.symbol}: second pos_loss refused (${e.message}) — swapping stale leg`);
+              }
             if (sizedLoss) {
               const id = lossPlan.orderId || lossPlan.planId || lossPlan.id;
               await cancelPlanOrders(p.symbol, lossPlan.planType, [String(id)]).catch(() => {});
