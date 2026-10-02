@@ -120,12 +120,11 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
   // ---------- account / positions ----------
   const getAccount = async () => {
     const r = await api('GET', '/v5/account/wallet-balance', {
-      qs: `accountType=${ACCT}&coin=USDT`,
+      qs: `accountType=${ACCT}`,
     });
     const a = (r?.list || [])[0] || {};
-    const coin = (a.coin || []).find((c) => c.coin === 'USDT') || {};
-    const equity = +(coin.equity ?? a.totalEquity ?? 0);
-    const avail = +(coin.availableToWithdraw ?? coin.availableBalance ?? 0);
+    const equity = +(a.totalEquity ?? 0);
+    const avail = +(a.totalAvailableBalance || a.totalWalletBalance || 0);
     return { equity, available: avail, isoMax: avail, crossMax: avail };
   };
 
@@ -183,8 +182,10 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
           body: { category: CAT, symbol, tradeMode: 1, buyLeverage: lev, sellLeverage: lev },
         });
       } catch (e) {
-        // 110026/110043 = already isolated at this lev — fall through to set-leverage
-        if (!/110026|110043/.test(e.message)) throw e;
+        // 110026/110043 = already isolated at this lev — fall through to set-leverage;
+        // 10032 = demo sandbox doesn't support isolated margin — positions run
+        // cross there; protection paths don't depend on margin mode.
+        if (!/110026|110043|10032/.test(e.message)) throw e;
       }
     }
     return api('POST', '/v5/position/set-leverage', {
@@ -255,7 +256,12 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
 
   const tradingStop = (symbol, fields, holdSide) =>
     api('POST', '/v5/position/trading-stop', {
-      body: { category: CAT, symbol, positionIdx: POS_IDX, tpslMode: 'Full', ...fields },
+      body: {
+        category: CAT, symbol, tpslMode: 'Full',
+        // positionIdx targets the POSITION: hedge long=1/short=2, oneway=0
+        positionIdx: POS_MODE === 'hedge' ? (holdSide === 'long' ? 1 : 2) : POS_IDX,
+        ...fields,
+      },
     });
 
   const planOrder = async (symbol, planType, triggerPrice, size, holdSide, marginMode) => {
@@ -263,7 +269,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
       const isSl = planType === 'pos_loss';
       return tradingStop(symbol, isSl
         ? { stopLoss: String(triggerPrice), slTriggerBy: 'MarkPrice' }
-        : { takeProfit: String(triggerPrice), tpTriggerBy: 'MarkPrice' });
+        : { takeProfit: String(triggerPrice), tpTriggerBy: 'MarkPrice' }, holdSide);
     }
     if (planType === 'moving_plan') {
       // Bitget moving_plan ≈ Bybit position trailing stop. triggerPrice
@@ -272,7 +278,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
       return tradingStop(symbol, {
         trailingStop: String(triggerPrice),
         slTriggerBy: 'MarkPrice',
-      });
+      }, holdSide);
     }
     // sized legs (profit_plan / loss_plan) → conditional reduceOnly order.
     // Direction: TP on a long fires when price RISES; SL on a long when it
@@ -292,7 +298,6 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
       triggerPrice: String(triggerPrice),
       triggerDirection: rise ? 1 : 2,
       triggerBy: 'MarkPrice',
-      orderFilter: 'tpslOrder',
       ...(isProfit ? { price: String(triggerPrice) } : {}),
     };
     return api('POST', '/v5/order/create', { body });

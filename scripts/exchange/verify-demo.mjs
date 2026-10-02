@@ -104,8 +104,12 @@ if (after) {
   for (const pl2 of await X.getPlans(pick))
     await X.cancelPlanOrders(pick, pl2.planType, [pl2.orderId]).catch(() => {});
 
-  const f2 = await X.getFills();
-  const mine = f2.filter((f) => f.symbol === pick && Date.now() - +f.cTime < 120e3);
+  let mine = [];
+  for (let i = 0; i < 8 && mine.length < 2; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 3000));
+    mine = (await X.getFills()).filter(
+      (f) => f.symbol === pick && Date.now() - +f.cTime < 120e3);
+  }
   ok('fills journaled', mine.length >= 2, `${mine.length} fills`);
 }
 
