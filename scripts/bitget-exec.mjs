@@ -974,13 +974,13 @@ async function main() {
   // entry the close joins back to (top-ups carry no riskUsd so they never
   // split a position); fills with no joinable entry cluster into
   // 'campaign' buckets by (symbol, close-side) — coarse but honest.
-  const groupIntoPositions = (rows, entries, netFn, openIds) => {
-    // epoch boundary = journaled instrumentation. A close is in-epoch when
-    // it joins an entriesLog entry (risk anchor, 24h retention) OR shares a
-    // tradeId with a journaled open fill (permanent). Campaign closes with
-    // neither = pre-epoch legacy positions — opened under a different
-    // sizing regime (pre equity-anchor, e.g. the raw ~$6k demo book) —
-    // real dollars on the ledger but not this model's record.
+  const groupIntoPositions = (rows, entries, netFn, epochTs) => {
+    // epoch boundary = journal's first instrumented OPEN fill (permanent
+    // marker — entriesLog only retains 24h and fill tradeIds are per-leg
+    // unique, so neither can carry the boundary). Campaign groups whose
+    // closes all precede it = pre-epoch legacy positions — opened under a
+    // different sizing regime (pre equity-anchor ~$6k raw book) — real
+    // dollars on the ledger but not this model's record.
     const groups = new Map();
     for (const f of rows) {
       const fTs = +(f.ts || f.cTime || 0);
@@ -988,17 +988,14 @@ async function main() {
         (e) => e.symbol === f.symbol && e.ts <= fTs && e.riskUsd > 0
       ).pop();
       const key = ent ? `pos:${f.symbol}:${ent.ts}` : `campaign:${f.symbol}:${f.side}`;
-      const journaled = !!ent || (openIds && f.tradeId && openIds.has(f.tradeId));
-      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, firstTs: Infinity, lastTs: 0, journaled: false };
+      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0 };
       g.fills += 1;
       g.netUsd += netFn(f);
-      if (journaled) g.journaled = true;
-      g.firstTs = Math.min(g.firstTs, fTs);
       g.lastTs = Math.max(g.lastTs, fTs);
       groups.set(key, g);
     }
     for (const g of groups.values())
-      g.preEpoch = g.key.startsWith('campaign:') && !g.journaled;
+      g.preEpoch = g.key.startsWith('campaign:') && Number.isFinite(epochTs) && g.lastTs < epochTs;
     return [...groups.values()].sort((a, b) => b.lastTs - a.lastTs); // newest-first, like the journal
   };
 
@@ -1024,8 +1021,9 @@ async function main() {
     // 6-leg trim ladder used to read as 6/6 wins and could hold the
     // win-rate breaker open through a bleed — the same flattery bug in
     // reverse. Groups are newest-first like the journal.
-    const openIds = new Set(fills.filter((f) => f.tradeSide === 'open').map((f) => f.tradeId));
-    const posAll = groupIntoPositions(closes, state.entriesLog, (f) => (+f.profit || 0) - (+f.fee || 0), openIds);
+    const openTs = fills.filter((f) => f.tradeSide === 'open').map((f) => +f.ts || Infinity);
+    const epochTs = openTs.length ? Math.min(...openTs) : Infinity;
+    const posAll = groupIntoPositions(closes, state.entriesLog, (f) => (+f.profit || 0) - (+f.fee || 0), epochTs);
     // pre-epoch positions (opened before journaled entries existed — e.g.
     // legacy fills from the pre-equity-anchor ~$6k book) are real dollars
     // but not THIS model's record — they can't trip or defend the breakers.
@@ -3012,8 +3010,9 @@ async function main() {
         profitFactor: gL > 0 ? round(gW / gL, 2) : null,
       };
     };
-    const openIds = new Set(store.fills.filter((f) => f.tradeSide === 'open').map((f) => f.tradeId));
-    const posGroups = groupIntoPositions(netCloses, state.entriesLog, netOfFee, openIds);
+    const openTs = store.fills.filter((f) => f.tradeSide === 'open').map((f) => +f.ts || Infinity);
+    const epochTs = openTs.length ? Math.min(...openTs) : Infinity;
+    const posGroups = groupIntoPositions(netCloses, state.entriesLog, netOfFee, epochTs);
     state.realizedStats = {
       // scope: every close-side fill incl. foreign/manual fills — the raw
       // journal total. trades-taken.json episodes aggregate differently.
