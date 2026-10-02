@@ -164,11 +164,18 @@ if (ll) {
     `mode=${ll.mode}${ll.mode === 'live' ? ' (ARMED — real money)' : ''}`);
   // freshness: a live-mode ledger older than 5min means the executor died
   // mid-flight — mode:'live' on a stale file is the lie this audit exists
-  // to catch
+  // to catch. But ledger age isn't loop liveness: a multi-minute scan phase
+  // starves the ledger legitimately. The rapid heartbeat (written at loop
+  // top) is the real signal; ledger age is the fallback when unwritten.
   if (ll.mode === 'live' || ll.mode === 'demo') {
     const la = ageMin(Date.parse(ll.refreshedAt || 0));
-    add('exec-alive', la > 5 ? 'FAIL' : 'PASS',
-      `live-ledger ${Number.isFinite(la) ? la.toFixed(1) : '∞'}min old${ll.cycleMs != null ? ` · cycle ${ll.cycleMs}ms` : ''}`);
+    let hb = Infinity;
+    try {
+      hb = ageMin(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'rapid-heartbeat.json'), 'utf8')).ts);
+    } catch {}
+    const alive = fin(hb) ? hb <= 10 : la <= 5;
+    add('exec-alive', alive ? 'PASS' : 'FAIL',
+      `heartbeat ${fin(hb) ? hb.toFixed(1) : '∞'}min · live-ledger ${Number.isFinite(la) ? la.toFixed(1) : '∞'}min old${ll.cycleMs != null ? ` · cycle ${ll.cycleMs}ms` : ''}`);
   }
   add('exec-errors', (ll.errors || []).length ? 'WARN' : 'PASS',
     (ll.errors || []).length ? ll.errors.slice(0, 4).join(' · ') : 'clean run, zero errors');

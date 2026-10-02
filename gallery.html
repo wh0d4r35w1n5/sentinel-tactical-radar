@@ -96,10 +96,14 @@ details.xtab th{font-size:8px;letter-spacing:.1em;color:var(--mut)}
 <div class="filters" id="filters2" style="margin-top:-10px"></div>
 <div id="gallery"></div>
 <button id="loadmore" style="display:none">LOAD MORE ▾</button>
-<div class="note">data: Bitget USDT-M fills · reconstructed FIFO episodes — staggered exits merge into one trade · fees included · no paper, no emitted-only signals</div>
+<div class="note">data: <span id="vNote">Bitget</span> USDT-M fills · reconstructed FIFO episodes — staggered exits merge into one trade · fees included · no paper, no emitted-only signals</div>
 </div>
 <script>
 const API='api/';
+// venue: live-ledger.exchange is authoritative — same contract as index
+let VEX='bitget';
+const VTITLE=()=>VEX==='bybit'?'Bybit':'Bitget';
+const VLINK=s=>VEX==='bybit'?`https://www.bybit.com/trade/usdt/${s}`:`https://www.bitget.com/futures/usdt/${s}`;
 const j=u=>fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
 const fmtP=p=>p==null?'—':p>=100?p.toFixed(1):p>=1?p.toFixed(3):p.toPrecision(4);
 const fmt$=v=>v==null?'—':(v>=0?'+':'−')+'$'+Math.abs(v).toFixed(2);
@@ -109,9 +113,16 @@ const holdTxt=m=>m==null?'—':m>=60?(m/60).toFixed(1)+'h':Math.round(m)+'m';
 async function candlesFor(asset,fromMs,toMs,gran){
   const granMs=gran==='5m'?300e3:gran==='15m'?900e3:3600e3;
   const out=[],seen=new Set();let cur=Math.round(fromMs);
+  const iv={'5m':'5','15m':'15','1H':'60','4H':'240','1D':'D'};
   for(let page=0;page<5&&cur<toMs;page++){
-    const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${cur}&endTime=${Math.round(toMs)}&limit=200`);
-    const jj=await r.json();const raw=jj.data||[];
+    let raw=[];
+    if(VEX==='bybit'){
+      const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${asset}USDT&interval=${iv[gran]||'60'}&start=${cur}&end=${Math.round(toMs)}&limit=200`);
+      const jj=await r.json();raw=((jj.result&&jj.result.list)||[]).slice().reverse();
+    }else{
+      const r=await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${asset}USDT&productType=USDT-FUTURES&granularity=${gran||'1H'}&startTime=${cur}&endTime=${Math.round(toMs)}&limit=200`);
+      const jj=await r.json();raw=jj.data||[];
+    }
     const rows=raw.map(c=>({t:+c[0],o:+c[1],h:+c[2],l:+c[3],c:+c[4],v:+c[5]})).sort((a,b)=>a.t-b.t).filter(c=>!seen.has(c.t)&&seen.add(c.t));
     if(!rows.length)break;
     out.push(...rows);if(raw.length<200)break;cur=rows[rows.length-1].t+granMs;
@@ -242,8 +253,8 @@ async function mountCard(key){
     noteMeasured(r);
   }
   const eb=card.querySelector('[data-chb]'),ea=card.querySelector('[data-cha]');
-  if(eb){if(csB.length)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);else eb.innerHTML='<div class="cverr">tape unavailable — Bitget API unreachable</div>'}
-  if(ea){if(csA.length)drawChart(ea,e,csA,true);else ea.innerHTML='<div class="cverr">tape unavailable — Bitget API unreachable</div>'}
+  if(eb){if(csB.length)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);else eb.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
+  if(ea){if(csA.length)drawChart(ea,e,csA,true);else ea.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
   if(!csA.length){r.measureFailed=true;paintCap(r)}
 }
 function cardHTML(r){
@@ -275,7 +286,7 @@ function cardHTML(r){
       <span>fees <b class="dn">$${r.fees}</b></span><span>gross <b class="${r.pnl>=0?'up':'dn'}">${fmt$(r.pnl)}</b></span>
       <span>net <b class="${r.net>=0?'up':'dn'}">${fmt$(r.net)}</b>${r.pnlPct!=null?` (${r.pnlPct>=0?'+':''}${r.pnlPct}%)`:''}</span>
       ${r.note?`<span class="sub" style="font-style:italic" title="operator thesis">“${esc(r.note).slice(0,90)}”</span>`:''}
-      <a class="sub" style="margin-left:auto" href="https://www.bitget.com/futures/usdt/${r.symbol}" target="_blank" rel="noopener">Bitget chart →</a>
+      <a class="sub" style="margin-left:auto" href="${VLINK(r.symbol)}" target="_blank" rel="noopener">${VTITLE()} chart →</a>
     </div>
     <div class="tnote" data-nk="${r.key}">${noteHTML(r.key)}</div></div>`;
 }
@@ -404,6 +415,7 @@ function paintCap(r){
 document.getElementById('loadmore').onclick=()=>loadMore();
 (async()=>{
   const [tk,ll]=await Promise.all([j(API+'trades-taken.json'),j(API+'live-ledger.json')]);
+  if(ll&&ll.exchange){VEX=ll.exchange;const vn=document.getElementById('vNote');if(vn)vn.textContent=VTITLE();}
   RECS=((tk&&tk.trades)||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
   const st=(tk&&tk.stats)||{},done=RECS.filter(r=>r.exitTs);
   const wins=done.filter(r=>r.net>0),losses=done.filter(r=>r.net<=0);

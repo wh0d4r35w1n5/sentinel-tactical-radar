@@ -1828,6 +1828,22 @@ async function main() {
     let opened = 0;
     const openedSym = new Set(); // a dup symbol in the plan must not stack
 
+    // ---- operator mandate: LONGs only above BOTH EMA50 & EMA200 ----
+    // Regime levels come from the scanner's api/mtf.json (1H stack, real
+    // 200-period). Stale (>90min) or missing rows fail CLOSED — a long
+    // that can't prove it's above the stack doesn't place. Applies to
+    // operator setups and core-carry deploys; scanner signals already
+    // carry the same gate upstream.
+    const mtfDoc = (() => {
+      try {
+        const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'mtf.json'), 'utf8'));
+        return d && Date.now() - new Date(d.t).getTime() < 90 * 60e3 ? d : null;
+      } catch { return null; }
+    })();
+    const regimeOkLong = (sym, px) => {
+      const r = mtfDoc?.rows?.[String(sym).replace(/USDT$/i, '')]?.regime;
+      return !!(r && Number.isFinite(r.ema50) && Number.isFinite(r.ema200) && px > r.ema50 && px > r.ema200);
+    };
     // ---- operator setup queue (VEMA-style): state/cmd-setups.json ----
     // Operator-authored entries — market / bounce / break-and-retest —
     // evaluated here each cycle and injected into plan.orders with
@@ -1885,6 +1901,9 @@ async function main() {
         const last = await tickLast(sym);
         if (!(last > 0)) continue; // ticker unreadable — try next cycle
         s.lastPx = last;
+        // long mandate: operator rule applies to setups too — a long below
+        // the EMA50/200 stack stays armed but blocked until price recovers
+        if (s.direction === 'LONG' && !regimeOkLong(sym, last)) { s.blockedBy = 'below-ema50/200'; continue; }
         let go = false;
         if (s.mode === 'bounce') {
           // limit-style: long buys the pullback INTO the level, short
@@ -1950,6 +1969,7 @@ async function main() {
           const tk = await X.ticker(sym);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
           if (!(last > 0)) continue;
+          if (!regimeOkLong(sym, last)) continue; // long mandate: only above EMA50+EMA200
           plan.orders.push({
             symbol: sym, direction: 'LONG', refEntry: last,
             notionalUsd: round(marginFree, 2),
@@ -2638,6 +2658,9 @@ async function main() {
         const t0 = Array.isArray(tk) ? tk[0] : tk; // adapters return the array row shape
         const px = +(t0?.lastPr || t0?.markPr || 0);
         if (!(px > 0)) continue;
+        // long mandate: top-ups buy — a long below the EMA50/200 stack
+        // stops receiving adds until price is back above both
+        if (p.side !== 'short' && !regimeOkLong(p.symbol, px)) continue;
         const lev = Math.max(1, Math.min(+p.lev || 10, +(process.env.SENTINEL_MAX_LEV || 40)));
         // room is measured with the SAME ruler the margin-rebalance gate
         // uses (size*entry/lev), not the exchange-reported marginSize: on

@@ -196,35 +196,49 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     });
   };
 
+  // Callers use Bitget-style lowercase order sides; accept common title-case
+  // inputs too, but reject unknown values rather than accidentally routing a
+  // typo as a SELL (which could open the opposite position).
+  const normalizeOrderSide = (side) => {
+    const s = String(side || '').toLowerCase();
+    if (s === 'buy' || s === 'open_long') return 'Buy';
+    if (s === 'sell' || s === 'open_short') return 'Sell';
+    throw new Error(`unsupported order side: ${side}`);
+  };
+
   // ---------- orders ----------
-  const marketOrder = (symbol, side, size, intent, extra = {}) =>
-    api('POST', '/v5/order/create', {
+  const marketOrder = (symbol, side, size, intent, extra = {}) => {
+    const normalizedSide = normalizeOrderSide(side);
+    return api('POST', '/v5/order/create', {
       body: {
         category: CAT,
         symbol,
-        side: side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell',
+        side: normalizedSide,
         orderType: 'Market',
         qty: String(size),
-        positionIdx: idxFor(side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell', intent),
+        positionIdx: idxFor(normalizedSide, intent),
         ...(intent === 'close' ? { reduceOnly: true } : {}),
         ...extra,
       },
     });
+  };
 
-  const limitOrder = (symbol, side, size, price, extra = {}) =>
-    api('POST', '/v5/order/create', {
+  const limitOrder = (symbol, side, size, price, extra = {}) => {
+    const normalizedSide = normalizeOrderSide(side);
+    return api('POST', '/v5/order/create', {
       body: {
         category: CAT,
         symbol,
-        side: side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell',
+        side: normalizedSide,
         orderType: 'Limit',
         qty: String(size),
         price: String(price),
         timeInForce: 'PostOnly',
-        positionIdx: idxFor(side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell', 'open'),
+        positionIdx: idxFor(normalizedSide, 'open'),
         ...extra,
       },
     });
+  };
 
   const pendingOrders = async (symbol) => {
     const r = await api('GET', '/v5/order/realtime', {
@@ -408,20 +422,37 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     const r = await api('GET', '/v5/execution/list', {
       qs: `category=${CAT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
     });
-    return (r?.list || []).map((f) => ({
-      tradeId: f.execId,
-      orderId: f.orderId,
-      symbol: f.symbol,
-      side: (f.side || '').toLowerCase(),
-      tradeSide: +f.closedSize > 0 ? 'close' : 'open',
-      price: f.execPrice,
-      baseVolume: f.execQty,
-      quoteVolume: f.execValue,
-      feeDetail: [{ totalFee: -(+f.execFee || 0) }], // Bitget convention: negative = charge
-      profit: f.execPnl,
-      cTime: f.execTime,
-      enterPointSource: 'api', // bot-routed — manual fills can't be distinguished on V5
-    }));
+    // execType filter is semantic, not cosmetic: Funding/Settle rows share the
+    // endpoint and carry qty+price, but never touch the position — ingest one
+    // and the journal books a phantom open that can never close.
+    return (r?.list || [])
+      .filter((f) => !f.execType || f.execType === 'Trade')
+      .map((f) => {
+        const orderSide = (f.side || '').toLowerCase(); // 'buy'|'sell' — order side
+        const isClose = +f.closedSize > 0;
+        // the journal contract (pairing, campaign groups, trades-taken) expects
+        // `side` = POSITION side: every fill in a long episode reads 'buy',
+        // every fill in a short reads 'sell'. Bybit reports order side, so
+        // closes arrive inverted — flip them back.
+        const posSide = isClose
+          ? (orderSide === 'buy' ? 'sell' : 'buy')
+          : orderSide;
+        return {
+          tradeId: f.execId,
+          orderId: f.orderId,
+          symbol: f.symbol,
+          side: posSide,
+          orderSide,
+          tradeSide: isClose ? 'close' : 'open',
+          price: f.execPrice,
+          baseVolume: f.execQty,
+          quoteVolume: f.execValue,
+          feeDetail: [{ totalFee: -(+f.execFee || 0) }], // Bitget convention: negative = charge
+          profit: f.execPnl,
+          cTime: f.execTime,
+          enterPointSource: 'api', // bot-routed — manual fills can't be distinguished on V5
+        };
+      });
   };
 
   // V5 has no close-positions endpoint — resolve live size, then a

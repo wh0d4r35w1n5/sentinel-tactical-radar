@@ -47,6 +47,7 @@ STOPWORDS = {
     "NEW", "UPDATE", "ALERT", "SETUP", "TRADE", "STOP", "PROFIT", "LEVERAGE", "LEV",
     "RISK", "SPOT", "FUTURES", "PERP", "THE", "AND", "FOR", "ALL", "NOW", "UTC", "CMP",
     "PRICE", "ACTION", "STRATEGY", "COIN", "DIRECTION", "MARKET", "ANALYSIS", "ZONE",
+    "ANALYTICS", "SIGNALS", "CRYPTO", "FOREX", "NEWS", "BITCOIN", "ETHEREUM",
 }
 
 
@@ -61,9 +62,10 @@ def parse_signal(text: str, ts_ms: int):
     if not side:
         return None
     asset = None
-    # prefer $/#-tagged or BASE/QUOTE pair tokens — they disambiguate real
-    # symbols from look-alike words like "Price"/"Coin"
-    for tok in TAGGED_RE.findall(text) + PAIR_RE.findall(text):
+    # prefer BASE/QUOTE pairs first — an explicit "BTC/USDT" is a stronger
+    # asset claim than a bare "#tag" (channel footers tag topics like
+    # #analytics that pass the stopword filter and shadow the real asset)
+    for tok in PAIR_RE.findall(text) + TAGGED_RE.findall(text):
         t = tok.upper()
         if t not in STOPWORDS:
             asset = t

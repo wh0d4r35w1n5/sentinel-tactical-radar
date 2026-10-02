@@ -64,6 +64,10 @@ let cycle = 0;
 for (;;) {
   const t = Date.now();
   cycle++;
+  // heartbeat — the ledger only writes when the exec phase runs, and a big
+  // scan can legitimately hold it off for minutes. god.mjs reads this file
+  // for "is the loop alive"; ledger age alone can't answer that question.
+  try { fs.writeFileSync('state/rapid-heartbeat.json', JSON.stringify({ ts: Date.now(), cycle })); } catch {}
   let tScan = 0, tExec = 0;
   try {
     const a = Date.now(); await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;

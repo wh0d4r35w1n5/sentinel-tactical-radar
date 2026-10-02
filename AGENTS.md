@@ -25,6 +25,11 @@
 - **Exploit funding as income**: carry earners rank up in trade score
   (+0–5 tilt by |rate|), payers penalized; `carryYieldDayPct` is journaled
   per order so carry income is auditable.
+- **Long regime rule**: LONGs only when price is above BOTH the EMA50 and
+  EMA200 (1H stack, real 200-period — needs >200 closed bars). Hard gate
+  `below-ema50/200`, fail-closed on missing/thin history; enforced on
+  scanner signals, operator setups, core-carry deploys, and top-ups.
+  Shorts unaffected (2026-10-02).
 - Never loosen evidence gates into measured-negative cells. Widen the
   funnel (candidate count, coverage), never the proof bar.
 
@@ -70,8 +75,9 @@
   passphrase). Demo mode hard-refuses a mainnet BYBIT_API_HOST.
 - Verify a new driver before any real cycle:
   `SENTINEL_EXEC=demo SENTINEL_EXCHANGE=bybit node scripts/exchange/verify-demo.mjs [--write]`
-- Not yet ported: scanner market data (still Bitget public feeds), liq-guard
-  WS, force-trade/force-near ops tools.
+- Scanner market data routes through the venue shim (`mdGet`); live-feed and
+  liq-guard public WS both have Bybit drivers. Ops tools `force-trade.mjs` /
+  `force-near.mjs` now go through `makeExchange` (Bitget or Bybit).
 - Live-phase addition: Bybit vault sweep routes UNIFIED->FUND — the funding
   account backs the Bybit Card, so `SENTINEL_VAULT_SHARE` sweeps become
   card-spendable. Card spends drain FUND outside the bot's view — reconcile

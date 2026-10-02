@@ -1,6 +1,7 @@
 // Live data shim for the Sentinel Tactical Radar terminal.
 // Patches window.fetch so the app's /api calls are served fresh:
-//  - GET market-scanner.json -> built live from Bitget public futures data
+//  - GET market-scanner.json -> built live from the active venue's public
+//    futures data (live-ledger.json.exchange decides: bitget or bybit)
 //  - POST config/bot-state/trades -> persisted to localStorage (static host
 //    has no backend; makes the dry-run controls functional per-browser)
 //  - GET config/bot-state/trades -> static snapshot merged with local state
@@ -9,7 +10,7 @@
   if (typeof fetch !== 'function' || typeof Response !== 'function') return;
   var orig = fetch.bind(window);
   var BASE = '/sentinel-tactical-radar/api/';
-  var SYM_KEY = 'str-bitget-futsyms-v2';
+  var SYM_KEY = 'str-futsyms-v3'; // venue-namespaced at use: key + '-' + venue
   var PULSE_KEY = 'str-live-pulse';
   var POST_KEY = 'str-post-state';
   var MIN_QV = 250000;
@@ -20,46 +21,105 @@
   var tickersCache = { t: 0, data: null };
   var postState = null;
 
-  // ---- live ticker stream (Bitget public WS, REST fallback) ----
+  // ---- venue resolution: the static artifacts declare which exchange the
+  // account actually runs on. live-ledger.exchange is authoritative;
+  // market-scanner.source ('bybit-direct' / 'bitget-…') is the fallback.
+  var venueCache = null;
+  function getVenue() {
+    if (venueCache) return Promise.resolve(venueCache);
+    var done = function (v) { venueCache = v; return v; };
+    return orig(BASE + 'live-ledger.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && (j.exchange === 'bybit' || j.exchange === 'bitget'))
+          return done({ name: j.exchange });
+        throw new Error('no venue');
+      })
+      .catch(function () {
+        return orig(BASE + 'market-scanner.json', { cache: 'no-store' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            return done({ name: /^bybit/.test((j && j.source) || '') ? 'bybit' : 'bitget' });
+          })
+          .catch(function () { return done({ name: 'bitget' }); });
+      });
+  }
+
+  // Bybit v5 rows -> the Bitget field names every downstream consumer
+  // already speaks (lastPr/high24h/changeUtc24h/quoteVolume…). WS deltas
+  // omit unchanged fields, so only defined keys are carried over.
+  var BY_TICK_MAP = {
+    lastPrice: 'lastPr', highPrice24h: 'high24h', lowPrice24h: 'low24h',
+    bid1Price: 'bidPr', ask1Price: 'askPr', turnover24h: 'quoteVolume',
+    price24hPcnt: 'changeUtc24h',
+  };
+  function normBybitTick(d, idKey) {
+    var o = {}; o[idKey] = d.symbol;
+    Object.keys(BY_TICK_MAP).forEach(function (k) {
+      if (d[k] !== undefined) o[BY_TICK_MAP[k]] = d[k];
+    });
+    return o;
+  }
+
+  // ---- live ticker stream (venue public WS, REST fallback) ----
   var liveTick = {};       // instId -> latest ticker row
   var liveTickAt = 0;      // last ws update
-  var ws = null, wsSubscribed = false, wsRetry = 0;
+  var ws = null, wsVenue = null, wsSubscribed = false, wsRetry = 0;
 
   function wsConnect(pairIds) {
     if (ws || typeof WebSocket !== 'function') return;
-    try { ws = new WebSocket('wss://ws.bitget.com/v2/ws/public'); } catch (e) { return; }
-    ws.onopen = function () {
-      wsRetry = 0;
-      var ids = pairIds || Object.keys(lastPairs || {});
-      for (var i = 0; i < ids.length; i += 100) {
-        ws.send(JSON.stringify({
-          op: 'subscribe',
-          args: ids.slice(i, i + 100).map(function (id) {
-            return { instType: 'USDT-FUTURES', channel: 'ticker', instId: id };
-          }),
-        }));
-      }
-      wsSubscribed = true;
-    };
-    ws.onmessage = function (e) {
-      try {
-        var m = JSON.parse(e.data);
-        if (m && m.arg && m.arg.channel === 'ticker' && Array.isArray(m.data)) {
-          m.data.forEach(function (d) { liveTick[d.instId] = d; });
-          liveTickAt = Date.now();
-          emitTick();
+    getVenue().then(function (v) {
+      if (ws) return;
+      var url = v.name === 'bybit'
+        ? 'wss://stream.bybit.com/v5/public/linear'
+        : 'wss://ws.bitget.com/v2/ws/public';
+      try { ws = new WebSocket(url); } catch (e) { return; }
+      wsVenue = v.name;
+      ws.onopen = function () {
+        wsRetry = 0;
+        var ids = pairIds || Object.keys(lastPairs || {});
+        var step = wsVenue === 'bybit' ? 10 : 100;
+        for (var i = 0; i < ids.length; i += step) {
+          ws.send(JSON.stringify({
+            op: 'subscribe',
+            args: wsVenue === 'bybit'
+              ? ids.slice(i, i + step).map(function (id) { return 'tickers.' + id; })
+              : ids.slice(i, i + step).map(function (id) {
+                  return { instType: 'USDT-FUTURES', channel: 'ticker', instId: id };
+                }),
+          }));
         }
-      } catch (e2) {}
-    };
-    ws.onclose = ws.onerror = function () {
-      ws = null; wsSubscribed = false;
-      var delay = Math.min(30000, 2000 * ++wsRetry);
-      setTimeout(function () { wsConnect(); }, delay);
-    };
+        wsSubscribed = true;
+      };
+      ws.onmessage = function (e) {
+        try {
+          var m = JSON.parse(e.data);
+          if (wsVenue === 'bybit') {
+            if (m && m.topic && m.topic.indexOf('tickers.') === 0 && m.data) {
+              var d = normBybitTick(m.data, 'instId');
+              liveTick[d.instId] = Object.assign({}, liveTick[d.instId] || {}, d);
+              liveTickAt = Date.now();
+              emitTick();
+            }
+          } else if (m && m.arg && m.arg.channel === 'ticker' && Array.isArray(m.data)) {
+            m.data.forEach(function (d) { liveTick[d.instId] = d; });
+            liveTickAt = Date.now();
+            emitTick();
+          }
+        } catch (e2) {}
+      };
+      ws.onclose = ws.onerror = function () {
+        ws = null; wsSubscribed = false;
+        var delay = Math.min(30000, 2000 * ++wsRetry);
+        setTimeout(function () { wsConnect(); }, delay);
+      };
+    });
   }
   setInterval(function () {
-    if (ws && ws.readyState === 1) { try { ws.send('ping'); } catch (e) {} }
-  }, 25000);
+    if (ws && ws.readyState === 1) {
+      try { ws.send(wsVenue === 'bybit' ? '{"op":"ping"}' : 'ping'); } catch (e) {}
+    }
+  }, 20000);
 
   // pub/sub: pages can repaint on every WS tick (throttled ~2s)
   var tickSubs = [], tickTimer = 0;
@@ -114,20 +174,51 @@
   }
 
   async function getSymbols() {
+    var v = await getVenue();
+    var key = SYM_KEY + '-' + v.name;
     var c = null;
-    try { c = JSON.parse(localStorage.getItem(SYM_KEY)); } catch (e) {}
+    try { c = JSON.parse(localStorage.getItem(key)); } catch (e) {}
     if (c && Date.now() - c.ts < 6 * 3600e3) return c.data;
-    var r = await orig('https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES');
-    var j = await r.json();
-    var data = j.data || [];
-    try { localStorage.setItem(SYM_KEY, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {}
+    var data = [];
+    if (v.name === 'bybit') {
+      // instruments-info paginates by cursor — walk until it stops handing
+      // one back so the full ~890-contract universe lands, not page one
+      var cursor = '';
+      for (var pg = 0; pg < 6; pg++) {
+        var br = await orig('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+        var bj = await br.json();
+        ((bj.result && bj.result.list) || []).forEach(function (s) {
+          data.push({
+            symbol: s.symbol, baseCoin: s.baseCoin, quoteCoin: s.quoteCoin,
+            symbolStatus: s.status === 'Trading' ? 'normal' : 'halt',
+          });
+        });
+        cursor = bj.result && bj.result.nextPageCursor;
+        if (!cursor) break;
+      }
+    } else {
+      var r = await orig('https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES');
+      var j = await r.json();
+      data = j.data || [];
+    }
+    try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {}
     return data;
   }
   async function getTickers() {
     if (tickersCache.data && Date.now() - tickersCache.t < 10000) return tickersCache.data;
-    var r = await orig('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES');
-    var j = await r.json();
-    tickersCache = { t: Date.now(), data: j.data || [] };
+    var v = await getVenue();
+    if (v.name === 'bybit') {
+      var r = await orig('https://api.bybit.com/v5/market/tickers?category=linear');
+      var j = await r.json();
+      tickersCache = {
+        t: Date.now(),
+        data: ((j.result && j.result.list) || []).map(function (d) { return normBybitTick(d, 'symbol'); }),
+      };
+    } else {
+      var r = await orig('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES');
+      var j = await r.json();
+      tickersCache = { t: Date.now(), data: j.data || [] };
+    }
     return tickersCache.data;
   }
 
@@ -278,7 +369,8 @@
       },
       refreshedAt: new Date().toISOString(),
       scanWindowSeconds: 10, error: null,
-      source: 'bitget-live', universeFilter: 'bitget-usdtm-perps',
+      source: (await getVenue()).name + '-live',
+      universeFilter: (await getVenue()).name + '-usdt-perps',
     };
   }
 

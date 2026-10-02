@@ -358,7 +358,7 @@ async function fetchKlines(symbol, light = false) {
   // a light caller needs only the 1h payload; a full caller also needs the
   // 5m tape — a cached light payload can't serve TA, so full callers refetch
   if (fresh && (light || hit.payload.candles5m)) return hit.payload;
-  const res = await mdGet('candles', { symbol, granularity: '1H', limit: 120 });
+  const res = await mdGet('candles', { symbol, granularity: '1H', limit: 240 });
   // stale cache beats a blank cell — a rate-limited cycle shouldn't erase
   // TA that was valid 6 minutes ago
   if (!res.ok) return hit?.payload ?? null;
@@ -386,6 +386,9 @@ async function fetchKlines(symbol, light = false) {
           harmonic: Harmonics.active(r5rows.slice(-60), 8),
           ta: TAEngine.analyze(r5rows.slice(-60), r5rows),
           sparkTf: '5m',
+          // 5m fallback carries no 1H history — the EMA50/200 regime can't
+          // be proven here, so longs veto fail-closed downstream.
+          regime: null,
         };
         cache[symbol] = { at: Date.now(), payload };
         klineCacheSave();
@@ -407,6 +410,17 @@ async function fetchKlines(symbol, light = false) {
   // drop the still-forming candle — TA on an unclosed bar paints patterns
   // that evaporate when the hour settles
   if (rows.length && rows[rows.length - 1].t + 3600e3 > Date.now()) rows.pop();
+  // operator mandate: longs only above BOTH EMA50 and EMA200. Computed on
+  // the full 240-bar fetch so the 200-period EMA is real (the 120-bar TA
+  // slice below can't express it); needs >200 closed bars else it can't be
+  // proven — regime stays null and the gate fails closed. rows is then
+  // truncated so downstream TA/volRatio/spark see exactly what they did.
+  const regimeMas = TAEngine.maStack ? TAEngine.maStack(rows) : null;
+  const regime =
+    regimeMas && Number.isFinite(regimeMas.ema50) && Number.isFinite(regimeMas.ema200) && rows.length > 200
+      ? { tf: '1H', bars: rows.length, ema50: regimeMas.ema50, ema200: regimeMas.ema200, px: rows[rows.length - 1].c }
+      : null;
+  if (rows.length > 120) rows.length = 120;
   // a single malformed candle field (null/undefined/NaN) poisons the whole
   // sparkline — Math.min(...vals) → NaN → every path coord "NaN" → SVG
   // renders blank with no error. Filter non-finite at the source.
@@ -434,6 +448,7 @@ async function fetchKlines(symbol, light = false) {
     candles,
     harmonic: Harmonics.active(candles, 8),
     ta: TAEngine.analyze(candles, candles5m),
+    regime,
   };
   // light fetches cache too — without it the board pass refetches ~10
   // symbols every 15s forever: the exact burst load that rate-limits the
@@ -673,6 +688,9 @@ async function main() {
         .map(([a, k]) => [a, {
           stack: k.mtf.stack, dir: k.mtf.dir, kind: k.mtf.kind,
           agree: k.mtf.agree, n: k.mtf.n,
+          // 1H EMA50/EMA200 regime — the executor's setup/core-carry paths
+          // gate their LONG entries on the same operator rule
+          regime: k.regime ?? null,
           cells: Object.fromEntries(
             Object.entries(k.mtf.cells).map(([tf, c]) => [tf, {
               dir: c.dir, str: c.str, trend: c.trend, rsi: c.rsi,
@@ -1632,6 +1650,9 @@ async function main() {
         betaBtc: betaTo(r.asset, 'BTC'),
         corrBtc: corrTo(r.asset, 'BTC') != null ? round(corrTo(r.asset, 'BTC'), 2) : null,
         mktType,
+        // operator mandate context: 1H EMA50/EMA200 regime levels for the
+        // long gate (null when >200 closed bars can't be proven)
+        emaRegime: r.k?.regime ?? null,
         direction,
         // measured factor-evidence for the ic gates: net IC contribution +
         // whether any proven-predictive factor sponsors this direction
@@ -2761,6 +2782,16 @@ async function main() {
     gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
+    // operator mandate: LONGs only when price sits above BOTH the 50 and
+    // 200 EMA (1H stack, real 200-period — needs >200 closed bars). Hard
+    // gate like fading-runner — a direction-mandate, not a stat veto:
+    // unprovable regime (thin history / no klines) fails CLOSED.
+    gate(
+      s.direction !== 'LONG' ||
+        (s.emaRegime != null &&
+          s.entryPrice > s.emaRegime.ema50 &&
+          s.entryPrice > s.emaRegime.ema200),
+      'below-ema50/200');
     gate(dirPlanned[s.direction] < SIDE_CAP, 'side-cap');
     // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
     // the eval block — the strategy's record stays on the board for
@@ -4347,7 +4378,7 @@ async function main() {
   try {
     const GATE_BOOK = [
       [/rr<|net-edge|dd-kill|heat-cap|cluster-heat|deployed-cap|^score |equity-floor/, 'tharp'],
-      [/fake-move|noise-cap|spread|mkt-type|carry/, 'murphy'],
+      [/fake-move|noise-cap|spread|mkt-type|carry|below-ema50\/200/, 'murphy'],
       [/strat-blocked/, 'bulkowski'],
       [/low-profit-pair|recent-closed|recent-reversed|funding-drag|untradeable/, 'clason'],
       [/already-open|proxy-dup/, 'pape'],
