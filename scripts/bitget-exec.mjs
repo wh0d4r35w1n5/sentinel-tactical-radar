@@ -987,7 +987,10 @@ async function main() {
       const ent = (entries || []).filter(
         (e) => e.symbol === f.symbol && e.ts <= fTs && e.riskUsd > 0
       ).pop();
-      const key = ent ? `pos:${f.symbol}:${ent.ts}` : `campaign:${f.symbol}:${f.side}`;
+      const key = ent ? `pos:${f.symbol}:${ent.ts}`
+        : (Number.isFinite(epochTs) && fTs < epochTs
+          ? `campaign-pre:${f.symbol}:${f.side}`   // pre-epoch legacy fill
+          : `campaign:${f.symbol}:${f.side}`);
       const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0 };
       g.fills += 1;
       g.netUsd += netFn(f);
@@ -995,7 +998,7 @@ async function main() {
       groups.set(key, g);
     }
     for (const g of groups.values())
-      g.preEpoch = g.key.startsWith('campaign:') && Number.isFinite(epochTs) && g.lastTs < epochTs;
+      g.preEpoch = g.key.startsWith('campaign-pre:');
     return [...groups.values()].sort((a, b) => b.lastTs - a.lastTs); // newest-first, like the journal
   };
 
