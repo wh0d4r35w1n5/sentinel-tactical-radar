@@ -322,13 +322,22 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     for (const o of [...(ord?.list || []), ...(ord2?.list || [])]) {
       const st = o.stopOrderType || '';
       const moving = /trailing/i.test(st);
-      const prof = /takeprofit/i.test(st);
+      // triggerDirection: 1 = fires on mark RISING to trigger, 2 = on mark
+      // FALLING. For a reduce-only close: rise = TP on a long / SL on a
+      // short, fall = the reverse. stopOrderType only wins when it's
+      // specific — 'Stop' is Bybit's generic conditional label and must
+      // fall through to triggerDirection.
+      const hs = o.side === 'Sell' ? 'long' : 'short'; // close side inverted
+      const prof = /takeprofit/i.test(st) ? true
+        : /stoploss/i.test(st) ? false
+        : (hs === 'long' && +o.triggerDirection === 1) ||
+          (hs === 'short' && +o.triggerDirection === 2);
       rows.push({
         planType: moving ? 'moving_plan' : prof ? 'profit_plan' : 'loss_plan',
         orderId: o.orderId,
         triggerPrice: o.triggerPrice,
         size: o.qty,
-        holdSide: o.side === 'Sell' ? 'long' : 'short', // close side inverted
+        holdSide: hs,
         cTime: o.createdTime,
       });
     }
