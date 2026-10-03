@@ -1,0 +1,231 @@
+{
+  "exchange": "bybit",
+  "exec": "demo",
+  "at": "2026-10-03T10:56:12.043Z",
+  "account": {
+    "equity": 50161.64183593,
+    "available": 49958.87446837
+  },
+  "positions": [
+    {
+      "symbol": "DOGEUSDT",
+      "side": "long",
+      "total": 3006,
+      "openPriceAvg": 0.09240108,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 11.31454723,
+      "stopPx": 0.09,
+      "targetPx": 0.0942,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 0.09288,
+      "unrealizedPL": 1.43964,
+      "protected": true
+    },
+    {
+      "symbol": "AVAXUSDT",
+      "side": "long",
+      "total": 30.9,
+      "openPriceAvg": 10.8915,
+      "leverage": 10,
+      "marginMode": "crossed",
+      "marginSize": 34.24002093,
+      "stopPx": 10.73,
+      "targetPx": 11.11,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 11.027,
+      "unrealizedPL": 4.18695,
+      "protected": true
+    },
+    {
+      "symbol": "ETHUSDT",
+      "side": "long",
+      "total": 0.25,
+      "openPriceAvg": 2678.9744,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 27.19072462,
+      "stopPx": 2638.79,
+      "targetPx": 2732.55,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 2683.71,
+      "unrealizedPL": 1.1839,
+      "protected": true
+    },
+    {
+      "symbol": "XRPUSDT",
+      "side": "long",
+      "total": 355.2,
+      "openPriceAvg": 1.48086667,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 21.35387722,
+      "stopPx": 1.46,
+      "targetPx": 1.51,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 1.4834,
+      "unrealizedPL": 0.89984,
+      "protected": true
+    },
+    {
+      "symbol": "LTCUSDT",
+      "side": "long",
+      "total": 7.8,
+      "openPriceAvg": 69.17666667,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 21.87529718,
+      "stopPx": 68.14,
+      "targetPx": 70.56,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 69.2,
+      "unrealizedPL": 0.182,
+      "protected": true
+    },
+    {
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "total": 0.016,
+      "openPriceAvg": 84533.49375,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 54.85109895,
+      "stopPx": 83265.4,
+      "targetPx": 86224.1,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 84589,
+      "unrealizedPL": 0.8881,
+      "protected": true
+    },
+    {
+      "symbol": "SOLUSDT",
+      "side": "long",
+      "total": 6.6,
+      "openPriceAvg": 119.05454545,
+      "leverage": 25,
+      "marginMode": "crossed",
+      "marginSize": 31.97080127,
+      "stopPx": 117.27,
+      "targetPx": 121.44,
+      "open": true,
+      "tradeMode": 0,
+      "markPrice": 119.53,
+      "unrealizedPL": 3.138,
+      "protected": true
+    }
+  ],
+  "summary": {
+    "totalPositions": 7,
+    "isolatedPositions": 0,
+    "crossPositions": 7,
+    "protectedPositions": 7,
+    "totalNotionalUSD": 4487.93,
+    "positionIMTotalAUD": 289.14,
+    "marginBudgetAUD": 100
+  },
+  "verdict": {
+    "allIsolated": false,
+    "allProtected": true,
+    "openCount": 7,
+    "blocked": [
+      "XAUUSDT (110123 demo T&C gate)"
+    ]
+  },
+  "isolation": {
+    "required": "isolated",
+    "actual": "cross",
+    "host": "https://api-demo.bybit.com",
+    "verifiedAt": "2026-10-03T10:56:12.043Z",
+    "switchIsolated": "10032 Demo trading are not supported.",
+    "setMarginMode": "HTTP 404 on api-demo.bybit.com",
+    "setLeverageMarginMode": "accepted, but tradeMode stays 0",
+    "note": "Bybit demo (api-demo.bybit.com) does not support isolated margin at all. Adapter now throws E_ISOLATION_FAILED rather than trading cross silently, so no new position can open here until the venue supports isolation."
+  },
+  "venueDecision": {
+    "at": "2026-10-03T12:14:07.901Z",
+    "decidedBy": "measured",
+    "isolatedVenue": "Bitget demo (api.bitget.com, paptrading=1)",
+    "rejectedVenues": {
+      "bybit demo": "switch-isolated 10032; set-margin-mode 404; set-leverage(marginMode) inert (tradeMode stays 0)",
+      "bybit testnet": "switch-isolated 100028 unified account forbidden; set-margin-mode 404",
+      "bybit OAuth AI sub-account": "isolation is account-scoped; positions remain cross; equity 0 (unfunded)"
+    },
+    "why": "Bitget demo is the only reachable venue whose exchange reports marginMode=isolated on a real position.",
+    "demoBook": "Bybit 7 cross longs HELD with existing stops (user decision) — not closed, not added to",
+    "newOpens": "must target bitget/demo; the Bybit adapter now throws E_NOT_ISOLATED / E_ISOLATION_FAILED",
+    "gate": "scripts/exchange/prove-isolation.mjs must print PASS before any sizing"
+  },
+  "knownGaps": [
+    "Bybit demo book ~2.9x over the 100AUD margin cap (~$289AUD posted IM vs $100AUD) — cross margin compounds risk; trim is a pending user decision",
+    "XAUUSDT still blocked by the demo 110123 T&C gate",
+    "bitget.mjs defaulted POS_MODE to \"oneway\" and never sent posSide; every order failed 40774 on this hedge-mode account until fixed"
+  ],
+  "isolatedMarginVerdict": {
+    "measuredAt": "2026-10-03T12:01:32.405Z",
+    "requirement": "per-position isolated margin so each trade is bounded by its own margin",
+    "bybitDemo": {
+      "host": "api-demo.bybit.com",
+      "switchIsolated": "10032 Demo trading are not supported",
+      "setMarginMode": "HTTP 404",
+      "setLeverageMarginMode": "accepted but tradeMode stays 0",
+      "verdict": "IMPOSSIBLE"
+    },
+    "bybitTestnet": {
+      "host": "api-testnet.bybit.com",
+      "switchIsolated": "100028 unified account is forbidden",
+      "setMarginMode": "HTTP 404",
+      "setAccountType": "HTTP 404",
+      "verdict": "IMPOSSIBLE on unified accounts"
+    },
+    "bybitOAuthAiSubaccount": {
+      "id": 107119217,
+      "key": "CMV92...Px4c",
+      "withdrawals": "Not Allowed",
+      "equity": 0,
+      "note": "obtained via OAuth; account-scoped isolation only, positions still cross; unfunded"
+    },
+    "bitgetDemo": {
+      "host": "api.bitget.com (paptrading=1 header)",
+      "credentials": "BITGET_DEMO_API_* from .env — auth OK, equity 5979.31 USDT",
+      "setMarginMode": "accepted natively (set-margin-mode endpoint exists)",
+      "posMode": "hedge",
+      "probe": {
+        "ts": "2026-10-03T12:12:44.106Z",
+        "symbol": "BTCUSDT",
+        "qty": "0.001",
+        "avgPrice": "84668.5",
+        "marginMode": "isolated",
+        "positionIM": "8.46685",
+        "liqPrice": "76553.7974683544303798",
+        "closedAndConfirmedFlat": true
+      },
+      "verdict": "SUPPORTS per-position ISOLATED margin — proven with a live position, not inferred",
+      "gate": "SENTINEL_EXCHANGE=bitget SENTINEL_EXEC=demo node scripts/exchange/prove-isolation.mjs -> exit 0"
+    },
+    "gate": "scripts/exchange/prove-isolation.mjs — refuses venues proven impossible, refuses missing creds, PASS only when the exchange reports marginMode isolated with a real position open",
+    "status": "BLOCKED on fresh Bitget demo credentials"
+  },
+  "bitgetAccount": {
+    "at": "2026-10-03T12:14:07.902Z",
+    "host": "https://api.bitget.com",
+    "posMode": "hedge",
+    "equity": 5979.3060954275,
+    "available": 5979.22864799,
+    "openPositions": [
+      {
+        "symbol": "HYPEUSDT",
+        "holdSide": "long",
+        "total": "0.02",
+        "marginMode": "isolated",
+        "cTime": "1790869850021",
+        "note": "pre-existing (2026-10-01), protected by pos_profit@92.443 / pos_loss@85.571 — left untouched"
+      }
+    ]
+  }
+}

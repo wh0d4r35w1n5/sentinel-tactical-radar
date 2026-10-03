@@ -1,0 +1,642 @@
+// exchange/bybit.mjs — Bybit V5 adapter.
+// Returns Bitget-shaped rows everywhere so bitget-exec.mjs call sites and
+// downstream journal/stats code don't care which exchange is underneath.
+//
+// Semantic mapping (Bitget → Bybit V5 linear):
+//   pos_loss / pos_profit   → /v5/position/trading-stop  (tpslMode=Full)
+//   profit_plan / loss_plan → /v5/order/create conditional (reduceOnly, MarkPrice trigger)
+//   moving_plan (trailing)  → /v5/position/trading-stop trailingStop+activePrice
+//   close-positions         → reduceOnly market order
+//   vault sweep             → /v5/asset/transfer/inter-transfer UNIFIED→FUND
+//   fills                   → /v5/execution/list
+import crypto from 'node:crypto';
+
+const normalizeOrderSide = (side) => (side === 'buy' || side === 'open_long' ? 'buy' : 'sell');
+
+const dec = (s) => {
+  // decimals implied by a step string ('0.001' → 3). Scientific-notation safe.
+  const t = String(s ?? '0');
+  if (!t.includes('e') && !t.includes('E')) {
+    const i = t.indexOf('.');
+    return i < 0 ? 0 : t.length - i - 1;
+  }
+  const [m, e] = t.toLowerCase().split('e');
+  const i = m.indexOf('.');
+  return Math.max(0, (i < 0 ? 0 : m.length - i - 1) - +e);
+};
+
+export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {}) {
+  const HOST = host ||
+    (mode === 'demo' ? 'https://api-demo.bybit.com'
+      : mode === 'testnet' ? 'https://api-testnet.bybit.com'
+      : 'https://api.bybit.com');
+  const CAT = 'linear'; // USDT perps — mirrors Bitget USDT-FUTURES scope
+  const ACCT = process.env.BYBIT_ACCOUNT_TYPE || 'UNIFIED';
+  const POS_IDX = +(process.env.BYBIT_POSITION_IDX ?? 0); // 0 = one-way (default)
+
+  function sign(ts, payload) {
+    return crypto
+      .createHmac('sha256', secret)
+      .update(ts + key + recvWindow + payload)
+      .digest('hex');
+  }
+
+  async function api(method, reqPath, { qs = '', body = null } = {}) {
+    const bodyStr = body ? JSON.stringify(body) : '';
+    const payload = method === 'GET' ? qs : bodyStr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const ts = String(Date.now());
+        const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
+          method,
+          headers: {
+            'X-BAPI-API-KEY': key,
+            'X-BAPI-SIGN': sign(ts, payload),
+            'X-BAPI-SIGN-TYPE': '2',
+            'X-BAPI-TIMESTAMP': ts,
+            'X-BAPI-RECV-WINDOW': recvWindow,
+            'Content-Type': 'application/json',
+          },
+          body: bodyStr || undefined,
+          signal: AbortSignal.timeout(15000),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || (j.retCode && j.retCode !== 0))
+          throw new Error(`${reqPath} ${method} -> ${j.retCode ?? res.status} ${j.retMsg || ''}`);
+        return j.result;
+      } catch (e) {
+        if (attempt === 1 || e.message.includes('->') || method !== 'GET') throw e;
+        await new Promise((r) => setTimeout(r, 700));
+      }
+    }
+  }
+
+  // ---------- market data ----------
+  const ticker = async (symbol) => {
+    const r = await api('GET', '/v5/market/tickers', {
+      qs: `category=${CAT}&symbol=${symbol}`,
+    });
+    const t = (r?.list || [])[0] || {};
+    // Bitget row shape: lastPr/markPr/indexPr/bidPr/askPr used by exec —
+    // returned as a single-element ARRAY because Bitget's ticker endpoint
+    // returns a list and call sites do `Array.isArray(q) ? q[0] : q`
+    return [{
+      lastPr: t.lastPrice,
+      markPr: t.markPrice,
+      indexPr: t.indexPrice,
+      bidPr: t.bid1Price,
+      askPr: t.ask1Price,
+      fundingRate: t.fundingRate,
+      nextFundingTime: t.nextFundingTime,
+    }];
+  };
+
+  const contractMap = async () => {
+    const out = {};
+    let cursor = '';
+    for (;;) {
+      const r = await api('GET', '/v5/market/instruments-info', {
+        qs: `category=${CAT}&limit=1000${cursor ? `&cursor=${cursor}` : ''}`,
+      });
+      for (const c of r?.list || []) {
+        if (c.status !== 'Trading') continue;
+        const lot = c.lotSizeFilter || {};
+        const pf = c.priceFilter || {};
+        const lev = c.leverageFilter || {};
+        const sz = dec(lot.qtyStep ?? '0.001');
+        const tick = +pf.tickSize;
+        out[c.symbol] = {
+          sizePlace: sz,
+          pricePlace: dec(pf.tickSize ?? '0.01'),
+          priceEndStep: '1',
+          minTradeNum: lot.minOrderQty ?? '0',
+          minTradeUSDT: lot.minNotionalValue ?? '0',
+          maxLev: +lev.maxLeverage || 25,
+          tickSize: tick,
+          qtyStep: +lot.qtyStep,
+        };
+      }
+      cursor = r?.nextPageCursor;
+      if (!cursor) break;
+    }
+    return out;
+  };
+
+  // ---------- account / positions ----------
+  const getAccount = async () => {
+    const r = await api('GET', '/v5/account/wallet-balance', {
+      qs: `accountType=${ACCT}`,
+    });
+    const a = (r?.list || [])[0] || {};
+    const equity = +(a.totalEquity ?? 0);
+    const avail = +(a.totalAvailableBalance || a.totalWalletBalance || 0);
+    return { equity, available: avail, isoMax: avail, crossMax: avail };
+  };
+
+  // Normalize a Bybit position row → Bitget all-position row shape.
+  const normPos = (p) => ({
+    symbol: p.symbol,
+    holdSide: p.side === 'Buy' ? 'long' : 'short',
+    side: p.side === 'Buy' ? 'long' : 'short',
+    total: p.size,
+    available: p.size,
+    openPriceAvg: p.avgPrice,
+    unrealizedPL: p.unrealisedPnl,
+    leverage: p.leverage,
+    // tradeMode is the ONLY authority on margin mode (0=cross, 1=isolated).
+    // Inferring it from positionIM labels every cross position that happens
+    // to have posted margin as 'isolated' — which is how a cross book got
+    // journalled as isolated.
+    marginMode: +p.tradeMode === 1 ? 'isolated' : 'crossed',
+    tradeMode: p.tradeMode,
+    marginSize: p.positionIM, // posted initial margin — liq-guard's MAXLOSS circuit keys off this
+    liquidationPrice: p.liqPrice,
+    markPrice: p.markPrice,
+    cTime: p.createdTime,
+    utime: p.updatedTime,
+    positionIdx: p.positionIdx,
+    takeProfit: p.takeProfit,
+    stopLoss: p.stopLoss,
+    trailingStop: p.trailingStop,
+    tpslMode: p.tpslMode,
+  });
+
+  const getPos = async () => {
+    const r = await api('GET', '/v5/position/list', {
+      qs: `category=${CAT}&settleCoin=USDT&limit=200`,
+    });
+    return (r?.list || [])
+      .filter((p) => +p.size > 0)
+      .map(normPos);
+  };
+
+  const getPosMode = async () => {
+    // Bybit hedge mode shows positions at positionIdx 1/2. Default = oneway.
+    const r = await api('GET', '/v5/position/list', {
+      qs: `category=${CAT}&settleCoin=USDT&limit=200`,
+    });
+    return (r?.list || []).some((p) => +p.positionIdx > 0) ? 'hedge' : 'oneway';
+  };
+
+  // ---------- margin budgeting ----------
+  // FIX: SENTINEL_MARGIN_BUDGET defaults to $100AUD so the live book never
+  // deploys more than the configured risk budget. Tracks deployment and
+  // blocks new orders when the budget is exhausted.
+  // Read the cap from the env so a $100AUD demo book can never deploy
+  // beyond the configured risk. The cap is expressed in AUD; the adapter's
+  // computeMargin converts USD margin to AUD (using audUsd from the call
+  // site, emitted by the exec's scanner fx.audPerUsd) before enrolling it
+  // in the budget.
+  let marginBudget = Number(process.env.SENTINEL_MARGIN_BUDGET ?? '0') || 0;
+  const budget = { deployed: 0, max: marginBudget, usage: 0 };
+  const setMarginBudget = (amt) => { marginBudget = +amt; budget.max = +amt; };
+  const getMarginBudget = () => marginBudget;
+  const getBudget = () => ({ ...budget });
+  const getBudgetRemaining = () => Math.max(0, budget.max - budget.deployed);
+  const addBudget = (symbol, amtUsd) => {
+    if (amtUsd > 0) budget.deployed = Math.min(budget.max, budget.deployed + amtUsd);
+    return { used: budget.deployed, remaining: getBudgetRemaining() };
+  };
+
+  // ---------- margin / leverage ----------
+  // Bybit's switch-isolated REQUIRES leverage in the same call (no bare
+  // mode-set like Bitget). So setIsolated only marks intent; the actual
+  // switch happens in setLeverage where leverage is known.
+  const isoPending = new Set();
+  const setIsolated = (symbol) => { isoPending.add(symbol); return Promise.resolve(); };
+
+  // tradeMode is the only authority on margin mode: 0=cross, 1=isolated.
+  const isIsolated = async (symbol) => {
+    const r = await api('GET', '/v5/position/list', {
+      qs: `category=${CAT}&symbol=${symbol}&limit=20`,
+    });
+    const p = (r?.list || []).find((x) => x.symbol === symbol);
+    return !!p && +p.tradeMode === 1;
+  };
+
+  // Every documented route to isolated, then VERIFY. A host that accepts
+  // marginMode but never flips tradeMode (api-demo.bybit.com does exactly
+  // this) fails here instead of silently running cross.
+  const forceIsolated = async (symbol, lev) => {
+    const tries = [];
+    try {
+      await api('POST', '/v5/position/switch-isolated', {
+        body: { category: CAT, symbol, tradeMode: 1, buyLeverage: String(lev), sellLeverage: String(lev) },
+      });
+      tries.push('switch-isolated ok');
+    } catch (e) {
+      tries.push('switch-isolated: ' + String(e.message).replace(/^.*-> /, ''));
+      try {
+        await api('POST', '/v5/position/set-leverage', {
+          body: { category: CAT, symbol, buyLeverage: String(lev), sellLeverage: String(lev), marginMode: 'ISOLATED_MARGIN' },
+        });
+        tries.push('set-leverage marginMode=ISOLATED_MARGIN ok');
+      } catch (e2) {
+        tries.push('set-leverage ISOLATED_MARGIN: ' + String(e2.message).replace(/^.*-> /, ''));
+      }
+    }
+    let ok = false;
+    for (let i = 0; i < 4 && !ok; i++) {
+      ok = await isIsolated(symbol).catch(() => false);
+      if (!ok) await new Promise((r) => setTimeout(r, 800));
+    }
+    return { ok, tries };
+  };
+
+  const setLeverage = async (symbol, leverage) => {
+    const lev = String(leverage);
+    if (isoPending.has(symbol)) {
+      isoPending.delete(symbol);
+      const { ok, tries } = await forceIsolated(symbol, lev);
+      if (!ok) {
+        const err = new Error(
+          `ISOLATION FAILED for ${symbol}: still CROSS after [${tries.join(' | ')}]. ` +
+          'Cross margin puts the whole wallet behind the position — refusing to trade it as isolated.'
+        );
+        err.code = 'E_ISOLATION_FAILED';
+        throw err;
+      }
+    }
+    // marginMode is explicit so the call can never be a silent no-op that
+    // leaves the symbol in whatever mode it was already in.
+    return api('POST', '/v5/position/set-leverage', {
+      body: { category: CAT, symbol, buyLeverage: lev, sellLeverage: lev, marginMode: 'ISOLATED_MARGIN' },
+    }).catch((e) => {
+      if (!/110043/.test(e.message)) throw e; // 'leverage not modified' — benign
+    });
+  };
+
+  // ---------- orders ----------
+  // Compute initial margin (notional/lev). By default returns USD margin
+  // (the exchange's quote currency). If audUsd > 0 (the exec's scanner
+  // emits fx.audPerUsd), converts USD margin to AUD so the budget cap
+  // (SENTINEL_MARGIN_BUDGET, expressed in AUD) is enforced in the user's
+  // currency rather than the exchange's quote currency.
+  const computeMargin = (symbol, size, leverage, refEntry, audUsd) => {
+    const px = refEntry || 1;
+    const notional = size * px;
+    let m = notional / leverage;
+    if (audUsd > 0) m = m * audUsd; // USD margin -> AUD margin
+    return m;
+  };
+  const marketOrder = async (symbol, side, size, intent, extra = {}) => {
+    const normalizedSide = normalizeOrderSide(side);
+    // Isolated is a hard requirement of this book, so verify it rather than
+    // assume the earlier setIsolated/setLeverage pair got there. SENTINEL_ALLOW_CROSS
+    // is the only way to open cross on purpose.
+    if (intent !== 'close' && !+(process.env.SENTINEL_ALLOW_CROSS || 0)) {
+      const isolated = await isIsolated(symbol).catch(() => false);
+      if (!isolated) {
+        const err = new Error(
+          `refusing to open ${symbol}: margin mode is CROSS, not isolated ` +
+          '(whole wallet would back it). Set SENTINEL_ALLOW_CROSS=1 to override.'
+        );
+        err.code = 'E_NOT_ISOLATED';
+        throw err;
+      }
+    }
+    const leverage = (extra.leverage && +extra.leverage > 0)
+      ? +extra.leverage
+      : 25;
+    const refEntry = extra.refEntry || 1;
+    const audUsd = +(extra.audUsd || 0);
+    const margin = computeMargin(symbol, size, leverage, refEntry, audUsd);
+    // Check the budget BEFORE submitting. Only record (addBudget) the margin
+    // after the order actually lands — a rejected order (e.g. qty-too-small
+    // or demo T&C gate) must not consume the risk cap.
+    if (getBudgetRemaining() <= 0) {
+      return Promise.reject(new Error('budget exhausted - cannot open ' + symbol + ' (remaining $' + getBudgetRemaining().toFixed(2) + ')'));
+    }
+    return api('POST', '/v5/order/create', {
+      body: {
+        category: CAT,
+        symbol,
+        side: side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell',
+        orderType: 'Market',
+        qty: String(size),
+        positionIdx: idxFor(side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell', intent),
+        ...(intent === 'close' ? { reduceOnly: true } : {}),
+        ...extra,
+      },
+    }).then(() => {
+      // enroll margin only after the order was accepted
+      addBudget(symbol, margin);
+      return {};
+    });
+  };
+
+  const limitOrder = (symbol, side, size, price, extra = {}) =>
+    api('POST', '/v5/order/create', {
+      body: {
+        category: CAT,
+        symbol,
+        side: side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell',
+        orderType: 'Limit',
+        qty: String(size),
+        price: String(price),
+        timeInForce: 'PostOnly',
+        positionIdx: idxFor(side === 'buy' || side === 'open_long' ? 'Buy' : 'Sell', 'open'),
+        ...extra,
+      },
+    });
+
+  const pendingOrders = async (symbol) => {
+    const r = await api('GET', '/v5/order/realtime', {
+      qs: `category=${CAT}&symbol=${symbol}&openOnly=0&limit=50`,
+    });
+    return (r?.list || [])
+      .filter((o) => !o.stopOrderType) // conditional rows belong in getPlans
+      .map((o) => ({
+        orderId: o.orderId,
+        clientOid: o.orderLinkId,
+        symbol: o.symbol,
+        price: o.price,
+        size: o.qty,
+        side: (o.side || '').toLowerCase(),
+        orderType: (o.orderType || '').toLowerCase(),
+        state: o.orderStatus,
+        cTime: o.createdTime,
+      }));
+  };
+
+  const cancelOrder = (symbol, orderId) =>
+    api('POST', '/v5/order/cancel', {
+      body: { category: CAT, symbol, orderId },
+    });
+
+  // ---------- TP/SL plans ----------
+  // Whole-position legs ride the position's trading-stop; sized legs are
+  // conditional reduceOnly orders. getPlans merges both into Bitget plan rows.
+  const TPSL_IDS = { pos_loss: 'sl', pos_profit: 'tp' };
+
+  const tradingStop = (symbol, fields, holdSide) =>
+    api('POST', '/v5/position/trading-stop', {
+      body: {
+        category: CAT, symbol, tpslMode: 'Full',
+        // positionIdx targets the POSITION: hedge long=1/short=2, oneway=0
+        positionIdx: POS_MODE === 'hedge' ? (holdSide === 'long' ? 1 : 2) : POS_IDX,
+        ...fields,
+      },
+    });
+
+  const planOrder = async (symbol, planType, triggerPrice, size, holdSide, marginMode) => {
+    if (planType === 'pos_loss' || planType === 'pos_profit') {
+      const isSl = planType === 'pos_loss';
+      return tradingStop(symbol, isSl
+        ? { stopLoss: String(triggerPrice), slTriggerBy: 'MarkPrice' }
+        : { takeProfit: String(triggerPrice), tpTriggerBy: 'MarkPrice' }, holdSide);
+    }
+    if (planType === 'moving_plan') {
+      // Bitget moving_plan ≈ Bybit position trailing stop. triggerPrice
+      // carries the callback distance in the exec's usage (moving plans are
+      // placed with a distance arg); activate immediately.
+      return tradingStop(symbol, {
+        trailingStop: String(triggerPrice),
+        slTriggerBy: 'MarkPrice',
+      }, holdSide);
+    }
+    // sized legs (profit_plan / loss_plan) → conditional reduceOnly order.
+    // Direction: TP on a long fires when price RISES; SL on a long when it
+    // FALLS. triggerDirection: 1=rise, 2=fall.
+    const isProfit = planType === 'profit_plan';
+    const long = holdSide === 'long';
+    const rise = isProfit === long;
+    const closeSide = long ? 'Sell' : 'Buy';
+    const body = {
+      category: CAT,
+      symbol,
+      side: closeSide,
+      orderType: isProfit ? 'Limit' : 'Market', // TP legs limit@trigger (fee mandate), SL market
+      qty: String(size),
+      reduceOnly: true,
+      positionIdx: idxFor(closeSide, 'close'),
+      triggerPrice: String(triggerPrice),
+      triggerDirection: rise ? 1 : 2,
+      triggerBy: 'MarkPrice',
+      ...(isProfit ? { price: String(triggerPrice) } : {}),
+    };
+    return api('POST', '/v5/order/create', { body });
+  };
+
+  // Merge conditional orders + position-level TP/SL into Bitget plan rows.
+  // Synthetic ids 'bbpos:sl:<sym>' / 'bbpos:tp:<sym>' mark position-level legs
+  // so cancelPlanOrders knows to clear trading-stop rather than cancel an order.
+  const getPlans = async (symbol) => {
+    const rows = [];
+    const [ord, ord2, pos] = await Promise.all([
+      api('GET', '/v5/order/realtime', {
+        qs: `category=${CAT}&symbol=${symbol}&orderFilter=StopOrder&openOnly=0&limit=50`,
+      }).catch(() => null),
+      api('GET', '/v5/order/realtime', {
+        qs: `category=${CAT}&symbol=${symbol}&orderFilter=tpslOrder&openOnly=0&limit=50`,
+      }).catch(() => null),
+      api('GET', '/v5/position/list', {
+        qs: `category=${CAT}&symbol=${symbol}`,
+      }).catch(() => null),
+    ]);
+    for (const o of [...(ord?.list || []), ...(ord2?.list || [])]) {
+      const st = o.stopOrderType || '';
+      const moving = /trailing/i.test(st);
+      // triggerDirection: 1 = fires on mark RISING to trigger, 2 = on mark
+      // FALLING. For a reduce-only close: rise = TP on a long / SL on a
+      // short, fall = the reverse. stopOrderType only wins when it's
+      // specific — 'Stop' is Bybit's generic conditional label and must
+      // fall through to triggerDirection.
+      const hs = o.side === 'Sell' ? 'long' : 'short'; // close side inverted
+      const prof = /takeprofit/i.test(st) ? true
+        : /stoploss/i.test(st) ? false
+        : (hs === 'long' && +o.triggerDirection === 1) ||
+          (hs === 'short' && +o.triggerDirection === 2);
+      rows.push({
+        planType: moving ? 'moving_plan' : prof ? 'profit_plan' : 'loss_plan',
+        orderId: o.orderId,
+        triggerPrice: o.triggerPrice,
+        size: o.qty,
+        holdSide: hs,
+        cTime: o.createdTime,
+      });
+    }
+    for (const p of pos?.list || []) {
+      if (+p.size <= 0) continue;
+      const hs = p.side === 'Buy' ? 'long' : 'short';
+      if (+p.stopLoss > 0)
+        rows.push({
+          planType: 'pos_loss',
+          orderId: `bbpos:sl:${p.symbol}:${p.positionIdx}`,
+          triggerPrice: p.stopLoss,
+          size: '0',
+          holdSide: hs,
+          cTime: p.updatedTime,
+        });
+      if (+p.takeProfit > 0)
+        rows.push({
+          planType: 'pos_profit',
+          orderId: `bbpos:tp:${p.symbol}:${p.positionIdx}`,
+          triggerPrice: p.takeProfit,
+          size: '0',
+          holdSide: hs,
+          cTime: p.updatedTime,
+        });
+      if (+p.trailingStop > 0)
+        rows.push({
+          planType: 'moving_plan',
+          orderId: `bbpos:ts:${p.symbol}:${p.positionIdx}`,
+          triggerPrice: p.trailingStop,
+          size: '0',
+          holdSide: hs,
+          cTime: p.updatedTime,
+        });
+    }
+    return rows;
+  };
+
+  const cancelPlanOrders = async (symbol, planType, orderIds) => {
+    for (const id of orderIds) {
+      const s = String(id);
+      if (s.startsWith('bbpos:')) {
+        const [, kind, sym] = s.split(':');
+        await tradingStop(sym || symbol, kind === 'sl'
+          ? { stopLoss: '0' }
+          : kind === 'tp'
+            ? { takeProfit: '0' }
+            : { trailingStop: '0' }).catch(() => {});
+      } else {
+        await api('POST', '/v5/order/cancel', {
+          body: { category: CAT, symbol, orderId: s },
+        }).catch(() => {});
+      }
+    }
+    return { ok: true };
+  };
+
+  const cancelAllPlans = (symbol) =>
+    api('POST', '/v5/order/cancel-all', {
+      body: { category: CAT, symbol, orderFilter: 'StopOrder' },
+    });
+
+  // ---------- fills / closes / vault ----------
+  // fills → the exec's journal shape: tradeId/symbol/side/price/baseVolume/
+  // quoteVolume/fee/profit/tradeSide/cTime/enterPointSource. execValue is the
+  // USDT notional (quoteVolume); execFee arrives positive as a cost.
+  const getFills = async () => {
+    const r = await api('GET', '/v5/execution/list', {
+      qs: `category=${CAT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
+    });
+    // execType filter is semantic, not cosmetic: Funding/Settle rows share the
+    // endpoint and carry qty+price, but never touch the position — ingest one
+    // and the journal books a phantom open that can never close.
+    return (r?.list || [])
+      .filter((f) => !f.execType || f.execType === 'Trade')
+      .map((f) => {
+      const orderSide = (f.side || '').toLowerCase(); // 'buy'|'sell' — order side
+      const isClose = +f.closedSize > 0;
+      // the journal contract (pairing, campaign groups, trades-taken) expects
+      // `side` = POSITION side: every fill in a long episode reads 'buy',
+      // every fill in a short reads 'sell'. Bybit reports order side, so
+      // closes arrive inverted — flip them back.
+      const posSide = isClose
+        ? (orderSide === 'buy' ? 'sell' : 'buy')
+        : orderSide;
+      return {
+      tradeId: f.execId,
+      orderId: f.orderId,
+      symbol: f.symbol,
+      side: posSide,
+      orderSide,
+      tradeSide: isClose ? 'close' : 'open',
+      price: f.execPrice,
+      baseVolume: f.execQty,
+      quoteVolume: f.execValue,
+      feeDetail: [{ totalFee: -(+f.execFee || 0) }], // Bitget convention: negative = charge
+      profit: f.execPnl,
+      cTime: f.execTime,
+      enterPointSource: 'api', // bot-routed — manual fills can't be distinguished on V5
+      };
+    });
+  };
+
+  // V5 has no close-positions endpoint — resolve live size, then a
+  // reduceOnly market order flattens the position (mirrors Bitget's
+  // close-positions semantic the exec relies on).
+  const closePosition = async (symbol, holdSide) => {
+    const r = await api('GET', '/v5/position/list', {
+      qs: `category=${CAT}&symbol=${symbol}`,
+    });
+    const p = (r?.list || []).find(
+      (x) => +x.size > 0 && (x.side === 'Buy' ? 'long' : 'short') === holdSide);
+    if (!p) return { ok: true }; // already flat
+    return api('POST', '/v5/order/create', {
+      body: {
+        category: CAT,
+        symbol,
+        side: p.side === 'Buy' ? 'Sell' : 'Buy',
+        orderType: 'Market',
+        qty: p.size,
+        reduceOnly: true,
+        positionIdx: +p.positionIdx,
+      },
+    });
+  };
+
+  // futures->spot on Bitget ≈ UNIFIED->FUND internal transfer on Bybit.
+  const vaultTransfer = (amtUsd) =>
+    api('POST', '/v5/asset/transfer/inter-transfer', {
+      body: {
+        transferId: crypto.randomUUID(),
+        coin: 'USDT',
+        amount: String(Math.round(amtUsd * 100) / 100),
+        fromAccountType: 'UNIFIED',
+        toAccountType: 'FUND',
+      },
+    });
+
+  // hedge-mode positionIdx: open → order side (Buy=1/Sell=2); close → the
+  // POSITION side (Sell order closing a long = idx 1). One-way mode = 0.
+  let POS_MODE = 'oneway';
+  const setPosMode = (m) => { POS_MODE = m === 'hedge' ? 'hedge' : 'oneway'; };
+  const idxFor = (orderSide, intent) => {
+    if (POS_MODE !== 'hedge') return POS_IDX;
+    const buyPos = intent === 'close' ? orderSide === 'Sell' : orderSide === 'Buy';
+    return buyPos ? 1 : 2;
+  };
+
+  return {
+    name: 'bybit',
+    host: HOST,
+    hasCreds: !!(key && secret),
+    setPosMode,
+    api,
+    ticker,
+    contractMap,
+    getAccount,
+    getPos,
+    getPosMode,
+    setIsolated,
+    setMarginBudget,
+    getMarginBudget,
+    getBudget,
+    getBudgetRemaining,
+    api,
+    ticker,
+    contractMap,
+    getAccount,
+    getPos,
+    getPosMode,
+    setIsolated,
+    isIsolated,
+    setLeverage,
+    marketOrder,
+    limitOrder,
+    pendingOrders,
+    cancelOrder,
+    planOrder,
+    getPlans,
+    cancelPlanOrders,
+    cancelAllPlans,
+    getFills,
+    closePosition,
+    vaultTransfer,
+    TPSL_IDS,
+  };
+}
+

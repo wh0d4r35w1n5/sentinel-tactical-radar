@@ -168,33 +168,74 @@ const getPosMode = (symbol) =>
   }).then((d) => (d?.posMode === 'hedge_mode' ? 'hedge' : 'oneway'));
 
 // ---------- order placement ----------
-const setIsolated = (symbol) =>
-  api('POST', '/api/v2/mix/account/set-margin-mode', {
+// Bitget answers "already isolated" with an error, which invites a blanket
+// catch — and that same catch also swallows "margin mode cannot be modified",
+// leaving the symbol CROSS while the order below still carries
+// marginMode:'isolated' and the journal still claims isolation. So: keep the
+// non-fatal catch for the idempotent case, then VERIFY the position row and
+// throw on mismatch so the entry is refused instead of silently cross.
+const setIsolated = async (symbol) => {
+  await api('POST', '/api/v2/mix/account/set-margin-mode', {
     body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
-  }).catch(() => {}); // already-isolated errors are harmless
+  }).catch(() => {}); // already-isolated is idempotent; the check below is the guard
+  let row = null;
+  for (let i = 0; i < 5 && !row; i++) {
+    const ps = await getPos().catch(() => []);
+    row = ps.find((x) => x.symbol === symbol) || null;
+    if (!row) await new Promise((r) => setTimeout(r, 700));
+  }
+  if (row && row.marginMode !== 'isolated') {
+    const err = new Error(
+      `ISOLATION FAILED for ${symbol}: margin mode is ${row.marginMode}, not isolated — ` +
+      'refusing to open cross.'
+    );
+    err.code = 'E_ISOLATION_FAILED';
+    throw err;
+  }
+  return row;
+};
 const setLeverage = (symbol, leverage) =>
   api('POST', '/api/v2/mix/account/set-leverage', {
     body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, leverage: String(leverage) },
   });
-let POS_MODE = 'oneway'; // set by getPosMode before any order is placed
-const marketOrder = (symbol, side, size, intent, extra = {}) =>
-  api('POST', '/api/v2/mix/order/place-order', {
-    body: {
-      symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-      size: String(size), side, orderType: 'market',
-      ...(intent === 'close'
-        ? POS_MODE === 'hedge'
-          ? { tradeSide: 'close' }
-          : { reduceOnly: 'YES' }
-        : POS_MODE === 'hedge'
-          ? { tradeSide: 'open' }
-          : {}),
-      ...extra,
-    },
-  });
-// TP/SL plans go through place-tpsl-order — profit_plan/loss_plan are
-// illegal on place-plan-order (that endpoint is for trigger/moving orders).
-// holdSide identifies the protected side; no side/orderType needed.
+let POS_MODE = null; // resolved by getPosMode in main() before any order
+// posSide names the POSITION, not the order flow. In hedge_mode the two are
+// independent, so a close must carry BOTH posSide and the opposite order side.
+// Bitget rejects any order whose posSide contradicts the account mode:
+// 40774 "The order type for unilateral position must also be the
+// unilateral position type." Verified live on this hedge-mode account.
+const hedgeFields = (side, intent) => {
+  const ps =
+    intent === 'close'
+      ? (side === 'sell' ? 'long' : 'short')
+      : (side === 'buy' ? 'long' : 'short');
+  return {
+    posSide: ps,
+    side: intent === 'close' ? (ps === 'long' ? 'sell' : 'buy') : side,
+    tradeSide: intent === 'close' ? 'close' : 'open',
+  };
+};
+const onewayFields = (side, intent) => ({
+  posSide: 'net',
+  side,
+  ...(intent === 'close' ? { reduceOnly: 'YES' } : {}),
+});
+// `extra` carries BOTH real Bitget wire fields (clientOid) and local journal
+// metadata (audUsd). Spreading the lot forwarded audUsd to the exchange as an
+// unknown order param. Forward only genuine wire fields.
+const WIRE_KEYS = new Set([
+  'clientOid',
+  'reduceOnly',
+  'timeInForceValue',
+  'postOnly',
+  'triggerPrice',
+  'triggerBy',
+  'stpMode',
+]);
+const wireExtra = (extra) =>
+  Object.fromEntries(
+    Object.entries(extra || {}).filter(([k, v]) => WIRE_KEYS.has(k) && v !== undefined)
+  );
 const planOrder = (symbol, planType, triggerPrice, size, holdSide) =>
   api('POST', '/api/v2/mix/order/place-tpsl-order', {
     body: {
@@ -1344,6 +1385,11 @@ async function main() {
       // exactly this reason. Cap is env-tunable (0/absent = legacy uncapped).
       const NOTIONAL_MULT_CAP = +(process.env.SENTINEL_MAX_NOTIONAL_MULT || 0) || Infinity;
       const notional = Math.min(marginUsd * lev, equityUsd * NOTIONAL_MULT_CAP);
+      // AUD budget cap: the scanner emits fx.audPerUsd; the exec's margin
+      // is USD-denominated. Convert to AUD so the adapter's budget cap
+      // (SENTINEL_MARGIN_BUDGET, in AUD) enrolls the correct share.
+      const audPerUsd = +(process.env.SENTINEL_AUD_PER_USD || plan?.fx?.audPerUsd || 0);
+      const marginAud = marginUsd * audPerUsd;
       let size = sizeFor(cm, o.symbol, notional, o.refEntry);
       let minMarginNeeded = null;
       if (!size && FLOOR_MIN) {
@@ -1381,7 +1427,7 @@ async function main() {
       try {
         await setIsolated(o.symbol);
         await setLeverage(o.symbol, lev);
-        await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid });
+        await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, 'open', { clientOid: coid, audUsd });
         // record the attempt immediately — the fills journal won't see this
         // for ~30s, and the rate cap must count it now (probe loops burn
         // fees per attempt, not per recorded fill)
