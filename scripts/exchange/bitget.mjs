@@ -97,21 +97,37 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     return !row || row.marginMode === 'isolated';
   };
   const setIsolated = async (symbol) => {
-    await api('POST', '/api/v2/mix/account/set-margin-mode', {
-      body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
-    }).catch(() => {}); // already-isolated is idempotent; the check below is the guard
+    let switchError = null;
+    try {
+      await api('POST', '/api/v2/mix/account/set-margin-mode', {
+        body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
+      });
+    } catch (e) {
+      switchError = e;
+    }
     let row = null;
     for (let i = 0; i < 5 && !row; i++) {
+      // A failed read is not evidence of isolation; preserve it as an empty
+      // result only while polling, then fail closed if the switch also failed.
       const rows = await getPos().catch(() => []);
       row = (rows || []).find((x) => x.symbol === symbol && +x.total > 0) || null;
       if (!row) await new Promise((r) => setTimeout(r, 700));
     }
     if (row && row.marginMode !== 'isolated') {
       const err = new Error(
-        `ISOLATION FAILED for ${symbol}: margin mode is ${row.marginMode}, not isolated â€” ` +
+        `ISOLATION FAILED for ${symbol}: margin mode is ${row.marginMode}, not isolated — ` +
         'refusing to open cross.'
       );
       err.code = 'E_ISOLATION_FAILED';
+      throw err;
+    }
+    if (switchError && !row) {
+      const err = new Error(
+        `ISOLATION UNVERIFIED for ${symbol}: margin-mode switch failed and no isolated ` +
+        `position could verify the setting (${switchError.message})`
+      );
+      err.code = 'E_ISOLATION_UNVERIFIED';
+      err.cause = switchError;
       throw err;
     }
     return row;
