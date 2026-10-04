@@ -78,51 +78,138 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
   const getPosMode = (symbol) =>
     api('GET', '/api/v2/mix/account/account', {
       qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
-    }).then((d) => (d?.posMode === 'hedge_mode' ? 'hedge' : 'oneway'));
+    }).then((d) => {
+      if (d?.posMode === 'hedge_mode') return 'hedge';
+      if (d?.posMode === 'one_way_mode') return 'oneway';
+      throw new Error(`unexpected Bitget position mode for ${symbol}: ${d?.posMode ?? 'missing'}`);
+    });
 
   // ---------- order placement ----------
-  const setIsolated = (symbol) =>
-    api('POST', '/api/v2/mix/account/set-margin-mode', {
+  // Bitget answers "already isolated" with an error, which invites a blanket
+  // catch — and that catch also swallows real failures, leaving the symbol CROSS
+  // while the order below still carries marginMode:'isolated'. So: keep the
+  // non-fatal catch for the idempotent case, then VERIFY the position row and
+  // throw on mismatch so the entry is refused instead of silently cross.
+  const isIsolated = async (symbol) => {
+    const rows = await getPos().catch(() => []);
+    const row = (rows || []).find((x) => x.symbol === symbol && +x.total > 0);
+    // No open position yet: nothing to verify, but the mode was just requested.
+    return !row || row.marginMode === 'isolated';
+  };
+  const setIsolated = async (symbol) => {
+    await api('POST', '/api/v2/mix/account/set-margin-mode', {
       body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
-    }).catch(() => {}); // already-isolated errors are harmless
+    }).catch(() => {}); // already-isolated is idempotent; the check below is the guard
+    let row = null;
+    for (let i = 0; i < 5 && !row; i++) {
+      const rows = await getPos().catch(() => []);
+      row = (rows || []).find((x) => x.symbol === symbol && +x.total > 0) || null;
+      if (!row) await new Promise((r) => setTimeout(r, 700));
+    }
+    if (row && row.marginMode !== 'isolated') {
+      const err = new Error(
+        `ISOLATION FAILED for ${symbol}: margin mode is ${row.marginMode}, not isolated — ` +
+        'refusing to open cross.'
+      );
+      err.code = 'E_ISOLATION_FAILED';
+      throw err;
+    }
+    return row;
+  };
   const setLeverage = (symbol, leverage) =>
     api('POST', '/api/v2/mix/account/set-leverage', {
       body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, leverage: String(leverage) },
     });
-  let POS_MODE = 'oneway'; // set by setPosMode before any order is placed
-  const marketOrder = (symbol, side, size, intent, extra = {}) =>
-    api('POST', '/api/v2/mix/order/place-order', {
-      body: {
-        symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-        size: String(size),
-        // callers pass the ORDER side ('sell' reduces a long). Bitget hedge
-        // closes want the POSITION side + tradeSide:'close' — invert here.
-        side: intent === 'close' && POS_MODE === 'hedge'
-          ? (side === 'sell' ? 'buy' : 'sell')
-          : side,
-        orderType: 'market',
-        ...(intent === 'close'
-          ? POS_MODE === 'hedge'
-            ? { tradeSide: 'close' }
-            : { reduceOnly: 'YES' }
-          : POS_MODE === 'hedge'
-            ? { tradeSide: 'open' }
-            : {}),
-        ...extra,
-      },
+  // POS_MODE is account-wide ('one_way_mode' | 'hedge_mode') and Bitget REJECTS
+  // any order whose posSide contradicts it:
+  //   40774 "The order type for unilateral position must also be the
+  //          unilateral position type."
+  // This adapter shipped a hardcoded POS_MODE='oneway' default and never sent
+  // posSide at all, so on this account (hedge_mode, measured) EVERY order was
+  // rejected and nothing could be opened. Guessing is not an option here:
+  // POS_MODE starts UNKNOWN and is read from the venue on first use, and an
+  // unresolvable mode throws instead of ordering blind.
+  let POS_MODE = null;
+  let POS_MODE_PROBE = null;
+  async function resolvePosMode(symbol) {
+    if (POS_MODE) return POS_MODE;
+    if (!POS_MODE_PROBE)
+      POS_MODE_PROBE = getPosMode(symbol).catch((e) => {
+        POS_MODE_PROBE = null; // never cache a transient failure
+        throw e;
+      });
+    POS_MODE = await POS_MODE_PROBE;
+    return POS_MODE;
+  }
+
+  // posSide names the POSITION, not the order flow. In hedge mode the two are
+  // independent, so a close must carry BOTH posSide (which position) and the
+  // opposite side (the direction that reduces it).
+  const hedgeFields = (side, intent) => {
+    const posSide = intent === 'close'
+      ? (side === 'sell' ? 'long' : 'short') // a 'sell' reduces a long
+      : (side === 'buy' ? 'long' : 'short');
+    return {
+      posSide,
+      side: intent === 'close' ? (posSide === 'long' ? 'sell' : 'buy') : side,
+      tradeSide: intent === 'close' ? 'close' : 'open',
+    };
+  };
+  const onewayFields = (side, intent) => ({
+    posSide: 'net',
+    side,
+    ...(intent === 'close' ? { reduceOnly: 'YES' } : {}),
+  });
+
+  // Callers use `extra` for BOTH real Bitget wire fields (clientOid) and local
+  // journal metadata (refEntry, audUsd). Spreading the lot into the request body
+  // sent refEntry/audUsd to the exchange as unknown order params. Only genuine
+  // wire fields are forwarded now.
+  const WIRE_KEYS = new Set([
+    'clientOid', 'reduceOnly', 'timeInForceValue', 'postOnly', 'hidden', 'iceberg',
+    'triggerPrice', 'triggerBy', 'stpMode', 'presetTakeProfitList', 'presetStopLossList',
+  ]);
+  const wire = (extra) =>
+    Object.fromEntries(
+      Object.entries(extra || {}).filter(([k, v]) => WIRE_KEYS.has(k) && v !== undefined)
+    );
+
+  const orderBody = (symbol, side, size, intent, orderType, price, extra) => ({
+    symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
+    size: String(size), orderType,
+    ...(price != null ? { price: String(price) } : {}),
+    ...(POS_MODE === 'hedge' ? hedgeFields(side, intent) : onewayFields(side, intent)),
+    ...wire(extra),
+  });
+
+  const marketOrder = async (symbol, side, size, intent, extra = {}) => {
+    await resolvePosMode(symbol);
+    return api('POST', '/api/v2/mix/order/place-order', {
+      body: orderBody(symbol, side, size, intent, 'market', null, extra),
     });
-  const limitOrder = (symbol, side, size, price, extra = {}) =>
-    api('POST', '/api/v2/mix/order/place-order', {
-      body: {
-        symbol, productType: PRODUCT, marginMode: 'isolated', marginCoin: MARGIN_COIN,
-        size: String(size), side, orderType: 'limit', price: String(price),
-        timeInForceValue: 'post_only',
-        ...(POS_MODE === 'hedge' ? { tradeSide: 'open' } : {}),
-        ...extra,
-      },
+  };
+  const limitOrder = async (symbol, side, size, price, extra = {}, intent = 'open') => {
+    await resolvePosMode(symbol);
+    return api('POST', '/api/v2/mix/order/place-order', {
+      body: { ...orderBody(symbol, side, size, intent, 'limit', price, extra), timeInForceValue: 'post_only' },
     });
-  // exec sets POS_MODE via this hook after getPosMode
-  const setPosMode = (m) => { POS_MODE = m === 'hedge' ? 'hedge' : 'oneway'; };
+  };
+  // exec sets POS_MODE via this hook after getPosMode; also clears the probe so
+  // the next order trusts the caller's explicit answer.
+  // An unrecognised value THROWS rather than silently becoming 'oneway': this
+  // hook is how callers hand over the venue's answer, and a typo'd or error
+  // string coerced to 'oneway' on a hedge account reproduces the 40774 failure
+  // this adapter was fixed to eliminate.
+  const setPosMode = (m) => {
+    if (m !== 'hedge' && m !== 'oneway') {
+      const e = new Error('setPosMode: expected "hedge" or "oneway", got ' + JSON.stringify(m));
+      e.code = 'E_BAD_POS_MODE';
+      throw e;
+    }
+    POS_MODE = m;
+    POS_MODE_PROBE = null;
+  };
+  const getResolvedPosMode = () => POS_MODE;
 
   const pendingOrders = (symbol) =>
     api('GET', '/api/v2/mix/order/orders-pending', { qs: `symbol=${symbol}&productType=${PRODUCT}` })
@@ -227,7 +314,9 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     getPos,
     getPosMode,
     setPosMode,
+    getResolvedPosMode,
     setIsolated,
+    isIsolated,
     setLeverage,
     marketOrder,
     limitOrder,
