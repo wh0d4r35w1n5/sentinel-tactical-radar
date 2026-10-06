@@ -2347,7 +2347,12 @@ async function main() {
   const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP', 'Liquidity Sweep']);
   const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown', 'Liquidity Sweep']);
   const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
+  // SENTINEL_MKT_ALLOW_BOTH=1 — operator override: trade BOTH directions in
+  // any regime. Default (unset) keeps the measured regime doctrine below
+  // (side tape = shorts only — longs of both families bleed sideways).
+  const MKT_BOTH = process.env.SENTINEL_MKT_ALLOW_BOTH === '1';
   const mktAllows = (s) => {
+    if (MKT_BOTH) return true; // operator mandate: direction gates off
     if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
     if (mktType.startsWith('bull')) return s.direction === 'LONG';
     // eval n=14,952 full-history split: sideways tape is where the P&L is

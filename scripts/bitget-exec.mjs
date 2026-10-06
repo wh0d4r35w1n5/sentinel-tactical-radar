@@ -83,7 +83,14 @@ const RR = (() => {
     return { mults: c.mults.map(Number), alloc: c.alloc.map(Number), moon: +c.moon || 0, profile: c.profile };
   } catch { return { ...legacy, profile: 'legacy-default' }; }
 })();
-const RR_CUM = [0, ...RR.alloc.reduce((a, f, i) => (a.push(+(a[i] + f).toFixed(8)), a), [0]).slice(0, -1), 1 - RR.moon];
+// cumulative tranche starts: [0, 0.15, 0.40, 0.85] — alloc sums to 1-moon,
+// so the reduce result IS the complete cum table (leg i = cum[i+1]-cum[i],
+// moon bag = residual). The old build wrapped that table in an extra
+// leading 0 ([0,0,0.15,0.40,0.85]) so leg 0 computed tsize 0 and was
+// dropped: the nearest 2R tranche never placed, alloc shifted one slot
+// (observed live: legs at 4R/7R only), and small books fell under the
+// leg-count floor → single whole-size TP instead of a staggered ladder.
+const RR_CUM = RR.alloc.reduce((a, f, i) => (a.push(+(a[i] + f).toFixed(8)), a), [0]);
 const RR_MAX_ALLOC = Math.max(...RR.alloc);
 // ---- wealth vault: SENTINEL_VAULT_SHARE (default 50%) of every
 // profitable close is swept into state/wealth-vault.json — a balance the
@@ -1384,7 +1391,16 @@ async function main() {
       // full-size stop + a partial ladder is a valid 1.12-quoted book, not
       // drift. Summing them resynced every cycle forever.
       const planQty = X.name === 'bitget' ? lossQty + profitQty : lossQty;
-      const planDrift =
+      // THE DRIFT SWAP IS BITGET-ONLY MACHINERY. It exists to unwind
+      // Bitget's cumulative pending-qty 43023 deadlock. On Bybit it can
+      // only do damage: conditional rows + mirrors double-count (lossQty
+      // reads 2x), `covered` is satisfied by a pos_loss mirror OF the very
+      // order being canceled, and the swap deletes the real StopLoss then
+      // `continue`s — leaving the position NAKED and starving the ladder
+      // retrofit / ratchet / band-repair below (all observed live on
+      // HYPE/ZEC). Bybit protection is maintained by the band-recheck and
+      // repair paths further down instead.
+      const planDrift = X.name === 'bitget' &&
         p.size > 0 &&
         (planQty > p.size * 1.001 ||
           (lossPlan &&
@@ -1632,16 +1648,29 @@ async function main() {
       // manual, and foreign positions alike — the trader's own TP distance
       // is preserved as the middle rung (0.55x/1.0x/1.8x tranches). A
       // position too small to split into >=2 tranches keeps its single TP.
-      if (profitPlans.length === 1 && p.size > 0) {
-        const tpTrig = +profitPlans[0].triggerPrice;
+      // a position-level TP surfaces as profit_plan + pos_profit (same
+      // trigger) — that is ONE logical TP. Counting the adapter's mirror as
+      // a second leg made the `===1` test never true and positions (HYPE,
+      // NEAR, SOL, ZEC) silently ran a single full-size TP forever. Dedupe
+      // the mirror first, then retrofit; cancelling removes BOTH the plan
+      // leg and the position-level TP (bbpos:tp id → takeProfit:0) so the
+      // ladder becomes the only profit side.
+      const mirrorTps = profitPlans.filter((x) => x.planType === 'pos_profit' &&
+        profitPlans.some((y) => y.planType === 'profit_plan' &&
+          Math.abs(+y.triggerPrice - +x.triggerPrice) < 1e-9));
+      const logicalProfit = profitPlans.filter((x) => !mirrorTps.includes(x));
+      if (logicalProfit.length === 1 && p.size > 0) {
+        const tpTrig = +logicalProfit[0].triggerPrice;
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
         if (distPct > 0) {
-          const pid = profitPlans[0].orderId || profitPlans[0].planId || profitPlans[0].id;
+          const srcs = [logicalProfit[0], ...mirrorTps];
           const placed = await placeTpLadder(p, distPct);
           if (placed >= 2) {
-            if (pid) {
+            for (const src of srcs) {
+              const pid = src.orderId || src.planId || src.id;
+              if (!pid) continue;
               try {
-                await cancelPlanOrders(p.symbol, profitPlans[0].planType, [String(pid)]);
+                await cancelPlanOrders(p.symbol, src.planType, [String(pid)]);
               } catch (e) {
                 state.errors.push(`ladder-cancel ${p.symbol}: ${e.message}`);
               }
@@ -1700,13 +1729,30 @@ async function main() {
         const opLossSide = p.side === 'long'
           ? +lossPlan.triggerPrice < p.entry
           : +lossPlan.triggerPrice > p.entry;
-        if (opLossSide && armedPct < bandPct * 0.5) {
+        // Garbage-band guard: cross/demo accounts report liquidation prices
+        // thousands of percent away from entry — "the room the band affords"
+        // is fictional there. Widening against it fired EVERY cycle (place
+        // pos_loss at an absurd price → stale-id cancel wiped the stop →
+        // god's shield re-placed → repeat), leaving the position naked at
+        // dump time and failing the never-naked audit forever. Only widen
+        // when the band is a plausible real band (≤30%).
+        const saneBand = bandPct <= 30;
+        if (opLossSide && saneBand && armedPct < bandPct * 0.5) {
           const sgn2 = p.side === 'long' ? 1 : -1;
           const pp2 = cm[p.symbol]?.pricePlace ?? 6;
           const wStop = round(p.entry * (1 - (sgn2 * bandPct * 0.7) / 100), pp2);
           try {
             await planOrder(p.symbol, 'pos_loss', wStop, '0', p.side, p.marginMode);
-            await cancelPlanOrders(p.symbol, lossPlan.planType, [String(lossPlan.orderId || lossPlan.planId)]);
+            // fresh-list cleanup — cancelling lossPlan by its (possibly
+            // stale) id can alias onto the plan just written and wipe the
+            // stop entirely (the documented ratchet trap; this path still
+            // had it). Only rows at a DIFFERENT trigger get cancelled.
+            const live = await getPlans(p.symbol).catch(() => []);
+            for (const x of live.filter((z) =>
+              /loss|stop|moving/i.test(z.planType || '') &&
+              +z.triggerPrice !== +wStop &&
+              (!z.holdSide || z.holdSide === p.side)))
+              await cancelPlanOrders(p.symbol, x.planType, [String(x.orderId || x.planId || x.id)]).catch(() => {});
             state.actions.push(`📏 widened ${p.symbol} stop ${round(armedPct, 2)}% -> ${round(bandPct * 0.7, 2)}% — using the room the band affords`);
           } catch (e) { state.errors.push(`widen ${p.symbol}: ${e.message}`); }
         }
@@ -1822,28 +1868,30 @@ async function main() {
       );
     }
   }
+  // ---- operator mandate: LONGs only above BOTH EMA50 & EMA200 ----
+  // Regime levels come from the scanner's api/mtf.json (1H stack, real
+  // 200-period). Stale (>90min) or missing rows fail CLOSED — a long
+  // that can't prove it's above the stack doesn't place. Applies to
+  // operator setups and core-carry deploys; scanner signals already
+  // carry the same gate upstream. Defined at cycle scope (not inside the
+  // entries else) — the top-up ladder below gates longs on the same
+  // mandate and threw `regimeOkLong is not defined` when it lived inside.
+  const mtfDoc = (() => {
+    try {
+      const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'mtf.json'), 'utf8'));
+      return d && Date.now() - new Date(d.t).getTime() < 90 * 60e3 ? d : null;
+    } catch { return null; }
+  })();
+  const regimeOkLong = (sym, px) => {
+    const r = mtfDoc?.rows?.[String(sym).replace(/USDT$/i, '')]?.regime;
+    return !!(r && Number.isFinite(r.ema50) && Number.isFinite(r.ema200) && px > r.ema50 && px > r.ema200);
+  };
   if (protectionHalted || entriesBlocked) {
     if (entriesBlocked) state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
     let opened = 0;
     const openedSym = new Set(); // a dup symbol in the plan must not stack
 
-    // ---- operator mandate: LONGs only above BOTH EMA50 & EMA200 ----
-    // Regime levels come from the scanner's api/mtf.json (1H stack, real
-    // 200-period). Stale (>90min) or missing rows fail CLOSED — a long
-    // that can't prove it's above the stack doesn't place. Applies to
-    // operator setups and core-carry deploys; scanner signals already
-    // carry the same gate upstream.
-    const mtfDoc = (() => {
-      try {
-        const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'mtf.json'), 'utf8'));
-        return d && Date.now() - new Date(d.t).getTime() < 90 * 60e3 ? d : null;
-      } catch { return null; }
-    })();
-    const regimeOkLong = (sym, px) => {
-      const r = mtfDoc?.rows?.[String(sym).replace(/USDT$/i, '')]?.regime;
-      return !!(r && Number.isFinite(r.ema50) && Number.isFinite(r.ema200) && px > r.ema50 && px > r.ema200);
-    };
     // ---- operator setup queue (VEMA-style): state/cmd-setups.json ----
     // Operator-authored entries — market / bounce / break-and-retest —
     // evaluated here each cycle and injected into plan.orders with

@@ -1,0 +1,35 @@
+[Unit]
+Description=Sentinel liquidation-zone guard
+After=network-online.target
+# Never abandon the guard to a start-rate limit — it must come back forever.
+StartLimitIntervalSec=0
+[Service]
+WorkingDirectory=/opt/sentinel
+ExecStart=/usr/bin/node scripts/liq-guard.mjs
+# Watch the LIVE Bitget book (systemd Environment= beats .env, which still
+# points at the old Bybit demo account). Operator mandate: emergency-only
+# trims, minimum clip size, position must survive:
+#   * danger zone ONLY at genuine emergency: mark within 0.10% of liq —
+#     price already below the armed stop (stop 2691.5 vs liq 2687.9 =
+#     0.13% apart), so ordinary drift never sheds a clip. shedding OFF.
+#   * trim 2% of size per event (minimum-amount discipline), new-low gate +
+#     15s spacing still apply so it never cascades
+#   * ETHUSDT seeded so it's tracked from boot
+Environment=SENTINEL_EXCHANGE=bitget
+Environment=SENTINEL_EXEC=live
+Environment=LIQ_GUARD=1
+Environment=LIQ_GUARD_SYM=ETHUSDT
+Environment=LIQ_GUARD_TRIM_PCT=2
+Environment=LIQ_GUARD_ZONE_PCT=0.10
+Environment=LIQ_GUARD_SPACING_MS=15000
+Environment=LIQ_GUARD_STOP_TRIM=0
+# seed-symbol residual floor defaults to 2500 (unit-count!) — that would
+# block ALL ETH trims (position is 0.55). Contract min + minTradeUSDT*3
+# floors still apply per-symbol.
+Environment=LIQ_GUARD_MIN_SIZE=0
+Restart=always
+RestartSec=15
+StandardOutput=append:/var/log/sentinel-liq-guard.log
+StandardError=append:/var/log/sentinel-liq-guard.log
+[Install]
+WantedBy=multi-user.target

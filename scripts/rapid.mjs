@@ -45,9 +45,11 @@ const env = {
 };
 
 // a hung child must not stall the daemon forever — fetch timeouts bound most
-// cases, but anything that escapes them gets a hard kill at 4min so the loop
-// recovers instead of going silent
-const CHILD_TIMEOUT = 240_000;
+// cases, but anything that escapes them gets a hard kill so the loop recovers
+// instead of going silent. 600s: scans legitimately need 4-5min on this box
+// (IO-throttled t3.micro) — a 240s cap killed the scanner before it could
+// write live-plan.json, which starved exec and broke the whole loop.
+const CHILD_TIMEOUT = 600_000;
 const run = (f) =>
   new Promise((res) => {
     const c = spawn(process.execPath, [f], { env, stdio: 'inherit' });

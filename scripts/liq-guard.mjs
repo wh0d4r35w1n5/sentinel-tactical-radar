@@ -110,6 +110,13 @@ const cancelPlan = (sym, planType, orderId) =>
 // pos_loss covers the whole position — size stays '0' so both adapters omit it.
 const planLoss = (sym, side, trigger, marginMode) =>
   X.planOrder(sym, 'pos_loss', trigger, '0', side, marginMode);
+// INSTANT ADAPTATION: after any trim the position size has changed — kick the
+// protection watcher (state/bw-kick, fs.watch'd there) so the SL and the
+// staggered TP ladder re-arm against the NEW size in the same second instead
+// of waiting out its poll cycle.
+const kickWatcher = () => {
+  try { fs.writeFileSync(path.join(__dirname, '..', 'state', 'bw-kick'), String(Date.now())); } catch {}
+};
 const closeMarket = async (sym, side, sizeStr, posMode, marginMode) => {
   const closeSide = side === 'long' ? 'sell' : 'buy'; // order side — adapters map close semantics
   // the position's REAL margin mode — bot entries are isolated, manual
@@ -313,6 +320,7 @@ async function tick() {
         const capUsd = (MAXLOSS_PCT * fp.margin).toFixed(2);
         try {
           await closeMarket(fp.sym, fp.side, String(fp.size), posMode, fp.marginMode);
+          kickWatcher(); // watcher sweeps the orphan plans NOW, not next poll
           log(`LOSS-CAP ${key}: upl ${fp.upl.toFixed(2)} <= -${capUsd} (${(MAXLOSS_PCT * 100).toFixed(0)}% margin) — full close @ ${mark}`);
           outbox(`🛑 LOSS-CAP — ${fp.sym} ${fp.side}: upl $${fp.upl.toFixed(2)} breached -$${capUsd} floor (${(MAXLOSS_PCT * 100).toFixed(0)}% of margin). Full close @ ${mark} — bounded loss, not a band hit.`);
           g.capped = true; dirty = true;
@@ -402,6 +410,7 @@ async function tick() {
           if (fp && fp.size > minClip && q > 0 && q < fp.size && clipValue >= DUST_USD) {
             await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
             g.lastStopTrim = Date.now(); g.lastStopMark = mark; g.stopClipN = (g.stopClipN || 0) + 1;
+            kickWatcher();
             trims.push({ at: g.lastStopTrim, sym: p.sym, side: p.side, size: q, mark, kind: 'stop-approach' });
             dirty = true;
             log(`STOP-TRIM ${key}: clipped ${q} of ${fp.size} @ ${mark} — ${sDist.toFixed(2)}% above stop ${trig}`);
@@ -466,6 +475,7 @@ async function tick() {
     if (!(q > 0) || q >= fp.size) continue;                 // never let a 'partial' equal the whole side
     log(`DANGER: ${key} mark ${mark} is ${fdist.toFixed(2)}% from liq ${fp.liq} — trimming ${q} of ${fp.size}`);
     await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
+    kickWatcher();
     g.lastTrim = Date.now();
     g.lastTrimMark = mark;
     trims.push({ at: g.lastTrim, sym: p.sym, side: p.side, size: q, mark });
@@ -529,9 +539,22 @@ async function boot() {
 }
 
 let busy = false; // setInterval doesn't await ticks — lock so a slow tick can't overlap the next
+let tickStartedAt = 0;
 const loop = async () => {
   if (busy) return;
   busy = true;
-  try { await tick(); } catch (e) { log('tick error:', e.message); } finally { busy = false; }
+  tickStartedAt = Date.now();
+  try { await tick(); } catch (e) { log('tick error:', e.message); } finally { busy = false; tickStartedAt = 0; }
 };
+// Stall watchdog: one never-settling await inside tick() (a blackholed keep-
+// alive socket that dodges AbortSignal) used to leave busy=true forever —
+// the process stayed "running" while the state file went stale for hours.
+// If a tick overruns 120s we exit hard; systemd Restart=always revives us
+// fresh within RestartSec. Self-healing beats rotting silently.
+setInterval(() => {
+  if (busy && tickStartedAt && Date.now() - tickStartedAt > 120e3) {
+    log(`FATAL: tick wedged for ${Math.round((Date.now() - tickStartedAt) / 1000)}s — exiting for systemd restart`);
+    process.exit(1);
+  }
+}, 10e3);
 boot().then((pm) => { posMode = pm; startWs(); setInterval(loop, POLL_MS); loop(); });

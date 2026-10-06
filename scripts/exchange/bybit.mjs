@@ -138,7 +138,11 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     openPriceAvg: p.avgPrice,
     unrealizedPL: p.unrealisedPnl,
     leverage: p.leverage,
-    marginMode: +p.positionIM > 0 || p.tradeMode === 1 ? 'isolated' : 'crossed',
+    // tradeMode is the ONLY exchange truth for margin mode — positionIM is
+    // > 0 on cross positions too, so the old `positionIM > 0 ||` check
+    // reported every cross position as isolated (the demo book really does
+    // run cross — verified raw: tradeMode 0 on all positions).
+    marginMode: +p.tradeMode === 1 ? 'isolated' : 'crossed',
     marginSize: p.positionIM, // posted initial margin — liq-guard's MAXLOSS circuit keys off this
     liquidationPrice: p.liqPrice,
     markPrice: p.markPrice,
@@ -425,7 +429,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     // execType filter is semantic, not cosmetic: Funding/Settle rows share the
     // endpoint and carry qty+price, but never touch the position — ingest one
     // and the journal books a phantom open that can never close.
-    return (r?.list || [])
+    const rows = (r?.list || [])
       .filter((f) => !f.execType || f.execType === 'Trade')
       .map((f) => {
         const orderSide = (f.side || '').toLowerCase(); // 'buy'|'sell' — order side
@@ -453,6 +457,38 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
           enterPointSource: 'api', // bot-routed — manual fills can't be distinguished on V5
         };
       });
+    // V5 execution rows carry NO pnl field — execPnl is simply absent from
+    // the response (verified against raw /v5/execution/list: TP closes with
+    // closedSize>0 included), so `profit: f.execPnl` reads undefined and the
+    // journal books 0 for every close. Every position then grades as a
+    // fee-only loser: rolling win-rate 0% → circuit-breaker trips with
+    // entries blocked → no new fills → the same losers sit in the window
+    // forever (self-feeding deadlock). Realize PnL here instead — FIFO per
+    // symbol+position-side across this window, chronologically: opens push
+    // inventory, closes consume it at (exit-entry)×qty×direction. A close
+    // whose open fell outside the 48h window books only the matched portion
+    // (0 if none) — same as before, never worse.
+    const books = new Map();
+    for (const f of rows.slice().sort((a, b) => +a.cTime - +b.cTime)) {
+      const key = `${f.symbol}:${f.side}`;
+      const q = books.get(key) || [];
+      const qty = +f.baseVolume || 0;
+      if (f.tradeSide === 'open') {
+        q.push({ price: +f.price || 0, qty });
+      } else if (f.tradeSide === 'close' && qty > 0) {
+        let left = qty, hit = 0, pnl = 0;
+        const dir = f.side === 'buy' ? 1 : -1;
+        while (left > 1e-9 && q.length) {
+          const h = q[0], take = Math.min(h.qty, left);
+          pnl += take * ((+f.price || 0) - h.price) * dir;
+          hit += take; h.qty -= take; left -= take;
+          if (h.qty <= 1e-9) q.shift();
+        }
+        if (hit > 0) f.profit = pnl;
+      }
+      books.set(key, q);
+    }
+    return rows;
   };
 
   // V5 has no close-positions endpoint — resolve live size, then a
