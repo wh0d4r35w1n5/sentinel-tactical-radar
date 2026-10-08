@@ -166,6 +166,19 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
         clientOid: `vault-${Date.now()}-${Math.round(amtUsd * 100)}`,
       },
     });
+  // vault destination: BTC on SPOT. Market buy where `size` is the quote
+  // (USDT) amount to spend — Bitget spot semantics for market buys.
+  const spotMarketBuy = (symbol, quoteUsd) =>
+    api('POST', '/api/v2/spot/trade/place-order', {
+      body: {
+        symbol, side: 'buy', orderType: 'market', force: 'normal',
+        size: String(+(+quoteUsd).toFixed(2)),
+        clientOid: `vaultbtc-${Date.now()}`.slice(0, 38),
+      },
+    });
+  const spotAssets = () =>
+    api('GET', '/api/v2/spot/account/assets', {})
+      .then((d) => (Array.isArray(d) ? d : d?.assets || []));
   const getFills = () =>
     api('GET', '/api/v2/mix/order/fills', {
       qs: `productType=${PRODUCT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
@@ -245,5 +258,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     getFills,
     closePosition,
     vaultTransfer,
+    spotMarketBuy,
+    spotAssets,
   };
 }
