@@ -665,10 +665,9 @@ async function main() {
   // spot left the futures account — acct.equity excludes them, so a blind
   // subtraction would double-count the carry out of the book.
   // unmoved = carry still sitting in the futures account (pending USDT not
-  // yet converted to spot BTC, and not written off). Deployed BTC left the
-  // account already; lostUsd is gone for good — subtracting either would
-  // double-count out of the book.
-  const vaultUnmoved = vaultNow - (+vaultState0.deployedUsd || 0) - (+vaultState0.transferredUsd || 0) - (+vaultState0.lostUsd || 0);
+  // yet transferred to spot). deployed ⊆ transferred — BTC buys spend the
+  // transferred bucket, so subtracting deployed too would double-count.
+  const vaultUnmoved = vaultNow - (+vaultState0.transferredUsd || 0) - (+vaultState0.lostUsd || 0);
   const equityUsd = EQ_OVERRIDE > 0
     ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultUnmoved)
     : Math.max(0, acct.equity - vaultUnmoved);
@@ -3325,7 +3324,10 @@ async function main() {
         vault.sweptIds ||= {}; vault.sweeps ||= [];
         vault.hwmUsd = Math.max(vault.hwmUsd || 0, EQ_OVERRIDE || 0);
         const hwmLoaded = vault.hwmUsd;
-        const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + vault.balanceUsd;
+        // navNow counts vault holdings still alive — lostUsd is real money
+        // already lost (the USELESS bag); adding it back would inflate NAV
+        // and mint carry room on a drawdown the vault already ate.
+        const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + (vault.balanceUsd || 0) - (vault.lostUsd || 0);
         // room = the above-water tranche created since the last high.
         // Each profitable fill consumes `net` of it (swept or not) — total
         // carry lands at exactly SHARE × net-new-high NAV across a cycle.
@@ -3391,33 +3393,61 @@ async function main() {
             state.actions.push(`🏦 vault write-off: legacy bag $${round(vault.lostUsd, 2)} marked lost — vault asset -> BTC spot`);
           }
           vault.asset = 'BTC';
-          const pending = round((vault.balanceUsd || 0) - (vault.deployedUsd || 0) - (vault.transferredUsd || 0) - (vault.lostUsd || 0), 4);
-          const spendable = Math.max(0, (+acct.available || 0) - 1); // $1 ops reserve stays
-          const deployUsd = round(Math.min(pending, spendable), 2);
-          if (deployUsd >= VAULT_BTC_MIN_USD && X.spotMarketBuy) {
-            await vaultTransfer(deployUsd); // futures -> spot
-            const bo = await X.spotMarketBuy(VAULT_BTC_SYM, deployUsd);
-            vault.deployedUsd = round((vault.deployedUsd || 0) + deployUsd, 4);
-            (vault.btcBuys ||= []).push({ ts: Date.now(), usd: deployUsd, orderId: bo?.orderId || null });
-            writeJson(VAULT_PATH, vault);
-            state.actions.push(`🏦 vault deploy: $${round(deployUsd, 2)} -> BTC spot · cost basis $${round(vault.deployedUsd, 2)} (pending $${round(pending - deployUsd, 2)})`);
+          const pendingFutures = round((vault.balanceUsd || 0) - (vault.transferredUsd || 0) - (vault.lostUsd || 0), 4);
+          const spotPending = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
+          // perms gate — the Bitget key needs spot order write + wallet
+          // transfer write. On 40014 hold carry in futures and re-probe
+          // every 30min; don't burn an API call every cycle on a dead perm.
+          const permsOk = vault.permsOk !== false || Date.now() - (vault.permsProbeAt || 0) > 30 * 60e3;
+          try {
+            if (permsOk && pendingFutures + spotPending >= VAULT_BTC_MIN_USD) {
+              const spendable = Math.max(0, (+acct.available || 0) - 1); // $1 ops reserve stays
+              const moveUsd = round(Math.min(pendingFutures, spendable), 2);
+              if (moveUsd >= VAULT_BTC_MIN_USD) {
+                await vaultTransfer(moveUsd); // futures -> spot — throws 40014 without transfer-write perm
+                vault.transferredUsd = round((vault.transferredUsd || 0) + moveUsd, 4);
+                writeJson(VAULT_PATH, vault);
+                state.actions.push(`🏦 vault transfer: $${round(moveUsd, 2)} futures->spot (carry earmark)`);
+              }
+              const buyUsd = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
+              if (buyUsd >= VAULT_BTC_MIN_USD && X.spotMarketBuy) {
+                const bo = await X.spotMarketBuy(VAULT_BTC_SYM, buyUsd);
+                vault.deployedUsd = round((vault.deployedUsd || 0) + buyUsd, 4);
+                (vault.btcBuys ||= []).push({ ts: Date.now(), usd: buyUsd, orderId: bo?.orderId || null });
+                writeJson(VAULT_PATH, vault);
+                state.actions.push(`🏦 vault deploy: $${round(buyUsd, 2)} -> BTC spot · cost basis $${round(vault.deployedUsd, 2)}`);
+              }
+              vault.permsOk = true;
+            }
+            // holdings truth = the exchange's own spot balance, not a
+            // ledger estimate — a dead bag can't hide behind deployedUsd
+            if (permsOk && X.spotAssets) {
+              const assets = await X.spotAssets(); // 40014 propagates -> perms gate below
+              const btc = assets.find((a) => a.coin === 'BTC');
+              const qty = btc ? (+btc.available || 0) + (+btc.frozen || 0) + (+btc.locked || 0) : 0;
+              const tk = await X.ticker(VAULT_BTC_SYM).catch(() => null);
+              const t0 = Array.isArray(tk) ? tk[0] : tk;
+              const px = +(t0?.lastPr || t0?.markPr || 0);
+              vault.btcQty = round(qty, 8);
+              vault.btcUsd = round(qty * px, 2);
+              writeJson(VAULT_PATH, vault);
+              state.vaultBtcQty = vault.btcQty;
+              state.vaultBtcUsd = vault.btcUsd;
+            }
+          } catch (e) {
+            if (/40014|permission/i.test(String(e.message || e))) {
+              vault.permsOk = false;
+              vault.permsProbeAt = Date.now();
+              writeJson(VAULT_PATH, vault);
+              state.errors.push('vault deploy paused: API key needs spot-trade + wallet-transfer perms (40014) — carry held in futures');
+            } else throw e;
           }
-          // holdings truth = the exchange's own spot balance, not a ledger
-          // estimate — a dead bag can never hide behind deployedUsd again
-          if (X.spotAssets) {
-            const assets = await X.spotAssets().catch(() => []);
-            const btc = assets.find((a) => a.coin === 'BTC');
-            const qty = btc ? (+btc.available || 0) + (+btc.frozen || 0) + (+btc.locked || 0) : 0;
-            const tk = await X.ticker(VAULT_BTC_SYM).catch(() => null);
-            const t0 = Array.isArray(tk) ? tk[0] : tk;
-            const px = +(t0?.lastPr || t0?.markPr || 0);
-            vault.btcQty = round(qty, 8);
-            vault.btcUsd = round(qty * px, 2);
-            writeJson(VAULT_PATH, vault);
-            state.vaultBtcQty = vault.btcQty;
-            state.vaultBtcUsd = vault.btcUsd;
-            state.vaultUsd = round(pending + vault.btcUsd, 2);
-          }
+          if (vault.permsOk === false)
+            state.actions.push('🏦 vault: carry held in futures — Bitget key missing spot/transfer perms, re-probing every 30min');
+          // vaultUsd = holdings value: pending futures USDT + unbought
+          // spot USDT + BTC at mark (last reconciled qty × live price)
+          state.vaultUsd = round(
+            Math.max(0, pendingFutures) + Math.max(0, spotPending) + (vault.btcUsd || 0), 2);
         } catch (e) {
           state.errors.push('vault deploy failed: ' + String(e.message || e).slice(0, 100));
         }
