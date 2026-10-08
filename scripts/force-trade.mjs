@@ -18,14 +18,34 @@ for (const p of [path.join(__dirname, '..', '.env'), '/opt/sentinel/.env']) {
 
 const X = makeExchange(process.env);
 if (!X.hasCreds) throw new Error(`missing ${X.name} API credentials`);
+// hedge-mode accounts reject one-way orders (Bitget 40774) — mirror the
+// exec: probe once and push the detected mode into the adapter.
+{
+  const pm = await X.getPosMode('BTCUSDT').catch(() => null);
+  if (pm) X.setPosMode?.(pm);
+}
 
 const SYM = process.argv[2] || 'NEARUSDT';
 const DIR = (process.argv[3] || 'LONG').toUpperCase();
 const SGN = DIR === 'LONG' ? 1 : -1;
 const HOLD = DIR === 'LONG' ? 'long' : 'short';
 const BUYSIDE = DIR === 'LONG' ? 'buy' : 'sell';
-const stopPct = +(process.argv[4] || 0.9);
-const tgtPct = +(process.argv[5] || 4.0);
+// stopPct 'auto' => 1.5x the 15m ATR%% — per-symbol volatility-derived stop
+// instead of a flat number. Tighter names earn tighter stops (and more lev
+// via the band formula); wild names get room. Clamp 1.5%..5%.
+let stopPct = 0, tgtPct = +(process.argv[5] || 4.0);
+if ((process.argv[4] || '') === 'auto') {
+  const candles = await fetch(
+    `https://api.bitget.com/api/v2/mix/market/candles?symbol=${SYM}&productType=USDT-FUTURES&granularity=15m&limit=20`
+  ).then((r) => r.json()).then((j) => (j.data || []).map((c) => ({ h: +c[2], l: +c[3], c: +c[4] })).reverse());
+  if (!candles.length) throw new Error('no candles for ATR');
+  const trs = candles.slice(1).map((c, i) => Math.max(c.h - c.l, Math.abs(c.h - candles[i].c), Math.abs(c.l - candles[i].c)));
+  const atrPct = (trs.reduce((a, t) => a + t, 0) / trs.length / candles[candles.length - 1].c) * 100;
+  stopPct = Math.min(5, Math.max(1.5, +(1.5 * atrPct).toFixed(2)));
+  // target follows the stop so RR stays ~1.5+ regardless of volatility
+  if (!process.argv[5]) tgtPct = +(Math.max(2, stopPct * 1.5)).toFixed(2);
+  console.log(`auto-stop: 15m ATR ${atrPct.toFixed(2)}% -> stopPct ${stopPct}% tgt ${tgtPct}%`);
+} else stopPct = +(process.argv[4] || 0.9);
 
 const plans = await X.getPlans(SYM);
 const byType = {};

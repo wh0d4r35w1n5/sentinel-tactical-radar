@@ -16,7 +16,6 @@ First run needs phone + login code once; session persists in tg-session.session.
 import asyncio, inspect, json, os, re, subprocess, sys, time
 from pathlib import Path
 from telethon import TelegramClient, events, Button
-from telethon.errors import FloodWaitError
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -211,16 +210,7 @@ async def main():
             return "?"
 
     def say(text):
-        # deliver-or-log: a Telegram send failure used to kill the caller's
-        # task silently. FloodWait waits out the window (capped), other
-        # errors return False so callers can journal instead of crash.
-        async def _s():
-            try:
-                return await client.send_message("me", text, parse_mode="html", link_preview=False)
-            except FloodWaitError as e:
-                await asyncio.sleep(min(e.seconds + 1, 60))
-                return await client.send_message("me", text, parse_mode="html", link_preview=False)
-        return _s()
+        return client.send_message("me", text, parse_mode="html", link_preview=False)
 
     # ---- command handlers -------------------------------------------------
     def c_status():
@@ -1263,27 +1253,18 @@ async def main():
                     await say(f"🌩 <b>GOD {esc(gok)}</b> — " + esc(", ".join(bad) or "audit findings") + "\n<i>/god for the report</i>")
                 prev_god = gok
                 # outbox — other services (liq-guard etc.) drop JSONL lines
-                # here; we deliver them to Saved Messages. Rename-claim first:
-                # a line appended between read and unlink would be lost.
+                # here; we deliver them to Saved Messages
                 op = STATE_DIR / "tg-outbox.jsonl"
-                claimed = STATE_DIR / "tg-outbox.claimed"
                 try:
                     if op.exists():
-                        try:
-                            op.replace(claimed)
-                        except OSError:
-                            claimed = op
-                        for l in claimed.read_text().splitlines():
+                        for l in op.read_text().splitlines():
                             try:
                                 t = json.loads(l).get("text")
                                 if t:
                                     await say(t)
                             except Exception:
                                 pass
-                        if claimed != op:
-                            claimed.unlink()
-                        else:
-                            op.unlink()
+                        op.unlink()
                 except Exception as e:
                     print(f"[tg-c2] outbox: {type(e).__name__}: {e}", flush=True)
 

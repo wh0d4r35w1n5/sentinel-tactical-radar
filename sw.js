@@ -7,7 +7,7 @@
 //                     a Pages outage shows last-known-good data, never a hole.
 //   fallback CDN   -> jsDelivr gh mirror, only when Pages itself is down
 //                     (cached ~12h upstream; stale beats absent)
-var VER = 'str-v7';
+var VER = 'str-v8';
 var STATIC = [
   '/sentinel-tactical-radar/',
   '/sentinel-tactical-radar/index.html',

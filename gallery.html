@@ -78,6 +78,21 @@ details.xtab td,details.xtab th{padding:3px 8px;text-align:right;border-bottom:1
 details.xtab th{font-size:8px;letter-spacing:.1em;color:var(--mut)}
 .cverr{display:flex;align-items:center;justify-content:center;min-height:250px;color:var(--mut);font-size:10px;letter-spacing:.08em}
 #genAt{float:right;font-size:9px;color:var(--mut);letter-spacing:.08em}
+/* ---- edge desk + exports ---- */
+.edge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 32px rgba(0,0,0,.28)}
+.edge h2{font-size:10px;letter-spacing:.2em;color:var(--mut);margin-bottom:8px;font-weight:800}
+.edrow{display:flex;gap:14px;flex-wrap:wrap}
+.edrow>.cell{flex:1;min-width:320px}
+.etbl{width:100%;border-collapse:collapse;font-size:10px;font-variant-numeric:tabular-nums}
+.etbl th{font-size:8px;letter-spacing:.1em;color:var(--mut);text-align:right;padding:3px 7px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+.etbl td{padding:3px 7px;text-align:right;border-bottom:1px solid rgba(140,160,255,.08);white-space:nowrap}
+.etbl td:first-child,.etbl th:first-child{text-align:left}
+.etbl tr:hover td{background:rgba(138,91,255,.06)}
+.dlbtn{font-size:9px;letter-spacing:.1em;font-weight:700;padding:4px 11px;border:1px solid rgba(61,220,255,.45);border-radius:6px;color:var(--cyan);cursor:pointer;background:transparent;transition:all .2s}
+.dlbtn:hover{box-shadow:0 0 14px rgba(61,220,255,.35)}
+.hdr-dl{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.rline{font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 8px;border-radius:4px;color:var(--txt);border:1px solid var(--line)}
+@media print{body{background:#fff;color:#111}body::before{display:none}.evpanel,.filters,#loadmore,.back,.dlbtn,.fchip,.tnote .nedit,.edge .dlbtn{display:none!important}.card,.stat,.edge{box-shadow:none;break-inside:avoid}}
 </style>
 </head>
 <body>
@@ -85,9 +100,28 @@ details.xtab th{font-size:8px;letter-spacing:.1em;color:var(--mut)}
 <header>
   <span class="logo">📡</span>
   <h1>SENTINEL EVIDENCE GALLERY<span class="sub">real exchange round-trips only · the tape at entry · the executed path out — nothing emitted, nothing simulated</span></h1>
-  <a class="back" href="index.html">← COMMAND DECK</a>
+  <div class="hdr-dl">
+    <span class="dlbtn" id="dlReport" title="print-ready performance report — stats + attribution + chart snapshots">⬇ REPORT</span>
+    <span class="dlbtn" id="dlJson" title="enriched JSON — every field incl. measured excursions, R, capture, efficiency">⬇ JSON</span>
+    <span class="dlbtn" id="dlTsv" title="Sheets/Excel-ready tab-separated export — paste straight in">⬇ TSV</span>
+    <span class="dlbtn" id="dlCopy" title="copy the headliner stats block to clipboard">⧉ COPY</span>
+    <span class="dlbtn" id="dlAll" title="cards self-measure on load and every 90s refresh — this forces a full pass now">⌁ MEASURE ALL</span>
+    <a class="back" href="index.html">← COMMAND DECK</a>
+  </div>
 </header>
 <div class="stats" id="stats"></div>
+<div class="edge"><h2>EDGE DESK — attribution by entry family · measured on real fills, not modeled <span id="edgeNote" style="float:right;font-weight:400"></span></h2>
+  <div class="edrow">
+    <div class="cell"><table class="etbl" id="etbl"><tr><td class="sub">measuring — mount cards to fill this table</td></tr></table><div class="pt" style="margin-top:10px">BY SYMBOL — where the book actually earns</div><table class="etbl" id="symtbl"><tr><td class="sub">—</td></tr></table></div>
+    <div class="cell"><div class="pt">R DISTRIBUTION — realized R per closed trade (heat-normalized: 1R = adverse excursion actually taken)</div><div class="cv" id="rhist" style="min-height:210px"><div class="cverr">measuring…</div></div><div class="evnote" id="rnote"></div></div>
+    <div class="cell"><div class="pt">SESSION EDGE — entry-hour buckets, UTC · where the fills get paid</div><div class="cv" id="sesstab" style="min-height:210px"><div class="cverr">measuring…</div></div><div class="evnote" id="sessnote"></div></div>
+  </div>
+  <div class="edrow" style="margin-top:14px">
+    <div class="cell"><div class="pt">CALIBRATION — does the scanner score predict R? score bucket → realized outcome (engine-attributed only)</div><table class="etbl" id="caltbl"><tr><td class="sub">measuring…</td></tr></table></div>
+    <div class="cell"><div class="pt">HOLD-TIME EDGE — minutes held vs realized R · is patience paid?</div><div class="cv" id="holdsc" style="min-height:190px"><div class="cverr">measuring…</div></div><div class="evnote" id="holdnote"></div></div>
+    <div class="cell"><div class="pt">RISK DIGEST — distribution stats a desk reads first</div><div class="cv" id="digest" style="min-height:190px"><div class="cverr">measuring…</div></div></div>
+  </div>
+</div>
 <div class="evpanel">
   <div class="pane"><div class="pt">EQUITY OF EVIDENCE — cumulative net per closed round-trip · engine-attributed vs all fills</div><div class="cv" id="eqcurve"></div><div class="evnote" id="eqnote">—</div></div>
   <div class="pane"><div class="pt">CAPTURE MAP — adverse excursion vs favorable excursion, per trade · dots fill in as charts below mount · click a dot to jump to its card</div><div class="cv" id="scatter"></div><div class="evnote" id="scnote">measuring…</div></div>
@@ -104,7 +138,10 @@ const API='api/';
 let VEX='bitget';
 const VTITLE=()=>VEX==='bybit'?'Bybit':'Bitget';
 const VLINK=s=>VEX==='bybit'?`https://www.bybit.com/trade/usdt/${s}`:`https://www.bitget.com/futures/usdt/${s}`;
-const j=u=>fetch(u+(u.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+const j=u=>{const url=u+(u.includes('?')?'&':'?')+'v='+Date.now();
+  const once=()=>fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null);
+  return once().catch(()=>new Promise(r=>setTimeout(r,1500)).then(once)).catch(()=>null); // one retry — a single dropped artifact shouldn't blank a panel
+};
 const fmtP=p=>p==null?'—':p>=100?p.toFixed(1):p>=1?p.toFixed(3):p.toPrecision(4);
 const fmt$=v=>v==null?'—':(v>=0?'+':'−')+'$'+Math.abs(v).toFixed(2);
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1e3);if(s<90)return Math.round(s)+'s';const m=s/60;if(m<90)return Math.round(m)+'m';const h=m/60;if(h<48)return h.toFixed(1)+'h';return Math.round(h/24)+'d'};
@@ -129,12 +166,142 @@ async function candlesFor(asset,fromMs,toMs,gran){
   }
   return out;
 }
+// ---- indicator kit — pure functions over candle arrays --------------------
+const emaSeries=(cs,n)=>{const k=2/(n+1);let v=null;return cs.map(c=>{v=v==null?c.c:c.c*k+v*(1-k);return{time:c.t/1000,value:v}})};
+function rsiSeries(cs,n=14){
+  if(cs.length<=n)return[];
+  let g=0,l=0;const out=[];
+  for(let i=1;i<cs.length;i++){
+    const d=cs[i].c-cs[i-1].c;
+    if(i<=n){if(d>0)g+=d;else l-=d;if(i===n){const rs=(g/n)/((l/n)||1e-9);out.push({time:cs[i].t/1000,value:100-100/(1+rs)})}}
+    else{g=(g*(n-1)+Math.max(0,d))/n;l=(l*(n-1)+Math.max(0,-d))/n;const rs=g/(l||1e-9);out.push({time:cs[i].t/1000,value:100-100/(1+rs)})}
+  }
+  return out;
+}
+function macdSeries(cs,f=12,s=26,sig=9){
+  const ema=(n)=>{const k=2/(n+1);let v=null;return cs.map(c=>{v=v==null?c.c:c.c*k+v*(1-k);return v})};
+  const ef=ema(f),es=ema(s);
+  const md=cs.map((c,i)=>({time:c.t/1000,value:ef[i]-es[i]}));
+  let v=null;const sg=md.map(m=>{v=v==null?m.value:m.value*(2/(sig+1))+v*(1-2/(sig+1));return{time:m.time,value:v}});
+  const hist=md.map((m,i)=>({time:m.time,value:m.value-sg[i].value}));
+  return{macd:md,signal:sg,hist};
+}
+function bollSeries(cs,n=20,k=2){
+  const mid=[],up=[],dn=[];
+  for(let i=n-1;i<cs.length;i++){
+    let s=0;for(let j=i-n+1;j<=i;j++)s+=cs[j].c;
+    const m=s/n;let v=0;for(let j=i-n+1;j<=i;j++)v+=(cs[j].c-m)**2;
+    const sd=Math.sqrt(v/n),t=cs[i].t/1000;
+    mid.push({time:t,value:m});up.push({time:t,value:m+k*sd});dn.push({time:t,value:m-k*sd});
+  }
+  return{mid,up,dn};
+}
+function vwapSeries(cs){
+  let pv=0,vv=0;const out=[];
+  for(const c of cs){const tp=(c.h+c.l+c.c)/3;pv+=tp*(c.v||0);vv+=(c.v||0);out.push({time:c.t/1000,value:vv?pv/vv:tp})}
+  return out;
+}
+const atrLast=(cs,n=14)=>{if(cs.length<=n)return null;let a=0;for(let i=cs.length-n;i<cs.length;i++)a+=Math.max(cs[i].h-cs[i].l,Math.abs(cs[i].h-cs[i-1].c),Math.abs(cs[i].l-cs[i-1].c));return a/n};
+function volProfile(cs,bins=24){
+  if(!cs.length)return null;
+  const lo=Math.min(...cs.map(c=>c.l)),hi=Math.max(...cs.map(c=>c.h)),rng=hi-lo;
+  if(rng<=0)return null;
+  const b=new Array(bins).fill(0);
+  for(const c of cs){const tp=(c.h+c.l+c.c)/3;b[Math.min(bins-1,Math.floor((tp-lo)/rng*bins))]+=c.v||0}
+  const tot=b.reduce((a,x)=>a+x,0);if(tot<=0)return null;
+  let pi=0;b.forEach((v,i)=>{if(v>b[pi])pi=i});
+  const px=i=>lo+rng*(i+0.5)/bins;
+  // 70% value area — expand out from POC
+  let lo2=pi,hi2=pi,acc=b[pi];
+  while(acc<tot*0.7&&(lo2>0||hi2<bins-1)){
+    const dl=lo2>0?b[lo2-1]:-1,dh=hi2<bins-1?b[hi2-1]:-1;
+    if(dh>=dl){hi2++;acc+=b[hi2]}else{lo2--;acc+=b[lo2]}
+  }
+  return{poc:px(pi),vah:px(Math.min(hi2+0.5,bins-0.5)),val:px(Math.max(lo2-0.5,0)),vols:b,lo,rng};
+}
+// ---- forensic detectors — mark the evidence the signal families claim -----
+function obvTrend(cs,n=20){
+  if(cs.length<n+2)return null;
+  let o=0;const arr=[];
+  for(let i=1;i<cs.length;i++){o+=(cs[i].c>cs[i-1].c?1:cs[i].c<cs[i-1].c?-1:0)*(cs[i].v||0);arr.push(o)}
+  const a=arr.slice(-n),b=arr.slice(-2*n,-n);
+  return(a.reduce((x,y)=>x+y,0)/a.length)-(b.reduce((x,y)=>x+y,0)/b.length)>0?'rising':'falling';
+}
+function rsiDivergence(cs,n=14){
+  // classic: two consecutive swing lows in price with a higher low in RSI =
+  // bull divergence (bear mirrored). Returns marker descriptors near the
+  // second pivot. Lookback window kept to the visible tail.
+  const rsi=rsiSeries(cs,n);if(rsi.length<10)return[];
+  const rs=new Map(rsi.map(x=>[x.time*1000,x.value]));
+  const out=[];
+  for(let i=Math.max(3,cs.length-40);i<cs.length-3;i++){
+    const c=cs[i];
+    const lo=Math.min(cs[i-2].l,cs[i-1].l,cs[i+1].l,cs[i+2].l),hi=Math.max(cs[i-2].h,cs[i-1].h,cs[i+1].h,cs[i+2].h);
+    // prior swing of same kind within last 25 bars
+    if(c.l<lo){for(let j=i-5;j>Math.max(2,i-25);j--){
+      const p=cs[j];if(p.l<Math.min(cs[j-1].l,cs[j+1].l,lo+1e-9)&&p.l<lo){continue}
+      if(p.l<lo&&p.l!==c.l){const r1=rs.get(p.t),r2=rs.get(c.t);if(r1&&r2&&c.l<p.l&&r2>r1+1){out.push({t:c.t,p:c.l,ty:'L',txt:'bull div'});i=cs.length}break}}
+    }
+    if(c.h>hi){for(let j=i-5;j>Math.max(2,i-25);j--){
+      const p=cs[j];
+      if(p.h>hi&&p.h!==c.h){const r1=rs.get(p.t),r2=rs.get(c.t);if(r1&&r2&&c.h>p.h&&r2<r1-1){out.push({t:c.t,p:c.h,ty:'H',txt:'bear div'});i=cs.length}break}}
+    }
+  }
+  return out;
+}
+function sweepMarks(cs,look=40){
+  // liquidity sweep / SFP: wick beyond the prior N-bar extreme that closes
+  // back inside the range. This IS the family's signature — drawn, not said.
+  const out=[];
+  for(let i=Math.max(5,cs.length-look);i<cs.length;i++){
+    const c=cs[i],pr=cs.slice(Math.max(0,i-12),i);
+    if(pr.length<5)continue;
+    const hi=Math.max(...pr.map(x=>x.h)),lo=Math.min(...pr.map(x=>x.l));
+    if(c.h>hi&&c.c<hi)out.push({t:c.t,p:c.h,ty:'H',txt:'SWEEP'});
+    if(c.l<lo&&c.c>lo)out.push({t:c.t,p:c.l,ty:'L',txt:'SWEEP'});
+  }
+  return out.slice(-6);
+}
+function candleTag(cs){
+  // name the setup bar — the last candle is the entry bar on the setup tape
+  const c=cs[cs.length-1];if(!c)return null;
+  const b=Math.abs(c.c-c.o),r=c.h-c.l||1e-9,up=c.c>=c.o;
+  const uW=c.h-Math.max(c.c,c.o),lW=Math.min(c.c,c.o)-c.l;
+  if(b/r<0.12)return{txt:'DOJI',ty:'H'};
+  if(lW>b*2&&uW<b)return{txt:up?'HAMMER':'HANGING',ty:'L'};
+  if(uW>b*2&&lW<b)return{txt:up?'SHOOTER':'INVHAM',ty:'H'};
+  const p=cs[cs.length-2];
+  if(p&&b>Math.abs(p.c-p.o)*1.4&&((up&&p.c<p.o)||(!up&&p.c>p.o)))return{txt:up?'BULL ENG':'BEAR ENG',ty:up?'L':'H'};
+  return null;
+}
+function dailyPivots(cs){
+  // classic floor pivots off the last completed UTC day
+  const d=new Date(cs[cs.length-1].t);d.setUTCHours(0,0,0,0);
+  const prev=cs.filter(c=>c.t<+d).slice(-24);
+  if(prev.length<6)return null;
+  const H=Math.max(...prev.map(c=>c.h)),L=Math.min(...prev.map(c=>c.l)),C=prev[prev.length-1].c;
+  const P=(H+L+C)/3;return{P,R1:2*P-L,S1:2*P-H};
+}
+function fvgZones(cs){
+  // fair value gaps — 3-candle displacement where the middle bar's wick
+  // doesn't overlap its neighbors'. Bullish FVG: c[i].l > c[i-2].h. Return
+  // the most recent still-unmitigated gap in each direction.
+  let bull=null,bear=null;
+  for(let i=2;i<cs.length;i++){
+    if(cs[i].l>cs[i-2].h){const z={t:cs[i-1].t,lo:cs[i-2].h,hi:cs[i].l};
+      // mitigated once a later candle trades back through the gap
+      const mit=cs.slice(i+1).some(c=>c.l<z.hi);if(!mit)bull=z}
+    if(cs[i].h<cs[i-2].l){const z={t:cs[i-1].t,lo:cs[i].h,hi:cs[i-2].l};
+      const mit=cs.slice(i+1).some(c=>c.h>z.lo);if(!mit)bear=z}
+  }
+  return{bull,bear};
+}
 function drawChart(el,e,cs,after){
-  if(!cs.length)return;
+  if(!cs.length)return null;
   const chart=LightweightCharts.createChart(el,{layout:{background:{type:'solid',color:'transparent'},textColor:'#8ea0bf',fontSize:10,fontFamily:"'Segoe UI',system-ui,sans-serif",attributionLogo:false},
     grid:{vertLines:{color:'rgba(140,150,255,.05)'},horzLines:{color:'rgba(140,150,255,.05)'}},
     timeScale:{timeVisible:true,borderVisible:false,secondsVisible:false,rightOffset:3},
-    rightPriceScale:{borderVisible:false,scaleMargins:{top:0.07,bottom:0.2}},
+    rightPriceScale:{borderVisible:false,scaleMargins:{top:0.05,bottom:0.26}},
     crosshair:{mode:0,vertLine:{color:'rgba(140,180,255,.4)',labelBackgroundColor:'#161d2e',style:2,width:1},horzLine:{color:'rgba(140,180,255,.4)',labelBackgroundColor:'#161d2e',style:2,width:1}},
     watermark:{visible:true,text:(e.asset||'')+'USDT',color:'rgba(140,160,255,.055)',fontSize:52,fontStyle:'bold'},
     width:el.clientWidth||520,height:el.clientHeight||250});
@@ -143,8 +310,29 @@ function drawChart(el,e,cs,after){
   s.setData(cs.map(c=>({time:c.t/1000,open:c.o,high:c.h,low:c.l,close:c.c})));
   if(cs.some(c=>c.v>0)){
     const vs=chart.addHistogramSeries({priceScaleId:'vol',priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false});
-    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.85,bottom:0},visible:false});
+    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.91,bottom:0},visible:false});
     vs.setData(cs.map(c=>({time:c.t/1000,value:c.v,color:c.c>=c.o?'rgba(46,230,168,.28)':'rgba(255,77,109,.28)'})));
+  }
+  // oscillator band — RSI(14) on the setup tape, MACD(12,26,9) on the
+  // execution tape. Own invisible price scale stacked above volume.
+  try{chart.priceScale('osc').applyOptions({visible:false,scaleMargins:{top:0.80,bottom:0.105},entireTextOnly:true})}catch(_){}
+  if(!after){
+    const r=rsiSeries(cs);
+    if(r.length){
+      const rs=chart.addLineSeries({priceScaleId:'osc',color:'rgba(255,180,84,.85)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'price',precision:0,minMove:1},title:'RSI14'});
+      rs.setData(r);
+      rs.createPriceLine({price:70,color:'rgba(255,77,109,.35)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:''});
+      rs.createPriceLine({price:30,color:'rgba(46,230,168,.35)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:''});
+      rs.createPriceLine({price:50,color:'rgba(140,160,255,.2)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:''});
+    }
+  }else{
+    const m=macdSeries(cs);
+    if(m.macd.length){
+      const hs=chart.addHistogramSeries({priceScaleId:'osc',priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'price',precision:4,minMove:0.0001},title:'MACD hist'});
+      hs.setData(m.hist.map(h=>({time:h.time,value:h.value,color:h.value>=0?'rgba(46,230,168,.4)':'rgba(255,77,109,.4)'})));
+      chart.addLineSeries({priceScaleId:'osc',color:'rgba(61,220,255,.8)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'price',precision:4},title:'MACD'}).setData(m.macd);
+      chart.addLineSeries({priceScaleId:'osc',color:'rgba(255,180,84,.8)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'price',precision:4},title:'sig'}).setData(m.signal);
+    }
   }
   const sgn=e.direction==='LONG'?1:-1;
   if(after&&e.entry){
@@ -158,10 +346,18 @@ function drawChart(el,e,cs,after){
   const snap=t=>cs.reduce((b,c)=>Math.abs(c.t-t)<Math.abs(b.t-t)?c:b).t/1000;
   const ls=(price,color,style,title)=>s.createPriceLine({price,color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
   ls(e.entry,'#f0f5ff',2,'ENTRY');
-  if(after&&e.exitPrice!=null)ls(e.exitPrice,e.net>=0?'#2ee6a8':'#ff4d6d',2,'EXIT avg');
+  if(after&&e.exitPrice!=null)ls(e.exitPrice,e.net>=0?'#2ee6a8':'#ff4d6d',2,'EXIT avg'+(e.rMult!=null?' · R '+(e.rMult>=0?'+':'')+e.rMult.toFixed(2):''));
   if(after&&e.mfe!=null&&e.mae!=null){
     ls(e.mfe,'rgba(46,230,168,.6)',1,'MFE +'+(sgn*(e.mfe/e.entry-1)*100).toFixed(2)+'%');
     ls(e.mae,'rgba(255,77,109,.6)',1,'MAE '+(sgn*(e.mae/e.entry-1)*100).toFixed(2)+'%');
+    // R-grid — 1R = the heat actually taken (entry→MAE). Dashed favorable
+    // rungs show what +1R/+2R/+3R of *that* risk would have paid.
+    const rUnit=Math.abs(e.entry-e.mae);
+    if(rUnit>e.entry*1e-6)
+      for(const k of[1,2,3]){
+        const rp=e.entry+sgn*rUnit*k;
+        s.createPriceLine({price:rp,color:'rgba(255,215,80,.28)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'R+'+k});
+      }
   }
   const marks=[{time:snap(e.ts),position:sgn>0?'belowBar':'aboveBar',color:'#f0f5ff',shape:sgn>0?'arrowUp':'arrowDown',text:'ENTRY '+e.direction+' $'+e.notional}];
   // real exit prints — a staggered ladder stamps one marker per tranche
@@ -171,9 +367,22 @@ function drawChart(el,e,cs,after){
   else if(after&&e.exitTs&&e.exitPrice!=null)
     marks.push({time:snap(e.exitTs),position:e.net>=0?'belowBar':'aboveBar',color:e.net>=0?'#2ee6a8':'#ff4d6d',shape:'circle',text:'EXIT '+fmt$(e.net)});
   if(!after){
-    const ema=n=>{const k=2/(n+1);let v=null;return cs.map(c=>{v=v==null?c.c:c.c*k+v*(1-k);return{time:c.t/1000,value:v}})};
-    chart.addLineSeries({color:'rgba(61,220,255,.6)',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(ema(20));
-    chart.addLineSeries({color:'rgba(255,180,84,.6)',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(ema(50));
+    chart.addLineSeries({color:'rgba(61,220,255,.6)',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(emaSeries(cs,20));
+    chart.addLineSeries({color:'rgba(255,180,84,.6)',lineWidth:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(emaSeries(cs,50));
+    chart.addLineSeries({color:'rgba(139,147,168,.55)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(emaSeries(cs,200));
+    // bollinger 20/2 — the volatility envelope price was traded inside of
+    const bb=bollSeries(cs,20,2);
+    for(const[pts,col]of[[bb.up,'rgba(138,91,255,.35)'],[bb.mid,'rgba(138,91,255,.25)'],[bb.dn,'rgba(138,91,255,.35)']])
+      chart.addLineSeries({color:col,lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(pts);
+    // anchored VWAP over the setup window — where institutional volume sat
+    chart.addLineSeries({color:'rgba(255,215,80,.7)',lineWidth:1,lineStyle:2,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false}).setData(vwapSeries(cs));
+    // volume profile — POC / VAH / VAL as horizontal structure levels
+    const vp=volProfile(cs);
+    if(vp){
+      s.createPriceLine({price:vp.poc,color:'rgba(255,46,196,.5)',lineWidth:1,lineStyle:3,axisLabelVisible:true,title:'POC'});
+      s.createPriceLine({price:vp.vah,color:'rgba(255,46,196,.3)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'VAH'});
+      s.createPriceLine({price:vp.val,color:'rgba(255,46,196,.3)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'VAL'});
+    }
     const piv=(window.Harmonics?Harmonics.zigzag(cs,0.012):[]);
     if(piv.length>2){
       const zz=chart.addLineSeries({color:'rgba(205,215,255,.45)',lineWidth:1,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false});
@@ -214,10 +423,38 @@ function drawChart(el,e,cs,after){
           marks.push({time:snap(p.labelAt.t),position:p.labelAt.ty==='H'?'aboveBar':'belowBar',color:pc,shape:'circle',text:p.name});
       }
     }
+    // last unmitigated fair value gap in each direction — the magnet zones
+    const fv=fvgZones(cs);
+    for(const[z,col,tag]of[[fv.bull,'rgba(46,230,168,.4)','FVG↑'],[fv.bear,'rgba(255,77,109,.4)','FVG↓']]){
+      if(!z)continue;
+      s.createPriceLine({price:z.hi,color:col,lineWidth:1,lineStyle:2,axisLabelVisible:false,title:tag});
+      s.createPriceLine({price:z.lo,color:col,lineWidth:1,lineStyle:4,axisLabelVisible:false,title:''});
+    }
+    // floor pivots off the last completed UTC day
+    const dP=dailyPivots(cs);
+    if(dP){
+      s.createPriceLine({price:dP.P,color:'rgba(240,245,255,.4)',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:'P'});
+      s.createPriceLine({price:dP.R1,color:'rgba(255,77,109,.3)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'R1'});
+      s.createPriceLine({price:dP.S1,color:'rgba(46,230,168,.3)',lineWidth:1,lineStyle:4,axisLabelVisible:false,title:'S1'});
+    }
+    // forensic marks: sweeps, RSI divergence, the entry bar's candle name
+    for(const m of sweepMarks(cs))
+      marks.push({time:snap(m.t),position:m.ty==='H'?'aboveBar':'belowBar',color:'#ff2ec4',shape:'circle',text:'◇'+m.txt});
+    for(const m of rsiDivergence(cs))
+      marks.push({time:snap(m.t),position:m.ty==='H'?'aboveBar':'belowBar',color:m.ty==='H'?'#ff4d7d':'#4dffa6',shape:'arrowUp',text:m.txt});
+    const ct=candleTag(cs);
+    if(ct)marks.push({time:snap(cs[cs.length-1].t),position:ct.ty==='H'?'aboveBar':'belowBar',color:'#ffd750',shape:'square',text:ct.txt});
+    // pane caption: ATR regime + OBV direction at the setup tape
+    const pt=el.closest('.pane')&&el.closest('.pane').querySelector('.pt');
+    if(pt&&!pt.dataset.base){pt.dataset.base=pt.textContent;
+      const a=atrLast(cs),o=obvTrend(cs),r=rsiSeries(cs),rl=r.length?r[r.length-1].value:null;
+      pt.textContent=pt.dataset.base+' · ATR '+(a?((a/cs[cs.length-1].c)*100).toFixed(2)+'%':'—')+' · OBV '+(o||'—')+' · RSI '+(rl?rl.toFixed(0):'—')}
   }
   s.setMarkers(marks.sort((a,b)=>a.time-b.time));
   chart.timeScale().fitContent();
+  return chart;
 }
+const CHARTS=new Map(); // key -> {b,a} — handles for PNG stitching
 
 let RECS=[],FILTER='all',SHOWN=0;
 const PAGE=6,obs=new IntersectionObserver(es=>{for(const en of es){if(en.isIntersecting){obs.unobserve(en.target);mountCard(en.target.dataset.k)}}},{rootMargin:'600px'});
@@ -250,11 +487,32 @@ async function mountCard(key){
     r.maePct=sgn*(mae-e.entry)/e.entry*100;
     const favUsd=Math.max(0,r.mfePct)/100*r.notional;
     r.capture=favUsd>0.01?Math.max(-99,Math.min(120,r.net/favUsd*100)):null;
+    // ---- execution forensics — the numbers a desk asks for ----------------
+    // R realized: net normalized by the heat actually taken (entry→MAE),
+    // NOT the planned stop — honest because it's measured, not modeled.
+    const heatUsd=Math.abs(r.maePct)/100*r.notional;
+    e.rMult=r.rMult=heatUsd>0.005?r.net/heatUsd:null;
+    // giveback: share of the best move surrendered before the exit
+    r.giveback=e.exitPrice!=null&&mfe!==e.entry?Math.max(-99,(sgn>0?(mfe-e.exitPrice):(e.exitPrice-mfe))/Math.abs(mfe-e.entry)*100):null;
+    // entry efficiency: where the fill sat inside the pre-entry window
+    // (low % for longs = bought near the low — good location)
+    if(csB.length>10){
+      const win=csB.slice(-48),lo=Math.min(...win.map(c=>c.l)),hi=Math.max(...win.map(c=>c.h));
+      r.entryEff=hi>lo?sgn>0?(e.entry-lo)/(hi-lo)*100:(hi-e.entry)/(hi-lo)*100:null;
+    }
+    // time underwater: share of held candles closing against the entry
+    const held=csA.filter(c=>c.t>=r.entryTs&&c.t<=end);
+    r.tUnder=held.length?held.filter(c=>sgn>0?c.c<e.entry:c.c>e.entry).length/held.length*100:null;
+    // time to MFE — how fast the move paid
+    const mfec=held.find(c=>sgn>0?c.h>=mfe:c.l<=mfe);
+    r.tMfeMin=mfec?(mfec.t-r.entryTs)/6e4:null;
     noteMeasured(r);
   }
   const eb=card.querySelector('[data-chb]'),ea=card.querySelector('[data-cha]');
-  if(eb){if(csB.length)drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);else eb.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
-  if(ea){if(csA.length)drawChart(ea,e,csA,true);else ea.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
+  const ch={};
+  if(eb){if(csB.length)ch.b=drawChart(eb,e,csB.filter(c=>c.t+3600e3<=e.ts),false);else eb.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
+  if(ea){if(csA.length)ch.a=drawChart(ea,e,csA,true);else ea.innerHTML=`<div class="cverr">tape unavailable — ${VTITLE()} API unreachable</div>`}
+  if(ch.b||ch.a)CHARTS.set(r.key,ch);
   if(!csA.length){r.measureFailed=true;paintCap(r)}
 }
 function cardHTML(r){
@@ -273,19 +531,22 @@ function cardHTML(r){
       <span class="tag ${r.dir==='LONG'?'long':'short'}">${r.dir}</span>
       ${r.strategy==='vema-setup'||r.strategy==='tv-webhook'?`<span class="tag setup" title="operator setup — armed via the setup builder${r.setupId?' · '+r.setupId:''}">🛠 ${esc(r.strategy)}${r.setupId?' '+esc(r.setupId):''}</span>`:r.strategy?`<span class="tag strat" title="linked emitted signal · score ${r.score??'—'} · grade ${r.grade||'—'}">${r.strategy}${r.score!=null?' '+r.score:''}</span>`:'<span class="sub">manual / foreign fill</span>'}
       <span class="cap x" data-cap title="capture efficiency — share of the favorable excursion actually banked">cap …</span>
+      <span class="rline" data-rm title="realized R — net ÷ adverse excursion taken">R —</span>
       <span class="sub">${fmtP(r.entryPx)} → ${open?'…':fmtP(r.exitPx)} · qty <b>${r.qty}</b> · <b class="num">$${r.notional}</b>${xn>1?` · ${xn} exits`:''}</span>
       <span class="oc ${ocCls}">${ocTxt}</span>
     </div>
     <div class="charts">
-      <div class="pane"><div class="pt">BEFORE — the tape at entry · zigzag · range · fibs · EMA20/50 · harmonics</div><div class="cv" data-chb></div></div>
-      <div class="pane"><div class="pt">EXECUTED — entry shading · tranche exits · MFE/MAE · net result</div><div class="cv" data-cha></div></div>
+      <div class="pane"><div class="pt">SETUP TAPE — EMA20/50/200 · VWAP · Bollinger · volume-profile POC/VA · RSI14 · zigzag · range · fibs · harmonics</div><div class="cv" data-chb></div></div>
+      <div class="pane"><div class="pt">EXECUTION TAPE — entry shading · tranche exits · MFE/MAE · R-grid · MACD · net result</div><div class="cv" data-cha></div></div>
     </div>
     ${xtab}
     <div class="meta">
       <span><b>${utc}</b> · ${ago(r.entryTs)} ago</span><span>${open?'open '+holdTxt(r.holdMin):'held <b>'+holdTxt(r.holdMin)+'</b>'}</span>
       <span>fees <b class="dn">$${r.fees}</b></span><span>gross <b class="${r.pnl>=0?'up':'dn'}">${fmt$(r.pnl)}</b></span>
       <span>net <b class="${r.net>=0?'up':'dn'}">${fmt$(r.net)}</b>${r.pnlPct!=null?` (${r.pnlPct>=0?'+':''}${r.pnlPct}%)`:''}</span>
+      <span data-fore style="display:none"></span>
       ${r.note?`<span class="sub" style="font-style:italic" title="operator thesis">“${esc(r.note).slice(0,90)}”</span>`:''}
+      <span class="nedit" data-png="${r.key}" title="download both chart panes as one PNG">⬇ png</span>
       <a class="sub" style="margin-left:auto" href="${VLINK(r.symbol)}" target="_blank" rel="noopener">${VTITLE()} chart →</a>
     </div>
     <div class="tnote" data-nk="${r.key}">${noteHTML(r.key)}</div></div>`;
@@ -301,6 +562,7 @@ function noteHTML(k){
   return `${n.note?`<span class="ntxt">“${esc(n.note)}”</span>`:''}${tags.map(t=>`<span class="ntag">${esc(t)}</span>`).join('')}<span class="nedit" title="annotate this trade — note + comma-separated tags">✎ ${n.note||tags.length?'edit':'note · tags'}</span>`;
 }
 document.addEventListener('click',e=>{
+  const pg=e.target.closest('[data-png]');if(pg){cardPng(pg.dataset.png);return}
   const ed=e.target.closest('.nedit');if(!ed)return;
   const row=ed.closest('.tnote');const k=row.dataset.nk;const cur=noteGet(k);
   row.innerHTML=`<input class="ninp" placeholder="thesis — what did you see?" value="${esc(cur.note||'')}"><input class="ninp ntag" style="max-width:150px" placeholder="tags (comma-sep)" value="${esc(cur.tags||'')}"><span class="nedit nsave">save</span>`;
@@ -311,11 +573,11 @@ document.addEventListener('click',e=>{
 });
 // ---- CSV export — the filtered view as a spreadsheet row-set --------------
 function exportCsv(){
-  const rows=[['symbol','dir','strategy','setupId','entry','exit','qty','notional','fees','pnl','net','pnlPct','holdMin','status','maePct','mfePct','capturePct','entryTs','exitTs','exits','note','tags'].join(',')];
+  const rows=[['symbol','dir','strategy','setupId','entry','exit','qty','notional','fees','pnl','net','pnlPct','holdMin','status','maePct','mfePct','capturePct','rMult','givebackPct','entryEffPct','underwaterPct','tToMfeMin','entryTs','exitTs','exits','note','tags'].join(',')];
   for(const r of view()){
     const n=noteGet(r.key);
     const cell=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-    rows.push([r.symbol,r.dir,r.strategy||'',r.setupId||'',r.entryPx,r.exitPx,r.qty,r.notional,r.fees,r.pnl,r.net,r.pnlPct,r.holdMin,r.status,r.maePct??'',r.mfePct??'',r.capture!=null?+r.capture.toFixed(1):'',new Date(r.entryTs).toISOString(),r.exitTs?new Date(r.exitTs).toISOString():'',(r.exits||[]).length,n.note||'',n.tags||''].map(cell).join(','));
+    rows.push([r.symbol,r.dir,r.strategy||'',r.setupId||'',r.entryPx,r.exitPx,r.qty,r.notional,r.fees,r.pnl,r.net,r.pnlPct,r.holdMin,r.status,r.maePct??'',r.mfePct??'',r.capture!=null?+r.capture.toFixed(1):'',r.rMult!=null?+r.rMult.toFixed(3):'',r.giveback!=null?+r.giveback.toFixed(1):'',r.entryEff!=null?+r.entryEff.toFixed(1):'',r.tUnder!=null?+r.tUnder.toFixed(1):'',r.tMfeMin!=null?+r.tMfeMin.toFixed(1):'',new Date(r.entryTs).toISOString(),r.exitTs?new Date(r.exitTs).toISOString():'',(r.exits||[]).length,n.note||'',n.tags||''].map(cell).join(','));
   }
   const b=new Blob([rows.join('\n')],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sentinel-evidence-'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
@@ -378,9 +640,31 @@ function renderEquity(){
     all.push({time:i+1,value:+cum.toFixed(2)});eng.push({time:i+1,value:+cumE.toFixed(2)})});
   chart.addBaselineSeries({baseValue:{type:'price',price:0},topLineColor:'rgba(61,220,255,.9)',topFillColor1:'rgba(61,220,255,.25)',topFillColor2:'rgba(61,220,255,.02)',bottomLineColor:'rgba(255,77,109,.9)',bottomFillColor1:'rgba(255,77,109,.02)',bottomFillColor2:'rgba(255,77,109,.25)',lineWidth:2,priceLineVisible:false,lastValueVisible:true,title:'all fills'}).setData(all);
   chart.addLineSeries({color:'#ffd750',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false,title:'engine only'}).setData(eng);
-  let pk=-1e18,mdd=0;for(const p of all){pk=Math.max(pk,p.value);mdd=Math.max(mdd,pk-p.value)}
-  const n=document.getElementById('eqnote');if(n)n.textContent=`cyan = all fills · gold dashed = engine-attributed only · max excursion into drawdown $${mdd.toFixed(2)} · x-axis = trade #`;
+  // drawdown overlay — depth below running peak on its own scale, bottom band
+  let pk=-1e18,mdd=0;const dd=[];
+  for(const p of all){pk=Math.max(pk,p.value);const d=pk-p.value;mdd=Math.max(mdd,d);dd.push({time:p.time,value:d})}
+  try{chart.priceScale('dd').applyOptions({visible:false,scaleMargins:{top:0.86,bottom:0}});}catch(_){}
+  chart.addAreaSeries({priceScaleId:'dd',lineColor:'rgba(255,77,109,.8)',topColor:'rgba(255,77,109,.25)',bottomColor:'rgba(255,77,109,.02)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,title:'drawdown'}).setData(dd);
+  // Monte Carlo band — bootstrap-resample the realized nets 400×; the 5th and
+  // 95th percentile paths show whether the run is inside or outside the luck
+  // envelope. The realized curve IS the evidence; the band is its prior.
+  const nets=done.map(r=>r.net),B=400,paths=[];
+  for(let b=0;b<B;b++){let c=0;const path=[];for(let i=0;i<nets.length;i++){c+=nets[Math.floor(Math.random()*nets.length)];path.push(c)}paths.push(path)}
+  const q=(i,p)=>paths.map(x=>x[i]).sort((a,b)=>a-b)[Math.floor(p*B)];
+  const band=p=>nets.map((_,i)=>({time:i+1,value:+q(i,p).toFixed(2)}));
+  chart.addLineSeries({color:'rgba(77,255,166,.35)',lineWidth:1,lineStyle:4,priceLineVisible:false,lastValueVisible:false,title:'p95'}).setData(band(0.95));
+  chart.addLineSeries({color:'rgba(140,160,255,.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false,title:'median'}).setData(band(0.5));
+  chart.addLineSeries({color:'rgba(255,77,109,.35)',lineWidth:1,lineStyle:4,priceLineVisible:false,lastValueVisible:false,title:'p05'}).setData(band(0.05));
+  // rolling expectancy — 10-trade moving mean of net, faint magenta
+  const W=10,roll=nets.map((_,i)=>{const w=nets.slice(Math.max(0,i-W+1),i+1);return{time:i+1,value:+(w.reduce((a,x)=>a+x,0)/w.length).toFixed(3)}});
+  chart.addLineSeries({color:'rgba(255,46,196,.5)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,title:'roll exp'}).setData(roll);
+  EQCH=chart;
+  const pcts=paths.map(x=>x[nets.length-1]).sort((a,b)=>a-b);
+  const p05=pcts[Math.floor(0.05*B)].toFixed(2),p95=pcts[Math.floor(0.95*B)].toFixed(2);
+  const n=document.getElementById('eqnote');if(n)n.textContent=`cyan=all fills · gold=engine · red=drawdown · faint bands=Monte-Carlo p05/p95 of resampled nets (final range $${p05}→$${p95}) · magenta=10-trade rolling expectancy · max dd $${mdd.toFixed(2)}`;
 }
+let EQCH=null;
+let EPOCH_MS=null;
 
 // ---- filters + sort + shareable state ------------------------------------
 function view(){const s=SORTS[SORT]||SORTS.newest;return RECS.filter(FLT[FILTER]||FLT.all).filter(r=>STRAT==='all'||(STRAT==='_manual'?!r.strategy:r.strategy===STRAT)).slice().sort(s)}
@@ -388,7 +672,8 @@ function applyFilter(){
   const g=document.getElementById('gallery');
   const list=view();
   SHOWN=0;g.innerHTML='';
-  if(!list.length)g.innerHTML='<div class="cverr">no trades match this filter</div>';
+  if(!list.length)g.innerHTML=`<div class="cverr">${RECS.length?`no trades match this filter — <span class="fchip" id="resetF" style="margin-left:8px">SHOW ALL (${RECS.length})</span>`:(EPOCH_MS?`record epoch started ${new Date(EPOCH_MS).toISOString().slice(0,16).replace('T',' ')}Z — first close writes the first card`:'no trades yet')}</div>`;
+  const rf=document.getElementById('resetF');if(rf)rf.onclick=()=>{FILTER='all';STRAT='all';document.querySelectorAll('#filters .fchip').forEach(x=>x.classList.toggle('on',x.dataset.f==='all'));const fs=document.getElementById('fStrat');if(fs)fs.value='all';applyFilter()};
   loadMore(list);
   pushHash();
 }
@@ -412,10 +697,282 @@ function paintCap(r){
   el.textContent='cap '+(r.capture>=0?'+':'')+r.capture.toFixed(0)+'%';
   el.title=`capture efficiency: banked ${r.capture.toFixed(0)}% of the ${r.mfePct.toFixed(2)}% favorable move`;
 }
-document.getElementById('loadmore').onclick=()=>loadMore();
+function paintFore(r){
+  const card=document.querySelector(`[data-k="${CSS.escape(r.key)}"]`);if(!card)return;
+  const rm=card.querySelector('[data-rm]');
+  if(rm){if(r.rMult==null){rm.style.display='none'}else{rm.style.display='';
+    rm.textContent='R '+(r.rMult>=0?'+':'')+r.rMult.toFixed(2);
+    rm.style.color=r.rMult>=0?'var(--grn)':'var(--red)';rm.style.borderColor=r.rMult>=0?'rgba(77,255,166,.4)':'rgba(255,77,125,.4)';
+    rm.title=`realized R ${r.rMult.toFixed(2)} — net $${r.net.toFixed(2)} ÷ heat taken ${Math.abs(r.maePct).toFixed(2)}%`}}
+  const f=card.querySelector('[data-fore]');
+  if(f&&(r.entryEff!=null||r.tUnder!=null||r.giveback!=null)){f.style.display='';
+    f.innerHTML=[
+      r.entryEff!=null?`entry@<b>${r.entryEff.toFixed(0)}%</b> of range`:'',
+      r.tUnder!=null?`underwater <b>${r.tUnder.toFixed(0)}%</b>`:'',
+      r.giveback!=null?`giveback <b class="${r.giveback>40?'dn':r.giveback<15?'up':''}">${r.giveback.toFixed(0)}%</b>`:'',
+      r.tMfeMin!=null?`→MFE <b>${holdTxt(r.tMfeMin)}</b>`:'',
+    ].filter(Boolean).join(' · ');
+    f.title='entry efficiency: location inside the 48h pre-entry range · underwater: share of held candles closed against entry · giveback: best move surrendered before exit · →MFE: time to the best print';
+  }
+}
+// ---- per-card PNG — stitch the two pane screenshots into one tall image ---
+function cardPng(key){
+  const ch=CHARTS.get(key);if(!ch||(!ch.b&&!ch.a))return;
+  const cn=[ch.b,ch.a].filter(Boolean).map(c=>c.takeScreenshot());
+  const c=document.createElement('canvas');
+  c.width=Math.max(...cn.map(x=>x.width));c.height=cn.reduce((a,x)=>a+x.height,0);
+  const x=c.getContext('2d');x.fillStyle='#0d1117';x.fillRect(0,0,c.width,c.height);
+  let y=0;for(const cv of cn){x.drawImage(cv,(c.width-cv.width)/2,y);y+=cv.height}
+  const a=document.createElement('a');a.href=c.toDataURL('image/png');
+  a.download='sentinel-'+key.replace(/[^A-Za-z0-9]+/g,'_')+'.png';a.click();
+}
+// ---- EDGE DESK — per-family attribution, R histogram, session table -------
+function renderEdge(){
+  const closed=MEASURED.filter(r=>r.exitTs);
+  const en=document.getElementById('edgeNote');if(en)en.textContent=MEASURED.length+'/'+RECS.length+' measured';
+  // -- attribution table: one row per strategy + manual/foreign bucket
+  const fams={};
+  for(const r of closed){const k=r.strategy||'manual/foreign';(fams[k]=fams[k]||[]).push(r)}
+  const rows=Object.entries(fams).map(([k,rs])=>{
+    const w=rs.filter(r=>r.net>0),net=rs.reduce((a,r)=>a+r.net,0);
+    const gp=w.reduce((a,r)=>a+r.net,0),gl=-rs.filter(r=>r.net<=0).reduce((a,r)=>a+r.net,0);
+    const avg=(f)=>{const v=rs.map(f).filter(x=>x!=null);return v.length?v.reduce((a,x)=>a+x,0)/v.length:null};
+    return{k,n:rs.length,wr:w.length/rs.length*100,net,exp:net/rs.length,pf:gl>0?gp/gl:gp>0?99:null,
+      cap:avg(r=>r.capture),mae:avg(r=>r.maePct),mfe:avg(r=>r.mfePct),r:avg(r=>r.rMult),und:avg(r=>r.tUnder),hold:avg(r=>r.holdMin)};
+  }).sort((a,b)=>b.net-a.net);
+  const tb=document.getElementById('etbl');
+  if(tb)tb.innerHTML=`<tr><th>family</th><th title="closed round-trips">n</th><th title="hit rate">wr</th><th title="net after fees">net $</th><th title="expectancy per trade">exp</th><th title="profit factor">pf</th><th title="avg capture efficiency">cap</th><th title="avg heat taken">mae</th><th title="avg move offered">mfe</th><th title="avg realized R">R̄</th><th title="avg time underwater">und</th><th title="avg hold">hold</th></tr>`+
+    rows.map(q=>`<tr><td>${esc(q.k)}</td><td>${q.n}</td><td class="${q.wr>=50?'up':'dn'}">${q.wr.toFixed(0)}%</td><td class="${q.net>=0?'up':'dn'}">${fmt$(q.net)}</td><td class="${q.exp>=0?'up':'dn'}">${q.exp>=0?'+':''}${q.exp.toFixed(2)}</td><td>${q.pf==null?'—':q.pf.toFixed(2)}</td><td>${q.cap==null?'—':q.cap.toFixed(0)+'%'}</td><td class="dn">${q.mae==null?'—':q.mae.toFixed(2)+'%'}</td><td class="up">${q.mfe==null?'—':q.mfe.toFixed(2)+'%'}</td><td class="${(q.r??0)>=0?'up':'dn'}">${q.r==null?'—':(q.r>=0?'+':'')+q.r.toFixed(2)}</td><td>${q.und==null?'—':q.und.toFixed(0)+'%'}</td><td>${q.hold==null?'—':holdTxt(q.hold)}</td></tr>`).join('');
+  // -- per-symbol leaderboard — same aggregation, keyed by ticker
+  const st2=document.getElementById('symtbl');
+  if(st2){
+    const sy={};for(const r of closed)(sy[r.symbol]=sy[r.symbol]||[]).push(r);
+    const srows=Object.entries(sy).map(([k,rs])=>{const net=rs.reduce((a,r)=>a+r.net,0),w=rs.filter(r=>r.net>0).length;
+      const rv=rs.map(r=>r.rMult).filter(x=>x!=null);
+      return{k,n:rs.length,wr:w/rs.length*100,net,r:rv.length?rv.reduce((a,x)=>a+x,0)/rv.length:null}}).sort((a,b)=>b.net-a.net);
+    st2.innerHTML=`<tr><th>symbol</th><th>n</th><th>wr</th><th>net $</th><th>avg R</th></tr>`+
+      srows.map(q=>`<tr style="cursor:pointer" data-sym="${q.k}"><td>${q.k.replace(/USDT$/,'')}</td><td>${q.n}</td><td class="${q.wr>=50?'up':'dn'}">${q.wr.toFixed(0)}%</td><td class="${q.net>=0?'up':'dn'}">${fmt$(q.net)}</td><td class="${(q.r??0)>=0?'up':'dn'}">${q.r==null?'—':(q.r>=0?'+':'')+q.r.toFixed(2)}</td></tr>`).join('');
+    st2.querySelectorAll('tr[data-sym]').forEach(tr=>tr.onclick=()=>{const c=document.querySelector(`[data-k^="${CSS.escape(tr.dataset.sym+'|')}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})});
+  }
+  // -- best / worst deep-links
+  if(en&&closed.length>=3){
+    const byR=closed.filter(r=>r.rMult!=null).sort((a,b)=>b.rMult-a.rMult);
+    if(byR.length){en.innerHTML=`${MEASURED.length}/${RECS.length} measured · best <a href="javascript:void 0" data-jump="${byR[0].key}" style="color:var(--grn)">${byR[0].symbol} R${byR[0].rMult.toFixed(2)}</a> · worst <a href="javascript:void 0" data-jump="${byR[byR.length-1].key}" style="color:var(--red)">${byR[byR.length-1].symbol} R${byR[byR.length-1].rMult.toFixed(2)}</a>`;
+      en.querySelectorAll('[data-jump]').forEach(a=>a.onclick=()=>{const c=document.querySelector(`[data-k="${CSS.escape(a.dataset.jump)}"]`);if(c)c.scrollIntoView({behavior:'smooth',block:'center'})})}
+  }
+  // -- R histogram
+  const rh=document.getElementById('rhist');
+  const rs=closed.map(r=>r.rMult).filter(x=>x!=null&&isFinite(x));
+  if(rh){if(!rs.length){rh.innerHTML='<div class="cverr">no measured R yet — scroll cards to measure</div>'}
+    else{
+      const lo=Math.min(-0.5,Math.floor(Math.min(...rs)*2)/2),hi=Math.max(0.5,Math.ceil(Math.max(...rs)*2)/2),nb=Math.min(20,Math.max(8,Math.round((hi-lo)/0.25))),step=(hi-lo)/nb;
+      const cnt=new Array(nb).fill(0);for(const v of rs)cnt[Math.min(nb-1,Math.max(0,Math.floor((v-lo)/step)))]++;
+      const mx=Math.max(...cnt),W=rh.clientWidth||380,H=190,ph=H-26,bw=(W-10)/nb;
+      let bars='',xl='';
+      for(let i=0;i<nb;i++){const h=cnt[i]/mx*ph,x=5+i*bw,mid=lo+(i+.5)*step;
+        bars+=`<rect x="${x.toFixed(1)}" y="${(ph+18-h).toFixed(1)}" width="${(bw-1.5).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${mid>=0?'rgba(77,255,166,.7)':'rgba(255,77,125,.7)'}" ><title>R ${mid.toFixed(2)} · ${cnt[i]} trades</title></rect>`;
+        if(i%Math.ceil(nb/8)===0)xl+=`<text x="${x.toFixed(1)}" y="${H-6}" fill="#8b93a8" font-size="8">${mid.toFixed(1)}</text>`}
+      const zx=5+((0-lo)/step)*bw;
+      rh.innerHTML=`<svg width="${W}" height="${H}"><line x1="${zx.toFixed(1)}" y1="8" x2="${zx.toFixed(1)}" y2="${ph+18}" stroke="rgba(240,245,255,.5)" stroke-dasharray="3 3"/>${bars}${xl}</svg>`;
+      const pos=rs.filter(v=>v>0);const rn=document.getElementById('rnote');
+      if(rn)rn.textContent=`${rs.length} trades · mean R ${(rs.reduce((a,v)=>a+v,0)/rs.length).toFixed(2)} · ${pos.length} positive · R=net ÷ heat taken (measured, not planned stop)`;
+    }}
+  // -- session table (UTC hour buckets)
+  const st=document.getElementById('sesstab');
+  if(st){
+    const buc=[[0,'ASIA 00–08'],[8,'LONDON 08–13'],[13,'NY 13–21'],[21,'LATE 21–24']];
+    const rows2=buc.map(([h,nm])=>{
+      const inB=r=>{const hr=new Date(r.entryTs).getUTCHours();return h===0?hr<8:h===8?(hr>=8&&hr<13):h===13?(hr>=13&&hr<21):hr>=21};
+      const g=closed.filter(inB);if(!g.length)return null;
+      const net=g.reduce((a,r)=>a+r.net,0),w=g.filter(r=>r.net>0).length;
+      return{nm,n:g.length,net,wr:w/g.length*100};
+    }).filter(Boolean);
+    st.innerHTML=rows2.length?`<table class="etbl"><tr><th>session</th><th>n</th><th>wr</th><th>net $</th><th>exp</th></tr>`+
+      rows2.map(q=>`<tr><td>${q.nm}</td><td>${q.n}</td><td class="${q.wr>=50?'up':'dn'}">${q.wr.toFixed(0)}%</td><td class="${q.net>=0?'up':'dn'}">${fmt$(q.net)}</td><td>${(q.net/q.n>=0?'+':'')+(q.net/q.n).toFixed(2)}</td></tr>`).join('')+'</table>'
+      :'<div class="cverr">no closed trades yet</div>';
+  }
+  // -- CALIBRATION: score bucket -> realized outcome. The fund question:
+  //    does the grade actually rank trades? Monotone = real signal.
+  const ct=document.getElementById('caltbl');
+  if(ct){
+    const sc=closed.filter(r=>r.score!=null);
+    if(!sc.length){ct.innerHTML='<tr><td class="sub">no scored trades yet</td></tr>'}
+    else{
+      const bkts={};
+      for(const r of sc){const b=r.score>=90?'90+':r.score>=80?'80s':r.score>=70?'70s':r.score>=60?'60s':'<60';(bkts[b]=bkts[b]||[]).push(r)}
+      const ordr=['90+','80s','70s','60s','<60'];
+      ct.innerHTML=`<tr><th>score</th><th>n</th><th>wr</th><th>net $</th><th>avg R</th><th>avg cap</th></tr>`+
+        ordr.filter(k=>bkts[k]).map(k=>{const g=bkts[k],net=g.reduce((a,r)=>a+r.net,0),w=g.filter(r=>r.net>0).length;
+          const rv=g.map(r=>r.rMult).filter(x=>x!=null),cv=g.map(r=>r.capture).filter(x=>x!=null);
+          return`<tr><td>${k}</td><td>${g.length}</td><td class="${w/g.length>=.5?'up':'dn'}">${(w/g.length*100).toFixed(0)}%</td><td class="${net>=0?'up':'dn'}">${fmt$(net)}</td><td class="${(rv.length?rv.reduce((a,x)=>a+x,0)/rv.length:0)>=0?'up':'dn'}">${rv.length?(rv.reduce((a,x)=>a+x,0)/rv.length).toFixed(2):'—'}</td><td>${cv.length?cv.reduce((a,x)=>a+x,0)/cv.length|0+'%':'—'}</td></tr>`}).join('');
+    }
+  }
+  // -- HOLD-TIME EDGE: holdMin -> rMult scatter with a median line
+  const hc=document.getElementById('holdsc');
+  if(hc){
+    const hp=closed.filter(r=>r.rMult!=null&&r.holdMin!=null);
+    if(hp.length<3){hc.innerHTML='<div class="cverr">need ≥3 measured closes</div>'}
+    else{
+      const W=hc.clientWidth||380,H=170,P=24;
+      const xm=Math.max(...hp.map(r=>r.holdMin))*1.08,ym=Math.max(1,...hp.map(r=>Math.abs(r.rMult)))*1.15;
+      const X=v=>P+v/xm*(W-2*P),Y=v=>H-P-(v+ym)/(2*ym)*(H-2*P);
+      const dots=hp.map(r=>`<circle cx="${X(r.holdMin).toFixed(1)}" cy="${Y(r.rMult).toFixed(1)}" r="3.5" fill="${r.rMult>=0?'#4dffa6':'#ff4d7d'}" fill-opacity=".7"><title>${r.symbol} · ${holdTxt(r.holdMin)} · R ${r.rMult.toFixed(2)}</title></circle>`).join('');
+      hc.innerHTML=`<svg width="${W}" height="${H}">
+        <line x1="${P}" y1="${Y(0)}" x2="${W-P}" y2="${Y(0)}" stroke="rgba(240,245,255,.4)" stroke-dasharray="3 3"/>
+        ${dots}
+        <text x="${W-P}" y="${H-6}" fill="#8b93a8" font-size="8" text-anchor="end">minutes held →</text>
+        <text x="4" y="${P-12}" fill="#8b93a8" font-size="8">↑ R</text></svg>`;
+      const quick=hp.filter(r=>r.holdMin<30),slow=hp.filter(r=>r.holdMin>=30);
+      const avg=g=>g.length?g.reduce((a,r)=>a+r.rMult,0)/g.length:null;
+      const hn=document.getElementById('holdnote');
+      if(hn)hn.textContent=`<30m avg R ${avg(quick)?.toFixed(2)??'—'} · ≥30m avg R ${avg(slow)?.toFixed(2)??'—'} · dots above zero paid`;
+    }
+  }
+  // -- RISK DIGEST: the stats block a desk scans before anything else
+  const dg=document.getElementById('digest');
+  if(dg){
+    const nets=closed.map(r=>r.net);
+    if(nets.length<2){dg.innerHTML='<div class="cverr">need ≥2 closed trades</div>'}
+    else{
+      const mu=nets.reduce((a,x)=>a+x,0)/nets.length,sd=Math.sqrt(nets.reduce((a,x)=>a+(x-mu)**2,0)/nets.length);
+      const neg=nets.filter(x=>x<0),dds=neg.length?Math.sqrt(neg.reduce((a,x)=>a+x*x,0)/neg.length):1e-9;
+      const wN=nets.filter(x=>x>0).length,p=wN/nets.length;
+      const aw=neg&&nets.filter(x=>x>0).reduce((a,x)=>a+x,0)/(wN||1),al=neg.length?-neg.reduce((a,x)=>a+x,0)/neg.length:0;
+      const kelly=aw&&al?(p-(1-p)/(aw/al)):null;
+      let mxW=0,mxL=0,cw=0,cl=0;for(const x of nets){if(x>0){cw++;cl=0;mxW=Math.max(mxW,cw)}else{cl++;cw=0;mxL=Math.max(mxL,cl)}}
+      const fees=closed.reduce((a,r)=>a+(r.fees||0),0),gross=closed.reduce((a,r)=>a+Math.max(0,r.pnl||0),0);
+      dg.innerHTML=`<table class="etbl">
+        <tr><td>Sharpe-lite (mean/sd per trade)</td><td class="${mu>=0?'up':'dn'}">${sd>0?(mu/sd).toFixed(2):'—'}</td></tr>
+        <tr><td>Sortino-lite (mean/σ of losses)</td><td class="${mu>=0?'up':'dn'}">${(mu/dds).toFixed(2)}</td></tr>
+        <tr><td>Kelly fraction (of bankroll/trade)</td><td>${kelly==null?'—':(kelly*100).toFixed(1)+'%'}</td></tr>
+        <tr><td>max win / loss streak</td><td>${mxW}W / ${mxL}L</td></tr>
+        <tr><td>payoff ratio (avgW/avgL)</td><td>${aw&&al?(aw/al).toFixed(2):'—'}</td></tr>
+        <tr><td>fee drag (% of gross wins)</td><td class="dn">${gross>0?(fees/gross*100).toFixed(0)+'%':'—'}</td></tr>
+        <tr><td>trades measured</td><td>${closed.length} closed · ${MEASURED.filter(r=>!r.exitTs).length} open</td></tr>
+      </table>`+
+      // -- stop-efficiency: replay every measured trade under a fixed stop —
+      //    if heat exceeded s%, it exits at −s%. The argmax row is the stop
+      //      the tape actually voted for.
+      (()=>{const ms=closed.filter(r=>r.maePct!=null);
+        if(ms.length<3)return'';
+        const sims=[0.3,0.5,0.8,1.2,2,3,5].map(s=>{
+          const net=ms.reduce((a,r)=>a+(r.maePct<=-s?(-s/100*r.notional-(r.fees||0)):r.net),0);
+          return{s,net}});
+        const best=sims.reduce((a,x)=>x.net>a.net?x:a,sims[0]);
+        return`<div class="pt" style="margin-top:8px">STOP-EFFICIENCY — replayed under fixed stops (MAE-triggered, fees in) · tape's pick: <b>${best.s}%</b></div>
+        <table class="etbl"><tr>${sims.map(x=>`<th>${x.s}%</th>`).join('')}</tr>
+        <tr>${sims.map(x=>`<td class="${x===best?'up':x.net<0?'dn':''}" ${x===best?'style="font-weight:800"':''}>${x.net>=0?'+':''}${x.net.toFixed(2)}</td>`).join('')}</tr></table>`})();
+    }
+  }
+}
+// ---- exports --------------------------------------------------------------
+function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function enriched(r){const n=noteGet(r.key);return{symbol:r.symbol,dir:r.dir,strategy:r.strategy||'manual/foreign',grade:r.grade||null,score:r.score??null,
+  entryPx:r.entryPx,exitPx:r.exitPx,qty:r.qty,notional:r.notional,fees:r.fees,gross:r.pnl,net:r.net,pnlPct:r.pnlPct,
+  holdMin:r.holdMin,entryTs:new Date(r.entryTs).toISOString(),exitTs:r.exitTs?new Date(r.exitTs).toISOString():null,status:r.status||'closed',
+  maePct:r.maePct??null,mfePct:r.mfePct??null,capturePct:r.capture!=null?+r.capture.toFixed(1):null,rMult:r.rMult!=null?+r.rMult.toFixed(3):null,
+  givebackPct:r.giveback!=null?+r.giveback.toFixed(1):null,entryEfficiencyPct:r.entryEff!=null?+r.entryEff.toFixed(1):null,
+  timeUnderwaterPct:r.tUnder!=null?+r.tUnder.toFixed(1):null,timeToMfeMin:r.tMfeMin!=null?+r.tMfeMin.toFixed(1):null,
+  exits:r.exits||[],note:n.note||'',tags:n.tags||''}}
+function exportJson(){dl('sentinel-evidence-'+new Date().toISOString().slice(0,10)+'.json',
+  new Blob([JSON.stringify({generated:new Date().toISOString(),venue:VTITLE(),filter:{f:FILTER,sort:SORT,strat:STRAT},trades:view().map(enriched)},null,1)],{type:'application/json'}))}
+function exportTsv(){
+  const rows=[['symbol','dir','family','entry','exit','notional','fees','net','pnlPct','holdMin','maePct','mfePct','capPct','R','givebackPct','entryEffPct','underPct','entryUtc','exitUtc'].join('\t')];
+  for(const r of view())rows.push([r.symbol,r.dir,r.strategy||'manual',r.entryPx,r.exitPx??'',r.notional,r.fees,r.net,r.pnlPct??'',r.holdMin??'',r.maePct??'',r.mfePct??'',r.capture!=null?+r.capture.toFixed(1):'',r.rMult!=null?+r.rMult.toFixed(3):'',r.giveback!=null?+r.giveback.toFixed(1):'',r.entryEff!=null?+r.entryEff.toFixed(1):'',r.tUnder!=null?+r.tUnder.toFixed(1):'',new Date(r.entryTs).toISOString(),r.exitTs?new Date(r.exitTs).toISOString():''].join('\t'));
+  dl('sentinel-evidence-'+new Date().toISOString().slice(0,10)+'.tsv',new Blob([rows.join('\n')],{type:'text/tab-separated-values'}));
+}
+async function measureAll(){
+  const b=document.getElementById('dlAll');b.textContent='mounting…';
+  // render every card into the gallery, then force-mount them sequentially
+  document.getElementById('loadmore').style.display='none';
+  const list=view(),g=document.getElementById('gallery');
+  if(SHOWN<list.length){g.insertAdjacentHTML('beforeend',list.slice(SHOWN).map(cardHTML).join(''));SHOWN=list.length}
+  for(const r of list){try{await mountCard(r.key)}catch(_){}}
+  renderEdge();b.textContent='⌁ MEASURE ALL';
+}
+// auto-measure: the gallery measures itself — on load and every refresh.
+// Closed+measured trades are static (skip); open trades re-measure so MFE/
+// underwater/capture keep tracking the live tape. Sequential mounts throttle
+// the candle pulls; autoMeasuring guards against overlapping refresh cycles.
+let autoMeasuring=false;
+async function autoMeasure(){
+  if(autoMeasuring)return;autoMeasuring=true;
+  try{
+    const list=view(),g=document.getElementById('gallery');
+    if(SHOWN<list.length){const y=scrollY;g.insertAdjacentHTML('beforeend',list.slice(SHOWN).map(cardHTML).join(''));SHOWN=list.length;scrollTo(0,y)}
+    for(const r of list){
+      if(r.mfePct!=null&&r.status!=='open'&&!r.upl)continue; // static record
+      try{await mountCard(r.key)}catch(_){}
+    }
+    renderEdge();
+  }finally{autoMeasuring=false}
+}
+function copySummary(){
+  const done=RECS.filter(r=>r.exitTs),w=done.filter(r=>r.net>0);
+  const net=done.reduce((a,r)=>a+r.net,0),gp=w.reduce((a,r)=>a+r.net,0),gl=-done.filter(r=>r.net<=0).reduce((a,r)=>a+r.net,0);
+  const txt=`SENTINEL LIVE-FIRE RECEIPT — ${new Date().toISOString().slice(0,10)}\n`+
+    `venue: ${VTITLE()} USDT-M · ${done.length} closed round-trips (fees incl.)\n`+
+    `net ${fmt$(net)} · wr ${done.length?(w.length/done.length*100).toFixed(0):0}% · pf ${gl>0?(gp/gl).toFixed(2):'—'} · expectancy ${fmt$(done.length?net/done.length:0)}\n`+
+    `measured on exchange fills — no paper, no simulations. evidence gallery attached.`;
+  navigator.clipboard.writeText(txt).then(()=>{const b=document.getElementById('dlCopy');if(b){b.textContent='✓ copied';setTimeout(()=>b.textContent='⧉ COPY',1500)}});
+}
+async function exportReport(){
+  const btn=document.getElementById('dlReport');btn.textContent='building…';
+  const done=RECS.filter(r=>r.exitTs),w=done.filter(r=>r.net>0);
+  const net=done.reduce((a,r)=>a+r.net,0),gp=w.reduce((a,r)=>a+r.net,0),gl=-done.filter(r=>r.net<=0).reduce((a,r)=>a+r.net,0);
+  // snapshot up to 6 mounted cards — the proof images ride inside the report
+  const shots=[];
+  for(const[k,ch]of CHARTS){if(shots.length>=6)break;
+    const r=RECS.find(x=>x.key===k);if(!r||!r.exitTs)continue;
+    const cn=[ch.b,ch.a].filter(Boolean).map(c=>{try{return c.takeScreenshot()}catch(_){return null}}).filter(Boolean);
+    if(!cn.length)continue;
+    const c=document.createElement('canvas');c.width=Math.max(...cn.map(x=>x.width));c.height=cn.reduce((a,x)=>a+x.height,0);
+    const x=c.getContext('2d');x.fillStyle='#0d1117';x.fillRect(0,0,c.width,c.height);
+    let y=0;for(const cv of cn){x.drawImage(cv,(c.width-cv.width)/2,y);y+=cv.height}
+    shots.push({r,url:c.toDataURL('image/png')});
+  }
+  const tb=document.getElementById('etbl').innerHTML;
+  const ct=document.getElementById('caltbl')?.innerHTML||'';
+  const dgt=document.getElementById('digest')?.innerHTML||'';
+  let eqImg='';try{eqImg=EQCH?EQCH.takeScreenshot().toDataURL('image/png'):''}catch(_){}
+  const w2=window.open('','_blank');
+  w2.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sentinel Evidence Report</title>
+<style>body{background:#0a0d14;color:#dfe8f5;font:12px/1.5 'Segoe UI',system-ui,sans-serif;padding:28px;max-width:980px;margin:0 auto}
+h1{font-size:16px;letter-spacing:.2em}h2{font-size:11px;letter-spacing:.15em;color:#8b93a8;margin:22px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:3px 7px;text-align:right;border-bottom:1px solid rgba(140,160,255,.15)}th:first-child,td:first-child{text-align:left}
+.g{color:#4dffa6}.r{color:#ff4d7d}.mut{color:#8b93a8;font-size:10px}img{width:100%;border:1px solid rgba(140,160,255,.2);border-radius:8px;margin:8px 0}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.stat{border:1px solid rgba(140,160,255,.2);border-radius:8px;padding:10px}.k{font-size:8px;letter-spacing:.15em;color:#8b93a8}.v{font-size:18px;font-weight:800}
+@media print{body{background:#fff;color:#111}img{break-inside:avoid}}</style></head><body>
+<h1>SENTINEL — LIVE-FIRE EVIDENCE REPORT</h1>
+<div class="mut">generated ${new Date().toISOString()} · venue: ${VTITLE()} USDT-M · every figure from real exchange fills incl. fees · no paper, no simulation</div>
+<div class="grid">
+<div class="stat"><div class="k">CLOSED ROUND-TRIPS</div><div class="v">${done.length}</div></div>
+<div class="stat"><div class="k">NET P&L (fees in)</div><div class="v ${net>=0?'g':'r'}">${fmt$(net)}</div></div>
+<div class="stat"><div class="k">HIT RATE</div><div class="v">${done.length?(w.length/done.length*100).toFixed(0):0}%</div></div>
+<div class="stat"><div class="k">PROFIT FACTOR</div><div class="v">${gl>0?(gp/gl).toFixed(2):'—'}</div></div>
+<div class="stat"><div class="k">EXPECTANCY / TRADE</div><div class="v">${fmt$(done.length?net/done.length:0)}</div></div>
+<div class="stat"><div class="k">FEES PAID</div><div class="v">$${RECS.reduce((a,r)=>a+(r.fees||0),0).toFixed(2)}</div></div>
+<div class="stat"><div class="k">AVG WIN / AVG LOSS</div><div class="v" style="font-size:13px">${w.length?fmt$(gp/w.length):'—'} / ${done.length-w.length?fmt$(-gl/(done.length-w.length)):'—'}</div></div>
+<div class="stat"><div class="k">MEASURED TRADES</div><div class="v">${MEASURED.filter(r=>r.exitTs).length}</div></div>
+</div>
+<h2>ATTRIBUTION BY ENTRY FAMILY</h2><table>${tb}</table>
+<h2>SCORE CALIBRATION</h2><table>${ct}</table>
+<h2>RISK DIGEST</h2>${dgt}
+${eqImg?'<h2>EQUITY OF EVIDENCE + DRAWDOWN</h2><img src="'+eqImg+'">':''}
+<h2>CHART EVIDENCE — mounted cards (setup tape + execution tape per trade)</h2>
+${shots.map(s=>`<div><b>${s.r.symbol} ${s.r.dir}</b> · ${fmtP(s.r.entryPx)}→${fmtP(s.r.exitPx)} · net <b class="${s.r.net>=0?'g':'r'}">${fmt$(s.r.net)}</b> · MFE ${s.r.mfePct!=null?s.r.mfePct.toFixed(2)+'%':'—'} · MAE ${s.r.maePct!=null?s.r.maePct.toFixed(2)+'%':'—'} · R ${s.r.rMult!=null?s.r.rMult.toFixed(2):'—'}<img src="${s.url}"></div>`).join('')||'<div class="mut">scroll the gallery to mount cards, then re-export for chart snapshots</div>'}
+<div class="mut">method: FIFO-merged fills from the exchange API · MFE/MAE measured on exchange klines · R = net ÷ adverse excursion taken · capture = banked share of favorable excursion</div>
+</body></html>`);
+  w2.document.close();
+  btn.textContent='⬇ REPORT';
+}
+// ---- wire: R badge + forensics refresh whenever a card measures -----------
+const _nm=noteMeasured;
+noteMeasured=function(r){_nm(r);paintFore(r);renderEdge()};
 (async()=>{
   const [tk,ll]=await Promise.all([j(API+'trades-taken.json'),j(API+'live-ledger.json')]);
   if(ll&&ll.exchange){VEX=ll.exchange;const vn=document.getElementById('vNote');if(vn)vn.textContent=VTITLE();}
+  EPOCH_MS=(ll&&ll.circuitBreakers&&ll.circuitBreakers.epochMs)||null;
   RECS=((tk&&tk.trades)||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
   const st=(tk&&tk.stats)||{},done=RECS.filter(r=>r.exitTs);
   const wins=done.filter(r=>r.net>0),losses=done.filter(r=>r.net<=0);
@@ -432,10 +989,11 @@ document.getElementById('loadmore').onclick=()=>loadMore();
     ['FEES PAID','$'+(st.fees??0).toFixed(2),'the bleed line'],
     ['🏦 VAULT',vault,'50% of profitable closes — untouchable'],
     ['OPEN',st.open??0,'positions still live'],
+    ['EPOCH',EPOCH_MS?ago(EPOCH_MS)+' ago':'—',EPOCH_MS?'record boundary '+new Date(EPOCH_MS).toISOString().slice(0,16).replace('T',' ')+'Z':'no epoch set — full history shown'],
   ].map(s=>`<div class="stat"><div class="k">${s[0]}</div><div class="v num">${s[1]}</div><div class="sub" style="font-size:9px">${s[2]}</div></div>`).join('');
   const hs=hashState();if(hs.f&&FLT[hs.f])FILTER=hs.f;if(hs.s&&SORTS[hs.s])SORT=hs.s;if(hs.strat)STRAT=hs.strat;
   const fc=[['all','ALL'],['engine','ENGINE'],['manual','MANUAL'],['win','WINS'],['loss','LOSSES'],['open','OPEN'],['LONG','LONGS'],['SHORT','SHORTS']];
-  document.getElementById('filters').innerHTML=fc.map(([k,l])=>`<span class="fchip${k===FILTER?' on':''}" data-f="${k}">${l}</span>`).join('');
+  document.getElementById('filters').innerHTML=fc.map(([k,l])=>{const n=k==='all'?RECS.length:RECS.filter(FLT[k]||FLT.all).length;return `<span class="fchip${k===FILTER?' on':''}" data-f="${k}" title="${n} record${n===1?'':'s'}">${l}·${n}</span>`}).join('');
   document.getElementById('filters').onclick=e=>{const c=e.target.closest('.fchip');if(!c)return;FILTER=c.dataset.f;document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===c));applyFilter()};
   const strats=[...new Set(RECS.map(r=>r.strategy).filter(Boolean))];
   document.getElementById('filters2').innerHTML=
@@ -445,8 +1003,30 @@ document.getElementById('loadmore').onclick=()=>loadMore();
   document.getElementById('fStrat').onchange=e=>{STRAT=e.target.value;applyFilter()};
   document.getElementById('fSort').onchange=e=>{SORT=e.target.value;applyFilter()};
   document.getElementById('csvBtn').onclick=exportCsv;
+  document.getElementById('dlJson').onclick=exportJson;
+  document.getElementById('dlTsv').onclick=exportTsv;
+  document.getElementById('dlCopy').onclick=copySummary;
+  document.getElementById('dlReport').onclick=exportReport;
+  document.getElementById('dlAll').onclick=measureAll;
   renderEquity();
+  renderEdge();
   applyFilter();
+  // auto-refresh: live positions move — re-pull the record set every 90s and
+  // soft-rebuild. Preserves scroll unless the trade count changed.
+  setInterval(async()=>{
+    const tk2=await j(API+'trades-taken.json');if(!tk2)return;
+    const recs=(tk2.trades||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
+    if(recs.length===RECS.length){RECS.forEach((r,i)=>{const n=recs[i];
+      if(n&&n.key===r.key){r.net=n.net;r.upl=n.upl;r.status=n.status;r.holdMin=n.holdMin}});return}
+    const keep=new Map(RECS.map(r=>[r.key,r]));
+    for(const r of recs){const o=keep.get(r.key);
+      if(o){Object.assign(r,{mfePct:o.mfePct,maePct:o.maePct,capture:o.capture,rMult:o.rMult,giveback:o.giveback,entryEff:o.entryEff,tUnder:o.tUnder,tMfeMin:o.tMfeMin,measureFailed:o.measureFailed});
+        if(o.mfePct!=null&&!MEASURED.includes(r))MEASURED.push(r)}}
+    RECS=recs;renderEquity();renderEdge();
+    const y=scrollY;applyFilter();scrollTo(0,y);
+    autoMeasure();
+  },90e3);
+  autoMeasure(); // first pass on load — every card mounts and measures itself
 })();
 </script>
 </body>

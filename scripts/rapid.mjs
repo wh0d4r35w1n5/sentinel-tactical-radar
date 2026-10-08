@@ -40,14 +40,15 @@ const env = {
   ...process.env,
   SENTINEL_RAPID: '1',
   SENTINEL_EXEC: MODE,
-  LIVE_FLOOR_MIN: '1',
   ...(MODE === 'live' ? { SENTINEL_LIVE: '1', CONFIRM_LIVE: 'YES' } : {}),
 };
 
 // a hung child must not stall the daemon forever — fetch timeouts bound most
-// cases, but anything that escapes them gets a hard kill at 4min so the loop
-// recovers instead of going silent
-const CHILD_TIMEOUT = 240_000;
+// cases, but anything that escapes them gets a hard kill so the loop recovers
+// instead of going silent. 600s: scans legitimately need 4-5min on this box
+// (IO-throttled t3.micro) — a 240s cap killed the scanner before it could
+// write live-plan.json, which starved exec and broke the whole loop.
+const CHILD_TIMEOUT = 600_000;
 const run = (f) =>
   new Promise((res) => {
     const c = spawn(process.execPath, [f], { env, stdio: 'inherit' });
@@ -60,22 +61,29 @@ const run = (f) =>
   });
 
 console.log(`[rapid] ${MODE.toUpperCase()} fast-loop — scan+exec every ${Math.round(MS / 1e3)}s — ctrl-c to stop`);
-let cycle = 0;
+let cycle = 0, consecFails = 0, lastErr = null;
 for (;;) {
   const t = Date.now();
   cycle++;
   // heartbeat — the ledger only writes when the exec phase runs, and a big
   // scan can legitimately hold it off for minutes. god.mjs reads this file
   // for "is the loop alive"; ledger age alone can't answer that question.
-  try { fs.writeFileSync('state/rapid-heartbeat.json', JSON.stringify({ ts: Date.now(), cycle })); } catch {}
+  // consecFails/lastErr expose a death spiral — N straight broken cycles is
+  // a paged event, not just a journal line.
+  try { fs.writeFileSync('state/rapid-heartbeat.json', JSON.stringify({ ts: Date.now(), cycle, consecFails, lastErr })); } catch {}
   let tScan = 0, tExec = 0;
   try {
     const a = Date.now(); await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;
     const b = Date.now(); await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
     await run('scripts/god.mjs').catch((e) => console.log('[rapid] god:', e.message || e));
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
+    consecFails = 0; lastErr = null;
   } catch (e) {
-    console.log(`[rapid] cycle ${cycle} error:`, e.message || e);
+    consecFails++;
+    lastErr = String(e.message || e).slice(0, 120);
+    console.log(`[rapid] cycle ${cycle} error (${consecFails} straight):`, e.message || e);
+    if (consecFails >= 5)
+      try { fs.appendFileSync('state/tg-outbox.jsonl', JSON.stringify({ ts: Date.now(), text: `🚨 RAPID DEATH SPIRAL — ${consecFails} consecutive failed cycles: ${lastErr}` }) + '\n'); } catch {}
   }
   const dt = Date.now() - t;
   const wait = Math.max(1_000, MS - dt);

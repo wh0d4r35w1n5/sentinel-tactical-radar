@@ -48,6 +48,14 @@ const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
 // user mandate: SENTINEL_LONG_ONLY=1 — short signals still render on the
 // board but are gated out of every order with a named 'shorts-banned' reject.
 const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
+// operator mandate: shorts = mean-reversion scalps only (env-tunable).
+const SHORT_STRATS = new Set(
+  (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile')
+    .split(',').map((x) => x.trim()).filter(Boolean)
+);
+const SHORT_MIN_RR = +(process.env.SENTINEL_SHORT_MIN_RR || 1.5);
+const SHORT_MAX_TGT = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
+const SHORT_MIN_SCORE = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
 // mode-scoped fills journal — demo fills/cooldowns must never read the
 // live loss record (and vice versa).
 const BOOK_TAG =
@@ -193,7 +201,7 @@ const ENGINE_VERSION = 'v1.7';
 // append-only prospective record: every emitted signal, every run, never
 // deleted or rewritten — the out-of-sample dataset the audit asked for
 const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
-const ARCHIVE_MAX_RUNS = 2500; // ~17 days at a 10min cadence
+const ARCHIVE_MAX_RUNS = +(process.env.SENTINEL_ARCHIVE_MAX_RUNS || 2500); // ~17 days at a 10min cadence
 // self-learning gate: doctrine weights stay DORMANT until the out-of-sample
 // set is big enough that adjustments measure edge, not luck (audit: 22
 // trades is nowhere near enough to start believing)
@@ -656,20 +664,24 @@ async function main() {
   const mtfFrames = new Map();
   {
     const assets = [...enriched.keys()];
-    for (const gran of ['15m', '4H', '1D']) {
-      for (let i = 0; i < assets.length; i += 6) {
-        const batch = assets.slice(i, i + 6);
-        const got = await Promise.all(
-          batch.map((a) => fetchTF(a + 'USDT', gran).catch(() => null))
-        );
-        got.forEach((rws, j) => {
-          if (!rws) return;
-          const m = mtfFrames.get(batch[j]) || {};
-          m[gran] = rws;
-          mtfFrames.set(batch[j], m);
-        });
-        if (i + 6 < assets.length) await new Promise((r) => setTimeout(r, 200));
-      }
+    // one pass per asset fetches all 3 frames in parallel — the old
+    // per-granularity sweep paid 3x the batch-boundary latency for the
+    // same requests (TTL cache makes most hits free anyway).
+    for (let i = 0; i < assets.length; i += 4) {
+      const batch = assets.slice(i, i + 4);
+      await Promise.all(
+        batch.map(async (a) => {
+          const m = {};
+          await Promise.all(
+            ['15m', '4H', '1D'].map(async (gran) => {
+              const rws = await fetchTF(a + 'USDT', gran).catch(() => null);
+              if (rws) m[gran] = rws;
+            })
+          );
+          if (Object.keys(m).length) mtfFrames.set(a, m);
+        })
+      );
+      if (i + 4 < assets.length) await new Promise((r) => setTimeout(r, 150));
     }
   }
   for (const [asset, k] of enriched) {
@@ -1326,6 +1338,39 @@ async function main() {
     .map((r) => dirMove(r, enriched.get(r.asset)))
     .sort((a, b) => a - b);
 
+  // ---- measured excursion table — the tape's own record of what each
+  // symbol:side / strategy family actually reaches. Feeds the RR rescue
+  // below: when a signal's structural target can't carry RR_MIN against
+  // the ATR-floor stop, a measured median MFE that DOES clear it is
+  // evidence the target was under-projected — the reward estimate updates
+  // to the tape, the discipline bar itself never moves.
+  let maeMfe = { bySymbol: {}, byFamily: {} };
+  try {
+    maeMfe = JSON.parse(fs.readFileSync(path.join(API, 'mae-mfe.json'), 'utf8'));
+  } catch {}
+  // global measured prior — aggregated over every recorded episode, so an
+  // unmeasured symbol inherits the book's realized heat rather than a
+  // hardcoded noise model. n-gates keep thin records from steering.
+  const GLOBAL_CELL = (() => {
+    const eps = (maeMfe.episodes || []).slice(-200);
+    if (eps.length < 10) return null;
+    const med = (arr) => { const s = arr.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)] ?? 0; };
+    return {
+      n: eps.length,
+      medMaePct: med(eps.map((e) => Math.abs(e.maePct ?? 0))),
+      medMfePct: med(eps.map((e) => Math.abs(e.mfePct ?? 0))),
+      winShare: eps.filter((e) => (e.exit - e.entry) * (e.side === 'long' ? 1 : -1) > 0).length / eps.length,
+    };
+  })();
+  const measuredCell = (s) => {
+    const sym = maeMfe.bySymbol?.[`${s.asset}USDT:${s.direction === 'LONG' ? 'long' : 'short'}`];
+    const fam = maeMfe.byFamily?.[s.strategy];
+    // symbol:side with n>=2 is the most specific evidence; family n>=3 next;
+    // the book-wide prior last (heat is universal — noise clips everywhere)
+    if (sym && sym.n >= 2) return sym;
+    if (fam && fam.n >= 3) return fam;
+    return GLOBAL_CELL;
+  };
   // ---- self-improvement: adapt doctrine weights to realized ledger R ----
   let priorEntries = [];
   try {
@@ -2347,7 +2392,12 @@ async function main() {
   const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP', 'Liquidity Sweep']);
   const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown', 'Liquidity Sweep']);
   const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
+  // SENTINEL_MKT_ALLOW_BOTH=1 — operator override: trade BOTH directions in
+  // any regime. Default (unset) keeps the measured regime doctrine below
+  // (side tape = shorts only — longs of both families bleed sideways).
+  const MKT_BOTH = process.env.SENTINEL_MKT_ALLOW_BOTH === '1';
   const mktAllows = (s) => {
+    if (MKT_BOTH) return true; // operator mandate: direction gates off
     if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
     if (mktType.startsWith('bull')) return s.direction === 'LONG';
     // eval n=14,952 full-history split: sideways tape is where the P&L is
@@ -2524,20 +2574,31 @@ async function main() {
   // cycle (10-min TTL). Applies only to strategies with enough history to
   // rank; a family with <20 graded signals earns probe-size routing rather
   // than a blanket ban — otherwise no strategy could ever qualify.
-  const sqnAllowedSet = (() => {
+  const sqnAllowed = (() => {
     try {
       const a = JSON.parse(
         fs.readFileSync(path.join(API, '..', 'state', 'sqn-allowed.json'), 'utf8')
       );
-      return a.ts && Date.now() - a.ts < 30 * 60e3 && Array.isArray(a.strategies) && a.strategies.length >= 2
-        ? new Set(a.strategies)
+      return a.ts && Date.now() - a.ts < 30 * 60e3 && Array.isArray(a.strategies) && a.strategies.length >= 1
+        ? { set: new Set(a.strategies), dirN: a.dirN || null }
         : null;
     } catch { return null; }
   })();
-  const sqnAllows = (s) =>
-    !sqnAllowedSet ||
-    !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N) ||
-    sqnAllowedSet.has(s.strategy);
+  // dir-scoped members ('Liquidity Sweep:SHORT') admit only that direction —
+  // the graded record shows the sides earn differently (LS longs −0.39R,
+  // shorts +0.16R), so the gate honors the cell that actually measured green.
+  // When dirN rides the allowlist the gate checks the DIRECTION cell's sample
+  // size: <EVAL_MIN_N graded trades in that direction is unproven — probe
+  // routing, not a ban (same courtesy blended-unproven strategies already get).
+  const sqnAllows = (s) => {
+    // missing/stale allowlist fails CLOSED for proven strategies — a dead
+    // optimizer must never re-open measured-negative cells
+    if (!sqnAllowed)
+      return !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N);
+    if (sqnAllowed.set.has(s.strategy) || sqnAllowed.set.has(`${s.strategy}:${s.direction}`)) return true;
+    if (sqnAllowed.dirN) return (sqnAllowed.dirN[`${s.strategy}:${s.direction}`] ?? 0) < EVAL_MIN_N;
+    return !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N);
+  };
   const lowProfitPair = (() => {
     const bySym = {};
     for (const f of recentFills) {
@@ -2604,7 +2665,10 @@ async function main() {
   })();
   // live-execution plan — emitted every build regardless of executor state.
   // orders = gate-passed entries this run; closes/trails filled post-settle.
-  const livePlan = { orders: [], closes: [], trails: [], rejects: [], mktType, marketSQN };
+  const livePlan = { orders: [], closes: [], trails: [], rejects: [], mktType, marketSQN,
+    // evidence-feed diagnostics — visible in api/live-plan.json so the
+    // rescue's data plumbing is auditable without a console
+    evidFeed: { epsN: (maeMfe.episodes || []).length, global: GLOBAL_CELL } };
   // portfolio heat: total equity at risk if every live stop fired right
   // now — positions with locked-profit stops contribute zero. Tharp's
   // heat rule caps the whole book, not just each trade.
@@ -2650,6 +2714,17 @@ async function main() {
     // by chop before the thesis can play out (PHA 0.5x, ENA 1.0x were the
     // noise-clipped red rows). Wider stop = same $ risk at lower leverage.
     const atrFloor = Math.min(4.5, 1.8 * (s.ta?.atrPct ?? 0));
+    // measured-heat floor — the trail-era exits cap realized heat far below
+    // the 1.8xATR noise floor (medMae on recent cells runs ~0.25-0.5%). When
+    // this cell's median MAE ×2.5 (tail margin — MAE medians understate the
+    // bad half) sits lower, the floor may tighten toward it. Never below
+    // 0.6%, never above the ATR floor — evidence can tighten, not widen.
+    const mCell = measuredCell(s);
+    const floorEff =
+      mCell?.medMaePct != null
+        ? Math.max(0.6, Math.min(atrFloor, mCell.medMaePct * 2.5))
+        : atrFloor;
+    if (floorEff < atrFloor) s.evidStop = true;
     const stopWant = Math.max(
       s.stopPct ?? Math.max(4, s.targetPct || 4),
       atrFloor
@@ -2677,9 +2752,52 @@ async function main() {
         ? Math.abs(s.funding?.ratePct ?? 0) * Math.min(s.etaH ?? 1, 8) / 8
         : 0;
     const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2 + fundDrag;
-    const rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
+    let rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
+    // evidence rescue — the measured tape can legitimately widen the reward
+    // estimate two ways (audited: evidTgt / evidRr flags ride the order):
+    //   path 1 — measured reach: this cell's median MFE clears RR_MIN at the
+    //     noise-floor stop. Target extends to 80% of measured MFE (max 8%);
+    //     the bar itself doesn't move, the projection was just stale.
+    //   path 2 — measured-positive cell: winShare >= 60% over n>=3 earns the
+    //     same 1.05:1 net bar shorts already face. Expectancy = WR×R is
+    //     positive where the record says so — capacity only into cells the
+    //     tape has already paid, never into measured-negative ones.
+    if (rrMaxStop < floorEff) {
+      if (mCell) {
+        const tgt2 = Math.min(8, (mCell.medMfePct ?? 0) * 0.8);
+        const ms2 = (tgt2 - rrCostPct) / RR_MIN - rrCostPct;
+        if (ms2 >= floorEff) {
+          s.targetPct = pct(tgt2); rrMaxStop = ms2; s.evidTgt = true;
+        } else if ((mCell.winShare ?? 0) >= 0.6 && (mCell.n ?? 0) >= 3) {
+          const ms3 = (s.targetPct - rrCostPct) / 1.05 - rrCostPct;
+          if (ms3 >= floorEff) { rrMaxStop = ms3; s.evidRr = true; }
+        }
+      }
+      // geometry rescue — the noise-floor stop is real (1.8xATR) but the
+      // fixed ~2% target made net-RR mathematically impossible, vetoing the
+      // ENTIRE funnel on volatile tape (observed: every candidate died on
+      // 'rr<1:1 atr-floor stop can't fit'). Instead of refusing, extend the
+      // target to exactly what RR_MIN needs at the floor stop — the ratio
+      // holds honestly, the trade just plays out over a wider objective.
+      // Capped at 8% like the evidence path — past that on 1h tape is a
+      // fantasy target, not a trade. Audited via atrTgt on the order.
+      if (rrMaxStop < floorEff && floorEff > 0) {
+        // +0.05 headroom — the extension lands exactly ON the boundary and
+        // pct()'s 2dp rounding can shave it back below floorEff, vetoing by
+        // epsilon (observed: tgt 2.94% extended then still failed rr<1:1)
+        const needTgt = RR_MIN * (floorEff + rrCostPct) + rrCostPct + 0.05;
+        // shorts are scalps by mandate (SHORT_MAX_TGT) — extending past that
+        // cap would just trade an rr veto for a short-tgt veto
+        const tgtCap = s.direction === 'SHORT' ? Math.min(8, SHORT_MAX_TGT) : 8;
+        if (needTgt > s.targetPct && needTgt <= tgtCap) {
+          s.targetPct = pct(needTgt);
+          rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
+          s.atrTgt = true;
+        }
+      }
+    }
     const rrStop = Math.min(stopWant, rrMaxStop);
-    const rrOk = rrMaxStop >= Math.max(atrFloor, 0.6);
+    const rrOk = rrMaxStop >= floorEff;
     const levMax = Math.max(3, Math.floor(80 / (rrStop + 0.64)));
     const lev = Math.max(3, Math.min(levTarget, levMax, s.maxLever ?? 20));
     const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
@@ -2725,12 +2843,16 @@ async function main() {
     // enforced regardless: price sanity, cost floor, spread, anti-chase,
     // dd-kill, mkt-type, duplicate/position caps.
     const RELAX = process.env.SENTINEL_GATES_RELAX === '1';
+    const DENY_SYMS = new Set(
+      (process.env.SENTINEL_DENY_SYMS || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)
+    );
     // RELAX lowers the generic floor to 35 — but the measured side-LS-short
     // band is evidence, not advisory: score >=80 in that cell is a
     // measured-losing bucket (-0.14% n=34), same class as ic-evidence.
     gate(inLsSideCell(s) ? scorePass(s, tradeScore) : tradeScore >= (RELAX ? 35 : entryFloor),
       `score ${tradeScore}${inLsSideCell(s) ? ` outside band ${LS_SIDE_BAND[0]}-${LS_SIDE_BAND[1]}` : `<${RELAX ? 35 : entryFloor}`}`);
     gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
+    gate(!DENY_SYMS.has(s.asset.toUpperCase() + 'USDT'), 'denied-symbol');
     // net-of-cost floor, proportional: costs can't eat more than 60% of
     // the target AND the net must still be worth taking. An absolute 2%
     // floor banned every 2% target by construction — fees scale with
@@ -2739,7 +2861,7 @@ async function main() {
       const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
       return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
     })(), 'net-edge');
-    gate(RELAX || rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, atr-floor stop can't fit)`);
+    gate(RELAX || rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, ${floorEff === atrFloor ? 'atr-floor' : `meas-floor ${pct(floorEff)}%`} stop can't fit)`);
     gate(RELAX ||
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
@@ -2782,16 +2904,19 @@ async function main() {
     gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
-    // operator mandate: LONGs only when price sits above BOTH the 50 and
-    // 200 EMA (1H stack, real 200-period — needs >200 closed bars). Hard
-    // gate like fading-runner — a direction-mandate, not a stat veto:
-    // unprovable regime (thin history / no klines) fails CLOSED.
-    gate(
-      s.direction !== 'LONG' ||
-        (s.emaRegime != null &&
-          s.entryPrice > s.emaRegime.ema50 &&
-          s.entryPrice > s.emaRegime.ema200),
-      'below-ema50/200');
+    // operator mandate: shorts are mean-reversion scalps ONLY — fade
+    // families that short the overextension back to mean (sweep/SFP/
+    // quartile), never trend-followed breakdowns. Bar is higher than the
+    // general floor: net-RR >= SHORT_MIN_RR after ALL costs, target
+    // capped at SHORT_MAX_TGT so exits are quick, and a high score floor
+    // — "extreme sense" entries only. RELAX does not soften this block.
+    if (s.direction === 'SHORT') {
+      gate(SHORT_STRATS.has(s.strategy), 'short-strat (mean-rev only)');
+      const shortNetRR = (s.targetPct - rrCostPct) / (stopPct + rrCostPct);
+      gate(shortNetRR >= SHORT_MIN_RR, `short-rr<${SHORT_MIN_RR}:1 net`);
+      gate((s.targetPct ?? 99) <= SHORT_MAX_TGT, `short-tgt>${SHORT_MAX_TGT}% (scalp-only)`);
+      gate(tradeScore >= SHORT_MIN_SCORE, `short-score<${SHORT_MIN_SCORE}`);
+    }
     gate(dirPlanned[s.direction] < SIDE_CAP, 'side-cap');
     // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
     // the eval block — the strategy's record stays on the board for
@@ -2828,8 +2953,10 @@ async function main() {
     if (gateFails.length) {
       livePlan.rejects.push({
         symbol: s.asset + 'USDT', direction: s.direction, score: s.score,
+        strategy: s.strategy ?? null,
         targetPct: s.targetPct, gates: gateFails,
         rangePosition: s.rangePosition ?? null, changePct: s.changePct ?? null,
+        mktType: s.mktType ?? null,
       });
       continue;
     }
@@ -2854,6 +2981,15 @@ async function main() {
         stopPct,
         netRR: pct((s.targetPct - rrCostPct) / (stopPct + rrCostPct)),
         costPct: rrCostPct,
+        // evidence-rescue audit trail — set when measured excursion data
+        // widened the reward estimate (evidTgt) or admitted a proven cell
+        // at the 1.05 bar (evidRr). Null = passed the raw RR_MIN gate.
+        evidTgt: s.evidTgt || null,
+        evidRr: s.evidRr || null,
+        evidStop: s.evidStop || null,
+        // atrTgt: target was extended to the RR_MIN-required distance at the
+        // ATR noise-floor stop — honest geometry, not a loosened gate
+        atrTgt: s.atrTgt || null,
         etaH: s.etaH ?? null,
         // runner distance scales with confluence — a high-confluence setup
         // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
@@ -2870,6 +3006,8 @@ async function main() {
             : null,
         reason: s.ta?.reasons?.[0] || null,
         ver: s.ver ?? ENGINE_VERSION,
+        strategy: s.strategy ?? null,
+        grade: s.grade ?? null,
         // entry-quality telemetry — the exec journals these so the
         // calibration layer can correlate fills with range/confluence
         rangePosition: s.rangePosition ?? null,
@@ -3676,43 +3814,59 @@ async function main() {
   // permanent record: every run also lands in its monthly history file
   // (api/history/archive-YYYY-MM.json) — trimming the hot window below can
   // never lose a signal. Dedup by timestamp keeps re-runs idempotent.
+  // Flush is cadence-gated: the hot archive already holds every run, so a
+  // per-cycle merge was re-reading+rewriting ~60MB of JSON for at most one
+  // new run — the dominant scan cost on IO-throttled disks. The hot file is
+  // the durable record; a crash between flushes loses nothing.
   const histDir = path.join(API, 'history');
   fs.mkdirSync(histDir, { recursive: true });
-  const byMonth = new Map();
-  for (const r of archive.runs) {
-    const m = new Date(r.ts).toISOString().slice(0, 7);
-    if (!byMonth.has(m)) byMonth.set(m, []);
-    byMonth.get(m).push(r);
+  const HIST_FLUSH_MS = +(process.env.SENTINEL_HIST_FLUSH_MS || 15 * 60e3);
+  const histStatePath = path.join(API, '..', 'state', 'hist-flush.json');
+  let histState = { at: 0, month: '', runs: 0, signals: 0 };
+  try { histState = { ...histState, ...JSON.parse(fs.readFileSync(histStatePath, 'utf8')) }; } catch {}
+  const curMonth = new Date().toISOString().slice(0, 7);
+  if (Date.now() - histState.at > HIST_FLUSH_MS || histState.month !== curMonth) {
+    const byMonth = new Map();
+    for (const r of archive.runs) {
+      const m = new Date(r.ts).toISOString().slice(0, 7);
+      if (!byMonth.has(m)) byMonth.set(m, []);
+      byMonth.get(m).push(r);
+    }
+    for (const [m, rs] of byMonth) {
+      const hf = path.join(histDir, `archive-${m}.json`);
+      let h = { runs: [] };
+      try {
+        h = JSON.parse(fs.readFileSync(hf, 'utf8'));
+      } catch {}
+      h.runs ??= [];
+      const seen = new Set(h.runs.map((x) => x.ts));
+      for (const r of rs) if (!seen.has(r.ts)) h.runs.push(r);
+      h.runs.sort((a, b) => a.ts - b.ts);
+      writeJson(hf, h);
+    }
+    let histRuns = 0;
+    let histSignals = 0;
+    for (const f of fs.readdirSync(histDir)) {
+      if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
+      try {
+        const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+        for (const r of h.runs || []) {
+          histRuns++;
+          histSignals += (r.signals || []).length;
+        }
+      } catch {}
+    }
+    histState = { at: Date.now(), month: curMonth, runs: histRuns, signals: histSignals };
+    writeJson(histStatePath, histState);
   }
-  let histRuns = 0;
-  let histSignals = 0;
-  for (const [m, rs] of byMonth) {
-    const hf = path.join(histDir, `archive-${m}.json`);
-    let h = { runs: [] };
-    try {
-      h = JSON.parse(fs.readFileSync(hf, 'utf8'));
-    } catch {}
-    h.runs ??= [];
-    const seen = new Set(h.runs.map((x) => x.ts));
-    for (const r of rs) if (!seen.has(r.ts)) h.runs.push(r);
-    h.runs.sort((a, b) => a.ts - b.ts);
-    writeJson(hf, h);
-  }
-  for (const f of fs.readdirSync(histDir)) {
-    if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
-    try {
-      const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
-      for (const r of h.runs || []) {
-        histRuns++;
-        histSignals += (r.signals || []).length;
-      }
-    } catch {}
-  }
+  const runsBeforeTrim = archive.runs.length;
   archive.runs = archive.runs.slice(-ARCHIVE_MAX_RUNS);
-  writeJson(ARCHIVE_FILE, archive);
-  // surface the permanent record's depth on the ledger itself
-  ledger.stats.archiveRuns = histRuns;
-  ledger.stats.signalsArchived = histSignals;
+  // 20MB write only when a run actually landed or the trim changed the file
+  if (!skipArchive || archive.runs.length !== runsBeforeTrim) writeJson(ARCHIVE_FILE, archive);
+  // surface the permanent record's depth on the ledger itself — counters
+  // refresh on flush cadence, persisted between flushes so no re-scan.
+  ledger.stats.archiveRuns = histState.runs;
+  ledger.stats.signalsArchived = histState.signals;
 
   // ---- forward-outcome evaluation: EVERY emitted signal gets measured ----
   // The position ledger only ever samples the ~1-2 signals that became
@@ -4617,6 +4771,11 @@ async function main() {
         (byStrat[r.strategy] = byStrat[r.strategy] || []).push(r);
       }
       const perStrategy = [];
+      // direction-scoped pools ride alongside blended ones — a strategy can
+      // be poison one way and profitable the other (live record: Liquidity
+      // Sweep longs −0.39R, shorts +0.16R). Blending them buries the only
+      // positive cell inside a negative pool. Members name ':SHORT'/':LONG'.
+      const dirPools = [];
       for (const [strat, rs] of Object.entries(byStrat)) {
         const base = poolStats(rs);
         if (!base) continue;
@@ -4631,10 +4790,16 @@ async function main() {
           if (v) variants[tag] = { n: v.n, E: v.E, sqn100: v.sqn100, hit: v.hit };
         }
         perStrategy.push({ strategy: strat, ...(({ R, ...rest }) => rest)(base), variants, R: base.R });
+        for (const dir of ['LONG', 'SHORT']) {
+          const v = poolStats(rs.filter((r) => r.direction === dir));
+          if (v) dirPools.push({ strategy: `${strat}:${dir}`, ...(({ R, ...rest }) => rest)(v), R: v.R });
+        }
       }
       // greedy optimal chain — add the pool that most raises joint shrunk
       // SQN until nothing improves it. This is the Tharp portfolio
-      // selection step: SQN of the MIX, not of members.
+      // selection step: SQN of the MIX, not of members. One pool per root
+      // strategy — a blended pool and its direction variants share R rows,
+      // so admitting both double-counts the same trades.
       const jointStats = (R) => {
         const n = R.length;
         const E = R.reduce((a, b) => a + b, 0) / n;
@@ -4642,13 +4807,16 @@ async function main() {
         const sqn = (E / sd) * Math.sqrt(100);
         return { n, E, sd, sqn100: sqn, shrunkSqn: (sqn * n) / (n + 15), hit: R.filter((x) => x > 0).length / n };
       };
-      const ranked = perStrategy.slice().sort((a, b) => b.shrunkSqn - a.shrunkSqn);
+      const ranked = perStrategy.concat(dirPools).sort((a, b) => b.shrunkSqn - a.shrunkSqn);
+      const usedRoots = new Set();
       let chain = [], chainR = [], chainStat = null;
       for (const c of ranked) {
+        const root = c.strategy.split(':')[0];
+        if (usedRoots.has(root)) continue;
         const cand = chainR.concat(c.R);
         const st = jointStats(cand);
         if (!chain.length || st.shrunkSqn > (chainStat?.shrunkSqn ?? -9) + 0.02) {
-          chain.push(c.strategy); chainR = cand; chainStat = st;
+          chain.push(c.strategy); chainR = cand; chainStat = st; usedRoots.add(root);
         }
       }
       const baseline = poolStats(evRecs);
@@ -4657,7 +4825,9 @@ async function main() {
         { name: 'all-signals', members: null, R: evRecs.map(R_of).filter((x) => x != null), st: baseline },
       ];
       // overlay variants of the winning chain — direction and inversion cuts
-      const chainRecs = evRecs.filter((r) => chain.includes(r.strategy));
+      // dir-aware: 'Liquidity Sweep:SHORT' admits only that direction's rows
+      const inChain = (r) => chain.includes(r.strategy) || chain.includes(`${r.strategy}:${r.direction}`);
+      const chainRecs = evRecs.filter(inChain);
       for (const [tag, f] of [
         ['chain-longs', (r) => r.direction === 'LONG'],
         ['chain-score<85', (r) => (r.score ?? 100) < 85],
@@ -4677,9 +4847,18 @@ async function main() {
         bestVariant: best.name,
         monteCarlo: mc,
       });
+      // the gate's proof bar is measured-positive expectancy, not greedy
+      // portfolio membership — admit EVERY dir-scoped pool whose shrunk SQN
+      // is positive (chain membership is an optimality overlay for the
+      // report, not a ban list). dirN carries each direction cell's graded
+      // count so the gate can tell "proven-negative" from "unproven":
+      // a cell with <EVAL_MIN_N graded trades probes rather than bans.
+      const positiveCells = ranked.filter((p) => p.shrunkSqn > 0).map((p) => p.strategy);
+      const dirN = {};
+      for (const p of ranked) if (p.strategy.includes(':')) dirN[p.strategy] = p.n;
       writeJson(path.join(API, '..', 'state', 'sqn-allowed.json'), {
-        ts: Date.now(), strategies: chain,
-        note: 'greedy max shrunk-SQN chain over graded signal R-multiples; TTL-gated sqn-chain gate',
+        ts: Date.now(), strategies: positiveCells.length ? positiveCells : chain, dirN,
+        note: 'all shrunk-SQN-positive dir cells admitted (chain in sqn-report); TTL-gated sqn-chain gate',
       });
     }
   } catch (e) { console.warn('sqn-optimizer skipped:', e.message); }

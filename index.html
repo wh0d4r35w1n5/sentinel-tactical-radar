@@ -847,8 +847,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -958,7 +958,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     {
       const vers=Object.keys(st.byVersion||{}).filter(v=>v!=='v0.x').sort();
       const curVer=vers[vers.length-1]||'v1.x';
-      const ce=(ledger.entries||[]).filter(e=>e.status!=='open'&&e.ver===curVer);
+      const ce=(ledger.entries||[]).filter(e=>e.status!=='open'&&e.ver===curVer);const tkS=(takenR&&takenR.stats)||null,atC=(allT&&allT.combined)||null,atB=(allT&&allT.books)||{},closedN=atC?atC.episodes:(tkS&&tkS.n!=null?tkS.n:ce.length);
       const gp=ce.filter(e=>e.pnlPct>0).reduce((a,e)=>a+e.pnlPct,0);
       const gl=Math.abs(ce.filter(e=>e.pnlPct<0).reduce((a,e)=>a+e.pnlPct,0));
       const pf=gl>0?+(gp/gl).toFixed(2):(gp>0?null:null);
@@ -968,16 +968,16 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const sqn=(rsd>0)?+(rm/rsd*Math.sqrt(rs.length)).toFixed(2):null;
       const es=(evals&&evals.stats)||{};
       const acc=k=>es[k]!=null?es[k]+'%':'—';
-      const status=ce.length<30?'INSUFFICIENT SAMPLE':ce.length<100?'DEVELOPING — preliminary':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'EDGE EVIDENCE EMERGING':'SAMPLE MATURE — NO EDGE EVIDENCE YET';
-      const stCol=ce.length<30?'var(--warn,#ffd166)':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'var(--grn)':'var(--txt)';
+      const status=closedN<30?'INSUFFICIENT SAMPLE':closedN<100?'DEVELOPING — preliminary':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'EDGE EVIDENCE EMERGING':'SAMPLE MATURE — NO EDGE EVIDENCE YET';
+      const stCol=closedN<30?'var(--warn,#ffd166)':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'var(--grn)':'var(--txt)';
       $('evStatus').innerHTML=`<b style="color:${stCol};letter-spacing:.14em;font-size:11px">${status}</b>`;
       $('evStats').innerHTML=[
         ['Signals observed',st.signalsArchived!=null?st.signalsArchived:'—','archived boards · append-only'],
-        [`${curVer} closed trades`,ce.length,'frozen-ruleset record only'],
+        ['Closed trades',closedN,atC?`all-time real fills · live ${(atB['bitget-live']||{}).episodes||0} + demo ${((atB['bitget-demo']||{}).episodes||0)+((atB['bybit-demo']||{}).episodes||0)} · ${atC.wins} wins · net ${atC.netUsd>=0?'+':'-'}$${Math.abs(atC.netUsd).toFixed(2)} after fees`:(tkS?`real exchange round-trips · ${tkS.wins} wins · net ${tkS.net>=0?'+':'-'}$${Math.abs(tkS.net).toFixed(2)} after fees`:'frozen-ruleset record only')],
         ['1h / 4h / 24h accuracy',`${acc('dirAcc1h')} / ${acc('dirAcc4h')} / ${acc('dirAcc24h')}`,'direction correct vs forward move'],
         ['TP before SL',es.hitRate24h!=null?es.hitRate24h+'%':'—','24h window · all signals'],
         ['Median alpha',es.medAlpha24h!=null?(es.medAlpha24h>=0?'+':'')+es.medAlpha24h+'%':'—','vs market basket · 24h'],
-        [`${curVer} PF / SQN`,`${pf??'—'} / ${sqn??'—'}`,'strategy edge, this ruleset'],
+        ...(()=>{const c=(allT&&allT.combined)||null,bk=(allT&&allT.books)||{},lv=bk['bitget-live'];return [['All-time PF / SQN',c?`${c.profitFactor??'—'} / ${c.sqn??'—'}`:'— / —',c?`n=${c.episodes} episodes · ${c.winRatePct}% win · live+demo since ${c.firstTs?new Date(c.firstTs).toISOString().slice(5,10):'?'} · live-book SQN ${lv&&lv.sqn!=null?lv.sqn:'—'} (n=${lv?lv.sqnN:0})`:'no fill journals yet']];})(),
         ['Sortino-SQN',st.sqnSortino??'—','downside σ only — moon-bag upside not penalized'],
         ['Deflated SR',st.deflatedSqn?`${st.deflatedSqn.dsr} (${st.deflatedSqn.trials} trials)`:'—','P(edge real) after the config-search haircut'],
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
@@ -1001,11 +1001,11 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     // ---- review ask #1: evidence maturity banner — first thing on the page
     {
       const m=st.maturity||{};
-      const evN=((evals&&evals.records)||[]).length+((evals&&evals.pending)||0);
+      const evN=(evals&&evals.stats&&evals.stats.n!=null?evals.stats.n:((evals&&evals.records)||[]).length)+((evals&&evals.pending)||0);const atC2=(allT&&allT.combined)||null,tkS=(takenR&&takenR.stats)||null,tkT=(takenR&&takenR.trades)||[],closedN=atC2?atC2.episodes:(tkS&&tkS.n!=null?tkS.n:m.closedTrades),firstTk=atC2&&atC2.firstTs?atC2.firstTs:Math.min(...tkT.map(t=>t.entryTs).filter(Number.isFinite)),daysLive=Number.isFinite(firstTk)?+((Date.now()-firstTk)/86400e3).toFixed(1):m.daysLive;
       const mb=$('maturityBox');
-      if(m.closedTrades!=null){
+      if(closedN!=null){
         mb.style.display='block';
-        $('maturityLine').innerHTML=`SENTINEL ${m.ver||''} · <span style="color:var(--warn,#ffd166)">PROSPECTIVE VALIDATION IN PROGRESS</span> · ${evN} signals evaluated · ${m.closedTrades} trades closed · ${m.daysLive}d live · <span class="sub">no backfilled results</span>`;
+        $('maturityLine').innerHTML=`SENTINEL ${m.ver||''} · <span style="color:var(--warn,#ffd166)">PROSPECTIVE VALIDATION IN PROGRESS</span> · ${evN} signals evaluated · ${closedN} trades closed${atC2?' (live+demo fills)':tkS?' (real fills)':''} · ${daysLive}d tracked · <span class="sub">no backfilled results</span>`;
       }
     }
     // ---- review ask #3: boring benchmarks — does the intelligence add
@@ -1068,7 +1068,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           const live=window.__live&&__live.price(p.symbol);
           const liveUpl=(live>0&&p.entry>0&&p.size>0)?(live-p.entry)*p.size*(p.side==='long'?1:-1):null;
           const upl=(liveUpl!=null&&isFinite(liveUpl))?liveUpl:p.upl;
-          return `<div class="ledger-row" style="display:block"><div style="display:flex;justify-content:space-between"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span>${heldSyms.has(p.symbol)?' <span class="sub" style="color:var(--warn,#ffd166)">MANUAL</span>':''} <span class="sub">${p.size} units${p.lev?' · '+p.lev+'x':''}${p.margin?' · $'+(+p.margin).toFixed(2)+' mgn':''}</span></span><span class="num ${upl>=0?'up':'dn'}" data-liveupl="${p.symbol}:${p.side}:${p.entry}:${p.size}">${upl>=0?'+':''}${(+upl).toFixed(2)} UPL${live?' · live':''}</span></div><div class="sub" style="font-size:9px;margin-top:1px">${live?'mark '+live+' · ':''}entry ${p.entry} · SL ${sls.length?sls.join(' / '):'<span style="color:var(--red)">NONE</span>'} · TP ${tps.length?tps.join(' → '):'<span style="color:var(--warn,#ffd166)">none</span>'}${liqD!=null?' · liq '+liqD.toFixed(1)+'%':''}</div></div>`;
+          return `<div class="ledger-row" style="display:block"><div style="display:flex;justify-content:space-between"><span>${LK(BG(p.symbol),'<b>'+p.symbol+'</b>')} <span class="tag ${p.side==='long'?'long':'short'}">${(p.side||'').toUpperCase()}</span>${heldSyms.has(p.symbol)?' <span class="sub" style="color:var(--warn,#ffd166)">MANUAL</span>':''} <span class="sub">${p.size} units${p.lev?' · '+p.lev+'x':''}${p.margin?' · $'+(+p.margin).toFixed(2)+' mgn':''}</span></span><span class="num ${upl>=0?'up':'dn'}" data-liveupl="${p.symbol}:${p.side}:${p.entry}:${p.size}">${upl>=0?'+':''}${(+upl).toFixed(2)} UPL${live?' · live':''}</span></div><div class="sub" style="font-size:9px;margin-top:1px">${live?'mark '+live+' · ':''}entry ${p.entry??'—'} · SL ${sls.length?sls.join(' / '):'<span style="color:var(--red)">NONE</span>'} · TP ${tps.length?tps.join(' → '):'<span style="color:var(--warn,#ffd166)">none</span>'}${liqD!=null?' · liq '+liqD.toFixed(1)+'%':''}</div></div>`;
         }).join('');
         // live UPL ticks — between ledger refreshes the WS ticker repaints
         // each position's UPL so the panel breathes at market speed
@@ -1077,7 +1077,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           __live.onTick(function(){
             document.querySelectorAll('[data-liveupl]').forEach(function(el){
               const m=el.getAttribute('data-liveupl').split(':');
-              const px=__live.price(m[0]);if(!(px>0))return;
+              const px=__live.price(m[0]);if(!(px>0)||!isFinite(+m[2])||!(+m[3]>0))return;
               const u=(px-(+m[2]))*(+m[3])*(m[1]==='long'?1:-1);
               el.innerHTML=(u>=0?'+':'')+u.toFixed(2)+' UPL · live';
               el.className='num '+(u>=0?'up':'dn');
@@ -1137,12 +1137,14 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         // ---- liquidation guard — per-position distance-to-liq ladder +
         // the trim history, straight from the guard's own api artifact
         if(liqG&&liqG.positions){
-          const rows=Object.entries(liqG.positions).sort((a,b)=>a[1].distPct-b[1].distPct);
+          const rows=Object.entries(liqG.positions).sort((a,b)=>(a[1].mark==null?-1:isFinite(+a[1].distPct)?+a[1].distPct:9e9)-(b[1].mark==null?-1:isFinite(+b[1].distPct)?+b[1].distPct:9e9));
           const trims=(liqG.trims||[]).slice(-4).reverse();
           const gAge=liqG.at?ago(liqG.at):null;
           $('liveGuard').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Liq guard <span class="sub">— progressive 5% clips inside 2% of liquidation · state '+(gAge?gAge+' ago':'—')+'</span></div>'+
             rows.map(([k,p])=>{
-              const d=+p.distPct,c=d<=2?'var(--red)':d<=4?'var(--warn,#ffd166)':'var(--grn)';
+              if(p.mark==null)return `<div class="ledger-row"><span><b style="font-size:10px">${k}</b> <span class="sub" style="color:var(--red)">⚠ BLIND — no mark ${p.blindMs?Math.round(p.blindMs/1e3)+'s':''} · protections parked · exchange stop armed</span></span><span class="num" style="color:var(--red);font-size:10px">—</span></div>`;
+              const d=+p.distPct;if(!isFinite(d))return `<div class="ledger-row"><span><b style="font-size:10px">${k}</b> <span class="sub">cross-margin · effectively un-liquidatable</span></span><span class="num" style="color:var(--grn);font-size:10px">∞</span></div>`;
+              const c=d<=2?'var(--red)':d<=4?'var(--warn,#ffd166)':'var(--grn)';
               const w=Math.max(2,Math.min(100,100-d*8));
               return `<div class="ledger-row"><span><b style="font-size:10px">${k}</b> <span class="sub">liq ${p.liq} · mark ${p.mark}</span></span><span><span class="num" style="color:${c};font-size:10px">${d.toFixed(2)}%</span><span style="display:inline-block;width:60px;height:4px;background:rgba(255,255,255,.08);margin-left:6px;vertical-align:middle;border-radius:2px"><span style="display:block;height:4px;width:${w}%;background:${c};border-radius:2px"></span></span></span></div>`;
             }).join('')+

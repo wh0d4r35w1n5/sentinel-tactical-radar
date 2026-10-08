@@ -28,7 +28,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
   }
   async function api(method, reqPath, { qs = '', body = null } = {}) {
     const bodyStr = body ? JSON.stringify(body) : '';
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await fetch(HOST + reqPath + (qs ? '?' + qs : ''), {
           method,
@@ -36,6 +36,12 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
           body: bodyStr || undefined,
           signal: AbortSignal.timeout(15000), // a hung call must not stall the cycle
         });
+        // 429 rate-limit on a GET is safe to retry after a pause — a throttled
+        // read isn't an API rejection of the data, just the door closed briefly
+        if (res.status === 429 && method === 'GET' && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
+        }
         const j = await res.json().catch(() => ({}));
         if (!res.ok || (j.code && j.code !== '00000'))
           throw new Error(`${reqPath} ${method} -> ${j.code || res.status} ${j.msg || ''}`);
@@ -44,7 +50,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
         // retry only transport failures on GETs — API rejections carry the
         // '->' marker, and a retried POST could double-fill an order that
         // actually executed before its response was lost
-        if (attempt === 1 || e.message.includes('->') || method !== 'GET') throw e;
+        if (attempt === 2 || e.message.includes('->') || method !== 'GET') throw e;
         await new Promise((r) => setTimeout(r, 700));
       }
     }
