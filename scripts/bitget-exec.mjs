@@ -176,6 +176,13 @@ const FEE_LOCK_AT = +(process.env.SENTINEL_FEE_LOCK_AT || 0) ||
   Math.max(0.3, 1.5 * (FEE_LOCK_MAE || 0.58));
 const FEE_LOCK_PCT = +(process.env.SENTINEL_FEE_LOCK_PCT || 0) ||
   Math.max(0.15, 0.5 * (FEE_LOCK_MAE || 0.58));
+// structural de-risk rails — worst-case loss at the live stop, as a
+// fraction of equity. A pyramid that stacks cost basis onto its own stop
+// (CLU −$24 autopsy, 2026-10-08) gets force-trimmed to budget BEFORE the
+// market collects it. MANUAL-hold symbols exempt — operator owns those.
+const POS_DERISK_CAP_PCT = +(process.env.SENTINEL_POS_DERISK_CAP_PCT || 0.30);   // trigger: worst-case > 30% of equity
+const POS_DERISK_TARGET_PCT = +(process.env.SENTINEL_POS_DERISK_TARGET_PCT || 0.12); // trim to: ~12% at stop
+const POS_DERISK_GAP_MS = +(process.env.SENTINEL_POS_DERISK_GAP_MS || 15 * 60e3); // once per window per symbol
 // ---- meta-label (López de Prado, AFML ch.3): the primary model decides
 // SIDE; a secondary model answers "will following it make money" and
 // scales SIZE. Ours is a shrunk bucketed classifier over the graded
@@ -462,6 +469,15 @@ async function main() {
   // position — opened manually on the app/exchange — which we arm with
   // protection but never expose to scanner-driven exits.
   const managed = new Set();
+  // prior-cycle leg/size memory — the banked-tranche floor detects a filled
+  // TP leg by it vanishing from the pending book while its level sits behind
+  // the mark; position-size memory catches non-ladder trims (guard/manual)
+  // the same way. Persisted via state.legs + positionsAfter on the ledger.
+  const priorLegMap = {};   // sym -> [tp limit px] armed last cycle
+  const priorSizeMap = {};  // sym -> position size last cycle
+  const curLegMap = {};     // sym -> [tp limit px] armed this cycle
+  const trimGuard = {};     // sym -> ts of last structural de-risk trim
+  let priorDayPeak = null;  // {day, usd} — session high watermark for the massacre governor
   try {
     const sameBook = (prior) => prior.mode === MODE && (prior.exchange || 'bitget') === X.name;
     for (const f of [outPath, catPath]) {
@@ -500,6 +516,13 @@ async function main() {
       // uses this to find triggers still live on symbols now flat
       if (sameBook(prior) && prior.plans)
         for (const s of Object.keys(prior.plans)) priorPlanSyms.add(s);
+      if (sameBook(prior) && prior.legs)
+        for (const [s, l] of Object.entries(prior.legs)) if (Array.isArray(l)) priorLegMap[s] = l;
+      if (sameBook(prior) && Array.isArray(prior.positionsAfter))
+        for (const pp2 of prior.positionsAfter) if (pp2?.symbol) priorSizeMap[pp2.symbol] = +pp2.size || 0;
+      if (sameBook(prior) && prior.trimGuard)
+        for (const [s, t] of Object.entries(prior.trimGuard)) trimGuard[s] = +t || 0;
+      if (sameBook(prior) && prior.dayPeak?.day) priorDayPeak = prior.dayPeak;
       if (sameBook(prior) && Array.isArray(prior.managed))
         for (const s of prior.managed) managed.add(s);
     }
@@ -890,6 +913,21 @@ async function main() {
   state.depositsUsd = round(eqTrack.deposits, 2);
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
+  // intraday massacre governor — session drawdown measured off TODAY's
+  // equity peak, not the funded-capital basis (dd24's denominator rolls and
+  // reads low while the session bleeds). Past MASSACRE_DD_PCT every
+  // deployment path stands down: entries, top-ups, carry, mandate. Exits
+  // and protection are untouched — stops still ratchet, trims still bank.
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const dayPeakUsd = Math.max(equityUsd, priorDayPeak?.day === dayKey ? +priorDayPeak.usd || 0 : 0);
+  state.dayPeak = { day: dayKey, usd: round(dayPeakUsd, 2) };
+  const dayDDpct = dayPeakUsd > 0 ? Math.max(0, (dayPeakUsd - equityUsd) / dayPeakUsd) * 100 : 0;
+  state.dayDDPct = round(dayDDpct, 2);
+  const MASSACRE_DD_PCT = +(process.env.SENTINEL_MASSACRE_DD_PCT || 20);
+  // DD-scaled risk — a wounded book defends with smaller knives. Survival
+  // first: size follows the session's damage, not the mandate's appetite.
+  const ddRiskScale = dayDDpct >= 30 ? 0 : dayDDpct >= 20 ? 0.25 : dayDDpct >= 10 ? 0.5 : 1;
+  state.ddRiskScale = ddRiskScale;
   const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
   // ---- operator halt: state/cmd-halt.json written by the telegram C2 —
   // joins the same rail as the kill-switch: entries only, existing
@@ -1125,6 +1163,7 @@ async function main() {
     // account can't post margin for even two contract-min positions —
     // every further entry is just donating fees. Preserve the last chip.
     : equityUsd < MIN_TRADE_EQUITY ? `equity floor ($${round(equityUsd,2)} < $${MIN_TRADE_EQUITY} — capital preservation, entries halted)`
+    : dayDDpct >= MASSACRE_DD_PCT ? `massacre-governor (session dd ${state.dayDDPct}% >= ${MASSACRE_DD_PCT}% — deployment frozen, protection lives)`
     : cbReason; // account-level breakers join the same rail — entries only, never exits
   if (cmdOverride) {
     const rail = cmdHalt || (realDdPct >= DD_KILL ? `dd ${state.ddPct}%` : null) || (dd24 >= DAILY_HALT ? `dd24 ${state.dd24Pct}%` : null) || cbReason;
@@ -1306,13 +1345,17 @@ async function main() {
   // layer emitted the closes.
   const REENTRY_MS = +(process.env.SENTINEL_REENTRY_COOLDOWN_MS || 60 * 60e3);
   const lastCloseBySym = {};
+  const lastLossCloseBySym = {}; // losing closes only — gates top-up re-adds
   let feesToday = 0;
   try {
     const fj = loadFills();
     const dayStart = new Date().setUTCHours(0, 0, 0, 0);
     for (const f of fj) {
-      if (f.tradeSide === 'close')
+      if (f.tradeSide === 'close') {
         lastCloseBySym[f.symbol] = Math.max(lastCloseBySym[f.symbol] || 0, +f.ts || 0);
+        if ((f.profit || 0) < 0)
+          lastLossCloseBySym[f.symbol] = Math.max(lastLossCloseBySym[f.symbol] || 0, +f.ts || 0);
+      }
       if (+f.ts >= dayStart) feesToday += +f.fee || 0;
     }
   } catch {}
@@ -1474,6 +1517,18 @@ async function main() {
     )
   );
   const plansOf = (sym) => planCache.get(sym) || [];
+  // resting limit TP legs — bitget-watch owns the steady-state ladder as
+  // post-only limits (maker fills; trigger profit_plans were measured
+  // paying 0.06% taker on every close). vtp-* clientOid tags them; they
+  // count as profit cover everywhere a profit plan would below.
+  const pendCache = new Map();
+  await Promise.all(
+    [...posBySym.keys(), ...ambiguous].map(async (sym) =>
+      pendCache.set(sym, await pendingOrders(sym).catch(() => []))
+    )
+  );
+  const tpLimsOf = (sym) =>
+    (pendCache.get(sym) || []).filter((o) => /^vtp-/.test(String(o.clientOid || '')));
   // ---- orphan-plan sweep: triggers left live on a symbol that went flat
   // (emergency close, stop fill, manual close between cycles) either
   // trigger-reject forever or — worse — fire a close-side order into a
@@ -1504,7 +1559,47 @@ async function main() {
       // regex the repair loop would stack a second stop on a trailed position
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
-      const hasProfit = !!profitPlan;
+      const limLegs = tpLimsOf(p.symbol); // resting maker TP legs = profit cover
+      curLegMap[p.symbol] = limLegs.map((o) => +o.price).filter((t) => t > 0);
+      const hasProfit = !!profitPlan || limLegs.length > 0;
+      // ---- structural de-risk: worst-case loss at the live stop must fit
+      // the book. A position whose stop-out would wound the account beyond
+      // POS_DERISK_CAP gets trimmed to budget before the market collects —
+      // the CLU autopsy: pyramids stacked entry onto the stop, one −0.5%
+      // dip realised −$24 on a ~$50 book. Explicit MANUAL holds exempt.
+      if (lossPlan && p.size > 0 && !MANUAL.has(p.symbol)
+          && Date.now() - (trimGuard[p.symbol] || 0) > POS_DERISK_GAP_MS) {
+        const slPx = +lossPlan.triggerPrice || 0;
+        const dist = Math.abs(p.entry - slPx);
+        if (slPx > 0 && dist > 0) {
+          const lossAtStop = dist * p.size; // USDT-M linear: |Δpx| × contracts
+          const capUsd = equityUsd * POS_DERISK_CAP_PCT;
+          if (lossAtStop > capUsd) {
+            const keepUsd = equityUsd * POS_DERISK_TARGET_PCT;
+            const keepSize = keepUsd / dist;
+            const c = cm[p.symbol] || {};
+            const sp = Math.pow(10, c.sizePlace ?? 3);
+            const trimQty = Math.floor((p.size - keepSize) * sp) / sp;
+            const minSz = Math.max(+c.minTradeNum || 0, (+c.minTradeUSDT || 0) / Math.max(1e-9, p.entry));
+            if (trimQty >= minSz && trimQty < p.size * 0.999) {
+              try {
+                await marketOrder(p.symbol, p.side === 'long' ? 'sell' : 'buy', String(trimQty), 'close');
+                trimGuard[p.symbol] = Date.now();
+                state.actions.push(`🛡 de-risk ${p.symbol}: worst-case $${round(lossAtStop, 2)} at stop ${slPx} > ${POS_DERISK_CAP_PCT * 100}% equity — trimmed ${trimQty}, keeps ~$${round(keepUsd, 2)} at stop`);
+              } catch (e) { state.errors.push(`de-risk ${p.symbol}: ${e.message.slice(0, 100)}`); }
+            } else if (lossAtStop > equityUsd * 0.6) {
+              // too small to partially trim but worst-case is existential —
+              // a >60%-of-book loss at stop is a defect, not a position
+              try {
+                await closePosition(p.symbol, p.holdSide || p.side);
+                trimGuard[p.symbol] = Date.now();
+                state.actions.push(`🛡 de-risk ${p.symbol}: worst-case $${round(lossAtStop, 2)} = ${round(lossAtStop / equityUsd * 100, 0)}% of book, below min-trim — closed`);
+                continue;
+              } catch (e) { state.errors.push(`de-risk-close ${p.symbol}: ${e.message.slice(0, 100)}`); }
+            }
+          }
+        }
+      }
       // manual-hold with an operator stop = zero reconcile. The drift
       // teardown and resync paths re-pin operator stops to band width and
       // re-split legs every cycle (observed live) — for scalps that
@@ -1565,11 +1660,16 @@ async function main() {
       const profitQty = existing
         .filter((x) => /profit/i.test(x.planType || ''))
         .reduce((a, x) => a + (+x.size || 0), 0);
+      // resting vtp- TP limits reserve close-qty against the position the
+      // same way sized plans do — leave them out of the budget and a
+      // trigger-leg + limit-leg coexistence window could read 1.7x and
+      // resync forever.
+      const limQty = limLegs.reduce((a, o) => a + (+o.size || 0), 0);
       // On Bybit only the LOSS side can over-cover — TP legs are a sized
       // subset of the same position (reduce-only, capped at fill), so a
       // full-size stop + a partial ladder is a valid 1.12-quoted book, not
       // drift. Summing them resynced every cycle forever.
-      const planQty = X.name === 'bitget' ? lossQty + profitQty : lossQty;
+      const planQty = X.name === 'bitget' ? lossQty + profitQty + limQty : lossQty;
       // THE DRIFT SWAP IS BITGET-ONLY MACHINERY. It exists to unwind
       // Bitget's cumulative pending-qty 43023 deadlock. On Bybit it can
       // only do damage: conditional rows + mirrors double-count (lossQty
@@ -1604,7 +1704,8 @@ async function main() {
           // blocked new placements), then re-cover at LIVE size in the same
           // breath. Manual positions keep their own trigger prices.
           const keepTrigs = (manualHold || setupArms[p.symbol])
-            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+            ? [...profitPlans.map((x) => +x.triggerPrice), ...limLegs.map((o) => +o.price)]
+                .filter((t) => t > 0)
                 .sort((a, b) => (sgn === 1 ? a - b : b - a))
             : [];
           await rebuildProfitCover(p, keepTrigs, 2 * stopPct);
@@ -1665,7 +1766,7 @@ async function main() {
       // mark is already through the ladder zone, where entry-priced legs
       // would sit below mark and instant-close the runner.
       const wholeProfit = profitPlans.some((x) => !(+x.size > 0)); // size-0 leg covers all
-      const bigLeg = Math.max(0, ...profitPlans.map((x) => +x.size || 0));
+      const bigLeg = Math.max(0, ...profitPlans.map((x) => +x.size || 0), ...limLegs.map((o) => +o.size || 0));
       const impliedSize = bigLeg / RR_MAX_ALLOC;
       const sgn2 = p.side === 'long' ? 1 : -1;
       const markPx = p.entry + (sgn2 * p.upl) / p.size;
@@ -1677,7 +1778,8 @@ async function main() {
       if (!wholeProfit && bigLeg > 0 && impliedSize < p.size * 0.8 && !runner) {
         try {
           const keepTrigs = (manualHold || setupArms[p.symbol])
-            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+            ? [...profitPlans.map((x) => +x.triggerPrice), ...limLegs.map((o) => +o.price)]
+                .filter((t) => t > 0)
                 .sort((a, b) => (sgn2 === 1 ? a - b : b - a))
             : [];
           await rebuildProfitCover(p, keepTrigs, 2 * stopD);
@@ -1689,8 +1791,10 @@ async function main() {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
         // nearest profit trigger in the trade direction = next bank level
-        const nearTp = profitPlans
-          .map((x) => +x.triggerPrice)
+        const nearTp = [
+            ...profitPlans.map((x) => +x.triggerPrice),
+            ...limLegs.map((o) => +o.price),
+          ]
           .filter((t) => t > 0 && (sgn === 1 ? t > p.entry : t < p.entry))
           .sort((a, b) => (sgn === 1 ? a - b : b - a))[0];
         const slTrig = +lossPlan.triggerPrice;
@@ -1698,7 +1802,7 @@ async function main() {
         const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
         const pp = cm[p.symbol]?.pricePlace ?? 6;
         let wantPx = null, why = null;
-        if (profitPlans.length && prog >= 0.9) {
+        if ((profitPlans.length || limLegs.length) && prog >= 0.9) {
           // ratchet tiers — the stop locks ~55% of the NEXT bank level once
           // price is within 10% of it, then keeps climbing: near TP1 the
           // stop lands at entry+0.30xT; near TP2 it locks TP1; near TP3 it
@@ -1706,7 +1810,7 @@ async function main() {
           const lockPct = Math.max(0.25, 0.55 * ((dist / p.entry) * 100));
           wantPx = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
           why = `ratchet ${p.symbol}: ${round(prog * 100, 0)}% to next TP — stop locked at +${round(lockPct, 2)}% (${wantPx})`;
-        } else if (!profitPlans.length && sgn * (mark - p.entry) > 0) {
+        } else if (!profitPlans.length && !limLegs.length && sgn * (mark - p.entry) > 0) {
           // moon-bag trail — all TP tranches banked, the leftover runner has
           // no target. Trail the stop 1.0% under price every cycle: the last
           // piece rides until the move actually reverses, never a fixed cap.
@@ -1742,6 +1846,43 @@ async function main() {
           if (candBetter) {
             wantPx = cand;
             why = `fee-lock ${p.symbol}: +${round(movePct, 2)}% run — stop floored at entry+${FEE_LOCK_PCT}% (${wantPx})`;
+          }
+        }
+        // banked-tranche floor — profit already taken is never handed back.
+        // A TP leg on the book last cycle that is now gone with its level
+        // behind the mark = that tranche FILLED. Floor the stop just under
+        // the last banked level: TP1 banked ⇒ the stop lives under TP1, not
+        // entry. Level must sit behind the mark — a pos_loss trigger on the
+        // wrong side of price fires instantly (would market-close the trade).
+        {
+          const priorL = priorLegMap[p.symbol] || [];
+          const tick2 = 2 * 10 ** -(pp ?? 6);
+          const banked = priorL.filter(
+            (t) => (sgn === 1 ? mark > t : mark < t)
+              && !limLegs.some((o) => Math.abs(+o.price - t) <= tick2)
+              && !profitPlans.some((x) => Math.abs(+x.triggerPrice - t) <= tick2)
+          );
+          if (banked.length) {
+            const last = sgn === 1 ? Math.max(...banked) : Math.min(...banked);
+            const cand = round(last * (1 - (sgn * 0.25) / 100), pp);
+            const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+            if (candBetter) {
+              wantPx = cand;
+              why = `banked-floor ${p.symbol}: TP tranche @ ${round(last, pp)} filled — stop floored under it (${wantPx})`;
+            }
+          }
+        }
+        // realized-trim lock — ANY size drop while in profit (TP leg, guard
+        // trim, operator tap) lifts the stop to breakeven+fees at minimum.
+        {
+          const psz = priorSizeMap[p.symbol] || 0;
+          if (psz > 0 && p.size < psz * 0.98 && sgn * (mark - p.entry) > 0) {
+            const cand = round(p.entry * (1 + (sgn * FEE_LOCK_PCT) / 100), pp);
+            const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+            if (candBetter) {
+              wantPx = cand;
+              why = `trim-lock ${p.symbol}: ${round(psz, 4)}→${round(p.size, 4)} banked in profit — stop floored entry+${FEE_LOCK_PCT}% (${wantPx})`;
+            }
           }
         }
         const slBetter =
@@ -1786,7 +1927,7 @@ async function main() {
         // the trail, not the stall clock.
         const uplPct = (p.upl / (p.size * p.entry)) * 100;
         const ageMs = p.cTime ? Date.now() - p.cTime : 0;
-        const runnerMode = !profitPlans.length;
+        const runnerMode = !profitPlans.length && !limLegs.length;
         // the 216s gate must clear the FEE-NOISE band, not any redness: a
         // 59x taker fill opens ~-0.12% red on notional instantly, so 'red
         // at all' auto-executed every chop market entry at +4min — the
@@ -1838,7 +1979,10 @@ async function main() {
         profitPlans.some((y) => y.planType === 'profit_plan' &&
           Math.abs(+y.triggerPrice - +x.triggerPrice) < 1e-9));
       const logicalProfit = profitPlans.filter((x) => !mirrorTps.includes(x));
-      if (logicalProfit.length === 1 && p.size > 0) {
+      // resting vtp- limit legs are already a ladder — a lone pos_profit
+      // fallback beside them is NOT an under-laddered position; retrofitting
+      // here would re-lay trigger legs the watcher just replaced (churn war)
+      if (logicalProfit.length === 1 && !limLegs.length && p.size > 0) {
         const tpTrig = +logicalProfit[0].triggerPrice;
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
         if (distPct > 0) {
@@ -2145,7 +2289,7 @@ async function main() {
         const costPct = 0.20; // same fee+slip floor the RR gate applies
         const netRR = (targetPct - costPct) / (stopPct + costPct);
         if (!(netRR >= SETUP_RR_FLOOR)) { rej(`net-rr ${round(netRR, 2)} < ${SETUP_RR_FLOOR}`); continue; }
-        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100);
+        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * ddRiskScale;
         plan.orders.push({
           symbol: sym, direction: s.direction, refEntry: last,
           notionalUsd: round(riskUsd / Math.max(0.0005, stopPct / 100), 2),
@@ -2262,7 +2406,7 @@ async function main() {
         }
       }
       if (feeHalted) {
-        state.actions.push(`🔥 fee-burn halt — ${round(feesToday, 2)} commissions today >= ${round(FEE_HALT_PCT * 100, 1)}% of equity — standing down`);
+        state.actions.push(`🔥 fee-burn halt — ${round(feesToday, 2)} commissions today >= ${FEE_DAY_HALT_PCT}% of equity — standing down`);
         break;
       }
       const lastClose = lastCloseBySym[o.symbol];
@@ -2920,7 +3064,11 @@ async function main() {
   // ---- deployment mandate: capital never idles. When the order queue is
   // exhausted (gated/cooldowns/denied) but margin remains, top up the
   // strongest open positions — pyramiding winners, NEVER averaging losers.
-  if (!protectionHalted && !cmdFlat && marginFree > TOPUP_FLOOR_USD) {
+  // unified deployment rail — entriesBlocked covers the loss breaker, DD
+  // kill-switch, massacre governor and CUSUM edge-death. A breaker that
+  // gates the queue but not pyramiding is no breaker (CLU autopsy: top-ups
+  // re-bought the stopped position 53s later, mid fee-halt).
+  if (!protectionHalted && !cmdFlat && !feeHalted && !entriesBlocked && marginFree > TOPUP_FLOOR_USD) {
     const capUsd = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
     // pyramiding throttle: persisted because rapid mode respawns the process
     // each cycle. One add per position per window, and only while the trade
@@ -2957,7 +3105,36 @@ async function main() {
         const lt = throttle[p.symbol];
         if (lt && Date.now() - lt.ts < TOPUP_GAP_MS) continue;
         if (lt && +p.upl <= +lt.upl) continue; // add only while the trade keeps improving
-        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3); // same fee headroom as entries
+        // post-loss ban: a losing close on this symbol benches re-adds for
+        // the re-entry window. Observed live: CLU stopped at a loss 11:41,
+        // top-up re-bought it 53s later — a stop-out is not a dip to buy.
+        const lc = lastLossCloseBySym[p.symbol];
+        if (lc && Date.now() - lc < REENTRY_MS) {
+          state.actions.push(`${p.symbol}: top-up banned — losing close ${Math.round((Date.now() - lc) / 6e4)}m ago (< ${Math.round(REENTRY_MS / 6e4)}m)`);
+          continue;
+        }
+        // pyramid-gap guard: never let an add drag blended entry within a
+        // scratch of the live stop. At high lev the pyramid stacks entry on
+        // top of the stop — a 0.5% dip then realises the whole pile as a
+        // loss (CLU −$24: adds pushed avg ~92.4 over stop ~91.9).
+        const TOPUP_STOP_GAP_PCT = +(process.env.SENTINEL_TOPUP_STOP_GAP_PCT || 0.4);
+        try {
+          const lp = (await getPlans(p.symbol).catch(() => []))
+            .find((x) => /loss|stop|moving/i.test(x.planType || ''));
+          const slPx = +lp?.triggerPrice || 0;
+          if (slPx > 0) {
+            const marginUsd0 = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3);
+            const addSz = sizeFor(cm, p.symbol, marginUsd0 * lev, px) || 0;
+            const blend = (p.entry * p.size + px * addSz) / Math.max(1e-12, p.size + addSz);
+            const gapPct = (Math.abs(blend - slPx) / blend) * 100;
+            const underStop = p.side === 'long' ? px <= slPx : px >= slPx;
+            if (underStop || gapPct < TOPUP_STOP_GAP_PCT) {
+              state.actions.push(`${p.symbol}: top-up skipped — add would stack blended entry ${round(blend, 4)} within ${round(gapPct, 2)}% of stop ${slPx}`);
+              continue;
+            }
+          }
+        } catch {}
+        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3) * ddRiskScale; // same fee headroom as entries; session-DD shrinks size
         const size = sizeFor(cm, p.symbol, marginUsd * lev, px);
         if (!size) { state.actions.push(`${p.symbol}: top-up skipped — below contract minimum`); continue; }
         await marketOrder(p.symbol, p.side === 'short' ? 'sell' : 'buy', size, 'open');
@@ -2987,6 +3164,7 @@ async function main() {
     state.idleMargin = {
       usd: round(marginFree, 2),
       reason: marginFree <= TOPUP_FLOOR_USD ? 'below top-up floor + contract minimums — dust, undeployable'
+        : entriesBlocked ? `deployment rail down — ${entriesBlocked}`
         : protectionHalted ? 'protection-halt active — entries and top-ups paused'
         : cmdFlat ? 'flatten pending — refusing to deploy into a closing book'
         : !winners.length ? 'no profitable positions below cap to top up (never averages losers)'
@@ -3372,6 +3550,12 @@ async function main() {
       })
     );
   } catch {}
+  // persist this cycle's armed TP-limit prices — next cycle's banked-tranche
+  // floor diffs them against the live book to detect tranche fills
+  state.legs = {};
+  for (const p of state.positionsAfter || [])
+    state.legs[p.symbol] = curLegMap[p.symbol] || priorLegMap[p.symbol] || [];
+  state.trimGuard = trimGuard;
   state.cycleMs = Date.now() - tRun;
   state.refreshedAt = new Date().toISOString(); // freshness = write time, not run start
   state.managed = [...managed]; // materialize at write time — entries late in the cycle count

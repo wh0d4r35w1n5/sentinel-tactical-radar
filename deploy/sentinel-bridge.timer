@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh equity-bridge.json every 15min
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -168,10 +168,20 @@ async def main():
     print("[tg] live — listening for new messages")
 
     # ================= COMMAND & CONTROL CENTRE =================
-    # Private channel: Saved Messages. Messages the operator sends to
-    # themselves arrive as OUTGOING events from this account — nobody else
-    # can inject a command, no bot token required.
+    # Control chat: Saved Messages by default, or cfg["control_chat"] (group
+    # id/title) for a shared operator room. Commands arrive as OUTGOING events
+    # from this account — other members can't inject one, no bot token needed.
     me = await client.get_me()
+    from telethon import utils as _u
+    c2_ent, C2_MARKED = me, me.id
+    if cfg.get("control_chat"):
+        try:
+            c2_ent = await client.get_entity(cfg["control_chat"])
+            C2_MARKED = _u.get_peer_id(c2_ent)
+            print(f"[tg-c2] control chat -> {getattr(c2_ent, 'title', cfg['control_chat'])} (id {c2_ent.id})")
+        except Exception as e:
+            print(f"[tg-c2] control_chat resolve failed ({type(e).__name__}: {e}) — using Saved Messages", flush=True)
+            c2_ent, C2_MARKED = me, me.id
     API_DIR = ROOT / "api"
     STATE_DIR = ROOT / "state"
     LINKS = "https://54-66-217-111.sslip.io"
@@ -216,10 +226,10 @@ async def main():
         # errors return False so callers can journal instead of crash.
         async def _s():
             try:
-                return await client.send_message("me", text, parse_mode="html", link_preview=False)
+                return await client.send_message(c2_ent, text, parse_mode="html", link_preview=False)
             except FloodWaitError as e:
                 await asyncio.sleep(min(e.seconds + 1, 60))
-                return await client.send_message("me", text, parse_mode="html", link_preview=False)
+                return await client.send_message(c2_ent, text, parse_mode="html", link_preview=False)
         return _s()
 
     # ---- command handlers -------------------------------------------------
@@ -1019,6 +1029,10 @@ async def main():
             "unsetup": c_unsetup, "cancelsetup": c_unsetup, "setupcancel": c_unsetup,
             "hook": c_hook, "webhook": c_hook, "tv": c_hook}
 
+    # replies that leak secrets stay in Saved Messages even when the control
+    # centre lives in a shared group
+    SELF_ONLY = {"hook", "webhook", "tv"}
+
     def run_cmd(fn, arg):
         # handlers are mixed-arity — intel commands ignore args, control
         # commands take them. Dispatch on signature so both work.
@@ -1033,8 +1047,11 @@ async def main():
         try:
             if not m or not m.raw_text or not m.out:
                 return
-            if getattr(m.peer_id, "user_id", None) != me.id:
-                return  # only Saved Messages (self) — spoof-proof by construction
+            # operator's own outgoing text in the control chat or Saved
+            # Messages. outgoing=True filters every other member — a shared
+            # control room stays operator-driven, guests are view-only.
+            if getattr(m.peer_id, "user_id", None) != me.id and ev.chat_id != C2_MARKED:
+                return
             txt = m.raw_text.strip()
             # raw-emoji command channel — "📊" alone fires /status, etc.
             # len-gate is load-bearing: our own alerts start with emoji too —
@@ -1069,7 +1086,12 @@ async def main():
                 reply = run_cmd(CMDS[cmd], arg)
             else:
                 reply = f"unknown command <code>{esc(cmd)}</code> — /help"
-            await say(reply)
+            # secret-bearing replies (webhook secret) never post to a shared
+            # control room — Saved Messages only
+            if cmd in SELF_ONLY:
+                await client.send_message("me", reply, parse_mode="html", link_preview=False)
+            else:
+                await say(reply)
             print(f"[tg-c2] /{cmd} answered", flush=True)
         except Exception as e:
             print(f"[tg-c2] handler error: {type(e).__name__}: {e}", flush=True)
@@ -1085,7 +1107,7 @@ async def main():
     ]
 
     async def send_menu():
-        await client.send_message(me, "🎛 <b>SENTINEL CONSOLE</b> — tap a tile, or send a raw emoji", buttons=MENU_BUTTONS, parse_mode="html")
+        await client.send_message(c2_ent, "🎛 <b>SENTINEL CONSOLE</b> — tap a tile, or send a raw emoji", buttons=MENU_BUTTONS, parse_mode="html")
 
     @client.on(events.CallbackQuery)
     async def on_cb(ev):
@@ -1131,13 +1153,13 @@ async def main():
                     continue
                 if st.get("msgId"):
                     try:
-                        await client.edit_message(me, st["msgId"], hud_text(), parse_mode="html")
+                        await client.edit_message(c2_ent, st["msgId"], hud_text(), parse_mode="html")
                         continue
                     except Exception:
                         st["msgId"] = None
-                m = await client.send_message(me, hud_text(), parse_mode="html")
+                m = await client.send_message(c2_ent, hud_text(), parse_mode="html")
                 try:
-                    await client.pin_message("me", m.id, notify=False)
+                    await client.pin_message(c2_ent, m.id, notify=False)
                 except Exception:
                     pass
                 st["msgId"] = m.id

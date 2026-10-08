@@ -1,0 +1,10 @@
+[Unit]
+Description=Sentinel equity bridge (exchange-verified P&L reconciliation)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sentinel
+EnvironmentFile=/opt/sentinel/.env
+ExecStart=/usr/bin/node /opt/sentinel/scripts/equity-bridge.mjs
+Nice=19

@@ -847,8 +847,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1104,6 +1104,13 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           // external funding is not trading profit — shown so equity growth
           // can't masquerade as performance
           if(src.depositsUsd)rails2.push([`deposits $${(+src.depositsUsd).toFixed(0)}`,'external funding, not PnL','info']);
+          // exchange-verified equity bridge: deposits-adjusted P&L straight
+          // from Bitget account bills — the reconciliation that can't be
+          // gamed by selective fill bookkeeping
+          if(bridge&&bridge.epoch){
+            const e=bridge.epoch,a=bridge.allTime;
+            rails2.push([`bridge ${e.returnPct>=0?'+':''}${e.returnPct}%`,`epoch net $${e.tradingPnlUsd} on $${e.depositsUsd} in · all-time ${a.returnPct>=0?'+':''}${a.returnPct}% ($${a.tradingPnlUsd}) · maxDD $${bridge.maxPnlDrawdownUsd}`,e.returnPct>=0?'ok':'warn']);
+          }
           if((r.deniedSymbols||[]).length)rails2.push(['denied',r.deniedSymbols.join(',')+' — new entries refused','info']);
           if((r.manualHold||[]).length)rails2.push(['manual-hold',r.manualHold.join(',')+' — exits off, protection still enforced','info']);
           if(r.relaxGates)rails2.push(['gates-relaxed','advisory vetoes bypassed — structural protections still on','warn']);
@@ -1124,7 +1131,13 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           const bs=rs&&rs.bySource,bsStr=bs?' · bot '+(bs.bot.closes||0)+'c $'+(bs.bot.netUsd??'—')+' · manual '+(bs.manual.closes||0)+'c $'+(bs.manual.netUsd??'—')+(bs.legacy&&bs.legacy.closes?' · legacy '+bs.legacy.closes+'c $'+bs.legacy.netUsd:''):'';
           const bp=rs&&rs.byPosition;
           const posStr=bp?' · '+bp.positions+' positions · '+bp.winRatePct+'% pos-win · exp $'+bp.expectancyUsd+'/pos':'';
-          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?posStr+' · net $'+rs.netUsd+' · PF '+rs.profitFactor+' · '+rs.winRatePct+'% per-fill':'')+(src.sqnR&&src.sqnR.sqn!=null?' · SQN(R) '+(+src.sqnR.sqn).toFixed(2)+' over '+src.sqnR.n+' risk-graded positions':' · SQN(R) pending — needs a risk-stamped entry→close')+bsStr+'</span></div>')+
+          // exchange-verified bridge: closed net after fees + open UPL so
+          // unrealized losses can't hide outside the headline number
+          const openArr=src.positionsAfter||[];
+          const openUpl=openArr.reduce((a,p)=>a+(+p.upl||0),0);
+          const openStr=openArr.length?' · open UPL '+(openUpl>=0?'+':'−')+'$'+Math.abs(openUpl).toFixed(2)+' ('+openArr.length+' open, exchange-marked)':'';
+          const eqStr=src.equityUsd!=null?' · equity $'+(+src.equityUsd).toFixed(2):'';
+          $('liveFills').innerHTML='<div class="ptitle" style="font-size:9px;margin:8px 0 4px">Real fills <span class="sub">— '+((src.realFillCount||rf.length)+' exchange fills'+(rs&&rs.closes?posStr+' · net $'+rs.netUsd+' · PF '+rs.profitFactor+' · '+rs.winRatePct+'% per-fill':'')+openStr+eqStr+(src.sqnR&&src.sqnR.sqn!=null?' · SQN(R) '+(+src.sqnR.sqn).toFixed(2)+' over '+src.sqnR.n+' risk-graded positions':' · SQN(R) pending — needs a risk-stamped entry→close')+bsStr+'</span></div>')+
             rf.map(f=>{const net=(f.profit||0)-(f.fee||0);return `<div class="ledger-row"><span><b style="font-size:10px">${f.symbol}</b> <span class="sub">${f.tradeSide||''} ${f.side} ${f.size} @ ${f.price} · fee ${f.fee} · net ${net>=0?'+':''}${net.toFixed(4)} · ${ago(f.ts)}</span></span><span class="num ${net>=0?'up':'dn'}">${f.profit>=0?'+':''}${f.profit}</span></div>`}).join('');
         }
         // gate-reject transparency — 'why didn't it trade' answers itself

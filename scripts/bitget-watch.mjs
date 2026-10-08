@@ -32,6 +32,11 @@ if (typeof X.hasCreds === 'boolean' && !X.hasCreds) {
   console.error(TAG(), 'FATAL: Bitget live credentials missing from env — exiting so systemd surfaces it');
   process.exit(1);
 }
+// position mode drives the close-order wire shape: hedge wants the
+// POSITION side + tradeSide:'close', oneway the opposite order side +
+// reduceOnly. Account-wide — resolved once at boot.
+let POS_MODE = 'oneway';
+try { POS_MODE = await X.getPosMode('BTCUSDT'); X.setPosMode(POS_MODE); } catch {}
 
 const DEFAULT_RR = { mults: [0.15, 0.35, 0.7], alloc: [0.35, 0.3, 0.2], moon: 0.15, stopPct: 1 };
 const loadRR = () => {
@@ -191,13 +196,21 @@ async function cycle() {
   const actions = [];
   const errors = [];
 
-  // orphan sweep: plans on symbols that went flat since last cycle
+  // orphan sweep: plans AND resting TP limits on symbols that went flat
+  // since last cycle
   const prev = readHeartbeat();
   for (const sym of prev?.flatWatched || []) {
     if (open.has(sym)) continue;
     try {
       const rows = await X.getPlans(sym).catch(() => []);
       if (rows.length) { await cancelRows(sym, rows); actions.push(`${sym}: swept ${rows.length} orphan plan(s) after flat`); }
+      const pend = await X.pendingOrders(sym).catch(() => []);
+      const orphans = pend.filter((o) => /^vtp-/.test(String(o.clientOid || '')));
+      for (const o of orphans) {
+        const oid = o.orderId || o.id;
+        if (oid) await X.cancelOrder(sym, String(oid)).catch(() => {});
+      }
+      if (orphans.length) actions.push(`${sym}: swept ${orphans.length} orphan TP limit(s) after flat`);
     } catch (e) { errors.push(`${sym} sweep: ${e.message.slice(0, 100)}`); }
   }
 
@@ -282,22 +295,89 @@ async function cycle() {
         }
       }
 
-      // ---- TP LADDER: exactly the RR legs sized to the live position.
-      // MANUAL_HOLD symbols are skipped — the operator owns profit geometry
-      // (re-arming here cancelled scalp TPs and re-laid band targets every
-      // 10s cycle, churning orders and undoing the scalp mandate).
+      // ---- TP LADDER: resting post-only limit legs, tagged vtp-* so they
+      // are never confused with exec pullback entries or foreign orders.
+      // The old trigger 'profit_plan' legs filled as TAKER on every winner
+      // (a limit posted at the trigger instant always crosses — measured
+      // 0.06% on every close in real-fills); resting legs sit in the book
+      // ahead of the touch and bank at ~0.02% maker with queue priority.
+      // Vestigial per-leg profit_plan triggers get swept: a trigger and a
+      // resting limit at the same px double-fire the tranche. Exactly one
+      // whole-position pos_profit trigger at the TOP leg price rides
+      // underneath as the taker fallback — it fires only if the resting
+      // legs are gone (exchange-cancelled, watcher restart gap, qty-cap
+      // edge cases). MANUAL_HOLD symbols are skipped — the operator owns
+      // profit geometry.
       const legs = desiredLegs(p, rr, want.stopPct, dec, sizeDec, want.mark);
-      const profitRows = rows.filter((r) => /^(profit_plan|pos_profit)$/.test(r.planType || ''));
-      if (!manualSet.has(p.symbol) && !legsMatch(profitRows, legs, dec, sp)) {
-        if (profitRows.length) { await cancelRows(p.symbol, profitRows); }
-        let placed = 0;
-        for (const l of legs) {
-          try {
-            await X.planOrder(p.symbol, 'profit_plan', String(l.px), String(l.size), p.holdSide, p.marginMode);
-            placed++;
-          } catch (e) { errors.push(`${p.symbol}: TP leg ${l.px} failed: ${e.message.slice(0, 100)}`); }
+      const legRows = rows.filter((r) => r.planType === 'profit_plan');
+      const fbRows = rows.filter((r) => r.planType === 'pos_profit');
+      if (!manualSet.has(p.symbol)) {
+        if (legRows.length) {
+          await cancelRows(p.symbol, legRows);
+          actions.push(`${p.symbol}: swept ${legRows.length} vestigial profit_plan leg(s)`);
         }
-        if (placed || profitRows.length) actions.push(`${p.symbol}: ladder re-armed ${placed}/${legs.length} legs (${profitRows.length ? 'replaced' : 'new'})`);
+        const pend = await X.pendingOrders(p.symbol).catch(() => null);
+        if (pend === null) {
+          // same rule as getPlans: an API error must never read as an empty
+          // book — skip TP maintenance this cycle rather than double-lay.
+          errors.push(`${p.symbol}: pendingOrders failed — TP legs skipped this cycle`);
+        } else {
+          const tpLims = pend.filter((o) => /^vtp-/.test(String(o.clientOid || '')));
+          const limMatch = (orders) => {
+            if (orders.length !== legs.length) return false;
+            const used = new Set();
+            for (const l of legs) {
+              const i = orders.findIndex((o, k) => !used.has(k)
+                && Math.abs(+o.price - l.px) <= 10 ** -dec
+                && Math.round(Math.abs((+o.size || 0) - l.size) * sp) === 0);
+              if (i < 0) return false;
+              used.add(i);
+            }
+            return true;
+          };
+          if (!limMatch(tpLims)) {
+            for (const o of tpLims) {
+              const oid = o.orderId || o.id;
+              if (oid) await X.cancelOrder(p.symbol, String(oid)).catch(() => {});
+            }
+            const long = p.holdSide === 'long';
+            let placed = 0;
+            for (let i = 0; i < legs.length; i++) {
+              const l = legs[i];
+              // a leg px the mark has already crossed can't post_only —
+              // gtc lets it fill immediately at the better price instead
+              // of error-looping while profit sits unclaimed
+              const crossed = want.mark > 0 && (long ? l.px <= want.mark * 1.0002 : l.px >= want.mark * 0.9998);
+              const extra = { clientOid: `vtp-${i}-${Date.now().toString(36).slice(-4)}` };
+              if (POS_MODE === 'hedge') extra.tradeSide = 'close';
+              else extra.reduceOnly = 'YES';
+              if (crossed) extra.timeInForceValue = 'gtc';
+              try {
+                await X.limitOrder(
+                  p.symbol,
+                  POS_MODE === 'hedge' ? (long ? 'buy' : 'sell') : (long ? 'sell' : 'buy'),
+                  String(l.size), String(l.px), extra
+                );
+                placed++;
+              } catch (e) { errors.push(`${p.symbol}: TP limit ${l.px} failed: ${e.message.slice(0, 100)}`); }
+            }
+            if (placed || tpLims.length) actions.push(`${p.symbol}: maker TP ladder re-armed ${placed}/${legs.length} legs (${tpLims.length ? 'replaced' : 'new'})`);
+          }
+          // fallback trigger: keep any existing pos_profit (exec places its
+          // own — price is its call, it is only a backstop); dedupe extras;
+          // arm ours at the top leg when none exists. Once every leg has
+          // banked the moon bag rides the trailing stop — no fixed cap.
+          if (legs.length && !fbRows.length) {
+            const topPx = legs[legs.length - 1].px;
+            try {
+              await X.planOrder(p.symbol, 'pos_profit', String(topPx), '0', p.holdSide, p.marginMode);
+              actions.push(`${p.symbol}: fallback pos_profit @ ${topPx}`);
+            } catch (e) { errors.push(`${p.symbol}: fallback TP failed: ${e.message.slice(0, 100)}`); }
+          } else if (fbRows.length > 1) {
+            await cancelRows(p.symbol, fbRows.slice(1));
+            actions.push(`${p.symbol}: deduped ${fbRows.length - 1} extra pos_profit row(s)`);
+          }
+        }
       }
     } catch (e) { errors.push(`${p.symbol}: ${e.message.slice(0, 120)}`); }
   }
