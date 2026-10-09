@@ -133,5 +133,39 @@ const mkWar = () => {
   ok(true, 'fight ran on form ranking');
 }
 
+// --- 8. personality evolves: wins build swagger, losses build tilt
+{
+  const war = mkWar();
+  const c = war.cracks['Diamond Dust'];
+  war.intents.push({ symbol: 'SUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Diamond Dust' });
+  const wins = [
+    { tradeId: 'w1', tradeSide: 'close', symbol: 'SUSDT', ts: 200, fee: 0, profit: 0.5 },
+    { tradeId: 'w2', tradeSide: 'close', symbol: 'SUSDT', ts: 300, fee: 0, profit: 0.5 },
+    { tradeId: 'w3', tradeSide: 'close', symbol: 'SUSDT', ts: 400, fee: 0, profit: 0.5 },
+  ];
+  pc.attribute(war, wins);
+  ok(c.persona && c.persona.swagger > 0.5, `swagger grows on wins: ${c.persona?.swagger}`);
+  ok(c.persona.tilt < 0.1, `tilt decays on wins: ${c.persona?.tilt}`);
+  ok(c.mood === 'heater' || c.mood === 'cocky', `winning mood set: ${c.mood}`);
+  const tiltBefore = c.persona.tilt;
+  war.intents.push({ symbol: 'TUSDT', direction: 'LONG', ts: 500, pimp: 'Silky Slim', crack: 'Diamond Dust' });
+  const losses = [1, 2, 3, 4].map(i => ({ tradeId: 'l' + i, tradeSide: 'close', symbol: 'TUSDT', ts: 600 + i, fee: 0, profit: -0.4 }));
+  pc.attribute(war, losses);
+  ok(c.persona.tilt > tiltBefore + 0.4, `tilt builds on losses: ${c.persona.tilt}`);
+  ok(c.mood === 'tilt' || c.mood === 'cold', `losing mood set: ${c.mood}`);
+}
+
+// --- 9. personality changes scoring: tilted girls chase movers harder
+{
+  const calm = { w: { chg: 1, score: 0 }, persona: { swagger: 0.5, tilt: 0, greed: 0.5, discipline: 0.5 } };
+  const tilted = { w: { chg: 1, score: 0 }, persona: { swagger: 0.5, tilt: 0.9, greed: 0.5, discipline: 0.5 } };
+  const cand = { symbol: 'DOGEUSDT', score: 0, changePct: 6, mktType: 'x', strategy: '' };
+  ok(pc.crackScore(tilted, cand) > pc.crackScore(calm, cand), 'tilt amplifies chase scoring');
+  const picky = { w: { chg: 0, score: 2 }, persona: { swagger: 0.5, tilt: 0, greed: 0.5, discipline: 0.95 } };
+  const loose = { w: { chg: 0, score: 2 }, persona: { swagger: 0.5, tilt: 0, greed: 0.5, discipline: 0.05 } };
+  const evCand = { symbol: 'ETHUSDT', score: 8, changePct: 0, mktType: 'x', strategy: '' };
+  ok(pc.crackScore(picky, evCand) > pc.crackScore(loose, evCand), 'discipline amplifies evidence scoring');
+}
+
 console.log(`\n${pass} pass · ${fail} fail`);
 process.exit(fail ? 1 : 0);

@@ -47,6 +47,24 @@ const CRACK_STABLE = [
 
 const BENCH_NAMES = ['Chrome Cherry', 'Plastic Poppy', 'Rusty Ruby', 'Vandal Vicky', 'Nylon Nina', 'Broke Betty', 'Static Stella', 'Lowdown Lola'];
 
+// evolving personalities — traits drift with every booked trick and feed
+// back into scoring. swagger: confidence from winning. tilt: desperation
+// after losses (over-chases movers). greed: appetite for bigger runners.
+// discipline: pickiness — learned patience.
+const freshPersona = () => ({ swagger: 0.5, tilt: 0.1, greed: 0.5, discipline: 0.5 });
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const MOOD_LINES = {
+  tilt: (n) => `🌋 ${n} is ON TILT — chasing anything that moves, corner's getting nervous`,
+  heater: (n) => `🔥 ${n} is on a heater — swagger through the roof, pimps are circling`,
+  cold: (n) => `🧊 ${n} can't buy a trick — cold streak, the bench is watching`,
+  cocky: (n) => `💅 ${n} got cocky — untouchable energy, the haters are plotting`,
+};
+const moodOf = (c) =>
+  (c.persona?.tilt ?? 0) >= 0.62 ? 'tilt' :
+  (c.form ?? 0) > 0.3 ? 'heater' :
+  (c.form ?? 0) < -0.3 ? 'cold' :
+  (c.persona?.swagger ?? 0) >= 0.75 ? 'cocky' : 'working';
+
 const GOOD_MKT = new Set(['side-normal', 'bear-normal']);
 const BAD_MKT = new Set(['bull-volatile']);
 const isMajor = (sym) => /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE)L?USDT$/i.test(sym);
@@ -59,7 +77,7 @@ function freshWar() {
     war.pimps[p] = { roster, crown: false, crippled: false, net: 0, wins: 0, losses: 0 };
   });
   for (const c of CRACK_STABLE) {
-    war.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0 };
+    war.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
   }
   for (const [p, st] of Object.entries(war.pimps)) for (const g of st.roster) war.cracks[g].pimp = p;
   war.drama.push({ ts: Date.now(), text: '🌆 Pimpcity founded — 5 pimps, 10 girls, one $4 corner' });
@@ -76,8 +94,11 @@ export function loadWar() {
       // pimp doesn't resurrect her.
       for (const c of CRACK_STABLE) {
         if (!w.cracks[c.name] && !(w.retired || {})[c.name])
-          w.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0 };
+          w.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
       }
+      // saved wars predate personalities — backfill so the field exists
+      // even on records written before this layer landed
+      for (const c of Object.values(w.cracks)) if (!c.persona) { c.persona = freshPersona(); c.mood = 'working'; }
       return w;
     }
   } catch {}
@@ -99,16 +120,18 @@ export function saveWar(w) {
       pimps: Object.entries(w.pimps).map(([name, p]) => ({
         name, roster: p.roster, net: +p.net.toFixed(4), wins: p.wins, losses: p.losses,
         crown: p.crown, crippled: p.crippled,
+        mood: (p.roster || []).map((g) => w.cracks[g]).filter(Boolean).sort((a, b) => (b.form ?? 0) - (a.form ?? 0))[0]?.mood || 'working',
       })).sort((a, b) => b.net - a.net),
       cracks: Object.entries(w.cracks).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
-        form: +(c.form ?? 0).toFixed(4),
+        form: +(c.form ?? 0).toFixed(4), mood: c.mood || 'working',
+        persona: c.persona ? { swagger: +c.persona.swagger.toFixed(2), tilt: +c.persona.tilt.toFixed(2), greed: +c.persona.greed.toFixed(2), discipline: +c.persona.discipline.toFixed(2) } : null,
       })).sort((a, b) => b.net - a.net),
       retired: Object.entries(w.retired || {}).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
-        form: +(c.form ?? 0).toFixed(4),
+        form: +(c.form ?? 0).toFixed(4), mood: c.mood || 'retired',
       })).sort((a, b) => b.net - a.net),
       intents: (w.intents || []).slice(-12),
       drama: w.drama.slice(-30).reverse(),
@@ -135,9 +158,15 @@ const say = (w, text) => {
 // how a girl sizes up a candidate row {symbol,score,changePct,mktType,strategy}
 export function crackScore(crack, c) {
   const w = crack.w || {};
-  let s = (w.score ?? 1) * (+c.score || 0) / 10;
-  s += (w.chg ?? 0) * Math.min(8, Math.abs(+c.changePct || 0));
-  s += (w.mom ?? 0) * (+c.changePct || 0);
+  const p = crack.persona || {};
+  // personality shapes the read: disciplined girls lean on the evidence
+  // score, tilted girls over-chase movers, greedy girls want runners
+  const dM = 1 + ((p.discipline ?? 0.5) - 0.5) * 0.5;
+  const tM = 1 + (p.tilt ?? 0) * 0.7;
+  const gM = 1 + ((p.greed ?? 0.5) - 0.5) * 0.6;
+  let s = (w.score ?? 1) * (+c.score || 0) / 10 * dM;
+  s += (w.chg ?? 0) * Math.min(8, Math.abs(+c.changePct || 0)) * tM;
+  s += (w.mom ?? 0) * (+c.changePct || 0) * gM;
   if (w.strat && w.stratW && c.strategy && new RegExp(w.strat, 'i').test(c.strategy)) s += w.stratW;
   if (w.major && isMajor(c.symbol)) s += w.major;
   if (w.alt && !isMajor(c.symbol)) s += w.alt;
@@ -233,6 +262,20 @@ export function attribute(war, fills, log = () => {}) {
     // hot three months ago and bleeding now should not hold the corner.
     cr.form = +( ((cr.form ?? 0) * 0.6 + net * 0.4).toFixed(4) );
     if (net >= 0) cr.wins++; else cr.losses++;
+    // personality evolves on every booked trick — wins build swagger and
+    // greed, losses build tilt and erode discipline. Moods flip in the
+    // drama feed so the dashboard isn't just numbers.
+    const ps = cr.persona || (cr.persona = freshPersona());
+    if (net >= 0) {
+      ps.swagger = clamp01(ps.swagger + 0.09); ps.greed = clamp01(ps.greed + 0.04);
+      ps.tilt = clamp01(ps.tilt * 0.55); ps.discipline = clamp01(ps.discipline + 0.03);
+    } else {
+      ps.tilt = clamp01(ps.tilt + 0.18); ps.swagger = clamp01(ps.swagger - 0.07);
+      ps.greed = clamp01(ps.greed - 0.02); ps.discipline = clamp01(ps.discipline - 0.05);
+    }
+    const m = moodOf(cr);
+    if (m !== cr.mood && MOOD_LINES[m]) lines.push(MOOD_LINES[m](hit.crack));
+    cr.mood = m;
     if (pm) {
       pm.net += net;
       if (net >= 0) pm.wins++; else pm.losses++;
@@ -304,7 +347,10 @@ export function fight(war, log = () => {}) {
     war.gen++;
     const used = new Set(Object.keys(war.cracks));
     const fresh = BENCH_NAMES.find((n) => !used.has(n)) || `Mutant ${war.gen}`;
-    const mutant = { w: {}, tag: 'spawn of ' + worstName, pimp: worst.pimp, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: war.gen };
+    const mutant = { w: {}, tag: 'spawn of ' + worstName, pimp: worst.pimp, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: war.gen, form: 0, mood: 'working',
+      // mutants inherit the leader's temperament with street noise — the
+      // personality genome drifts just like the playbook does
+      persona: { swagger: 0.4 + Math.random() * 0.3, tilt: Math.random() * 0.25, greed: 0.35 + Math.random() * 0.4, discipline: 0.3 + Math.random() * 0.4 } };
     for (const k of Object.keys(leader[1].w)) {
       const sv = +leader[1].w[k];
       mutant.w[k] = Number.isFinite(sv) ? sv * (0.7 + Math.random() * 0.6) : leader[1].w[k];
