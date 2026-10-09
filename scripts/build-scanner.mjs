@@ -12,6 +12,7 @@ import '../ta-engine.js';  // sets globalThis.TAEngine
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 import { integrityNote } from './crc32.mjs';
 import * as sf from './signal-fusion.mjs';
+import { getLibEdge, OUR_FAMILY } from './libedge-scan.mjs';
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
@@ -1639,6 +1640,12 @@ async function main() {
   // signals need momentum metrics; pairs whose kline fetch failed get a
   // neutral profile instead of being dropped from the board entirely
   const neutral = { rsi14: 50, volRatio: 1, closes: null };
+  // trader.dev library edge — public KPI mass per pair. Cached 12h; a
+  // failed refresh returns whatever the last good pull had (never blocks)
+  let libEdge = {};
+  try {
+    libEdge = (await getLibEdge(candidates.map((r) => r.asset), { log: (m) => console.log(m) })).map || {};
+  } catch (e) { console.warn('libedge refresh failed — scoring without it: ' + e.message); }
   const ranked = candidates
     .map((r) => {
       const k = enriched.get(r.asset) ?? neutral;
@@ -1762,6 +1769,16 @@ async function main() {
       const obiBoost = book
         ? (dir0 === 'LONG' ? 1 : -1) * clamp(book.microPos * 3 + book.imb * 2, -3.5, 3.5)
         : 0;
+      // library edge density (trader.dev public backtest mass): pairs with
+      // many independently-profitable strategies are empirically easier
+      // tape; pairs where the whole library failed pay a small tax.
+      // Archetype agreement (+1) when OUR strategy family matches the
+      // library's dominant archetype for this symbol — unsigned prior,
+      // tape quality isn't directional.
+      const le = libEdge[r.asset];
+      const libBoost = !le || !le.n
+        ? 0
+        : clamp(le.edge + (OUR_FAMILY(strategy) && OUR_FAMILY(strategy) === le.domArch ? 1 : 0), -1.5, 3.5);
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -1779,6 +1796,7 @@ async function main() {
             fundBoost +
             rsBoost +
             obiBoost +
+            libBoost +
             (climax ? -10 : 0),
           0,
           100
@@ -1792,10 +1810,11 @@ async function main() {
         confl: Math.min((k.ta?.confluence || 0) * 3, 12),
         ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy),
         deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
-        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, clim: climax ? -10 : 0,
+        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, lib: libBoost, clim: climax ? -10 : 0,
       };
       return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
-        btcPair, rsBoost, book, obiBoost,
+        btcPair, rsBoost, book, obiBoost, libBoost,
+        libedge: le && le.n ? { density: le.density, topSharpe: le.topSharpe, domArch: le.domArch, domTf: le.domTf } : null,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
