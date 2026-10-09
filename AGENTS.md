@@ -118,6 +118,12 @@ ft.mjs, rr-config.json, env.txt).
   1.5x 15m ATR clamped 1.5-5%.
 - Entries circuit breaker may be overridden by bounded
   state/cmd-override.json — operator-level risk call, never auto-renew.
+- **Standing oil mandate** (operator order 2026-10-09):
+  `SENTINEL_CORE_SYMS=CLUSDT,ETHUSDT,BTCUSDT` on sentinel-rapid —
+  CL gets first claim in core-carry and rides every slot-deploy
+  nomination (score-45 seed). Macro thesis: Iran war / Hormuz
+  escalation, SPR restock demand, structural inflation bid. Still
+  gated: dedup, cooldown, ambiguous/manual guards, catalog.
 
 ## Key mechanics
 
