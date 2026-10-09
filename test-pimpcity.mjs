@@ -204,5 +204,41 @@ const mkWar = () => {
   ok(war.cracks['Hot Holly'].net === 0, 'unverified nomination cannot steal the trick');
 }
 
+// --- 13. form boosts nomination rank on identical reads
+{
+  const war = mkWar();
+  war.cracks['Hot One'] = { w: { score: 1 }, tag: 't', pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0.6 };
+  war.cracks['Cold One'] = { w: { score: 1 }, tag: 't', pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: -0.6 };
+  delete war.cracks['Diamond Dust']; war.pimps['Silky Slim'].roster = [];
+  const noms = pc.nominate(war, [{ symbol: 'AAAUSDT', score: 5, changePct: 1, mktType: 'x' }, { symbol: 'BBBUSDT', score: 4, changePct: 1, mktType: 'x' }], 2);
+  ok(noms[0].crack === 'Hot One', `hot girl's nom outranks: ${noms[0].crack}`);
+}
+
+// --- 14. persona decay pulls temperament toward baseline each cycle
+{
+  const war = mkWar();
+  const c = war.cracks['Diamond Dust'];
+  c.persona = { swagger: 0.9, tilt: 0.8, greed: 0.9, discipline: 0.2 };
+  pc.fight(war); // early-returns with <3 closed girls but decay runs first
+  ok(c.persona.swagger < 0.9, `swagger decayed: ${c.persona.swagger}`);
+  ok(c.persona.tilt < 0.8, `tilt decayed: ${c.persona.tilt}`);
+  ok(c.persona.discipline > 0.2, `discipline recovered: ${c.persona.discipline}`);
+}
+
+// --- 15. crown trade-down: hottest free agent swaps for coldest roster girl
+{
+  const war = mkWar();
+  war.pimps['Silky Slim'].net = 1.5; // crown requires positive net
+  war.pimps['Silky Slim'].roster = ['Diamond Dust', 'Cold Carol'];
+  const c = war.cracks['Diamond Dust'];
+  c.closes = 3; c.form = 0.4; c.net = 0.5;
+  war.cracks['Cold Carol'] = { w: { score: 1 }, tag: 't', pimp: 'Silky Slim', net: -0.1, wins: 0, losses: 2, closes: 2, stolen: 0, gen: 0, form: -0.3 };
+  war.cracks['Street Star'] = { w: { score: 1 }, tag: 't', pimp: null, net: 0.3, wins: 2, losses: 0, closes: 2, stolen: 0, gen: 0, form: 0.7 };
+  pc.fight(war);
+  ok(war.cracks['Street Star'].pimp === 'Silky Slim', `star recruited by crown: ${war.cracks['Street Star'].pimp}`);
+  ok(war.cracks['Cold Carol'].pimp === null, 'deadweight cut to free agency');
+  ok(war.pimps['Silky Slim'].roster.includes('Street Star') && !war.pimps['Silky Slim'].roster.includes('Cold Carol'), 'roster swapped');
+}
+
 console.log(`\n${pass} pass · ${fail} fail`);
 process.exit(fail ? 1 : 0);

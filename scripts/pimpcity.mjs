@@ -186,7 +186,9 @@ export function nominate(war, cand, slotsAvail) {
     for (const crack of girls) {
       let best = null, bestS = -1e9;
       for (const c of cand) {
-        const sc = crackScore(crack, c) + (pname === topPimp ? 4 : 0) - (pname === botPimp ? 4 : 0);
+        // form rides the nomination too — a hot girl's read earns slot
+        // priority over a cold one, not just post-hoc leaderboard rank
+        const sc = crackScore(crack, c) + (pname === topPimp ? 4 : 0) - (pname === botPimp ? 4 : 0) + (crack.form ?? 0) * 2;
         if (sc > bestS) { bestS = sc; best = c; }
       }
       if (best) noms.push({ cand: best, sc: bestS, pimp: pname, crack: crack.name });
@@ -199,7 +201,7 @@ export function nominate(war, cand, slotsAvail) {
     if (crack.pimp) continue;
     let best = null, bestS = -1e9;
     for (const c of cand) {
-      const sc = crackScore({ name: gname, ...crack }, c);
+      const sc = crackScore({ name: gname, ...crack }, c) + (crack.form ?? 0) * 2;
       if (sc > bestS) { bestS = sc; best = c; }
     }
     if (best) noms.push({ cand: best, sc: bestS, pimp: null, crack: gname });
@@ -310,6 +312,16 @@ export function attribute(war, fills, log = () => {}) {
 // the turf war — runs once per exec cycle after attribution.
 export function fight(war, log = () => {}) {
   const lines = [];
+  // persona decay: absent new evidence, temperament mean-reverts ~1.5%/cycle
+  // — a girl can't stay tilted on last month's losses forever, and a cocky
+  // one stops strutting when the tricks dry up
+  for (const c of Object.values(war.cracks)) {
+    const ps = c.persona; if (!ps) continue;
+    ps.swagger = clamp01(ps.swagger + (0.5 - ps.swagger) * 0.015);
+    ps.tilt = clamp01(ps.tilt + (0.1 - ps.tilt) * 0.015);
+    ps.greed = clamp01(ps.greed + (0.5 - ps.greed) * 0.015);
+    ps.discipline = clamp01(ps.discipline + (0.5 - ps.discipline) * 0.015);
+  }
   const crackRows = Object.entries(war.cracks).filter(([, c]) => c.closes >= 2);
   if (crackRows.length < 3) return lines;
   // rank by recent form — lifetime net is the résumé, form is who's hot NOW
@@ -389,6 +401,28 @@ export function fight(war, log = () => {}) {
     p.roster.push(gname);
     girl.pimp = pname;
     lines.push(`🤝 ${pname} picked ${gname} up off the street — free agent no more, she's got a corner now`);
+  }
+
+  // --- trade-down: the crown pimp upgrades — swap his coldest girl for the
+  // hottest free agent when the form gap is decisive. The dropped girl
+  // hits the street herself; hour-capped so the wire isn't churn noise.
+  if (Date.now() - (war.lastTradeDown || 0) > 3600e3) {
+    const crownRow = pimpRows.find(([, p]) => p.crown);
+    if (crownRow) {
+      const [cname, cp] = crownRow;
+      const roster = (cp.roster || []).map((g) => [g, war.cracks[g]]).filter(([, c]) => c && c.closes >= 2);
+      const worstG = roster.sort((a, b) => (a[1].form ?? 0) - (b[1].form ?? 0))[0];
+      const freeNow = Object.entries(war.cracks).filter(([, c]) => !c.pimp && c.closes >= 2)
+        .sort((a, b) => (b[1].form ?? 0) - (a[1].form ?? 0))[0];
+      if (worstG && freeNow && (freeNow[1].form ?? 0) - (worstG[1].form ?? 0) > 0.5) {
+        cp.roster = (cp.roster || []).filter((g) => g !== worstG[0]);
+        cp.roster.push(freeNow[0]);
+        freeNow[1].pimp = cname;
+        worstG[1].pimp = null;
+        war.lastTradeDown = Date.now();
+        lines.push(`👑➡️ TRADE-DOWN — ${cname} cut ${worstG[0]} loose (form ${(worstG[1].form ?? 0).toFixed(2)}) and took ${freeNow[0]} off the street (form ${(freeNow[1].form ?? 0).toFixed(2)}) — kingpins upgrade, deadweight walks`);
+      }
+    }
   }
 
   for (const l of lines) { say(war, l); log(l); }
