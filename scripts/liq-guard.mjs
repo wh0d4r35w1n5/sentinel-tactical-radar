@@ -47,6 +47,14 @@ const POLL_MS = +(process.env.LIQ_GUARD_POLL_MS || 300);
 // bleeds through the dip instead of stopping out all at once.
 const STOP_TRIM = process.env.LIQ_GUARD_STOP_TRIM !== '0';
 const STOP_ZONE = +(process.env.LIQ_GUARD_STOP_ZONE_PCT || 1.2); // % above stop = trim zone
+// tight stops ARE the cut — the shed-through-the-dip ladder needs room
+// to work. Below MIN_WIDTH every clip is a fee+loss donation racing a
+// trigger that fires in seconds anyway (observed: 130 stop-approach clips
+// in one session on 0.55% stops — the zone covered the position's whole
+// life). Stops >=1.5% wide keep the ladder, zoned to their last 45%.
+const STOP_TRIM_MIN_WIDTH = +(process.env.LIQ_GUARD_STOP_TRIM_MIN_WIDTH_PCT || 1.5);
+const STOP_ZONE_FRAC = +(process.env.LIQ_GUARD_STOP_ZONE_FRAC || 0.45);
+const STOP_CLIP_MAX = +(process.env.LIQ_GUARD_STOP_CLIP_MAX || 4);
 // 0.9 parked every stop PAST god.mjs's band-integrity edge (stopPct >= 0.8 x
 // bandPct => "cannot fire before liquidation" FAIL) — the guard was writing
 // the exact stops the audit flags. 0.75 sits inside the edge with margin.
@@ -904,10 +912,21 @@ async function tick() {
         const trig = +loss?.triggerPrice || 0;
         const sDist = trig > 0 ? (p.side === 'long' ? (mark - trig) / trig * 100 : (trig - mark) / trig * 100) : null;
         if (sDist != null) stOut.positions[key].stopDist = +sDist.toFixed(3);
+        // stop WIDTH drives everything: tight stops skip the ladder, wide
+        // stops zone it to the last fraction of the run (not an absolute %
+        // that covered the position's entire life on tight stops)
+        const stopWidthPct = trig > 0 && p.entry > 0 ? Math.abs(p.entry - trig) / p.entry * 100 : 0;
+        const zonePct = Math.min(STOP_ZONE, stopWidthPct * STOP_ZONE_FRAC);
+        const ladderOn = STOP_TRIM && stopWidthPct >= STOP_TRIM_MIN_WIDTH;
         const newLow = g.lastStopMark == null || (p.side === 'long' ? mark < g.lastStopMark : mark > g.lastStopMark);
         // sDist > 0.05 required — a mark already THROUGH the trigger means
-        // the stop is mid-fire; clipping then races the exchange's close
-        if (sDist != null && sDist > 0.05 && sDist <= STOP_ZONE && newLow && Date.now() - (g.lastStopTrim || 0) >= SPACING_MS) {
+        // the stop is mid-fire; clipping then races the exchange's close.
+        // Shared clip clock: the liq-zone path and this path must never
+        // machine-gun the same slide (they did — alternating 4s clips).
+        if (ladderOn && sDist != null && sDist > 0.05 && sDist <= zonePct && newLow
+          && (g.stopClipN || 0) < STOP_CLIP_MAX
+          && Date.now() - (g.lastStopTrim || 0) >= SPACING_MS
+          && Date.now() - (g.lastTrim || 0) >= SPACING_MS) {
           // fresh-verify before firing — same discipline as the liq path
           const fresh = await getAllPos().catch(() => null);
           if (fresh) { posCache = fresh; posCacheAt = Date.now(); }
@@ -972,7 +991,7 @@ async function tick() {
               }
             } catch (e) { log(`${key} stop-deepen failed (stop still armed): ${e.message}`); }
           }
-        } else if (sDist != null && sDist > STOP_ZONE + 0.8) {
+        } else if (sDist != null && sDist > zonePct + 0.8) {
           g.lastStopMark = null; g.stopClipN = 0; // recovered clear — re-arm gate and first-clip front-load
         }
       } catch (e) { log(`${key} stop-trim error: ${e.message}`); }
@@ -988,7 +1007,9 @@ async function tick() {
         // the raw liq distance
         if (stOut.positions[key]) stOut.positions[key].zonePct = +zonePct.toFixed(3);
         if (distPct > zonePct) continue;                                    // outside danger zone — dormant
-    if (Date.now() - g.lastTrim < SPACING_MS) continue;                 // serialization floor
+    // shared clip clock — the stop-approach ladder and this path must not
+    // alternate 4s clips down the same slide
+    if (Date.now() - g.lastTrim < SPACING_MS || Date.now() - (g.lastStopTrim || 0) < SPACING_MS) continue;
     // deterioration gate: re-arm only when price prints worse than at the
     // last trim. Waterfall => clips every ~4s; hovering in-zone => zero.
     const worse = g.lastTrimMark == null || (p.side === 'long' ? mark < g.lastTrimMark : mark > g.lastTrimMark);
