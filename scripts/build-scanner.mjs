@@ -1495,12 +1495,13 @@ async function main() {
   // earn a bounded score lift. Bayesian n/(n+10) shrinkage damps small
   // samples. (The ledger-fed stratAdj above is legacy reporting — the
   // ledger entries array is empty post-purge, so it outputs zeros.)
-  let evalByStrat = {};
+  let evalStatsFull = {};
   try {
-    evalByStrat =
+    evalStatsFull =
       JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
-        .stats?.byStrategy || {};
+        .stats || {};
   } catch {}
+  const evalByStrat = evalStatsFull.byStrategy || {};
   const EVAL_MIN_N = 20;
   const stratBlock = new Set();
   const stratBoost = {};
@@ -1527,6 +1528,30 @@ async function main() {
       stratBoost[k] = Math.min(6, Math.round(clamp(shrunkAlpha * 3, -4, 6) * 10) / 10);
     }
   }
+  // ---- regime-conditional strategy ratings: "switch strategy per regime"
+  // done by measurement, not rule-of-thumb. Each strategy's alpha IN the
+  // current mktType overrides its global rating once the cell has depth
+  // (n>=15); a strategy globally-fine but measured-negative IN this tape is
+  // blocked for this regime only — it re-earns entry when the tape turns
+  // or its record recovers. The eval engine already tags every sealed
+  // record with mktType — this is the consumption side.
+  const evalByStratMkt = evalStatsFull.byStrategyMkt || {};
+  const stratRegBlock = new Set();
+  const stratRegBoost = {};
+  {
+    const strats = new Set([
+      ...Object.keys(stratBoost),
+      ...Object.keys(evalByStratMkt).map((x) => x.split('|')[0]),
+    ]);
+    for (const k of strats) {
+      const reg = evalByStratMkt[`${k}|${mktType}`];
+      if (!reg || (reg.n || 0) < 15) continue;
+      const regAlpha = (reg.avgAlpha24h ?? 0) * (reg.n / (reg.n + 10));
+      if (regAlpha < -0.3) stratRegBlock.add(k);
+      else stratRegBoost[k] = Math.min(6, Math.round(clamp(regAlpha * 3, -4, 6) * 10) / 10);
+    }
+  }
+  const stratEff = (k) => stratRegBoost[k] ?? (stratBoost[k] || 0);
 
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
@@ -1683,7 +1708,7 @@ async function main() {
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
-            (stratBoost[strategy] || 0) +
+            stratEff(strategy) +
             derivBoost +
             newsBoost +
             mcapBoost +
@@ -1704,7 +1729,7 @@ async function main() {
       const fz = {
         mom: momentumScore, vol: volumeScore, liq: liquidityScore, surg: surgeScore,
         confl: Math.min((k.ta?.confluence || 0) * 3, 12),
-        ic: icAdj, strat: (stratAdj[strategy] || 0) + (stratBoost[strategy] || 0),
+        ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy),
         deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
         soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, clim: climax ? -10 : 0,
       };
@@ -2943,7 +2968,7 @@ async function main() {
     // families under water). Capital follows measured edge, not the
     // inverted composite: high score + negative alpha now sizes SMALL.
     const conv = Math.round(
-      clamp(0.35 + (stratBoost[s.strategy] || 0) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
+      clamp(0.35 + stratEff(s.strategy) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
     ) / 100;
     // strategy circuit-breaker — a doctrine that has already bled on ≥3
     // closed trades gets half-size until its record clears. Risk control,
@@ -3051,7 +3076,7 @@ async function main() {
     // the eval block — the strategy's record stays on the board for
     // evidence, but exceptional confluence may still route. Default 75;
     // set high to restore the strict block.
-    gate(RELAX || !stratBlock.has(s.strategy) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
+    gate(RELAX || !(stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
@@ -3175,7 +3200,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!stratBlock.has(s.strategy) || tradeScoreOf(s) >= STRAT_OVERRIDE))
+      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!(stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) || tradeScoreOf(s) >= STRAT_OVERRIDE))
       .map((s) => [s.asset, s.direction])
   );
 
@@ -3801,6 +3826,9 @@ async function main() {
       source: 'signal-eval.json byStrategy · min n=20',
       blocked: [...stratBlock],
       boosts: stratBoost,
+      mktType,
+      regimeBlocked: [...stratRegBlock],
+      regimeBoosts: stratRegBoost,
       hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
       shortGate: 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape',
       atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
@@ -4327,6 +4355,9 @@ async function main() {
   );
   evStats.byRegime = group((r) => r.regime ?? 'unknown');
   evStats.byMktType = group((r) => r.mktType ?? 'unknown');
+  // regime-conditional strategy table — the scorer's regime-switch input:
+  // strategy alpha measured PER mktType, not just globally
+  evStats.byStrategyMkt = group((r) => (r.strategy ?? '?') + '|' + (r.mktType ?? 'unknown'));
   // calibration: does the score ORDER predict? Monotone hit rate across
   // deciles = a ranking that means something; flat/inverted = decoration.
   evStats.calibration = group((r) =>
