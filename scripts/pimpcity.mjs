@@ -126,6 +126,7 @@ export function saveWar(w) {
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
         form: +(c.form ?? 0).toFixed(4), mood: c.mood || 'working',
+        hist: (c.hist || []).slice(-24),
         persona: c.persona ? { swagger: +c.persona.swagger.toFixed(2), tilt: +c.persona.tilt.toFixed(2), greed: +c.persona.greed.toFixed(2), discipline: +c.persona.discipline.toFixed(2) } : null,
       })).sort((a, b) => b.net - a.net),
       retired: Object.entries(w.retired || {}).map(([name, c]) => ({
@@ -267,6 +268,9 @@ export function attribute(war, fills, log = () => {}) {
     const pm = hit.pimp ? war.pimps[hit.pimp] : null;
     if (!cr) continue;
     cr.net += net;
+    // net trail for the dashboard sparkline — last 24 episode points
+    (cr.hist ||= []).push(+cr.net.toFixed(4));
+    if (cr.hist.length > 24) cr.hist.shift();
     // episode accounting: one intent = one position = one "trick". A TP
     // ladder journals N close FILLS but the leaderboard counts TRADES —
     // closes++ fires once per episode, wins/losses track the episode's
@@ -401,6 +405,22 @@ export function fight(war, log = () => {}) {
     p.roster.push(gname);
     girl.pimp = pname;
     lines.push(`🤝 ${pname} picked ${gname} up off the street — free agent no more, she's got a corner now`);
+  }
+
+  // --- playbook mutation: if girls only ever steal, the stable converges
+  // to the leader's genes and stops learning. Each cycle, one random girl
+  // jitters one numeric weight ±15% — cheap exploration; fight() selection
+  // pressure decides whether it survives.
+  const mutable = crackRows.filter(([, c]) => c.w);
+  if (mutable.length && Math.random() < 0.35) {
+    const [mname, mc] = mutable[Math.floor(Math.random() * mutable.length)];
+    const keys = Object.keys(mc.w).filter((k) => Number.isFinite(+mc.w[k]));
+    if (keys.length) {
+      const k = keys[Math.floor(Math.random() * keys.length)];
+      const before = +mc.w[k];
+      mc.w[k] = +(before * (0.85 + Math.random() * 0.3)).toFixed(4);
+      lines.push(`🧬 ${mname} tweaked her reads — ${k} ${mc.w[k] > before ? 'up' : 'down'}weighted (street R&D)`);
+    }
   }
 
   // --- trade-down: the crown pimp upgrades — swap his coldest girl for the

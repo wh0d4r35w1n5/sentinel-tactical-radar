@@ -1384,7 +1384,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
             <div class="sub" style="font-size:8.5px">${esc(c.tag||'')}</div>
             ${cm!=='working'?`<span class="pc-mood ${cm}">${MOODTXT[cm]||cm}</span>`:''}</div>
           </div>
-          <div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>
+          <div style="display:flex;align-items:center;gap:6px"><div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>${c.hist&&c.hist.length>1?`<span style="margin-left:auto">${sparkSVG(c.hist,64,16)}</span>`:''}</div>
           <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}${+c.form>0.15?' · 🔥 hot':+c.form<-0.15?' · 🧊 cold':''}</div>
         </div>`;}).join('');
       const ret=(pimpW.retired||[]);
