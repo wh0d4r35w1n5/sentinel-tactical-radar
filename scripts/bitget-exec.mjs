@@ -567,12 +567,44 @@ async function main() {
   } catch {}
   try { fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, ts: Date.now() })); } catch {}
   process.on('exit', () => { try { fs.unlinkSync(lockPath); } catch {} });
+  // 🌆 pimpcity tick — attribution, turf war, intent reconcile, save.
+  // Needs only the fill journal + the set of open symbols, so it runs on
+  // EVERY path a cycle takes — including stale-plan and unreadable-plan
+  // bails, where accounting continuity matters most (positions still
+  // close via exchange stops while the exec refuses to route).
+  let war = null, pc = null;
+  const pimpTick = async (openSyms) => {
+    try {
+      pc = pc || await import('./pimpcity.mjs');
+      war = pc.loadWar();
+      const warFills = loadFills();
+      for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
+      for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
+      // reconcile intents vs the fill journal: a nomination earns "on
+      // shift" only with a matching open fill AND a live position —
+      // queued-never-filled nominations stay pending, expire at 15min
+      for (const it of war.intents || []) {
+        if (it.filledAt == null) {
+          const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
+          if (of) it.filledAt = +of.ts || Date.now();
+        }
+        it.live = it.filledAt != null && openSyms.has(it.symbol);
+      }
+      war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+      try { pc.saveWar(war); } catch {}
+    } catch (e) { state.errors.push('pimpcity: ' + e.message); }
+  };
+  const openSymsNow = async () => {
+    const ps = await getPos().catch(() => []);
+    return new Set((ps || []).filter((p) => +p.total > 0).map((p) => p.symbol));
+  };
   let plan = null;
   try {
     plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
   } catch (e) {
     if (MODE !== 'off') {
       state.errors.push(`live-plan.json unreadable: ${e.message}`);
+      await pimpTick(await openSymsNow());
       writeJson(outPath, state);
     }
     log('no readable plan — nothing to route');
@@ -591,6 +623,7 @@ async function main() {
 
   if (stale) {
     state.errors.push(`plan stale (${Math.round((Date.now() - plan.ts) / 6e4)}min > ${(plan.ttlMs / 6e4)|0}min) — refused`);
+    await pimpTick(await openSymsNow());
     writeJson(outPath, state);
     log('stale plan — refused to route old prices');
     return;
@@ -742,32 +775,12 @@ async function main() {
     posBySym.set(p.symbol, p);
   }
   for (const s of ambiguous) state.errors.push(`${s}: both long AND short open — refusing to guess, close manually`);
-  // 🌆 pimpcity — adversarial persona layer. Runs EARLY on purpose: cycles
-  // under box load get killed before the tail, and a stale war file means
-  // stale attribution + a dashboard lying about who's on shift. Everything
-  // here only needs positions + the fill journal — both available now.
-  // Advisory only; failures fall back to plain score ranking downstream.
-  let war = null, pc = null;
-  try {
-    pc = await import('./pimpcity.mjs');
-    war = pc.loadWar();
-    const warFills = loadFills();
-    for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
-    for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
-    // reconcile intents against the fill journal: a nomination earns
-    // "on shift" only when a matching open fill exists AND the symbol
-    // still holds a live position — queued-never-filled nominations are
-    // labeled pending and expire after 15min
-    for (const it of war.intents || []) {
-      if (it.filledAt == null) {
-        const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
-        if (of) it.filledAt = +of.ts || Date.now();
-      }
-      it.live = it.filledAt != null && posBySym.has(it.symbol);
-    }
-    war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
-    try { pc.saveWar(war); } catch {}
-  } catch (e) { state.errors.push('pimpcity: ' + e.message); }
+  // 🌆 pimpcity — tick runs EARLY on purpose: cycles under box load get
+  // killed before the tail, and a stale war file means stale attribution +
+  // a dashboard lying about who's on shift. Needs only posBySym + the fill
+  // journal — both available now. Advisory; nomination consumes the roster
+  // downstream.
+  await pimpTick(new Set(posBySym.keys()));
   // excursion tracking for the stall-exit gate — peak/trough per open
   // position, refreshed each cycle by the excursion block below
   const maeTrack = (() => {
