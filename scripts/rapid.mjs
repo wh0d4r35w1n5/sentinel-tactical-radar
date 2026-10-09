@@ -86,6 +86,7 @@ for (;;) {
     if (crashed) throw new Error(`child exited (${crashed})`);
     await run('scripts/god.mjs').catch((e) => console.log('[rapid] god:', e.message || e));
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
+    await run('scripts/onchain-scan.mjs').catch((e) => console.log('[rapid] onchain-scan:', e.message || e));
     consecFails = 0; lastErr = null;
   } catch (e) {
     consecFails++;

@@ -2484,6 +2484,35 @@ async function main() {
           if (added) state.actions.push(`🏦 majors tilt: seeded ${added} high-volume contracts into the slot pool (top ${vols.length} by 24h turnover)`);
         } catch { /* ticker board unreachable — pool proceeds without majors */ }
       }
+      // onchain discovery feed → perp lane: trending high-volume/high-liq
+      // DEX tokens (pump.fun grads, Solana memes) that already have a Bitget
+      // perp get a seat in the slot pool today. Tokens without a perp listing
+      // stay discovery-only until the wallet lane has creds (BGW_*). Freshness
+      // + audit gates ride along — rugged/absent audits never seed.
+      if (process.env.SENTINEL_ONCHAIN_FEED !== '0') {
+        try {
+          const hot = JSON.parse(
+            fs.readFileSync(path.join(API, 'onchain-hot.json'), 'utf8')
+          );
+          if (Date.now() - (hot.ts || 0) < (hot.ttlMs || 15 * 60e3)) {
+            const seen = new Set([...CORE_SYMS, ...pool.map((p) => p.symbol)]);
+            let added = 0;
+            for (const h of (hot.hot || []).slice(0, +(process.env.SENTINEL_ONCHAIN_TOP_N || 10))) {
+              if (!h.perpAvailable || !h.perpSymbol || seen.has(h.perpSymbol)) continue;
+              if (h.audit && (h.audit.rugged || (h.audit.risks || []).length > 3)) continue;
+              seen.add(h.perpSymbol);
+              pool.push({
+                symbol: h.perpSymbol, direction: 'LONG',
+                score: Math.round(36 + Math.min(16, (h.score || 0) / 4)),
+                gates: ['onchain-seed'], onchain: true,
+                onchainVol: h.vol24hUsd, onchainLiq: h.liqUsd, onchainMcap: h.mcapUsd,
+              });
+              added++;
+            }
+            if (added) state.actions.push(`⛓ onchain tilt: seeded ${added} trending DEX tokens with perp listings (top-40 scan)`);
+          }
+        } catch { /* feed absent/stale — pool proceeds without it */ }
+      }
       let cand = [...CORE_SYMS.map((symbol) => ({ symbol, score: 45 })), ...pool.sort((a, b) => b.score - a.score)];
       try {
         const noms = war && pc ? pc.nominate(war, cand, slotsAvail) : [];
