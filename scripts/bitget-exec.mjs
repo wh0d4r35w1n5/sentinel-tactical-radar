@@ -580,6 +580,9 @@ async function main() {
       war = pc.loadWar();
       const warFills = loadFills();
       for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
+      // vault carry is the pimp's distribution upstairs — sweep amounts
+      // credit whoever owned the trick, unattributed carry is the house pot
+      for (const l of pc.vaultDistribute(war, loadVault()).lines) state.actions.push('🌆 ' + l);
       for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
       // reconcile intents vs the fill journal: a nomination earns "on
       // shift" only with a matching open fill AND a live position —

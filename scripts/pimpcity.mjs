@@ -127,12 +127,15 @@ export function saveWar(w) {
       pimps: Object.entries(w.pimps).map(([name, p]) => ({
         name, roster: p.roster, net: +p.net.toFixed(4), wins: p.wins, losses: p.losses,
         crown: p.crown, crippled: p.crippled,
+        vault: +(p.vaultUsd || 0).toFixed(4), vaultSweeps: p.vaultSweeps || 0,
         mood: (p.roster || []).map((g) => w.cracks[g]).filter(Boolean).sort((a, b) => (b.form ?? 0) - (a.form ?? 0))[0]?.mood || 'working',
       })).sort((a, b) => b.net - a.net),
+      vault: { house: +(w.vaultHouse || 0).toFixed(4) },
       cracks: Object.entries(w.cracks).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
         form: +(c.form ?? 0).toFixed(4), mood: c.mood || 'working',
+        vault: +(c.vaultUsd || 0).toFixed(4),
         hist: (c.hist || []).slice(-24),
         persona: c.persona ? { swagger: +c.persona.swagger.toFixed(2), tilt: +c.persona.tilt.toFixed(2), greed: +c.persona.greed.toFixed(2), discipline: +c.persona.discipline.toFixed(2) } : null,
       })).sort((a, b) => b.net - a.net),
@@ -261,6 +264,7 @@ export function attribute(war, fills, log = () => {}) {
   // entry fills charged already — a position closed in N clips must pay
   // its entry leg once, not once per clip
   const feeSeen = new Set(war.feeSeen || (war.feeSeen = []));
+  const owners = war.closeOwner || (war.closeOwner = {});
   let moved = false;
   for (const f of fills.concat(ocCloses)) {
     // closes arrive two ways on Bitget: tradeSide 'close' or profit!=0
@@ -282,9 +286,12 @@ export function attribute(war, fills, log = () => {}) {
       const it = intents[i];
       if (it.symbol === f.symbol && it.ts <= f.ts) { hit = it; break; }
     }
-    if (!hit) { done.add(f.tradeId); continue; }
+    if (!hit) { done.add(f.tradeId); owners[f.tradeId] = { pimp: null, crack: null }; continue; }
     done.add(f.tradeId);
     moved = true;
+    // close→owner map: the vault sweep for this fill pays the pimp who
+    // owned the trick — recorded here so carry KPI survives intent expiry
+    owners[f.tradeId] = { pimp: hit.pimp || null, crack: hit.crack || null };
     // round-trip fee truth: the entry leg is journaled as an 'open' fill on
     // the same symbol+direction between the nomination and this close —
     // charge it, or the board scores every trick half-priced.
@@ -342,9 +349,54 @@ export function attribute(war, fills, log = () => {}) {
   }
   war.attributed = [...done].slice(-800);
   war.feeSeen = [...feeSeen].slice(-800);
+  const ownKeys = Object.keys(owners);
+  if (ownKeys.length > 1200) for (const k of ownKeys.slice(0, ownKeys.length - 1200)) delete owners[k];
   war.intents = intents.slice(-60);
   if (moved) for (const l of lines.slice(-3)) { say(war, l); log(l); }
   return lines;
+}
+
+// ---- vault carry distribution — the house take on every profitable close
+// is the pimp's money going upstairs: the sweep on a trick pays whoever
+// owned the girl that banked it. war.closeOwner (written by attribute())
+// maps close tradeId -> {pimp, crack}; sweeps without a claimable owner —
+// manual fills, pre-binding closes, retired-corner ghosts — land in
+// vaultHouse, the corner's anonymous pot. Sweeps dedupe by tradeId so a
+// recycled journal can never double-pay the KPI.
+export function vaultDistribute(war, vault, log = () => {}) {
+  const seen = new Set(war.vaultSeen || (war.vaultSeen = []));
+  const owners = war.closeOwner || {};
+  let paid = 0, lines = [];
+  for (const s of vault.sweeps || []) {
+    if (!s || !(+s.amountUsd > 0) || !s.tradeId || seen.has(s.tradeId)) continue;
+    seen.add(s.tradeId);
+    paid += +s.amountUsd;
+    let own = owners[s.tradeId] || {};
+    // pre-closeOwner sweeps: fall back to the same newest-intent-before-ts
+    // heuristic attribute() uses — only sweeps whose intents still live
+    // resolve; the rest honestly land in the house pot
+    if (!own.pimp && !own.crack) {
+      for (let i = war.intents.length - 1; i >= 0; i--) {
+        const it = war.intents[i];
+        if (it.symbol === s.symbol && it.ts <= (+s.ts || 0)) { own = { pimp: it.pimp || null, crack: it.crack }; break; }
+      }
+    }
+    if (own.crack) {
+      const cr = war.cracks[own.crack] || (war.retired || {})[own.crack];
+      if (cr) cr.vaultUsd = +((cr.vaultUsd || 0) + s.amountUsd).toFixed(4);
+    }
+    if (own.pimp && war.pimps[own.pimp]) {
+      const p = war.pimps[own.pimp];
+      p.vaultUsd = +((p.vaultUsd || 0) + s.amountUsd).toFixed(4);
+      p.vaultSweeps = (p.vaultSweeps || 0) + 1;
+      lines.push(`🏦 ${own.pimp} kicked $${(+s.amountUsd).toFixed(2)} upstairs${own.crack ? ` — ${own.crack}'s trick on ${s.symbol}` : ` on ${s.symbol}`} (lifetime vault $${p.vaultUsd.toFixed(2)})`);
+    } else {
+      war.vaultHouse = +((war.vaultHouse || 0) + s.amountUsd).toFixed(4);
+    }
+  }
+  war.vaultSeen = [...seen].slice(-2000);
+  if (lines.length) for (const l of lines.slice(-3)) { say(war, l); log(l); }
+  return { paid, lines };
 }
 
 // the turf war — runs once per exec cycle after attribution.

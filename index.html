@@ -1347,7 +1347,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     if(pimpW&&(pimpW.pimps||[]).length){
       $('pimpPanel').style.display='block';
       const reportAt=Date.parse(pimpW.at);
-      $('pimpAt').textContent=Number.isFinite(reportAt)?(Date.now()-reportAt>15*60e3?'STALE REPORT':'LATEST REPORT')+' · '+ago(reportAt)+' ago · totals exclude opening fees and funding':'REPORT TIME UNKNOWN';
+      $('pimpAt').textContent=Number.isFinite(reportAt)?(Date.now()-reportAt>15*60e3?'STALE REPORT':'LATEST REPORT')+' · '+ago(reportAt)+' ago · totals exclude opening fees and funding'+(pimpW.vault?` · 🏦 house pot $${(+pimpW.vault.house||0).toFixed(2)} unclaimed`:''):'REPORT TIME UNKNOWN';
       const PIMP_COL={'Silky Slim':'var(--cyan)','Madam Razor':'var(--pink)','Cold Cash Cole':'var(--gold)','Big Daddy Kane':'var(--vio)','Fancy Red':'var(--grn)'};
       const heat=p=>{const t=(p.wins||0)+(p.losses||0);return t?Math.min(5,Math.max(1,Math.round(t/2))):0};
       $('pimpBoard').innerHTML=pimpW.pimps.map(p=>{
@@ -1365,6 +1365,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           </div>
           <div class="num" style="font-size:21px;font-weight:800;margin:6px 0 2px;color:${p.net>=0?'var(--grn)':'var(--red)'}">${p.net>=0?'+':''}$${(+p.net).toFixed(2)}</div>
           <div class="sub" style="font-size:9px">${p.wins}W / ${p.losses}L · stable: ${(p.roster||[]).map(g=>esc(g)).join(' · ')||'<i>empty corner</i>'}</div>
+          <div class="sub" style="font-size:9px;color:var(--gold);margin-top:2px">🏦 vault $${(+p.vault||0).toFixed(2)}${p.vaultSweeps?` · ${p.vaultSweeps} sweeps`:''}</div>
         </div>`;}).join('');
       const shift=(pimpW.intents||[]);
       const live=shift.filter(i=>i.live),pend=shift.filter(i=>!i.live);
@@ -1385,7 +1386,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
             ${cm!=='working'?`<span class="pc-mood ${cm}">${MOODTXT[cm]||cm}</span>`:''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px"><div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>${c.hist&&c.hist.length>1?`<span style="margin-left:auto">${sparkSVG(c.hist,64,16)}</span>`:''}</div>
-          <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}${+c.form>0.15?' · 🔥 hot':+c.form<-0.15?' · 🧊 cold':''}</div>
+          <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${+c.vault>0?' · 🏦$'+(+c.vault).toFixed(2):''}${c.gen?' · gen'+c.gen+' mutant':''}${+c.form>0.15?' · 🔥 hot':+c.form<-0.15?' · 🧊 cold':''}</div>
         </div>`;}).join('');
       const ret=(pimpW.retired||[]);
       $('pimpRetired').style.display=ret.length?'block':'none';
