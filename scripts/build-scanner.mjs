@@ -3345,6 +3345,30 @@ async function main() {
       livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
     // trails intentionally not emitted — stops stay at the entry-set level
   }
+  // Emit the execution plan BEFORE the eval/research tail: the tail is the
+  // heaviest part of the cycle (multi-MB archive parse — it OOM-killed the
+  // scanner for ~3h on 2026-10-09 and every cycle died before the late write
+  // while market-scanner.json kept refreshing). Executor health must never
+  // depend on the R&D tail completing. The write repeats at the end so a
+  // healthy run still refreshes ts.
+  try {
+    writeJson(path.join(API, 'live-plan.json'), {
+      refreshedAt: snap.refreshedAt,
+      ts: now,
+      ttlMs: 15 * 60e3,
+      engine: ENGINE_VERSION,
+      killSwitch: ddNow >= ddKillPct,
+      ddPct: pct(ddNow),
+      ...livePlan,
+    });
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan early write: ${e.message}\n`
+      );
+    } catch {}
+  }
   const closed = ledger.entries.filter((e) => e.status !== 'open');
   // money truth: a profitable exit is a win regardless of which rule closed it
   const wins = closed.filter((e) => (e.pnlPct ?? 0) > 0).length;
@@ -4407,7 +4431,14 @@ async function main() {
         ddPct: pct(ddNow),
         ...livePlan,
       });
-  } catch {}
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan late write: ${e.message}\n`
+      );
+    } catch {}
+  }
 
   // ---- boring benchmark (review ask #3): does the intelligence add value
   // beyond doing something trivial? Track BTC buy&hold, an equal-weight

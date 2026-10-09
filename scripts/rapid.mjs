@@ -56,8 +56,12 @@ const run = (f) =>
       console.log(`[rapid] ${f} exceeded ${CHILD_TIMEOUT / 1e3}s — killing`);
       c.kill('SIGKILL');
     }, CHILD_TIMEOUT);
-    c.on('close', () => { clearTimeout(killer); res(); });
-    c.on('error', () => { clearTimeout(killer); res(); });
+    // resolve with exit info — a crashed/killed child must surface as a
+    // failed cycle (heartbeat + death-spiral alert), not silently count as
+    // healthy. Exec still runs after a scanner crash: positions need
+    // managing even when intelligence is down.
+    c.on('close', (code, sig) => { clearTimeout(killer); res({ f, code, sig }); });
+    c.on('error', (e) => { clearTimeout(killer); res({ f, err: e }); });
   });
 
 console.log(`[rapid] ${MODE.toUpperCase()} fast-loop — scan+exec every ${Math.round(MS / 1e3)}s — ctrl-c to stop`);
@@ -73,8 +77,13 @@ for (;;) {
   try { fs.writeFileSync('state/rapid-heartbeat.json', JSON.stringify({ ts: Date.now(), cycle, consecFails, lastErr })); } catch {}
   let tScan = 0, tExec = 0;
   try {
-    const a = Date.now(); await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;
-    const b = Date.now(); await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
+    const a = Date.now(); const rScan = await run('scripts/build-scanner.mjs'); tScan = Date.now() - a;
+    const b = Date.now(); const rExec = await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
+    const crashed = [rScan, rExec]
+      .filter((r) => r.code !== 0 || r.sig || r.err)
+      .map((r) => `${r.f}: ${r.err?.message || `code=${r.code} sig=${r.sig}`}`)
+      .join('; ');
+    if (crashed) throw new Error(`child exited (${crashed})`);
     await run('scripts/god.mjs').catch((e) => console.log('[rapid] god:', e.message || e));
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
     consecFails = 0; lastErr = null;

@@ -2459,6 +2459,31 @@ async function main() {
         score: (+r.score || 0) + (GOOD_MKT.has(r.mktType) ? 15 : BAD_MKT.has(r.mktType) ? -10 : 0)
           + Math.min(20, Math.abs(+r.changePct || 0) * 4),
       }));
+      // majors mandate: high-volume/high-liquidity contracts get a standing
+      // seat in the slot pool — ranked by the venue's own 24h quote volume so
+      // the list maintains itself (no hand-curated majors list). Seeds run
+      // just under CORE_SYMS (45) but above weak rejects; every downstream
+      // guard (dedup/cooldown/deny/ambiguous/manual/re-entry) still applies.
+      if (process.env.SENTINEL_MAJORS_TILT !== '0' && X.name === 'bitget') {
+        try {
+          const tj = await fetch('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES')
+            .then((r) => r.json());
+          const vols = (tj.data || [])
+            .map((t) => ({ symbol: t.symbol, vol: +(t.usdtVolume ?? t.quoteVolume ?? 0) }))
+            .filter((t) => t.vol > 0 && cm[t.symbol])
+            .sort((a, b) => b.vol - a.vol)
+            .slice(0, +(process.env.SENTINEL_MAJORS_TOP_N || 30));
+          const seen = new Set([...CORE_SYMS, ...pool.map((p) => p.symbol)]);
+          let added = 0;
+          for (const m of vols) {
+            if (seen.has(m.symbol)) continue;
+            seen.add(m.symbol);
+            pool.push({ symbol: m.symbol, direction: 'LONG', score: Math.round(38 + Math.min(15, Math.log10(Math.max(1, m.vol / 1e6)) * 3)), gates: ['majors-seed'], majors: true, volUsd: m.vol });
+            added++;
+          }
+          if (added) state.actions.push(`🏦 majors tilt: seeded ${added} high-volume contracts into the slot pool (top ${vols.length} by 24h turnover)`);
+        } catch { /* ticker board unreachable — pool proceeds without majors */ }
+      }
       let cand = [...CORE_SYMS.map((symbol) => ({ symbol, score: 45 })), ...pool.sort((a, b) => b.score - a.score)];
       try {
         const noms = war && pc ? pc.nominate(war, cand, slotsAvail) : [];
