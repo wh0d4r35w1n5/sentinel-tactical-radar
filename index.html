@@ -378,7 +378,14 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .pc-pimp:hover{transform:translateY(-2px);border-color:rgba(255,94,188,.55)}
 .pc-pimp.crown{border-color:var(--gold);box-shadow:0 0 26px rgba(255,209,102,.22),inset 0 0 22px rgba(255,209,102,.05)}
 .pc-pimp.crippled{border-color:rgba(255,77,125,.45);filter:saturate(.55) brightness(.85)}
-.pc-pimp .av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;border:2px solid currentColor;background:rgba(0,0,0,.35);flex-shrink:0}
+.pc-pimp .av{width:44px;height:44px;border-radius:50%;flex-shrink:0;border:2px solid currentColor;background:#12162b;overflow:hidden}
+.pc-pimp .av svg{display:block;width:100%;height:100%}
+.pc-mood{display:inline-block;font-size:8px;letter-spacing:.09em;padding:1px 6px;border-radius:6px;border:1px solid;margin-top:3px;font-weight:700}
+.pc-mood.tilt{color:#ff6b6b;border-color:#ff6b6b66;background:#ff6b6b14}
+.pc-mood.heater{color:var(--gold);border-color:#ffd16666;background:#ffd16614}
+.pc-mood.cold{color:var(--cyan);border-color:#22e5ff44;background:#22e5ff10}
+.pc-mood.cocky{color:var(--pink);border-color:#ff5ebc66;background:#ff5ebc14}
+.pc-mood.working{color:var(--mut);border-color:#8b93b855;background:#8b93b810}
 .pc-badge{font-size:7.5px;letter-spacing:.14em;padding:2px 7px;border-radius:3px;font-weight:800;white-space:nowrap}
 .pc-badge.king{background:linear-gradient(135deg,#ffd166,#ff9d3d);color:#1a0d00;box-shadow:0 0 14px rgba(255,209,102,.5)}
 .pc-badge.broke{background:rgba(255,77,125,.14);color:var(--red);border:1px solid rgba(255,77,125,.45)}
@@ -389,7 +396,8 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .pc-girl:hover{transform:translateY(-2px);border-color:rgba(255,94,188,.55)}
 .pc-girl.topgirl{border-color:rgba(255,209,102,.5)}
 .pc-girl.topgirl::before{content:"TOP GIRL";position:absolute;top:9px;right:-26px;transform:rotate(35deg);background:linear-gradient(135deg,#ffd166,#ff9d3d);color:#1a0d00;font-size:7px;font-weight:900;letter-spacing:.1em;padding:2px 28px;box-shadow:0 0 12px rgba(255,209,102,.4)}
-.pc-girl .av{width:32px;height:32px;border-radius:8px;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(255,94,188,.28),rgba(34,229,255,.2));border:1px solid rgba(255,94,188,.45);color:#ffd8ef;flex-shrink:0}
+.pc-girl .av{width:38px;height:38px;border-radius:10px;flex-shrink:0;border:1px solid rgba(255,94,188,.45);background:#12162b;overflow:hidden}
+.pc-girl .av svg{display:block;width:100%;height:100%}
 .pc-girl.free{border-style:dashed;opacity:.75}
 .pc-wire{position:relative;border-left:2px solid rgba(255,46,196,.45);padding-left:11px}
 .pc-wire .w{display:flex;justify-content:space-between;gap:10px;padding:4.5px 0;border-bottom:1px dashed rgba(255,94,188,.13);font-size:10.5px}
@@ -1282,6 +1290,57 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       ).join('');
       $('godAt').textContent='audit '+ago(Date.parse(god.at))+' ago · '+god.checks.length+' invariants watched';
     }
+    // ---- procedural GTA-style portraits — seeded per name, no assets.
+    // Mood drives the mouth/brows so you can read the stable's psychology.
+    const MOODTXT={tilt:'🌋 ON TILT',heater:'🔥 ON A HEATER',cold:'🧊 COLD STREAK',cocky:'💅 COCKY',working:'WORKING',retired:'⚰️ RETIRED'};
+    const pcAv=(()=>{
+      const SKIN=['#8d5524','#a9714b','#c68642','#d9a06b','#eec39a','#6f4a2f'];
+      const HAIR=['#17110a','#3a2415','#ffd166','#ff5ebc','#22e5ff','#7a4dff','#e8e4da'];
+      const LIP=['#ff5e8a','#d94f70','#b83a5a'];
+      const hash=s=>{let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0};
+      const rng=sd=>()=>{sd=Math.imul(sd^sd>>>15,sd|1);sd^=sd+Math.imul(sd^sd>>>7,sd|61);return((sd^sd>>>14)>>>0)/4294967296};
+      return (name,role,mood,hue)=>{
+        const r=rng(hash(name)),pick=a=>a[Math.floor(r()*a.length)];
+        const skin=pick(SKIN),hair=pick(HAIR),lip=pick(LIP);
+        const glow=hue||`hsl(${Math.floor(r()*360)},90%,62%)`;
+        const pimp=role==='pimp',girl=role==='girl';
+        const hat=pimp&&r()<0.85, shades=r()<(pimp?0.8:0.45), chain=pimp||r()<0.35;
+        const cig=mood==='tilt'||(!pimp&&r()<0.25), erring=girl&&r()<0.6;
+        const hs=Math.floor(r()*(girl?6:4));
+        const HAIRS=[
+          `<circle cx="32" cy="17" r="12" fill="${hair}"/><circle cx="22" cy="21" r="6" fill="${hair}"/><circle cx="42" cy="21" r="6" fill="${hair}"/>`, // afro
+          `<path d="M18 26q-2-16 14-16t14 16q-6-8-14-8t-14 8z" fill="${hair}"/>`, // slick
+          `<path d="M29 5h6l3 16h-12z" fill="${hair}"/>`, // mohawk
+          `<path d="M20 24a12 12 0 0 1 24 0l-2-1a10 10 0 0 0-20 0z" fill="${hair}"/><path d="M24 15a8 8 0 0 1 8-3" stroke="rgba(255,255,255,.35)" stroke-width="1.5" fill="none"/>`, // bald shine
+          `<path d="M16 24q0-15 16-15t16 15l2 22h-6l-3-15q-9-6-18 0l-3 15h-6z" fill="${hair}"/>`, // long
+          `<circle cx="19" cy="17" r="7" fill="${hair}"/><circle cx="45" cy="17" r="7" fill="${hair}"/><path d="M20 24a12 12 0 0 1 24 0l-2-1a10 10 0 0 0-20 0z" fill="${hair}"/>`, // puffs
+        ];
+        const eyes=shades?
+          `<rect x="19" y="28" width="11" height="7" rx="3" fill="#0b0d16"/><rect x="34" y="28" width="11" height="7" rx="3" fill="#0b0d16"/><path d="M30 30h4M19 29l-3-2M45 29l3-2" stroke="#0b0d16" stroke-width="1.6" fill="none"/>`
+          :`<circle cx="25" cy="31" r="1.8" fill="#14101c"/><circle cx="39" cy="31" r="1.8" fill="#14101c"/>${girl?`<path d="M22 28l3 1M42 28l-3 1" stroke="#14101c" stroke-width="1.4"/>`:''}`;
+        const MOUTHS={tilt:'M24 46q8-7 16 0',heater:'M24 42q8 9 16 0',cold:'M24 47q8-8 16-1',cocky:'M25 43q8 6 15-2',working:'M26 44q6 4 12 0',retired:'M26 47q6-3 12 0'};
+        const mouth=`<path d="${(MOUTHS[mood]||MOUTHS.working).slice(1,-1)}" stroke="${girl?lip:'#3a2418'}" stroke-width="${girl?2.6:2}" fill="none" stroke-linecap="round"/>`;
+        const brow=mood==='tilt'?`<path d="M20 25l9 3M44 25l-9 3" stroke="#1a120b" stroke-width="2.2" fill="none" stroke-linecap="round"/>`:'';
+        const hatSvg=hat?`<ellipse cx="32" cy="18" rx="20" ry="4.5" fill="#241c3a" stroke="${glow}" stroke-width="1"/><rect x="20" y="4" width="24" height="14" rx="3" fill="#2c2245" stroke="${glow}" stroke-width="1"/><rect x="20" y="13" width="24" height="4" fill="${glow}" opacity=".85"/>`:'';
+        const chainSvg=chain?`<path d="M24 53q8 8 16 0" stroke="#ffd166" stroke-width="1.8" fill="none"/><circle cx="32" cy="58" r="2" fill="#ffd166"/>`:'';
+        const cigSvg=cig?`<rect x="43" y="45" width="9" height="2.4" rx="1" fill="#e8e4da"/><circle cx="52.5" cy="46" r="1.6" fill="#ff8c42"/><circle cx="55" cy="42" r="1" fill="rgba(200,200,200,.5)"/>`:'';
+        return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <rect width="64" height="64" fill="#12162b"/><circle cx="32" cy="28" r="24" fill="${glow}" opacity=".2"/>
+          <rect x="6" y="38" width="6" height="26" fill="#1b2040"/><rect x="52" y="34" width="7" height="30" fill="#1b2040"/><rect x="8" y="42" width="2" height="2" fill="${glow}" opacity=".7"/><rect x="54" y="38" width="2" height="2" fill="${glow}" opacity=".7"/>
+          <path d="M10 64q4-15 22-15t22 15z" fill="${pimp?'#241c3a':'#1c2030'}"/>
+          ${pimp?`<path d="M22 50l10 14 10-14-10-3z" fill="#12162b"/><path d="M32 53v11" stroke="${glow}" stroke-width="1.4"/>`:`<path d="M24 50l8 6 8-6-8-2z" fill="${glow}" opacity=".5"/>`}
+          <ellipse cx="19" cy="33" rx="2.2" ry="3.4" fill="${skin}"/><ellipse cx="45" cy="33" rx="2.2" ry="3.4" fill="${skin}"/>
+          <ellipse cx="32" cy="32" rx="13" ry="14" fill="${skin}"/>
+          ${hat?'':HAIRS[hs]}
+          ${eyes}${brow}
+          ${girl?`<circle cx="25" cy="37" r="2.4" fill="${lip}" opacity=".28"/><circle cx="39" cy="37" r="2.4" fill="${lip}" opacity=".28"/>`:''}
+          ${mouth}${cigSvg}${hatSvg}${chainSvg}
+          ${erring?`<circle cx="45" cy="37" r="1.4" fill="#ffd166"/>`:''}
+          <path d="M19 26a13 14 0 0 1 6-8" stroke="${glow}" stroke-width="1.6" fill="none" opacity=".9"/>
+          <path d="M12 62q4-12 14-14" stroke="${glow}" stroke-width="1.4" fill="none" opacity=".55"/>
+        </svg>`;
+      };
+    })();
     // ---- PIMP CITY — the crackwhore economy: named strategy personas
     // fighting over a real book. Net is realized $ after fees — the only
     // currency the corner respects. Data: api/pimp-war.json each cycle ----
@@ -1295,11 +1354,13 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         const col=PIMP_COL[p.name]||'var(--mut)';
         const st=heat(p),stars='★'.repeat(st)+'<span style="opacity:.25">'+'★'.repeat(5-st)+'</span>';
         const badge=p.crown?'<span class="pc-badge king">👑 KINGPIN</span>':p.crippled?'<span class="pc-badge broke">💀 CRIPPLED</span>':'<span class="pc-badge hustle">HUSTLIN</span>';
+        const pm=p.mood||'working';
         return `<div class="pc-pimp${p.crown?' crown':''}${p.crippled?' crippled':''}">
           <div style="display:flex;gap:10px;align-items:center">
-            <div class="av" style="color:${col}">${esc((p.name||'?')[0])}</div>
+            <div class="av" style="color:${col}">${pcAv(p.name,'pimp',pm)}</div>
             <div style="flex:1;min-width:0"><b style="font-size:12px;letter-spacing:.04em">${esc(p.name)}</b>
-            <div class="pc-stars">${stars}</div></div>
+            <div class="pc-stars">${stars}</div>
+            <span class="pc-mood ${pm}">${MOODTXT[pm]||pm}</span></div>
             ${badge}
           </div>
           <div class="num" style="font-size:21px;font-weight:800;margin:6px 0 2px;color:${p.net>=0?'var(--grn)':'var(--red)'}">${p.net>=0?'+':''}$${(+p.net).toFixed(2)}</div>
@@ -1314,11 +1375,14 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>{
         const pcol=PIMP_COL[c.pimp]||'var(--mut)';
         const top=leader&&c.name===leader.name;
-        return `<div class="pc-girl${top?' topgirl':''}${c.pimp?'':' free'}">
+        const cm=c.mood||'working';
+        const traits=c.persona?`title="swagger ${c.persona.swagger} · tilt ${c.persona.tilt} · greed ${c.persona.greed} · discipline ${c.persona.discipline}"`:'';
+        return `<div class="pc-girl${top?' topgirl':''}${c.pimp?'':' free'}" ${traits}>
           <div style="display:flex;gap:9px;align-items:center;margin-bottom:5px">
-            <div class="av">${esc((c.name||'?')[0])}</div>
+            <div class="av">${pcAv(c.name,'girl',cm)}</div>
             <div style="flex:1;min-width:0"><b style="font-size:11px">${esc(c.name)}</b>
-            <div class="sub" style="font-size:8.5px">${esc(c.tag||'')}</div></div>
+            <div class="sub" style="font-size:8.5px">${esc(c.tag||'')}</div>
+            ${cm!=='working'?`<span class="pc-mood ${cm}">${MOODTXT[cm]||cm}</span>`:''}</div>
           </div>
           <div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>
           <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}${+c.form>0.15?' · 🔥 hot':+c.form<-0.15?' · 🧊 cold':''}</div>
