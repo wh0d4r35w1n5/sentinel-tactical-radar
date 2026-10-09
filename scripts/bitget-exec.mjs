@@ -136,8 +136,12 @@ const VAULT_TRANSFER = MODE !== 'demo' && process.env.SENTINEL_VAULT_TRANSFER ==
 // USELESS futures bag died in the 10-08 cascade and is written off as
 // lostUsd — honest accounting, not a hidden ghost deployment.
 const VAULT_SYM = process.env.SENTINEL_VAULT_SYM || 'USELESSUSDT'; // legacy guard (top-up skip); no longer deployed
-const VAULT_BTC_SYM = 'BTCUSDT';
-const VAULT_BTC_MIN_USD = +(process.env.SENTINEL_VAULT_BTC_MIN_USD || 5); // spot min order — batch carry into ≥$5 buys
+// vault deploy asset — operator mandate 2026-10-09: stack USELESS on SPOT
+// (the 5x leveraged bag died; spot accumulation can't liquidate). Override
+// with SENTINEL_VAULT_BUY_SYM if the mandate changes again.
+const VAULT_BUY_SYM = process.env.SENTINEL_VAULT_BUY_SYM || 'USELESSUSDT';
+const VAULT_BUY_COIN = VAULT_BUY_SYM.replace(/USDT$/i, '');
+const VAULT_BUY_MIN_USD = +(process.env.SENTINEL_VAULT_BUY_MIN_USD || 5); // spot min order — batch carry into ≥$5 buys
 const VAULT_PATH = path.join(__dirname, '..', 'state', `wealth-vault${BOOK_TAG}.json`);
 const loadVault = () => {
   try { return { balanceUsd: 0, sweptIds: {}, sweeps: [], ...JSON.parse(fs.readFileSync(VAULT_PATH, 'utf8')) }; }
@@ -2380,6 +2384,20 @@ async function main() {
     // compete for LIVE_TARGET_POSITIONS capacity
     const vaultHeld = posBySym.has(VAULT_SYM) ? 1 : 0;
     const slotsAvail = Math.max(0, TARGET_POSITIONS - (posBySym.size - vaultHeld) - plan.orders.filter((o) => !o.mandate).length);
+    // 🌆 pimpcity — adversarial persona layer. Runs EVERY cycle (the corner
+    // never sleeps): closes get attributed to the girl that opened them, and
+    // the war evolves — losers steal the leader's playbook, the top pimp
+    // poaches the best girl off a weak roster, the bottom pimp is crippled
+    // for next cycle's nominations, the worst girl gets retired for a
+    // mutant. Advisory only — it reorders mandate candidates and journals
+    // drama; failures fall back to plain score ranking.
+    let war = null, pc = null;
+    try {
+      pc = await import('./pimpcity.mjs');
+      war = pc.loadWar();
+      for (const l of pc.attribute(war, loadFills())) state.actions.push('🌆 ' + l);
+      for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
+    } catch (e) { state.errors.push('pimpcity: ' + e.message); }
     if (slotsAvail > 0 && marginFree > 0.5) {
       const softOnly = (r) =>
         r.direction === 'LONG' &&
@@ -2390,11 +2408,30 @@ async function main() {
       // is the worst. Rank mandate picks toward the proven regime.
       const GOOD_MKT = new Set(['side-normal', 'bear-normal']);
       const BAD_MKT = new Set(['bull-volatile']);
+      // crackwhore mandate: the trail only pays after +0.2% — rank deployment
+      // by who is actually MOVING, not just static score. |24h change| is the
+      // cheapest live proxy for current volatility in the reject row.
       const pool = (plan.rejects || []).filter(softOnly).map((r) => ({
+        ...r,
         symbol: r.symbol,
-        score: (+r.score || 0) + (GOOD_MKT.has(r.mktType) ? 15 : BAD_MKT.has(r.mktType) ? -10 : 0),
+        score: (+r.score || 0) + (GOOD_MKT.has(r.mktType) ? 15 : BAD_MKT.has(r.mktType) ? -10 : 0)
+          + Math.min(20, Math.abs(+r.changePct || 0) * 4),
       }));
-      const cand = [...CORE_SYMS.map((symbol) => ({ symbol, score: 45 })), ...pool.sort((a, b) => b.score - a.score)];
+      let cand = [...CORE_SYMS.map((symbol) => ({ symbol, score: 45 })), ...pool.sort((a, b) => b.score - a.score)];
+      try {
+        const noms = war && pc ? pc.nominate(war, cand, slotsAvail) : [];
+        if (noms.length) {
+          const bySym = new Map(cand.map((c) => [c.symbol, c]));
+          const nomCand = [];
+          for (const n of noms) {
+            const row = bySym.get(n.cand.symbol) || n.cand;
+            nomCand.push({ ...row, symbol: n.cand.symbol, score: Math.round(n.sc), pimp: n.pimp, crack: n.crack });
+          }
+          for (const c of cand) if (!nomCand.some((n) => n.symbol === c.symbol)) nomCand.push(c);
+          cand = nomCand;
+          state.actions.push(`🌆 pimpcity: ${noms.slice(0, slotsAvail).map((n) => `${n.pimp} fields ${n.crack}→${n.cand.symbol}`).join(' · ')}`);
+        }
+      } catch (e) { state.errors.push('pimpcity: ' + e.message); }
       const perSlotUsd = marginFree / slotsAvail;
       let picked = 0;
       for (const c of cand) {
@@ -2412,13 +2449,19 @@ async function main() {
             stopPct: CORE_STOP_PCT, targetPct: CORE_TARGET_PCT,
             leverage: CORE_LEV, conv: 1, runnerMult: 1.8,
             strategy: 'slot-deploy', core: true, mandate: true,
+            pimp: c.pimp, crack: c.crack,
           });
-          state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long (score ${c.score}) · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
+          if (war && c.pimp) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp, crack: c.crack });
+          state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long${c.pimp ? ` · ${c.crack} working for ${c.pimp}` : ` (score ${c.score})`} · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
           picked++;
         } catch { /* ticker dead — next candidate */ }
       }
       if (!picked) state.actions.push('📌 SLOT-FILL mandate — no eligible long (all candidates denied/cooling/manual/ambiguous) — slots stay idle');
     }
+    // prune dead intents: a nomination only stays "on shift" while its
+    // position is open or the order is still fresh enough to fill (15min)
+    if (war && war.intents) war.intents = war.intents.filter((it) => posBySym.has(it.symbol) || Date.now() - it.ts < 15 * 60 * 1000);
+    if (war && pc) { try { pc.saveWar(war); } catch {} }
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
@@ -3378,21 +3421,22 @@ async function main() {
         }
         if (chg > 0)
           state.actions.push(`🏦 vault carry: +$${round(chg, 2)} banked at HWM $${round(vault.hwmUsd, 2)} — untouchable total $${round(vault.balanceUsd, 2)}`);
-        // vault deploy: pending carry moves futures->spot and buys BTC —
-        // the mandate asset (operator 2026-10-08). Batched at
-        // VAULT_BTC_MIN_USD (spot min order) so fees stay a small fraction;
-        // deployedUsd tracks BTC cost basis, spot assets reconcile the qty.
-        // Migration: a legacy non-BTC deployedUsd is the dead USELESS bag —
-        // written off to lostUsd so pending can't pretend it still exists.
+        // vault deploy: pending carry moves futures->spot and buys the
+        // mandate asset (operator 2026-10-09: USELESS on spot — accumulates,
+        // can't liquidate). Batched at VAULT_BUY_MIN_USD (spot min order) so
+        // fees stay a small fraction; deployedUsd tracks cost basis, spot
+        // assets reconcile the qty. Migration: a legacy deployedUsd from a
+        // dead mandate gets written off to lostUsd — pending can't pretend
+        // it still exists.
         try {
-          if (vault.asset !== 'BTC' && (vault.deployedUsd || 0) > 0) {
+          if (vault.asset !== VAULT_BUY_COIN && (vault.deployedUsd || 0) > 0) {
             vault.lostUsd = round((vault.lostUsd || 0) + vault.deployedUsd, 4);
             vault.sweeps.push({ ts: Date.now(), symbol: VAULT_SYM, amountUsd: -vault.deployedUsd, hwm: vault.hwmUsd, moved: 'writeoff-legacy' });
             vault.deployedUsd = 0;
             writeJson(VAULT_PATH, vault);
-            state.actions.push(`🏦 vault write-off: legacy bag $${round(vault.lostUsd, 2)} marked lost — vault asset -> BTC spot`);
+            state.actions.push(`🏦 vault write-off: legacy bag $${round(vault.lostUsd, 2)} marked lost — vault asset -> ${VAULT_BUY_COIN} spot`);
           }
-          vault.asset = 'BTC';
+          vault.asset = VAULT_BUY_COIN;
           const pendingFutures = round((vault.balanceUsd || 0) - (vault.transferredUsd || 0) - (vault.lostUsd || 0), 4);
           const spotPending = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
           // perms gate — the Bitget key needs spot order write + wallet
@@ -3400,22 +3444,22 @@ async function main() {
           // every 30min; don't burn an API call every cycle on a dead perm.
           const permsOk = vault.permsOk !== false || Date.now() - (vault.permsProbeAt || 0) > 30 * 60e3;
           try {
-            if (permsOk && pendingFutures + spotPending >= VAULT_BTC_MIN_USD) {
+            if (permsOk && pendingFutures + spotPending >= VAULT_BUY_MIN_USD) {
               const spendable = Math.max(0, (+acct.available || 0) - 1); // $1 ops reserve stays
               const moveUsd = round(Math.min(pendingFutures, spendable), 2);
-              if (moveUsd >= VAULT_BTC_MIN_USD) {
+              if (moveUsd >= VAULT_BUY_MIN_USD) {
                 await vaultTransfer(moveUsd); // futures -> spot — throws 40014 without transfer-write perm
                 vault.transferredUsd = round((vault.transferredUsd || 0) + moveUsd, 4);
                 writeJson(VAULT_PATH, vault);
                 state.actions.push(`🏦 vault transfer: $${round(moveUsd, 2)} futures->spot (carry earmark)`);
               }
               const buyUsd = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
-              if (buyUsd >= VAULT_BTC_MIN_USD && X.spotMarketBuy) {
-                const bo = await X.spotMarketBuy(VAULT_BTC_SYM, buyUsd);
+              if (buyUsd >= VAULT_BUY_MIN_USD && X.spotMarketBuy) {
+                const bo = await X.spotMarketBuy(VAULT_BUY_SYM, buyUsd);
                 vault.deployedUsd = round((vault.deployedUsd || 0) + buyUsd, 4);
-                (vault.btcBuys ||= []).push({ ts: Date.now(), usd: buyUsd, orderId: bo?.orderId || null });
+                (vault.buys ||= []).push({ ts: Date.now(), usd: buyUsd, sym: VAULT_BUY_SYM, orderId: bo?.orderId || null });
                 writeJson(VAULT_PATH, vault);
-                state.actions.push(`🏦 vault deploy: $${round(buyUsd, 2)} -> BTC spot · cost basis $${round(vault.deployedUsd, 2)}`);
+                state.actions.push(`🏦 vault deploy: $${round(buyUsd, 2)} -> ${VAULT_BUY_COIN} spot · cost basis $${round(vault.deployedUsd, 2)}`);
               }
               vault.permsOk = true;
             }
@@ -3423,16 +3467,17 @@ async function main() {
             // ledger estimate — a dead bag can't hide behind deployedUsd
             if (permsOk && X.spotAssets) {
               const assets = await X.spotAssets(); // 40014 propagates -> perms gate below
-              const btc = assets.find((a) => a.coin === 'BTC');
-              const qty = btc ? (+btc.available || 0) + (+btc.frozen || 0) + (+btc.locked || 0) : 0;
-              const tk = await X.ticker(VAULT_BTC_SYM).catch(() => null);
+              const coin = assets.find((a) => a.coin === VAULT_BUY_COIN);
+              const qty = coin ? (+coin.available || 0) + (+coin.frozen || 0) + (+coin.locked || 0) : 0;
+              const tk = await X.ticker(VAULT_BUY_SYM).catch(() => null);
               const t0 = Array.isArray(tk) ? tk[0] : tk;
               const px = +(t0?.lastPr || t0?.markPr || 0);
-              vault.btcQty = round(qty, 8);
-              vault.btcUsd = round(qty * px, 2);
+              vault.assetQty = round(qty, 8);
+              vault.assetUsd = round(qty * px, 2);
+              vault.btcQty = vault.assetQty; vault.btcUsd = vault.assetUsd; // dashboard compat keys
               writeJson(VAULT_PATH, vault);
-              state.vaultBtcQty = vault.btcQty;
-              state.vaultBtcUsd = vault.btcUsd;
+              state.vaultAssetQty = vault.assetQty;
+              state.vaultAssetUsd = vault.assetUsd;
             }
           } catch (e) {
             if (/40014|permission/i.test(String(e.message || e))) {

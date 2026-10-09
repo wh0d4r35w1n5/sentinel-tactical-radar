@@ -532,6 +532,14 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="sub" id="vaultNote" style="margin-top:8px;font-size:10px"></div>
   </div>
+  <div class="panel neon" id="pimpPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">🚦 PIMP CITY · the crackwhore economy <span class="sub">— every girl is a strategy persona · net-after-fees decides who wears the crown, who gets crippled, who steals the playbook, and who gets retired</span><span id="pimpAt" class="sub" style="float:right"></span></div>
+    <div id="pimpBoard" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-bottom:10px"></div>
+    <div id="pimpWorking" style="margin-bottom:6px"></div>
+    <div class="jscroll" style="max-height:360px"><table><thead><tr><th>Girl</th><th>Vibe</th><th>Works for</th><th>Net</th><th>W/L</th><th>Tricks</th><th>Steals</th><th>Gen</th></tr></thead><tbody id="pimpGirls"></tbody></table></div>
+    <div class="ptitle" style="font-size:9px;margin:10px 0 4px">Street wire <span class="sub">— the beef, the steals, the retirements, live from the corner</span></div>
+    <div id="pimpDrama" class="sub" style="font-size:10px;max-height:190px;overflow-y:auto"></div>
+  </div>
   <div class="panel pro" id="edgePanel" style="margin-top:16px;display:none">
     <div class="ptitle">⚖️ Payoff engine · empirical edge × Monte Carlo <span class="sub">— fitted entry edge gates and scales every entry · ladder profile re-picked by billion-roll evidence each 30min</span><span id="edgeSub" class="sub" style="float:right"></span></div>
     <div class="stats" id="edgeStats" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -847,8 +855,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1232,6 +1240,29 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         `<div class="ledger-row"><span><span style="color:${dc[c.status]||'var(--mut)'}">●</span> <b style="font-size:10px;letter-spacing:.06em">${c.name}</b> <span class="sub">${c.detail}</span></span><b class="num" style="color:${dc[c.status]||'var(--mut)'};font-size:9px">${c.status}</b></div>`
       ).join('');
       $('godAt').textContent='audit '+ago(Date.parse(god.at))+' ago · '+god.checks.length+' invariants watched';
+    }
+    // ---- PIMP CITY — the crackwhore economy: named strategy personas
+    // fighting over a real book. Net is realized $ after fees — the only
+    // currency the corner respects. Data: api/pimp-war.json each cycle ----
+    if(pimpW&&(pimpW.pimps||[]).length){
+      $('pimpPanel').style.display='block';
+      $('pimpAt').textContent=pimpW.at?'corner report '+ago(Date.parse(pimpW.at))+' ago':'';
+      $('pimpBoard').innerHTML=pimpW.pimps.map(p=>{
+        const col=p.crown?'var(--gold)':p.crippled?'var(--red)':'var(--mut)';
+        const badge=p.crown?'👑 CROWN':p.crippled?'💀 CRIPPLED':'&nbsp;';
+        return `<div style="border:1px solid ${p.crown?'rgba(255,200,60,.55)':p.crippled?'rgba(255,80,80,.4)':'var(--line)'};border-radius:10px;padding:10px 12px;background:rgba(0,0,0,.22)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">${esc(p.name)}</b><span style="color:${col};font-size:9px;letter-spacing:.12em">${badge}</span></div>
+          <div class="num" style="font-size:19px;font-weight:800;color:${p.net>=0?'var(--grn)':'var(--red)'}">${p.net>=0?'+':''}$${(+p.net).toFixed(2)}</div>
+          <div class="sub" style="font-size:9px">${p.wins}W / ${p.losses}L · stable: ${(p.roster||[]).map(g=>esc(g)).join(' · ')||'<i>empty corner</i>'}</div>
+        </div>`;}).join('');
+      $('pimpWorking').innerHTML=(pimpW.intents&&pimpW.intents.length)
+        ?'<div class="sub" style="font-size:10px">💼 on shift: '+pimpW.intents.map(i=>`<b style="color:var(--fg)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; ')+'</div>'
+        :'';
+      $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>
+        `<tr><td><b>${esc(c.name)}</b></td><td class="sub">${esc(c.tag||'')}</td><td>${esc(c.pimp||'— free agent —')}</td><td class="num" style="color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</td><td class="num">${c.wins}/${c.losses}</td><td class="num">${c.closes}</td><td class="num">${c.stolen?'📓'+c.stolen:'—'}</td><td class="num">${c.gen?'g'+c.gen:'—'}</td></tr>`).join('');
+      $('pimpDrama').innerHTML=(pimpW.drama||[]).map(d=>
+        `<div class="ledger-row"><span>${errTxt(d.text)}</span><span style="opacity:.55;font-size:9px;white-space:nowrap">${ago(d.ts)}</span></div>`).join('')
+        ||'<div class="sub">quiet on the corner…</div>';
     }
     // ---- SENTINEL MIND — the bot's inner voice in plain english ----
     if(thR&&thR.headline){
