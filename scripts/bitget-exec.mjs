@@ -68,6 +68,34 @@ const loadFills = () => {
     return FILLS_SINCE ? fj.filter((f) => (+f.ts || 0) >= FILLS_SINCE) : fj;
   } catch { return []; }
 };
+// manual-book attribution: guard/exec protective closes land src 'api'
+// even when the POSITION was hand-opened (web/ios/android). Attribute every
+// close to its position's open source — majority open qty wins, resets when
+// the book flats — so operator trades can neither trip nor defend the
+// engine's breakers (the NMR manual dip-buy bleed tripped one falsely).
+// Anything NOT 'api' is an operator book; treating non-web as api was the
+// second half of the attribution bug (phone trades bled into the breakers).
+// Hedge-mode safe: Bitget close fills carry the POSITION side ('close buy'
+// closes a long), so symbol:side buckets open/close of the same position.
+const tagManualCloses = (rows) => {
+  const cur = {};
+  for (const f of [...rows].sort((a, b) => (a.ts || 0) - (b.ts || 0))) {
+    const k = `${f.symbol}:${f.side}`;
+    const qty = +f.size || 0;
+    if (f.tradeSide === 'open') {
+      const c = (cur[k] ||= { qty: 0, web: 0, api: 0 });
+      c.qty += qty;
+      c[(f.src || 'api') === 'api' ? 'api' : 'web'] += qty;
+    } else if (f.tradeSide === 'close') {
+      const c = cur[k];
+      if (c) {
+        f._manual = c.web > c.api;
+        c.qty -= qty;
+        if (c.qty <= (c.web + c.api) * 1e-3) delete cur[k]; // flat — re-attribute next position
+      }
+    }
+  }
+};
 // R:R ladder profile — picked by scripts/rr-optimizer.mjs (1M-roll Monte
 // Carlo over candidate ladders; writes state/rr-config.json). mults are
 // stop-distance multiples per leg, alloc is the position fraction banked
@@ -103,6 +131,17 @@ const VAULT_SHARE = Math.min(0.9, Math.max(0, +(process.env.SENTINEL_VAULT_SHARE
 // has no wallet layer (endpoint 404s, demo keys are futures-scoped), so
 // accounting carve-out is the only possible behavior there.
 const VAULT_TRANSFER = MODE !== 'demo' && process.env.SENTINEL_VAULT_TRANSFER === '1';
+// vault asset: swept carry moves to SPOT and buys BTC — operator mandate
+// 2026-10-08 (revised): the vault holds sats, not a leveraged meme. The
+// USELESS futures bag died in the 10-08 cascade and is written off as
+// lostUsd — honest accounting, not a hidden ghost deployment.
+const VAULT_SYM = process.env.SENTINEL_VAULT_SYM || 'USELESSUSDT'; // legacy guard (top-up skip); no longer deployed
+// vault deploy asset — operator mandate 2026-10-09: stack USELESS on SPOT
+// (the 5x leveraged bag died; spot accumulation can't liquidate). Override
+// with SENTINEL_VAULT_BUY_SYM if the mandate changes again.
+const VAULT_BUY_SYM = process.env.SENTINEL_VAULT_BUY_SYM || 'USELESSUSDT';
+const VAULT_BUY_COIN = VAULT_BUY_SYM.replace(/USDT$/i, '');
+const VAULT_BUY_MIN_USD = +(process.env.SENTINEL_VAULT_BUY_MIN_USD || 5); // spot min order — batch carry into ≥$5 buys
 const VAULT_PATH = path.join(__dirname, '..', 'state', `wealth-vault${BOOK_TAG}.json`);
 const loadVault = () => {
   try { return { balanceUsd: 0, sweptIds: {}, sweeps: [], ...JSON.parse(fs.readFileSync(VAULT_PATH, 'utf8')) }; }
@@ -144,6 +183,13 @@ const FEE_LOCK_AT = +(process.env.SENTINEL_FEE_LOCK_AT || 0) ||
   Math.max(0.3, 1.5 * (FEE_LOCK_MAE || 0.58));
 const FEE_LOCK_PCT = +(process.env.SENTINEL_FEE_LOCK_PCT || 0) ||
   Math.max(0.15, 0.5 * (FEE_LOCK_MAE || 0.58));
+// structural de-risk rails — worst-case loss at the live stop, as a
+// fraction of equity. A pyramid that stacks cost basis onto its own stop
+// (CLU −$24 autopsy, 2026-10-08) gets force-trimmed to budget BEFORE the
+// market collects it. MANUAL-hold symbols exempt — operator owns those.
+const POS_DERISK_CAP_PCT = +(process.env.SENTINEL_POS_DERISK_CAP_PCT || 0.30);   // trigger: worst-case > 30% of equity
+const POS_DERISK_TARGET_PCT = +(process.env.SENTINEL_POS_DERISK_TARGET_PCT || 0.12); // trim to: ~12% at stop
+const POS_DERISK_GAP_MS = +(process.env.SENTINEL_POS_DERISK_GAP_MS || 15 * 60e3); // once per window per symbol
 // ---- meta-label (López de Prado, AFML ch.3): the primary model decides
 // SIDE; a secondary model answers "will following it make money" and
 // scales SIZE. Ours is a shrunk bucketed classifier over the graded
@@ -245,6 +291,10 @@ const PAPER_EQUITY = 10000; // plan notional is denominated in the $10k model
 // not an idle balance. Capped gearing (default 8x) on purpose: the core
 // exists to hold exposure, not to gamble the book.
 const CORE_LEV = +(process.env.SENTINEL_CORE_LEV || 8);
+// operator order 2026-10-08: every entry rides >=20x where the liq band
+// holds it — the band cap still wins when it can't (a stop past
+// liquidation is a broken trade, not a leveraged one).
+const LEV_FLOOR = +(process.env.SENTINEL_MIN_LEV || 20);
 const CORE_FLOOR_PCT = +(process.env.SENTINEL_CORE_FLOOR_PCT || 0.15);
 const CORE_FLOOR_USD = +(process.env.SENTINEL_CORE_FLOOR_USD || 8);
 const CORE_STOP_PCT = +(process.env.SENTINEL_CORE_STOP_PCT || 3);
@@ -259,6 +309,61 @@ const DENY_SYMS = new Set(
 
 const log = (...a) => console.log('[exec]', ...a);
 const round = (x, p = 6) => +(+x).toFixed(p);
+
+// ---- all-time record helpers: FIFO episode reconstruction over any fill
+// journal. Opens accumulate qty per symbol+positionSide; closes consume;
+// flat => episode ends. Position side resolves per fill: hedge-mode close
+// fills carry the POSITION side ('close buy' closed a long); oneway close
+// fills carry the ORDER side ('sell' closed a long); opens always carry
+// the position side directly. Per-side keys keep a hedged same-symbol book
+// from merging both directions into one corrupt episode.
+const fillPosDir = (f) =>
+  f.tradeSide === 'close'
+    ? (POS_MODE === 'hedge' ? f.side === 'buy' : f.side === 'sell') ? 'long' : 'short'
+    : (f.side === 'buy' ? 'long' : 'short');
+const fifoEpisodes = (fills) => {
+  const qty = new Map(); const cur = new Map(); const out = [];
+  for (const f of [...(fills || [])].sort((a, b) => (a.ts || 0) - (b.ts || 0))) {
+    const sym = f.symbol; const sz = +f.size || 0;
+    const dir = fillPosDir(f);
+    const k = `${sym}:${dir}`;
+    const isClose = f.tradeSide === 'close' || (f.profit || 0) !== 0;
+    if (!cur.has(k)) {
+      cur.set(k, { symbol: sym, dir, openTs: f.ts, fills: 0, fees: 0, profit: 0, notional: 0, riskUsd: 0, bot: f.src == null ? null : f.src === 'api', strat: null });
+    }
+    const e = cur.get(k); e.fills++; e.fees += +f.fee || 0;
+    if (+f.riskUsd > e.riskUsd) e.riskUsd = +f.riskUsd;
+    if (!isClose) { qty.set(k, (qty.get(k) || 0) + sz); e.notional += +f.notionalUsd || 0; }
+    else {
+      e.profit += +f.profit || 0;
+      qty.set(k, (qty.get(k) || 0) - sz);
+      if ((qty.get(k) || 0) <= Math.max(sz * 0.01, 1e-9)) { e.closeTs = f.ts; e.netUsd = e.profit - e.fees; out.push(e); cur.delete(k); }
+    }
+  }
+  for (const e of cur.values()) { e.open = true; e.netUsd = e.profit - e.fees; out.push(e); }
+  return out;
+};
+const episodeStats = (epis) => {
+  const closed = epis.filter((e) => !e.open);
+  const wins = closed.filter((e) => e.netUsd > 0);
+  const gW = wins.reduce((a, e) => a + e.netUsd, 0);
+  const gL = Math.abs(closed.filter((e) => e.netUsd <= 0).reduce((a, e) => a + e.netUsd, 0));
+  const rs = closed.filter((e) => e.riskUsd > 0).map((e) => e.netUsd / e.riskUsd);
+  const m = rs.length ? rs.reduce((a, x) => a + x, 0) / rs.length : 0;
+  const sd = rs.length > 1 ? Math.sqrt(rs.reduce((a, x) => a + (x - m) ** 2, 0) / (rs.length - 1)) : 0;
+  return {
+    episodes: closed.length, open: epis.length - closed.length,
+    botEpisodes: closed.filter((e) => e.bot === true).length,
+    wins: wins.length, winRatePct: closed.length ? round((wins.length / closed.length) * 100, 1) : null,
+    netUsd: round(closed.reduce((a, e) => a + e.netUsd, 0), 4),
+    feesUsd: round(closed.reduce((a, e) => a + e.fees, 0), 4),
+    profitFactor: gL > 0 ? round(gW / gL, 2) : null,
+    sqn: rs.length > 1 && sd > 0 ? round((m / sd) * Math.sqrt(rs.length), 2) : null,
+    sqnN: rs.length, meanR: rs.length ? round(m, 3) : null,
+    firstTs: epis.length ? Math.min(...epis.map((e) => e.openTs || Infinity)) : null,
+    lastTs: epis.length ? Math.max(...epis.map((e) => e.closeTs || e.openTs || 0)) : null,
+  };
+};
 
 // ---------- exchange adapter ----------
 // All wire ops delegate to scripts/exchange/ — SENTINEL_EXCHANGE selects the
@@ -371,6 +476,15 @@ async function main() {
   // position — opened manually on the app/exchange — which we arm with
   // protection but never expose to scanner-driven exits.
   const managed = new Set();
+  // prior-cycle leg/size memory — the banked-tranche floor detects a filled
+  // TP leg by it vanishing from the pending book while its level sits behind
+  // the mark; position-size memory catches non-ladder trims (guard/manual)
+  // the same way. Persisted via state.legs + positionsAfter on the ledger.
+  const priorLegMap = {};   // sym -> [tp limit px] armed last cycle
+  const priorSizeMap = {};  // sym -> position size last cycle
+  const curLegMap = {};     // sym -> [tp limit px] armed this cycle
+  const trimGuard = {};     // sym -> ts of last structural de-risk trim
+  let priorDayPeak = null;  // {day, usd} — session high watermark for the massacre governor
   try {
     const sameBook = (prior) => prior.mode === MODE && (prior.exchange || 'bitget') === X.name;
     for (const f of [outPath, catPath]) {
@@ -390,17 +504,32 @@ async function main() {
       // ~30s behind live order routing, so a probe loop can slip extra
       // opens under the rate cap before the fills ever record. Attempts
       // (not fills) are what cost fees; count them locally.
-      if (sameBook(prior) && Array.isArray(prior.entriesLog))
-        state.entriesLog = prior.entriesLog.filter(
+      if (sameBook(prior) && Array.isArray(prior.entriesLog)) {
+        // merge, don't overwrite — this block runs once per file; a second
+        // file's entriesLog must ADD to the first's, not replace it.
+        // Dedupe on the serialized row (same entry = same JSON).
+        const merged = new Map((state.entriesLog || []).map((e) => [typeof e === 'object' ? JSON.stringify(e) : String(e), e]));
+        for (const e of prior.entriesLog) {
+          if (e == null) continue; // a null row would throw on .ts access below
           // entries may be bare timestamps (legacy) or {ts,symbol,direction}.
           // 24h retention — the hourly cap filters to the window itself; a
           // true DAILY cap needs the whole day's attempts retained.
-          (e) => Number.isFinite(e.ts ?? e) && Date.now() - (e.ts ?? e) < 24 * 3600e3
-        );
+          if (!Number.isFinite(e.ts ?? e) || Date.now() - (e.ts ?? e) >= 24 * 3600e3) continue;
+          merged.set(typeof e === 'object' ? JSON.stringify(e) : String(e), e);
+        }
+        state.entriesLog = [...merged.values()].slice(-500); // hard cap — a churn storm can't grow the ledger row unbounded
+      }
       // symbols that carried pending plans last cycle — orphan-plan sweep
       // uses this to find triggers still live on symbols now flat
       if (sameBook(prior) && prior.plans)
         for (const s of Object.keys(prior.plans)) priorPlanSyms.add(s);
+      if (sameBook(prior) && prior.legs)
+        for (const [s, l] of Object.entries(prior.legs)) if (Array.isArray(l)) priorLegMap[s] = l;
+      if (sameBook(prior) && Array.isArray(prior.positionsAfter))
+        for (const pp2 of prior.positionsAfter) if (pp2?.symbol) priorSizeMap[pp2.symbol] = +pp2.size || 0;
+      if (sameBook(prior) && prior.trimGuard)
+        for (const [s, t] of Object.entries(prior.trimGuard)) trimGuard[s] = +t || 0;
+      if (sameBook(prior) && prior.dayPeak?.day) priorDayPeak = prior.dayPeak;
       if (sameBook(prior) && Array.isArray(prior.managed))
         for (const s of prior.managed) managed.add(s);
     }
@@ -539,7 +668,10 @@ async function main() {
   // subtract only the UNMOVED vault balance: funds already transferred to
   // spot left the futures account — acct.equity excludes them, so a blind
   // subtraction would double-count the carry out of the book.
-  const vaultUnmoved = vaultNow - (+vaultState0.transferredUsd || 0);
+  // unmoved = carry still sitting in the futures account (pending USDT not
+  // yet transferred to spot). deployed ⊆ transferred — BTC buys spend the
+  // transferred bucket, so subtracting deployed too would double-count.
+  const vaultUnmoved = vaultNow - (+vaultState0.transferredUsd || 0) - (+vaultState0.lostUsd || 0);
   const equityUsd = EQ_OVERRIDE > 0
     ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultUnmoved)
     : Math.max(0, acct.equity - vaultUnmoved);
@@ -579,6 +711,15 @@ async function main() {
   };
   for (const s of (cmdJson('cmd-manual-hold.json')?.symbols || [])) MANUAL.add(String(s).toUpperCase());
   for (const s of (cmdJson('cmd-deny.json')?.symbols || [])) DENY_SYMS.add(String(s).toUpperCase());
+  // auto-quarantine merge: state/auto-deny.json is written by the self-audit
+  // in the breaker block below — measured-negative symbols earn a bounded,
+  // self-expiring deny (the "attack itself to find the holes" desk rule,
+  // run every cycle instead of every Sunday).
+  try {
+    const ad = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'auto-deny.json'), 'utf8'));
+    for (const e of ad.entries || [])
+      if (+e.until > Date.now()) DENY_SYMS.add(String(e.symbol).toUpperCase());
+  } catch {}
   // a MANUAL_HOLD on a flat symbol silently exempts future auto-entries from
   // management — flag it so the exemption can't linger forgotten
   state.manualHoldStale = [...MANUAL].filter((s) => !rawPos.some((p) => p.symbol === s && +p.total > 0));
@@ -769,12 +910,34 @@ async function main() {
   if (equityUsd > 0) eqTrack.samples.push([nowMs, tradingEq]);
   eqTrack.samples = eqTrack.samples.filter(([t]) => nowMs - t < 36e5 * 24.5).slice(-7000);
   try { writeJson(peakPath, { peak: eqTrack.peak, samples: eqTrack.samples, deposits: eqTrack.deposits, lastEq: eqTrack.lastEq, lastUpl: eqTrack.lastUpl, lastEqAt: eqTrack.lastEqAt, lastVault: eqTrack.lastVault, netIds: eqTrack.netIds, at: new Date().toISOString() }); } catch {}
-  const realDdPct = eqTrack.peak > 0 ? ((eqTrack.peak - tradingEq) / eqTrack.peak) * 100 : 0;
+  // dd base = funded capital + best trading gain. The raw peak/tradingEq
+  // form divides by peak≈0 when an epoch starts near-empty then gets
+  // funded — tradingEq can even go negative, producing >100% dd forever
+  // and permanently tripping every rail (observed: ddPct 345 phantom).
+  // With zero deposits this reduces to the classic equity-peak formula.
+  const ddBase = eqTrack.deposits + Math.max(0, eqTrack.peak);
+  const realDdPct = ddBase > 0 ? Math.max(0, (ddBase - equityUsd) / ddBase) * 100 : 0;
   const peak24 = Math.max(tradingEq, ...eqTrack.samples.filter(([t]) => nowMs - t <= 36e5 * 24).map(([, q]) => q));
-  const dd24 = peak24 > 0 ? ((peak24 - tradingEq) / peak24) * 100 : 0;
+  const ddBase24 = eqTrack.deposits + Math.max(0, peak24);
+  const dd24 = ddBase24 > 0 ? Math.max(0, (ddBase24 - equityUsd) / ddBase24) * 100 : 0;
   state.depositsUsd = round(eqTrack.deposits, 2);
   state.ddPct = round(realDdPct, 2);
   state.dd24Pct = round(dd24, 2);
+  // intraday massacre governor — session drawdown measured off TODAY's
+  // equity peak, not the funded-capital basis (dd24's denominator rolls and
+  // reads low while the session bleeds). Past MASSACRE_DD_PCT every
+  // deployment path stands down: entries, top-ups, carry, mandate. Exits
+  // and protection are untouched — stops still ratchet, trims still bank.
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const dayPeakUsd = Math.max(equityUsd, priorDayPeak?.day === dayKey ? +priorDayPeak.usd || 0 : 0);
+  state.dayPeak = { day: dayKey, usd: round(dayPeakUsd, 2) };
+  const dayDDpct = dayPeakUsd > 0 ? Math.max(0, (dayPeakUsd - equityUsd) / dayPeakUsd) * 100 : 0;
+  state.dayDDPct = round(dayDDpct, 2);
+  const MASSACRE_DD_PCT = +(process.env.SENTINEL_MASSACRE_DD_PCT || 20);
+  // DD-scaled risk — a wounded book defends with smaller knives. Survival
+  // first: size follows the session's damage, not the mandate's appetite.
+  const ddRiskScale = dayDDpct >= 30 ? 0 : dayDDpct >= 20 ? 0.25 : dayDDpct >= 10 ? 0.5 : 1;
+  state.ddRiskScale = ddRiskScale;
   const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
   // ---- operator halt: state/cmd-halt.json written by the telegram C2 —
   // joins the same rail as the kill-switch: entries only, existing
@@ -802,6 +965,11 @@ async function main() {
       } catch (e) { state.errors.push(`cmd-close ${p.symbol}: ${e.message}`); }
     } else state.actions.push(`cmd-close ${cmdClose.symbol}: no open position`);
   }
+  // operator breaker override — state/cmd-override.json {entries:true, until:ts}.
+  // Bounded and self-expiring: the operator can order capital deployed past
+  // the circuit breakers, but the safeties re-arm themselves when the window
+  // lapses instead of being silently dead forever.
+  const cmdOverride = (() => { try { const c = cmdJson('cmd-override.json'); return c && c.entries === true && +c.until > Date.now() ? c : null; } catch { return null; } })();
   // Position-level grading: the journal counts close FILLS, but the trim
   // ladder means one position journals many closes (a 6-leg TP ladder is one
   // trade, not six wins). Every consumer of the record — breakers, CUSUM,
@@ -853,7 +1021,14 @@ async function main() {
     for (const [t, q] of eqTrack.samples || [])
       if (t <= winT && (!eqStart || t > eqStart[0])) eqStart = [t, q];
     const lossBasis = eqStart && eqStart[1] > 0 ? eqStart[1] : equityUsd;
-    const fills = loadFills().filter((f) => !f.src || f.src === 'api');
+    // manual-book attribution: guard/exec protective closes land src 'api'
+    // even when the POSITION was hand-opened (web). Attribute every close to
+    // its position's open source — majority open qty wins, resets when the
+    // book flats — so operator trades can neither trip nor defend the
+    // engine's breakers (the NMR manual dip-buy bleed tripped one falsely).
+    const allFills = loadFills();
+    tagManualCloses(allFills);
+    const fills = allFills.filter((f) => (!f.src || f.src === 'api') && !f._manual);
     const day = fills.filter((f) => Date.now() - (f.ts || 0) < 86400e3);
     const closes = fills.filter((f) => f.tradeSide === 'close');
     // grade POSITIONS, not fills: a winning position paying out through a
@@ -871,6 +1046,11 @@ async function main() {
     const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
     const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
     const net24 = dayPnl - fees24;
+    // transparency split for the dashboard: how much of the 24h window was
+    // the ENGINE's book vs operator-attributed closes. The breaker only ever
+    // reads the bot column — this surfaces why the two numbers differ.
+    const dayAll = allFills.filter((f) => Date.now() - (f.ts || 0) < 86400e3 && (!f.src || f.src === 'api') && f.tradeSide === 'close');
+    const net24Manual = dayAll.filter((f) => f._manual).reduce((a, f) => a + (f.profit || 0) - (f.fee || 0), 0);
     const wr = last20.length ? last20.filter((g) => g.netUsd > 0).length / last20.length : null;
     const LOSS_HALT_PCT = +(process.env.SENTINEL_LOSS_HALT_PCT || 8);   // realized bleed vs equity
     const WR_HALT_PCT = +(process.env.SENTINEL_WR_HALT_PCT || 30);      // rolling win-rate floor
@@ -931,12 +1111,45 @@ async function main() {
     }
     state.circuitBreakers = {
       net24Usd: round(net24, 2), fees24Usd: round(fees24, 2), basisUsd: round(lossBasis, 2),
+      net24ManualUsd: round(net24Manual, 2), epochMs: FILLS_SINCE || null,
       winRate20: wr != null ? round(wr * 100, 1) : null, positions20: last20.length,
       edgeDeath: cusum, kelly,
       thresholds: { lossHaltPct: LOSS_HALT_PCT, wrHaltPct: WR_HALT_PCT, feeHaltPct: FEE_HALT_PCT, streakHalt: STREAK_HALT, reserveUsd: RESERVE_USD },
       tripped: cbReason,
     };
     var kellyRiskUsd = kelly ? kelly.halfKellyRiskUsd : null;
+    // ---- per-symbol bleed quarantine: a symbol whose last AQ_N grouped
+    // positions are ALL losers AND that has bled >= AQ_USD net in the window
+    // is a measured-negative cell — deny it before redeploy churn grinds the
+    // account (the NMR pattern: 14 closes / -$14.79 before anyone noticed).
+    // Bounded and self-expiring: entries lapse, the symbol can re-earn its
+    // place. Deny merges at the top of this cycle's gate set via the
+    // auto-deny.json read near DENY_SYMS — this write feeds the NEXT cycle.
+    try {
+      const AQ_N = +(process.env.SENTINEL_AQ_N || 4);
+      const AQ_USD = +(process.env.SENTINEL_AQ_USD || 1);
+      const AQ_MS = +(process.env.SENTINEL_AQ_HOURS || 24) * 3600e3;
+      const adPath = path.join(__dirname, '..', 'state', 'auto-deny.json');
+      let ad = { entries: [] };
+      try { ad = JSON.parse(fs.readFileSync(adPath, 'utf8')); } catch {}
+      ad.entries = (ad.entries || []).filter((e) => +e.until > Date.now());
+      const bySym = new Map();
+      for (const g of pos) {
+        if (!bySym.has(g.symbol)) bySym.set(g.symbol, []);
+        bySym.get(g.symbol).push(g); // groups are newest-first
+      }
+      for (const [sym, gs] of bySym) {
+        const recent = gs.slice(0, AQ_N);
+        const net = recent.reduce((a, g) => a + g.netUsd, 0);
+        if (recent.length >= AQ_N && recent.every((g) => g.netUsd <= 0) && net <= -AQ_USD &&
+            !ad.entries.some((e) => e.symbol === sym)) {
+          ad.entries.push({ symbol: sym, until: Date.now() + AQ_MS, netUsd: round(net, 3), at: Date.now() });
+          state.actions.push(`🚫 AUTO-QUARANTINE ${sym}: ${AQ_N} straight losing positions, net $${round(net, 2)} — denied ${AQ_MS / 3600e3}h (measured-negative cell)`);
+        }
+      }
+      fs.writeFileSync(adPath, JSON.stringify(ad));
+      state.autoDeny = ad.entries.map((e) => `${e.symbol} until ${new Date(e.until).toISOString().slice(11, 16)}Z`);
+    } catch {}
   } catch {}
   // Van Tharp Model 17 — risk tier follows demonstrated SQN, never leads
   // it. priorSqnR is last cycle's persisted position-level SQN: unproven
@@ -952,14 +1165,20 @@ async function main() {
       : sqnV < 2.5 ? 0.08
       : +(process.env.SENTINEL_MAX_RISK_PCT || 0.12));
   const entriesBlocked =
-    cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
+    cmdOverride ? null // operator override — deploy regardless; still logged below
+    : cmdHalt ? `operator halt — ${cmdHalt.reason || 'manual'} (telegram ${cmdHalt.at || ''})`
     : realDdPct >= DD_KILL ? `kill-switch (real equity dd ${state.ddPct}% >= ${DD_KILL}%)`
     : dd24 >= DAILY_HALT ? `daily-loss halt (equity -${state.dd24Pct}% in rolling 24h >= ${DAILY_HALT}%)`
     // Buffett rule #1 enforced mechanically: below the survival floor the
     // account can't post margin for even two contract-min positions —
     // every further entry is just donating fees. Preserve the last chip.
     : equityUsd < MIN_TRADE_EQUITY ? `equity floor ($${round(equityUsd,2)} < $${MIN_TRADE_EQUITY} — capital preservation, entries halted)`
+    : dayDDpct >= MASSACRE_DD_PCT ? `massacre-governor (session dd ${state.dayDDPct}% >= ${MASSACRE_DD_PCT}% — deployment frozen, protection lives)`
     : cbReason; // account-level breakers join the same rail — entries only, never exits
+  if (cmdOverride) {
+    const rail = cmdHalt || (realDdPct >= DD_KILL ? `dd ${state.ddPct}%` : null) || (dd24 >= DAILY_HALT ? `dd24 ${state.dd24Pct}%` : null) || cbReason;
+    state.actions.push(`⚠️ OVERRIDE active until ${new Date(+cmdOverride.until).toISOString().slice(11, 19)}Z — entries forced past ${rail || 'breakers'}`);
+  }
 
   // published risk rails — the machine-readable answer to "where are the
   // kill-switches / position limits / disconnect handling" — rendered on
@@ -971,7 +1190,7 @@ async function main() {
       ? `all free margin / ${TARGET_POSITIONS} target slots (~${round(100 / TARGET_POSITIONS, 1)}% equity each) × risk multiplier`
       : 'deployment frozen — 0 target slots',
     maxPositions: MAX_POSITIONS,
-    leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64)',
+    leverageRule: 'contract maxLever, bounded so the stop stays inside the liq band: lev <= 80/(stopPct+0.64); carry/mandate orders floored at SENTINEL_MIN_LEV (20) when the band holds it',
     killSwitchPct: DD_KILL,
     dailyHaltPct: DAILY_HALT,
     riskCapPct: RISK_CAP_PCT, // Model 17 tier — scaled by prior cycle's position SQN
@@ -1136,13 +1355,17 @@ async function main() {
   // layer emitted the closes.
   const REENTRY_MS = +(process.env.SENTINEL_REENTRY_COOLDOWN_MS || 60 * 60e3);
   const lastCloseBySym = {};
+  const lastLossCloseBySym = {}; // losing closes only — gates top-up re-adds
   let feesToday = 0;
   try {
     const fj = loadFills();
     const dayStart = new Date().setUTCHours(0, 0, 0, 0);
     for (const f of fj) {
-      if (f.tradeSide === 'close')
+      if (f.tradeSide === 'close') {
         lastCloseBySym[f.symbol] = Math.max(lastCloseBySym[f.symbol] || 0, +f.ts || 0);
+        if ((f.profit || 0) < 0)
+          lastLossCloseBySym[f.symbol] = Math.max(lastLossCloseBySym[f.symbol] || 0, +f.ts || 0);
+      }
       if (+f.ts >= dayStart) feesToday += +f.fee || 0;
     }
   } catch {}
@@ -1304,6 +1527,18 @@ async function main() {
     )
   );
   const plansOf = (sym) => planCache.get(sym) || [];
+  // resting limit TP legs — bitget-watch owns the steady-state ladder as
+  // post-only limits (maker fills; trigger profit_plans were measured
+  // paying 0.06% taker on every close). vtp-* clientOid tags them; they
+  // count as profit cover everywhere a profit plan would below.
+  const pendCache = new Map();
+  await Promise.all(
+    [...posBySym.keys(), ...ambiguous].map(async (sym) =>
+      pendCache.set(sym, await pendingOrders(sym).catch(() => []))
+    )
+  );
+  const tpLimsOf = (sym) =>
+    (pendCache.get(sym) || []).filter((o) => /^vtp-/.test(String(o.clientOid || '')));
   // ---- orphan-plan sweep: triggers left live on a symbol that went flat
   // (emergency close, stop fill, manual close between cycles) either
   // trigger-reject forever or — worse — fire a close-side order into a
@@ -1334,7 +1569,56 @@ async function main() {
       // regex the repair loop would stack a second stop on a trailed position
       const lossPlan = existing.find((x) => /loss|stop|moving/i.test(x.planType || ''));
       const profitPlan = existing.find((x) => /profit/i.test(x.planType || ''));
-      const hasProfit = !!profitPlan;
+      const limLegs = tpLimsOf(p.symbol); // resting maker TP legs = profit cover
+      curLegMap[p.symbol] = limLegs.map((o) => +o.price).filter((t) => t > 0);
+      const hasProfit = !!profitPlan || limLegs.length > 0;
+      // ---- structural de-risk: worst-case loss at the live stop must fit
+      // the book. A position whose stop-out would wound the account beyond
+      // POS_DERISK_CAP gets trimmed to budget before the market collects —
+      // the CLU autopsy: pyramids stacked entry onto the stop, one −0.5%
+      // dip realised −$24 on a ~$50 book. Explicit MANUAL holds exempt.
+      if (lossPlan && p.size > 0 && !MANUAL.has(p.symbol)
+          && Date.now() - (trimGuard[p.symbol] || 0) > POS_DERISK_GAP_MS) {
+        const slPx = +lossPlan.triggerPrice || 0;
+        const dist = Math.abs(p.entry - slPx);
+        if (slPx > 0 && dist > 0) {
+          const lossAtStop = dist * p.size; // USDT-M linear: |Δpx| × contracts
+          const capUsd = equityUsd * POS_DERISK_CAP_PCT;
+          if (lossAtStop > capUsd) {
+            const keepUsd = equityUsd * POS_DERISK_TARGET_PCT;
+            const keepSize = keepUsd / dist;
+            const c = cm[p.symbol] || {};
+            const sp = Math.pow(10, c.sizePlace ?? 3);
+            const trimQty = Math.floor((p.size - keepSize) * sp) / sp;
+            const minSz = Math.max(+c.minTradeNum || 0, (+c.minTradeUSDT || 0) / Math.max(1e-9, p.entry));
+            if (trimQty >= minSz && trimQty < p.size * 0.999) {
+              try {
+                await marketOrder(p.symbol, p.side === 'long' ? 'sell' : 'buy', String(trimQty), 'close');
+                trimGuard[p.symbol] = Date.now();
+                state.actions.push(`🛡 de-risk ${p.symbol}: worst-case $${round(lossAtStop, 2)} at stop ${slPx} > ${POS_DERISK_CAP_PCT * 100}% equity — trimmed ${trimQty}, keeps ~$${round(keepUsd, 2)} at stop`);
+              } catch (e) { state.errors.push(`de-risk ${p.symbol}: ${e.message.slice(0, 100)}`); }
+            } else if (lossAtStop > equityUsd * 0.6) {
+              // too small to partially trim but worst-case is existential —
+              // a >60%-of-book loss at stop is a defect, not a position
+              try {
+                await closePosition(p.symbol, p.holdSide || p.side);
+                trimGuard[p.symbol] = Date.now();
+                state.actions.push(`🛡 de-risk ${p.symbol}: worst-case $${round(lossAtStop, 2)} = ${round(lossAtStop / equityUsd * 100, 0)}% of book, below min-trim — closed`);
+                continue;
+              } catch (e) { state.errors.push(`de-risk-close ${p.symbol}: ${e.message.slice(0, 100)}`); }
+            }
+          }
+        }
+      }
+      // manual-hold with an operator stop = zero reconcile. The drift
+      // teardown and resync paths re-pin operator stops to band width and
+      // re-split legs every cycle (observed live) — for scalps that
+      // widens the very invalidation the entry was sized around. Requiring
+      // profit legs too created a race: every swap window let the teardown
+      // fire and re-ladder at exec targets. The stop is the nakedness
+      // floor; profit geometry is the operator's call (liq-guard
+      // synthesizes a stop if the book ever goes fully naked).
+      if (manualHold && lossPlan) continue;
       // stall-exit — the excursion record shows losers telegraph early:
       // median adverse run ~1.3% vs median favorable ~0.33%. A managed
       // position still red past STALL_MIN that never showed STALL_MFE
@@ -1386,11 +1670,16 @@ async function main() {
       const profitQty = existing
         .filter((x) => /profit/i.test(x.planType || ''))
         .reduce((a, x) => a + (+x.size || 0), 0);
+      // resting vtp- TP limits reserve close-qty against the position the
+      // same way sized plans do — leave them out of the budget and a
+      // trigger-leg + limit-leg coexistence window could read 1.7x and
+      // resync forever.
+      const limQty = limLegs.reduce((a, o) => a + (+o.size || 0), 0);
       // On Bybit only the LOSS side can over-cover — TP legs are a sized
       // subset of the same position (reduce-only, capped at fill), so a
       // full-size stop + a partial ladder is a valid 1.12-quoted book, not
       // drift. Summing them resynced every cycle forever.
-      const planQty = X.name === 'bitget' ? lossQty + profitQty : lossQty;
+      const planQty = X.name === 'bitget' ? lossQty + profitQty + limQty : lossQty;
       // THE DRIFT SWAP IS BITGET-ONLY MACHINERY. It exists to unwind
       // Bitget's cumulative pending-qty 43023 deadlock. On Bybit it can
       // only do damage: conditional rows + mirrors double-count (lossQty
@@ -1425,7 +1714,8 @@ async function main() {
           // blocked new placements), then re-cover at LIVE size in the same
           // breath. Manual positions keep their own trigger prices.
           const keepTrigs = (manualHold || setupArms[p.symbol])
-            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+            ? [...profitPlans.map((x) => +x.triggerPrice), ...limLegs.map((o) => +o.price)]
+                .filter((t) => t > 0)
                 .sort((a, b) => (sgn === 1 ? a - b : b - a))
             : [];
           await rebuildProfitCover(p, keepTrigs, 2 * stopPct);
@@ -1486,7 +1776,7 @@ async function main() {
       // mark is already through the ladder zone, where entry-priced legs
       // would sit below mark and instant-close the runner.
       const wholeProfit = profitPlans.some((x) => !(+x.size > 0)); // size-0 leg covers all
-      const bigLeg = Math.max(0, ...profitPlans.map((x) => +x.size || 0));
+      const bigLeg = Math.max(0, ...profitPlans.map((x) => +x.size || 0), ...limLegs.map((o) => +o.size || 0));
       const impliedSize = bigLeg / RR_MAX_ALLOC;
       const sgn2 = p.side === 'long' ? 1 : -1;
       const markPx = p.entry + (sgn2 * p.upl) / p.size;
@@ -1498,7 +1788,8 @@ async function main() {
       if (!wholeProfit && bigLeg > 0 && impliedSize < p.size * 0.8 && !runner) {
         try {
           const keepTrigs = (manualHold || setupArms[p.symbol])
-            ? profitPlans.map((x) => +x.triggerPrice).filter((t) => t > 0)
+            ? [...profitPlans.map((x) => +x.triggerPrice), ...limLegs.map((o) => +o.price)]
+                .filter((t) => t > 0)
                 .sort((a, b) => (sgn2 === 1 ? a - b : b - a))
             : [];
           await rebuildProfitCover(p, keepTrigs, 2 * stopD);
@@ -1510,8 +1801,10 @@ async function main() {
         const sgn = p.side === 'long' ? 1 : -1;
         const mark = p.entry + (sgn * p.upl) / p.size; // entry + realized move
         // nearest profit trigger in the trade direction = next bank level
-        const nearTp = profitPlans
-          .map((x) => +x.triggerPrice)
+        const nearTp = [
+            ...profitPlans.map((x) => +x.triggerPrice),
+            ...limLegs.map((o) => +o.price),
+          ]
           .filter((t) => t > 0 && (sgn === 1 ? t > p.entry : t < p.entry))
           .sort((a, b) => (sgn === 1 ? a - b : b - a))[0];
         const slTrig = +lossPlan.triggerPrice;
@@ -1519,7 +1812,7 @@ async function main() {
         const prog = dist > 0 ? (sgn * (mark - p.entry)) / dist : 0;
         const pp = cm[p.symbol]?.pricePlace ?? 6;
         let wantPx = null, why = null;
-        if (profitPlans.length && prog >= 0.9) {
+        if ((profitPlans.length || limLegs.length) && prog >= 0.9) {
           // ratchet tiers — the stop locks ~55% of the NEXT bank level once
           // price is within 10% of it, then keeps climbing: near TP1 the
           // stop lands at entry+0.30xT; near TP2 it locks TP1; near TP3 it
@@ -1527,7 +1820,7 @@ async function main() {
           const lockPct = Math.max(0.25, 0.55 * ((dist / p.entry) * 100));
           wantPx = round(p.entry * (1 + (sgn * lockPct) / 100), pp);
           why = `ratchet ${p.symbol}: ${round(prog * 100, 0)}% to next TP — stop locked at +${round(lockPct, 2)}% (${wantPx})`;
-        } else if (!profitPlans.length && sgn * (mark - p.entry) > 0) {
+        } else if (!profitPlans.length && !limLegs.length && sgn * (mark - p.entry) > 0) {
           // moon-bag trail — all TP tranches banked, the leftover runner has
           // no target. Trail the stop 1.0% under price every cycle: the last
           // piece rides until the move actually reverses, never a fixed cap.
@@ -1563,6 +1856,43 @@ async function main() {
           if (candBetter) {
             wantPx = cand;
             why = `fee-lock ${p.symbol}: +${round(movePct, 2)}% run — stop floored at entry+${FEE_LOCK_PCT}% (${wantPx})`;
+          }
+        }
+        // banked-tranche floor — profit already taken is never handed back.
+        // A TP leg on the book last cycle that is now gone with its level
+        // behind the mark = that tranche FILLED. Floor the stop just under
+        // the last banked level: TP1 banked ⇒ the stop lives under TP1, not
+        // entry. Level must sit behind the mark — a pos_loss trigger on the
+        // wrong side of price fires instantly (would market-close the trade).
+        {
+          const priorL = priorLegMap[p.symbol] || [];
+          const tick2 = 2 * 10 ** -(pp ?? 6);
+          const banked = priorL.filter(
+            (t) => (sgn === 1 ? mark > t : mark < t)
+              && !limLegs.some((o) => Math.abs(+o.price - t) <= tick2)
+              && !profitPlans.some((x) => Math.abs(+x.triggerPrice - t) <= tick2)
+          );
+          if (banked.length) {
+            const last = sgn === 1 ? Math.max(...banked) : Math.min(...banked);
+            const cand = round(last * (1 - (sgn * 0.25) / 100), pp);
+            const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+            if (candBetter) {
+              wantPx = cand;
+              why = `banked-floor ${p.symbol}: TP tranche @ ${round(last, pp)} filled — stop floored under it (${wantPx})`;
+            }
+          }
+        }
+        // realized-trim lock — ANY size drop while in profit (TP leg, guard
+        // trim, operator tap) lifts the stop to breakeven+fees at minimum.
+        {
+          const psz = priorSizeMap[p.symbol] || 0;
+          if (psz > 0 && p.size < psz * 0.98 && sgn * (mark - p.entry) > 0) {
+            const cand = round(p.entry * (1 + (sgn * FEE_LOCK_PCT) / 100), pp);
+            const candBetter = wantPx == null || (sgn === 1 ? cand > wantPx : cand < wantPx);
+            if (candBetter) {
+              wantPx = cand;
+              why = `trim-lock ${p.symbol}: ${round(psz, 4)}→${round(p.size, 4)} banked in profit — stop floored entry+${FEE_LOCK_PCT}% (${wantPx})`;
+            }
           }
         }
         const slBetter =
@@ -1607,7 +1937,7 @@ async function main() {
         // the trail, not the stall clock.
         const uplPct = (p.upl / (p.size * p.entry)) * 100;
         const ageMs = p.cTime ? Date.now() - p.cTime : 0;
-        const runnerMode = !profitPlans.length;
+        const runnerMode = !profitPlans.length && !limLegs.length;
         // the 216s gate must clear the FEE-NOISE band, not any redness: a
         // 59x taker fill opens ~-0.12% red on notional instantly, so 'red
         // at all' auto-executed every chop market entry at +4min — the
@@ -1659,7 +1989,10 @@ async function main() {
         profitPlans.some((y) => y.planType === 'profit_plan' &&
           Math.abs(+y.triggerPrice - +x.triggerPrice) < 1e-9));
       const logicalProfit = profitPlans.filter((x) => !mirrorTps.includes(x));
-      if (logicalProfit.length === 1 && p.size > 0) {
+      // resting vtp- limit legs are already a ladder — a lone pos_profit
+      // fallback beside them is NOT an under-laddered position; retrofitting
+      // here would re-lay trigger legs the watcher just replaced (churn war)
+      if (logicalProfit.length === 1 && !limLegs.length && p.size > 0) {
         const tpTrig = +logicalProfit[0].triggerPrice;
         const distPct = tpTrig > 0 ? (Math.abs(tpTrig - p.entry) / p.entry) * 100 : 0;
         if (distPct > 0) {
@@ -1868,24 +2201,38 @@ async function main() {
       );
     }
   }
-  // ---- operator mandate: LONGs only above BOTH EMA50 & EMA200 ----
-  // Regime levels come from the scanner's api/mtf.json (1H stack, real
-  // 200-period). Stale (>90min) or missing rows fail CLOSED — a long
-  // that can't prove it's above the stack doesn't place. Applies to
-  // operator setups and core-carry deploys; scanner signals already
-  // carry the same gate upstream. Defined at cycle scope (not inside the
-  // entries else) — the top-up ladder below gates longs on the same
-  // mandate and threw `regimeOkLong is not defined` when it lived inside.
-  const mtfDoc = (() => {
-    try {
-      const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'mtf.json'), 'utf8'));
-      return d && Date.now() - new Date(d.t).getTime() < 90 * 60e3 ? d : null;
-    } catch { return null; }
-  })();
-  const regimeOkLong = (sym, px) => {
-    const r = mtfDoc?.rows?.[String(sym).replace(/USDT$/i, '')]?.regime;
-    return !!(r && Number.isFinite(r.ema50) && Number.isFinite(r.ema200) && px > r.ema50 && px > r.ema200);
-  };
+  // ---- orphan-entry sweep ----
+  // Maker entries rest ~2.5s by design, then the placer cancels them. A
+  // cycle that dies mid-attempt leaves a LIVE limit order on the exchange
+  // that bypasses every gate when price later dips through it — the 12:31
+  // CLU re-buy (19 contracts during an active fee-burn halt) was exactly
+  // this ghost. Sweep rules: our `s*`-prefixed orders die at ORPHAN age;
+  // when deployment is blocked ANY open-side pending order dies — nothing
+  // may open while the book is stood down. reduceOnly legs are protection
+  // and are never touched.
+  try {
+    const ORPHAN_MS = +(process.env.SENTINEL_ORPHAN_ORDER_MS || 90e3);
+    const sweepSyms = new Set([
+      ...posBySym.keys(),
+      ...(plan?.orders || []).map((o) => o.symbol),
+      ...(state.entriesLog || []).filter((e) => Date.now() - e.ts < 36e5).map((e) => e.symbol),
+    ]);
+    for (const s of sweepSyms) {
+      const pend = await pendingOrders(s).catch(() => []);
+      for (const o of pend) {
+        const opening = String(o.reduceOnly || '').toUpperCase() !== 'YES' && o.tradeSide !== 'close';
+        if (!opening) continue;
+        const age = Date.now() - (+o.cTime || +o.uTime || Date.now());
+        // ONLY ours — engine orders carry the `s*` clientOid prefix.
+        // Anything else is the operator trading manually; never touch it.
+        if (/^s\d/.test(String(o.clientOid || o.clientOrderId || '')) && age > ORPHAN_MS) {
+          await X.cancelOrder(s, String(o.orderId)).then(() =>
+            state.actions.push(`🧹 orphan-sweep ${s}: cancelled stale engine entry ${String(o.orderId).slice(-8)} age ${Math.round(age / 1000)}s`)
+          ).catch(() => {});
+        }
+      }
+    }
+  } catch {}
   if (protectionHalted || entriesBlocked) {
     if (entriesBlocked) state.actions.push(`${entriesBlocked} — no new entries`);
   } else {
@@ -1949,9 +2296,6 @@ async function main() {
         const last = await tickLast(sym);
         if (!(last > 0)) continue; // ticker unreadable — try next cycle
         s.lastPx = last;
-        // long mandate: operator rule applies to setups too — a long below
-        // the EMA50/200 stack stays armed but blocked until price recovers
-        if (s.direction === 'LONG' && !regimeOkLong(sym, last)) { s.blockedBy = 'below-ema50/200'; continue; }
         let go = false;
         if (s.mode === 'bounce') {
           // limit-style: long buys the pullback INTO the level, short
@@ -1987,7 +2331,7 @@ async function main() {
         const costPct = 0.20; // same fee+slip floor the RR gate applies
         const netRR = (targetPct - costPct) / (stopPct + costPct);
         if (!(netRR >= SETUP_RR_FLOOR)) { rej(`net-rr ${round(netRR, 2)} < ${SETUP_RR_FLOOR}`); continue; }
-        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100);
+        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * ddRiskScale;
         plan.orders.push({
           symbol: sym, direction: s.direction, refEntry: last,
           notionalUsd: round(riskUsd / Math.max(0.0005, stopPct / 100), 2),
@@ -2017,7 +2361,6 @@ async function main() {
           const tk = await X.ticker(sym);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
           if (!(last > 0)) continue;
-          if (!regimeOkLong(sym, last)) continue; // long mandate: only above EMA50+EMA200
           plan.orders.push({
             symbol: sym, direction: 'LONG', refEntry: last,
             notionalUsd: round(marginFree, 2),
@@ -2030,10 +2373,115 @@ async function main() {
         break; // one core order per cycle — first eligible symbol wins
       }
     }
+    // ---- slot-fill mandate: operator rule — keep the book deployed at
+    // LIVE_TARGET_POSITIONS while margin is free. Rides the queue LAST so
+    // every gate-passing signal gets first claim on margin; mandate orders
+    // then deploy marginFree/slots each into the best available longs.
+    // Hard vetoes still ride (deny/manual/ambiguous/2-loss cooldown/
+    // re-entry/already-planned) — idle slots are the mandate's failure
+    // state, journaled loudly when it happens.
+    // the vault bag isn't a trading slot — it accumulates carry, it doesn't
+    // compete for LIVE_TARGET_POSITIONS capacity
+    const vaultHeld = posBySym.has(VAULT_SYM) ? 1 : 0;
+    const slotsAvail = Math.max(0, TARGET_POSITIONS - (posBySym.size - vaultHeld) - plan.orders.filter((o) => !o.mandate).length);
+    // 🌆 pimpcity — adversarial persona layer. Runs EVERY cycle (the corner
+    // never sleeps): closes get attributed to the girl that opened them, and
+    // the war evolves — losers steal the leader's playbook, the top pimp
+    // poaches the best girl off a weak roster, the bottom pimp is crippled
+    // for next cycle's nominations, the worst girl gets retired for a
+    // mutant. Advisory only — it reorders mandate candidates and journals
+    // drama; failures fall back to plain score ranking.
+    let war = null, pc = null;
+    try {
+      pc = await import('./pimpcity.mjs');
+      war = pc.loadWar();
+      const warFills = loadFills();
+      for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
+      for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
+      // reconcile intents against the fill journal: a nomination earns
+      // "on shift" only when a matching open fill exists AND the symbol
+      // still holds a live position — queued-never-filled nominations are
+      // labeled pending and expire after 15min
+      for (const it of war.intents || []) {
+        if (it.filledAt == null) {
+          const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
+          if (of) it.filledAt = +of.ts || Date.now();
+        }
+        it.live = it.filledAt != null && posBySym.has(it.symbol);
+      }
+    } catch (e) { state.errors.push('pimpcity: ' + e.message); }
+    if (slotsAvail > 0 && marginFree > 0.5) {
+      const softOnly = (r) =>
+        r.direction === 'LONG' &&
+        (r.gates || []).length &&
+        (r.gates || []).every((g) => /sqn-chain|fake-move|rr|score|meta|funding|chop|range|drift|short/i.test(g));
+      // measured byMktType alpha (signal-eval): side-normal +0.39 /
+      // bear-normal +0.27 are the only positive cells; bull-volatile −0.41
+      // is the worst. Rank mandate picks toward the proven regime.
+      const GOOD_MKT = new Set(['side-normal', 'bear-normal']);
+      const BAD_MKT = new Set(['bull-volatile']);
+      // crackwhore mandate: the trail only pays after +0.2% — rank deployment
+      // by who is actually MOVING, not just static score. |24h change| is the
+      // cheapest live proxy for current volatility in the reject row.
+      const pool = (plan.rejects || []).filter(softOnly).map((r) => ({
+        ...r,
+        symbol: r.symbol,
+        score: (+r.score || 0) + (GOOD_MKT.has(r.mktType) ? 15 : BAD_MKT.has(r.mktType) ? -10 : 0)
+          + Math.min(20, Math.abs(+r.changePct || 0) * 4),
+      }));
+      let cand = [...CORE_SYMS.map((symbol) => ({ symbol, score: 45 })), ...pool.sort((a, b) => b.score - a.score)];
+      try {
+        const noms = war && pc ? pc.nominate(war, cand, slotsAvail) : [];
+        if (noms.length) {
+          const bySym = new Map(cand.map((c) => [c.symbol, c]));
+          const nomCand = [];
+          for (const n of noms) {
+            const row = bySym.get(n.cand.symbol) || n.cand;
+            nomCand.push({ ...row, symbol: n.cand.symbol, score: Math.round(n.sc), pimp: n.pimp, crack: n.crack });
+          }
+          for (const c of cand) if (!nomCand.some((n) => n.symbol === c.symbol)) nomCand.push(c);
+          cand = nomCand;
+          state.actions.push(`🌆 pimpcity: ${noms.slice(0, slotsAvail).map((n) => `${n.pimp} fields ${n.crack}→${n.cand.symbol}`).join(' · ')}`);
+        }
+      } catch (e) { state.errors.push('pimpcity: ' + e.message); }
+      const perSlotUsd = marginFree / slotsAvail;
+      let picked = 0;
+      for (const c of cand) {
+        if (picked >= slotsAvail) break;
+        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
+        const lc = lastCloseBySym[c.symbol];
+        if (lc && Date.now() - lc < REENTRY_MS) continue;
+        try {
+          const tk = await X.ticker(c.symbol);
+          const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
+          if (!(last > 0)) continue;
+          plan.orders.push({
+            symbol: c.symbol, direction: 'LONG', refEntry: last,
+            notionalUsd: round(perSlotUsd * CORE_LEV, 2),
+            stopPct: CORE_STOP_PCT, targetPct: CORE_TARGET_PCT,
+            leverage: CORE_LEV, conv: 1, runnerMult: 1.8,
+            strategy: 'slot-deploy', core: true, mandate: true,
+            pimp: c.pimp, crack: c.crack,
+          });
+          if (war && c.pimp) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp, crack: c.crack });
+          state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long${c.pimp ? ` · ${c.crack} working for ${c.pimp}` : ` (score ${c.score})`} · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
+          picked++;
+        } catch { /* ticker dead — next candidate */ }
+      }
+      if (!picked) state.actions.push('📌 SLOT-FILL mandate — no eligible long (all candidates denied/cooling/manual/ambiguous) — slots stay idle');
+    }
+    // prune dead intents: live = open position; pending = unfilled but
+    // fresh (<15min); everything else is a dead nomination — drop it so
+    // the dashboard never shows a girl "on shift" who never clocked in
+    if (war && war.intents) war.intents = war.intents.filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+    if (war && pc) { try { pc.saveWar(war); } catch {} }
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
       // pass and stack a third order on a symbol already holding both sides
       if (posBySym.has(o.symbol) || openedSym.has(o.symbol) || ambiguous.has(o.symbol) || opened + posBySym.size >= MAX_POSITIONS) continue;
+      // mandate fills empty slots only — once the book reaches the
+      // position target it stands down; signals fill first (queue order)
+      if (o.mandate && opened + posBySym.size >= TARGET_POSITIONS) continue;
       // MANUAL_HOLD is a hands-off claim on the SYMBOL, not just the open
       // position — an auto-entry on a held symbol would open then go
       // unmanaged (management exempts itself by design). Entries blocked.
@@ -2046,11 +2494,13 @@ async function main() {
         continue;
       }
       if ((MAX_ENTRIES_HOUR > 0 && entriesThisHour >= MAX_ENTRIES_HOUR) || (MAX_ENTRIES_DAY > 0 && entriesThisDay >= MAX_ENTRIES_DAY)) {
+        if (o.mandate) { /* churn cap limits turnover, not coverage — a flat book is exempt */ } else {
         state.actions.push(`🚦 entry rate cap (${entriesThisHour}/${MAX_ENTRIES_HOUR}/h · ${entriesThisDay}/${MAX_ENTRIES_DAY}/day) — standing down`);
-        break;
+        continue;
+        }
       }
       if (feeHalted) {
-        state.actions.push(`🔥 fee-burn halt — ${round(feesToday, 2)} commissions today >= ${round(FEE_HALT_PCT * 100, 1)}% of equity — standing down`);
+        state.actions.push(`🔥 fee-burn halt — ${round(feesToday, 2)} commissions today >= ${FEE_DAY_HALT_PCT}% of equity — standing down`);
         break;
       }
       const lastClose = lastCloseBySym[o.symbol];
@@ -2076,6 +2526,20 @@ async function main() {
       if (LONG_ONLY && o.direction === 'SHORT') {
         state.actions.push(`${o.symbol}: ⛔ SHORT blocked — longs-only mandate`);
         continue;
+      }
+      // shorts = mean-reversion scalps only (mandate, mirrored from the
+      // scanner): a stale or hand-built short gets the same bar — fade
+      // family, high score, capped target. Net-RR floor is enforced in
+      // the RR defense block below.
+      if (o.direction === 'SHORT' && !o.setup) {
+        const ok = (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile').split(',').map((x) => x.trim());
+        const sMin = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
+        const sTgt = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
+        const why = !o.strategy || !ok.includes(o.strategy) ? 'short-strat (mean-rev only)'
+          : (o.score ?? 0) < sMin ? `short-score<${sMin}`
+          : (o.targetPct ?? 99) > sTgt ? `short-tgt>${sTgt}% (scalp-only)`
+          : null;
+        if (why) { state.actions.push(`${o.symbol}: ${why}`); continue; }
       }
       if (!o.core && !o.setup) { // mandate roles (core-carry deploys) and operator setups are exempt from tape gates
         if (regimeChop) {
@@ -2118,7 +2582,10 @@ async function main() {
         // operator setups get their own floor — the operator owns the
         // trade, but the floor still refuses geometry that pays for the
         // stop with a target that's already inside the fee line
-        const RR_MIN = o.setup ? +(process.env.SENTINEL_SETUP_MIN_RR || 1) : +(process.env.SENTINEL_MIN_RR || 2);
+        const RR_MIN = Math.max(
+          o.direction === 'SHORT' && !o.setup ? +(process.env.SENTINEL_SHORT_MIN_RR || 1.5) : 0,
+          o.setup ? +(process.env.SENTINEL_SETUP_MIN_RR || 1) : +(process.env.SENTINEL_MIN_RR || 2)
+        );
         // floor at UNAVOIDABLE cost only: taker RT 0.12 + modeled slip 0.08 =
         // 0.20%. The 0.30% floor invented a spread the scanner measured as
         // ~0 on liquid majors — every marginal plan died at ~2.4:1 effective.
@@ -2145,7 +2612,7 @@ async function main() {
         // model owns SIZE while the primary model owns SIDE
         metaMul = Math.min(1.3, Math.max(0.5, metaP / Math.max(0.05, META.p0)));
       }
-      if (!o.setup && EDGE_LIVE.v < EDGE_MIN_TRADE) {
+      if (!o.setup && !o.mandate && EDGE_LIVE.v < EDGE_MIN_TRADE) {
         state.actions.push(`${o.symbol}: ⛔ edge-gated — fitted entry edge ${EDGE_LIVE.v.toFixed(2)} < ${EDGE_MIN_TRADE} (${EDGE_LIVE.src}) — skipped`);
         continue;
       }
@@ -2220,13 +2687,15 @@ async function main() {
       // leverage: contract max, bounded so the designed stop still sits
       // inside the liquidation band — lev <= 80/(stopPct + 0.64) keeps the
       // stop at <=80% of the band edge, otherwise liquidation fires first.
+      // Operator floor: LEV_FLOOR (SENTINEL_MIN_LEV, default 20) lifts the
+      // carry/mandate cap — the band cap still wins when it can't hold 20x.
       const lev = Math.max(
         1,
         Math.min(
           cm[o.symbol].maxLev || 125,
           Math.floor(80 / (o.stopPct + 0.64)),
           +(process.env.SENTINEL_MAX_LEV || 40), // account ceiling — the max-safety profile pins it lower
-          o.core ? CORE_LEV : Infinity // carry runs capped gearing, not signal lev
+          o.core ? Math.max(CORE_LEV, LEV_FLOOR) : Infinity // carry gears to the operator floor when the band allows
         )
       );
       // fee headroom: Bitget charges the taker fee on NOTIONAL from free
@@ -2243,7 +2712,12 @@ async function main() {
       // their full slot, unproven ones take a probe-size fraction. The
       // per-position cap below stays the absolute ceiling either way.
       const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1))) * metaMul;
-      const marginUsd = o.setup
+      const marginUsd = o.mandate
+        ? // flat-book deployment: max available margin, fee-headroom only —
+          // the mandate IS the position; conviction/risk ceilings are for
+          // signals competing for slots, not the coverage order
+          marginFree / (1 + lev * FEE_RT * 1.3)
+        : o.setup
         ? Math.min(
             // VEMA-style risk-% sizing: notional such that a stop-out
             // loses ≈ riskUsd (stop distance + round-trip fee drag on
@@ -2392,7 +2866,7 @@ async function main() {
           } catch { /* limit path failed — taker covers full size below */ }
         }
         if (needSize > 0) {
-          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup)
+          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup || o.mandate)
             await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
           else {
             state.actions.push(`${o.symbol}: 🛡️ pullback unfilled — no market chase at edge ${EDGE_LIVE.v.toFixed(2)} < ${CHASE_EDGE}`);
@@ -2684,7 +3158,11 @@ async function main() {
   // ---- deployment mandate: capital never idles. When the order queue is
   // exhausted (gated/cooldowns/denied) but margin remains, top up the
   // strongest open positions — pyramiding winners, NEVER averaging losers.
-  if (!protectionHalted && !cmdFlat && marginFree > TOPUP_FLOOR_USD) {
+  // unified deployment rail — entriesBlocked covers the loss breaker, DD
+  // kill-switch, massacre governor and CUSUM edge-death. A breaker that
+  // gates the queue but not pyramiding is no breaker (CLU autopsy: top-ups
+  // re-bought the stopped position 53s later, mid fee-halt).
+  if (!protectionHalted && !cmdFlat && !feeHalted && !entriesBlocked && marginFree > TOPUP_FLOOR_USD) {
     const capUsd = equityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85);
     // pyramiding throttle: persisted because rapid mode respawns the process
     // each cycle. One add per position per window, and only while the trade
@@ -2700,16 +3178,14 @@ async function main() {
       .sort((a, b) => (b.upl / (b.size * b.entry)) - (a.upl / (a.size * a.entry)))
       .slice(0, TOPUP_MAX);
     for (const p of winners) {
+      if (p.symbol === VAULT_SYM) continue; // vault grows via sweeps, not top-ups
       if (!(marginFree > TOPUP_FLOOR_USD)) break;
       try {
         const tk = await X.ticker(p.symbol);
         const t0 = Array.isArray(tk) ? tk[0] : tk; // adapters return the array row shape
         const px = +(t0?.lastPr || t0?.markPr || 0);
         if (!(px > 0)) continue;
-        // long mandate: top-ups buy — a long below the EMA50/200 stack
-        // stops receiving adds until price is back above both
-        if (p.side !== 'short' && !regimeOkLong(p.symbol, px)) continue;
-        const lev = Math.max(1, Math.min(+p.lev || 10, +(process.env.SENTINEL_MAX_LEV || 40)));
+        const lev = Math.max(1, Math.min(Math.max(+p.lev || 10, LEV_FLOOR), +(process.env.SENTINEL_MAX_LEV || 40)));
         // room is measured with the SAME ruler the margin-rebalance gate
         // uses (size*entry/lev), not the exchange-reported marginSize: on
         // cross-margin venues positionIM diverges from posted margin during
@@ -2723,7 +3199,36 @@ async function main() {
         const lt = throttle[p.symbol];
         if (lt && Date.now() - lt.ts < TOPUP_GAP_MS) continue;
         if (lt && +p.upl <= +lt.upl) continue; // add only while the trade keeps improving
-        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3); // same fee headroom as entries
+        // post-loss ban: a losing close on this symbol benches re-adds for
+        // the re-entry window. Observed live: CLU stopped at a loss 11:41,
+        // top-up re-bought it 53s later — a stop-out is not a dip to buy.
+        const lc = lastLossCloseBySym[p.symbol];
+        if (lc && Date.now() - lc < REENTRY_MS) {
+          state.actions.push(`${p.symbol}: top-up banned — losing close ${Math.round((Date.now() - lc) / 6e4)}m ago (< ${Math.round(REENTRY_MS / 6e4)}m)`);
+          continue;
+        }
+        // pyramid-gap guard: never let an add drag blended entry within a
+        // scratch of the live stop. At high lev the pyramid stacks entry on
+        // top of the stop — a 0.5% dip then realises the whole pile as a
+        // loss (CLU −$24: adds pushed avg ~92.4 over stop ~91.9).
+        const TOPUP_STOP_GAP_PCT = +(process.env.SENTINEL_TOPUP_STOP_GAP_PCT || 0.4);
+        try {
+          const lp = (await getPlans(p.symbol).catch(() => []))
+            .find((x) => /loss|stop|moving/i.test(x.planType || ''));
+          const slPx = +lp?.triggerPrice || 0;
+          if (slPx > 0) {
+            const marginUsd0 = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3);
+            const addSz = sizeFor(cm, p.symbol, marginUsd0 * lev, px) || 0;
+            const blend = (p.entry * p.size + px * addSz) / Math.max(1e-12, p.size + addSz);
+            const gapPct = (Math.abs(blend - slPx) / blend) * 100;
+            const underStop = p.side === 'long' ? px <= slPx : px >= slPx;
+            if (underStop || gapPct < TOPUP_STOP_GAP_PCT) {
+              state.actions.push(`${p.symbol}: top-up skipped — add would stack blended entry ${round(blend, 4)} within ${round(gapPct, 2)}% of stop ${slPx}`);
+              continue;
+            }
+          }
+        } catch {}
+        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3) * ddRiskScale; // same fee headroom as entries; session-DD shrinks size
         const size = sizeFor(cm, p.symbol, marginUsd * lev, px);
         if (!size) { state.actions.push(`${p.symbol}: top-up skipped — below contract minimum`); continue; }
         await marketOrder(p.symbol, p.side === 'short' ? 'sell' : 'buy', size, 'open');
@@ -2753,6 +3258,7 @@ async function main() {
     state.idleMargin = {
       usd: round(marginFree, 2),
       reason: marginFree <= TOPUP_FLOOR_USD ? 'below top-up floor + contract minimums — dust, undeployable'
+        : entriesBlocked ? `deployment rail down — ${entriesBlocked}`
         : protectionHalted ? 'protection-halt active — entries and top-ups paused'
         : cmdFlat ? 'flatten pending — refusing to deploy into a closing book'
         : !winners.length ? 'no profitable positions below cap to top up (never averages losers)'
@@ -2856,6 +3362,9 @@ async function main() {
       store.fills = store.fills.slice(0, 400);
       writeJson(fillsPath, store);
     }
+    // tag AFTER the merge so this cycle's fresh closes attribute too —
+    // fills appended above would otherwise read as bot until next run
+    tagManualCloses(store.fills);
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
     // ---- wealth vault — high-water-mark incentive fee ----
@@ -2871,7 +3380,10 @@ async function main() {
         vault.sweptIds ||= {}; vault.sweeps ||= [];
         vault.hwmUsd = Math.max(vault.hwmUsd || 0, EQ_OVERRIDE || 0);
         const hwmLoaded = vault.hwmUsd;
-        const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + vault.balanceUsd;
+        // navNow counts vault holdings still alive — lostUsd is real money
+        // already lost (the USELESS bag); adding it back would inflate NAV
+        // and mint carry room on a drawdown the vault already ate.
+        const navNow = EQ_OVERRIDE > 0 ? EQ_OVERRIDE + epochNet : equityUsd + (vault.balanceUsd || 0) - (vault.lostUsd || 0);
         // room = the above-water tranche created since the last high.
         // Each profitable fill consumes `net` of it (swept or not) — total
         // carry lands at exactly SHARE × net-new-high NAV across a cycle.
@@ -2909,11 +3421,94 @@ async function main() {
         // `navNow - 65` room and keep paying carry on the same tranche.
         if (chg > 0 || vault.hwmUsd !== hwmLoaded || !vault.updatedAt) {
           vault.sweeps = vault.sweeps.slice(-1000);
+          // sweptIds is a dedupe map — one key per sweep forever. Cap it:
+          // ids older than the newest 5000 entries can never reappear in a
+          // bounded fill journal anyway (fills roll off before ids recur).
+          const ids = Object.keys(vault.sweptIds || {});
+          if (ids.length > 5000) {
+            const keep = new Set(vault.sweeps.slice(-5000).map((s) => s.tradeId));
+            for (const k of ids) if (!keep.has(k)) delete vault.sweptIds[k];
+          }
           vault.updatedAt = new Date().toISOString();
           writeJson(VAULT_PATH, vault);
         }
         if (chg > 0)
           state.actions.push(`🏦 vault carry: +$${round(chg, 2)} banked at HWM $${round(vault.hwmUsd, 2)} — untouchable total $${round(vault.balanceUsd, 2)}`);
+        // vault deploy: pending carry moves futures->spot and buys the
+        // mandate asset (operator 2026-10-09: USELESS on spot — accumulates,
+        // can't liquidate). Batched at VAULT_BUY_MIN_USD (spot min order) so
+        // fees stay a small fraction; deployedUsd tracks cost basis, spot
+        // assets reconcile the qty. Migration: a legacy deployedUsd from a
+        // dead mandate gets written off to lostUsd — pending can't pretend
+        // it still exists.
+        try {
+          if (vault.asset !== VAULT_BUY_COIN && (vault.deployedUsd || 0) > 0) {
+            vault.lostUsd = round((vault.lostUsd || 0) + vault.deployedUsd, 4);
+            vault.sweeps.push({ ts: Date.now(), symbol: VAULT_SYM, amountUsd: -vault.deployedUsd, hwm: vault.hwmUsd, moved: 'writeoff-legacy' });
+            vault.deployedUsd = 0;
+            writeJson(VAULT_PATH, vault);
+            state.actions.push(`🏦 vault write-off: legacy bag $${round(vault.lostUsd, 2)} marked lost — vault asset -> ${VAULT_BUY_COIN} spot`);
+          }
+          vault.asset = VAULT_BUY_COIN;
+          const pendingFutures = round((vault.balanceUsd || 0) - (vault.transferredUsd || 0) - (vault.lostUsd || 0), 4);
+          const spotPending = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
+          // perms gate — the Bitget key needs spot order write + wallet
+          // transfer write. On 40014 hold carry in futures and re-probe
+          // every 30min; don't burn an API call every cycle on a dead perm.
+          const permsOk = vault.permsOk !== false || Date.now() - (vault.permsProbeAt || 0) > 30 * 60e3;
+          try {
+            if (permsOk && pendingFutures + spotPending >= VAULT_BUY_MIN_USD) {
+              const spendable = Math.max(0, (+acct.available || 0) - 1); // $1 ops reserve stays
+              const moveUsd = round(Math.min(pendingFutures, spendable), 2);
+              if (moveUsd >= VAULT_BUY_MIN_USD) {
+                await vaultTransfer(moveUsd); // futures -> spot — throws 40014 without transfer-write perm
+                vault.transferredUsd = round((vault.transferredUsd || 0) + moveUsd, 4);
+                writeJson(VAULT_PATH, vault);
+                state.actions.push(`🏦 vault transfer: $${round(moveUsd, 2)} futures->spot (carry earmark)`);
+              }
+              const buyUsd = round((vault.transferredUsd || 0) - (vault.deployedUsd || 0), 4);
+              if (buyUsd >= VAULT_BUY_MIN_USD && X.spotMarketBuy) {
+                const bo = await X.spotMarketBuy(VAULT_BUY_SYM, buyUsd);
+                vault.deployedUsd = round((vault.deployedUsd || 0) + buyUsd, 4);
+                (vault.buys ||= []).push({ ts: Date.now(), usd: buyUsd, sym: VAULT_BUY_SYM, orderId: bo?.orderId || null });
+                writeJson(VAULT_PATH, vault);
+                state.actions.push(`🏦 vault deploy: $${round(buyUsd, 2)} -> ${VAULT_BUY_COIN} spot · cost basis $${round(vault.deployedUsd, 2)}`);
+              }
+              vault.permsOk = true;
+            }
+            // holdings truth = the exchange's own spot balance, not a
+            // ledger estimate — a dead bag can't hide behind deployedUsd
+            if (permsOk && X.spotAssets) {
+              const assets = await X.spotAssets(); // 40014 propagates -> perms gate below
+              const coin = assets.find((a) => a.coin === VAULT_BUY_COIN);
+              const qty = coin ? (+coin.available || 0) + (+coin.frozen || 0) + (+coin.locked || 0) : 0;
+              const tk = await X.ticker(VAULT_BUY_SYM).catch(() => null);
+              const t0 = Array.isArray(tk) ? tk[0] : tk;
+              const px = +(t0?.lastPr || t0?.markPr || 0);
+              vault.assetQty = round(qty, 8);
+              vault.assetUsd = round(qty * px, 2);
+              vault.btcQty = vault.assetQty; vault.btcUsd = vault.assetUsd; // dashboard compat keys
+              writeJson(VAULT_PATH, vault);
+              state.vaultAssetQty = vault.assetQty;
+              state.vaultAssetUsd = vault.assetUsd;
+            }
+          } catch (e) {
+            if (/40014|permission/i.test(String(e.message || e))) {
+              vault.permsOk = false;
+              vault.permsProbeAt = Date.now();
+              writeJson(VAULT_PATH, vault);
+              state.errors.push('vault deploy paused: API key needs spot-trade + wallet-transfer perms (40014) — carry held in futures');
+            } else throw e;
+          }
+          if (vault.permsOk === false)
+            state.actions.push('🏦 vault: carry held in futures — Bitget key missing spot/transfer perms, re-probing every 30min');
+          // vaultUsd = holdings value: pending futures USDT + unbought
+          // spot USDT + BTC at mark (last reconciled qty × live price)
+          state.vaultUsd = round(
+            Math.max(0, pendingFutures) + Math.max(0, spotPending) + (vault.btcUsd || 0), 2);
+        } catch (e) {
+          state.errors.push('vault deploy failed: ' + String(e.message || e).slice(0, 100));
+        }
       } catch (e) {
         state.errors.push('vault sweep failed: ' + String(e).slice(0, 100));
       }
@@ -2962,9 +3557,9 @@ async function main() {
       // attribution split: enterPointSource 'api' = this engine; ios/android/
       // web = manual account trading; null = legacy fill recorded pre-tag
       bySource: {
-        bot: statsFor(store.fills.filter((f) => f.src === 'api')),
-        manual: statsFor(store.fills.filter((f) => f.src && f.src !== 'api')),
-        legacy: statsFor(store.fills.filter((f) => !f.src)),
+        bot: statsFor(store.fills.filter((f) => f.src === 'api' && !f._manual)),
+        manual: statsFor(store.fills.filter((f) => (f.src && f.src !== 'api') || f._manual)),
+        legacy: statsFor(store.fills.filter((f) => !f.src && !f._manual)),
       },
       // the headline number an investor should quote — per-POSITION record.
       // The fill-level stats above stay (every realized dollar is real) but
@@ -3018,12 +3613,76 @@ async function main() {
     state.errors.push(`fills journal: ${e.message}`);
   }
 
+  // ---- all-time record across every real fill journal this deployment has
+  // ever written (live + demo books). Reporting only — the risk tier stays
+  // keyed to the live book's own sqnR.
+  try {
+    const allBooks = {};
+    const allEpis = [];
+    for (const [bk, fname] of Object.entries({
+      'bitget-demo': 'demo-fills.json',
+      'bybit-demo': 'demo-fills-bybit.json',
+      'bitget-live': 'real-fills.json',
+    })) {
+      let fs2 = [];
+      try { fs2 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', fname), 'utf8')).fills || []; } catch {}
+      // epoch boundary — the same SENTINEL_FILLS_SINCE_MS reset that zeroes
+      // the headline record zeroes the all-time aggregate too; a 'since'
+      // filter that only half-applies is a stats leak, not a clean start.
+      if (FILLS_SINCE) fs2 = fs2.filter((f) => (+f.ts || 0) >= FILLS_SINCE);
+      const epis = fifoEpisodes(fs2);
+      // strategy attribution — entriesLog belongs to this mode's own journal,
+      // so it only joins fills from the active book; the rest stay honestly
+      // 'unattributed' instead of borrowing a foreign book's labels.
+      if (fname === FILLS_FILE) {
+        for (const e of epis) {
+          const ent = (state.entriesLog || [])
+            .filter((en) => en.symbol === e.symbol && en.strategy && en.ts >= (e.openTs || 0) - 600e3 && en.ts <= (e.closeTs || Date.now()))
+            .pop();
+          e.strat = ent?.strategy || 'unattributed';
+        }
+      }
+      allEpis.push(...epis);
+      allBooks[bk] = episodeStats(epis);
+    }
+    // family evidence from the money itself — replaces the excursion
+    // tracker's survivorship-biased winShare as the family-gate input.
+    // Buckets under n<3 keep the mae-mfe estimate until fills prove better.
+    const fams = {};
+    for (const e of allEpis.filter((x) => !x.open)) {
+      const k = e.strat || 'unattributed';
+      const g = fams[k] || (fams[k] = { n: 0, w: 0, ret: 0, retN: 0 });
+      g.n++;
+      if (e.netUsd > 0) g.w++;
+      // return base = open-side notional; a close-first episode with no
+      // journaled open has no base — it counts toward winShare only, not a
+      // fabricated return percentage
+      const base = e.notional > 0 ? e.notional : e.riskUsd > 0 ? e.riskUsd : 0;
+      if (base > 0) { g.ret += (100 * e.netUsd) / base; g.retN++; }
+    }
+    const fillFams = {};
+    for (const [k, g] of Object.entries(fams)) {
+      if (g.n < 3) continue;
+      fillFams[k] = { n: g.n, winShare: round(g.w / g.n, 3), meanRetPct: g.retN ? round(g.ret / g.retN, 3) : null, src: 'fills' };
+    }
+    Object.assign(FAM_STATS, fillFams);
+    const at = {
+      refreshedAt: new Date().toISOString(),
+      scope: 'all real exchange fill journals (live + demo books) — FIFO position episodes per symbol',
+      combined: episodeStats(allEpis),
+      books: allBooks,
+      families: fillFams,
+    };
+    state.allTime = at;
+    writeJson(path.join(API_DIR, 'alltime-stats.json'), at);
+  } catch (e) { state.errors.push(`alltime stats: ${e.message}`); }
+
   // final position snapshot — exchange state is the ledger's ground truth
   try {
     const pos2 = await getPos();
     state.positionsAfter = (pos2 || [])
       .filter((p) => +p.total > 0)
-      .map((p) => ({ symbol: p.symbol, side: p.holdSide, size: +p.total, upl: +p.unrealizedPL }));
+      .map((p) => ({ symbol: p.symbol, side: p.holdSide, size: +p.total, upl: +p.unrealizedPL, entry: +p.openPriceAvg || null, lev: +p.leverage || null, margin: +p.marginSize || 0, marginMode: p.marginMode, liq: +p.liquidationPrice || 0 }));
   } catch {}
   // dump pending protection plans per open symbol — the god.mjs overseer
   // audits these to prove no position is ever naked on the exchange
@@ -3036,6 +3695,12 @@ async function main() {
       })
     );
   } catch {}
+  // persist this cycle's armed TP-limit prices — next cycle's banked-tranche
+  // floor diffs them against the live book to detect tranche fills
+  state.legs = {};
+  for (const p of state.positionsAfter || [])
+    state.legs[p.symbol] = curLegMap[p.symbol] || priorLegMap[p.symbol] || [];
+  state.trimGuard = trimGuard;
   state.cycleMs = Date.now() - tRun;
   state.refreshedAt = new Date().toISOString(); // freshness = write time, not run start
   state.managed = [...managed]; // materialize at write time — entries late in the cycle count
@@ -3133,7 +3798,7 @@ async function main() {
     writeJson(trackPath, track);
   } catch (e) { state.errors.push(`mae/mfe: ${e.message}`); }
 
-  writeJson(outPath, state);
+  writeJson(outPath, { ...state, actions: [...new Set(state.actions)], errors: [...new Set(state.errors)].slice(0, 50), rejects: (state.rejects || []).slice(0, 60) });
   log(`done — ${state.actions.length} actions, ${state.errors.length} errors`);
   if (state.errors.length) console.log(state.errors.join('\n'));
 }
