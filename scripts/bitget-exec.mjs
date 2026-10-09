@@ -2828,6 +2828,28 @@ async function main() {
       // empirical Kelly per strategy — measured-positive cells keep full
       // size, measured-negative decay to 0.3x probe (never a raise)
       const kellyMul = (o.strategy && kellyStrat[o.strategy]?.mult) || 1;
+      // Avellaneda–Stoikov inventory skew (MSE448 strat 2 — the paper's
+      // profitable strategy wasn't a better signal, it was quoting AGAINST
+      // inventory: AS held inv std 2.99 vs control 8.49 at similar PnL =
+      // half the variance). Directional-book analog: the more margin is
+      // already deployed same-direction — correlated names counting 1.5x —
+      // the smaller each new slice. invMul = exp(−γ·q_eff), γ default 2.2:
+      // 20% deployed → ×0.64, 40% → ×0.41, floored at 0.15. Continuous
+      // version of the binary corr-cluster veto — it shrinks before the
+      // veto fires. Mandate/setup orders exempt (operator/mandate-sized).
+      const INV_GAMMA = +(process.env.SENTINEL_INV_GAMMA || 2.2);
+      const dirSide = o.direction === 'SHORT' ? 'short' : 'long';
+      let sameDirMargin = 0;
+      for (const [s2, pv] of posBySym) {
+        if ((pv?.side || pv?.holdSide) !== dirSide) continue;
+        const notion = (+pv.size || 0) * (+pv.entry || +pv.markPrice || 0);
+        const m = +pv.margin || +pv.marginSize || (notion > 0 ? notion / (+pv.lev || 20) : 0);
+        sameDirMargin += m * (corrMap[o.symbol]?.[s2] ? 1.5 : 1);
+      }
+      const qEff = equityUsd > 0 ? sameDirMargin / equityUsd : 0;
+      const invMul = o.mandate || o.setup ? 1 : Math.max(0.15, Math.exp(-INV_GAMMA * qEff));
+      if (invMul < 0.9)
+        state.actions.push(`${o.symbol}: 📐 inventory-skew ×${round(invMul, 2)} — ${Math.round(qEff * 100)}% of equity already deployed same-side (AS)`);
       const marginUsd = o.mandate
         ? // flat-book deployment: max available margin, fee-headroom only —
           // the mandate IS the position; conviction/risk ceilings are for
@@ -2844,7 +2866,7 @@ async function main() {
             marginFree / (1 + lev * FEE_RT * 1.3)
           )
         : Math.min(
-            (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul * kellyMul,
+            (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul * kellyMul * invMul,
             // single-position margin cap — 85%: near-full aggression on a
             // qualifying shot while still banking one reload. Ruin is the
             // only unrecoverable outcome; every other loss is tuition.
@@ -3008,6 +3030,7 @@ async function main() {
           score: Number.isFinite(o.score) ? o.score : null,
           conv: Number.isFinite(o.conv) ? o.conv : null,
           marginUsd: round(marginUsd, 2), lev, notionalUsd: round(notional, 2),
+          invSkew: +invMul.toFixed(3),
           // Van Tharp R-basis: the $ the position loses if the entry stop
           // fires (stop distance + round-trip fee drag on notional). The
           // fills journal joins entries -> closes and grades each close in

@@ -115,6 +115,7 @@ async function mdGet(kind, p = {}) {
       case 'fundNow':   url = `${FUND_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
       case 'fundHist':  url = `${FUND_HIST_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&pageSize=${p.limit || 8}`; break;
       case 'oi':        url = `${OI_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+      case 'book':      url = `https://api.bitget.com/api/v2/mix/market/orderbook?symbol=${p.symbol}&productType=USDT-FUTURES&limit=${p.limit || 5}&type=step0`; break;
       default: throw new Error('mdGet unknown kind ' + kind);
     }
     const res = await fetch(url, { signal: TF() });
@@ -168,6 +169,13 @@ async function mdGet(kind, p = {}) {
       ep = '/v5/market/open-interest'; q.set('symbol', p.symbol);
       q.set('intervalTime', '5min'); q.set('limit', '1');
       norm = (list) => ({ openInterestList: [{ size: list[0]?.openInterest }] });
+      break;
+    case 'book':
+      ep = '/v5/market/orderbook'; q.set('symbol', p.symbol);
+      q.set('limit', String(p.limit || 5));
+      // v5 returns the object (not a list): {b:[[px,sz]], a:[[px,sz]]} —
+      // normalize onto the Bitget wire shape {bids, asks}
+      norm = (o) => ({ bids: o?.b || [], asks: o?.a || [] });
       break;
     default: throw new Error('mdGet unknown kind ' + kind);
   }
@@ -468,6 +476,33 @@ async function fetchKlines(symbol, light = false) {
   return payload;
 }
 
+// ---- orderbook micro-structure (Stanford MSE448 "High Frequency Trading
+// Strategies", strat 1: the microprice). The microprice weights the mid by
+// the OPPOSING queue — a buy-heavy book lifts it above mid — the fairest
+// short-horizon estimate of the true price. microPos normalizes the
+// micro-vs-mid distance into half-spread units (−0.5..+0.5) so the read is
+// scale-free across majors and memes; imb is the 5-level queue imbalance.
+// The paper itself found it informative-but-weak alone — here it is a
+// bounded tilt + a fusion component the residual learner can re-weight.
+async function fetchBook(symbol) {
+  const res = await mdGet('book', { symbol, limit: 5 }).catch(() => null);
+  if (!res?.ok) return null;
+  const d = (await res.json())?.data;
+  const bids = (d?.bids || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  const asks = (d?.asks || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  if (!bids.length || !asks.length) return null;
+  const [bid, bidSz] = bids[0], [ask, askSz] = asks[0];
+  const mid = (bid + ask) / 2, spread = ask - bid;
+  const micro = (bid * askSz + ask * bidSz) / (bidSz + askSz);
+  const bsz = bids.reduce((a, x) => a + x[1], 0), asz = asks.reduce((a, x) => a + x[1], 0);
+  return {
+    micro,
+    microPos: spread > 0 ? Math.max(-0.5, Math.min(0.5, (micro - mid) / spread)) : 0,
+    imb: bsz + asz > 0 ? (bsz - asz) / (bsz + asz) : 0,
+    spreadPct: mid > 0 ? (spread / mid) * 100 : null,
+  };
+}
+
 // 5m candles from entry open -> now, for intraperiod settlement replay.
 // 600 bars ≈ 50h — comfortably covers the 24h TTL; the still-forming tail
 // candle is dropped (same rule as the TA klines).
@@ -738,6 +773,22 @@ async function main() {
   }
   const btcK = enriched.get('BTC') ?? (await fetchKlines('BTCUSDT', true).catch(() => null));
   const btcCloses = btcK?.closes ?? btcK?.candles?.map((c) => c.c) ?? null;
+
+  // ---- top-of-book snapshot per scored candidate (microprice + queue
+  // imbalance). Best-effort: a missing book leaves the obi factor at 0.
+  const books = {};
+  {
+    const want = candidates.filter((r) => enriched.has(r.asset));
+    for (let i = 0; i < want.length; i += 6) {
+      await Promise.all(
+        want.slice(i, i + 6).map(async (r) => {
+          const b = await fetchBook(r.pair).catch(() => null);
+          if (b) books[r.asset] = b;
+        })
+      );
+      if (i + 6 < want.length) await new Promise((r) => setTimeout(r, 200));
+    }
+  }
 
   // ---- multi-timeframe deep read: 15m/1H/4H/1D frames per enriched asset.
   // TTL caches make this near-free on steady-state cycles; each asset's
@@ -1702,6 +1753,15 @@ async function main() {
         (btcPair.rsRsi > 60 ? 0.5 : btcPair.rsRsi < 40 ? -0.5 : 0),
         -4, 4
       );
+      // microprice + queue imbalance (MSE448 strat 1): microPos is the
+      // signed micro-vs-mid distance in half-spread units, imb the 5-level
+      // queue split — a LONG whose book is bid-heavy with micro above mid
+      // has flow confluence; sellers absorbing pays negative. Bounded
+      // ±3.5 — the paper graded it informative-but-weak alone.
+      const book = books[r.asset] || null;
+      const obiBoost = book
+        ? (dir0 === 'LONG' ? 1 : -1) * clamp(book.microPos * 3 + book.imb * 2, -3.5, 3.5)
+        : 0;
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -1718,6 +1778,7 @@ async function main() {
             icAdj +
             fundBoost +
             rsBoost +
+            obiBoost +
             (climax ? -10 : 0),
           0,
           100
@@ -1731,10 +1792,10 @@ async function main() {
         confl: Math.min((k.ta?.confluence || 0) * 3, 12),
         ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy),
         deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
-        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, clim: climax ? -10 : 0,
+        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, clim: climax ? -10 : 0,
       };
       return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
-        btcPair, rsBoost,
+        btcPair, rsBoost, book, obiBoost,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
@@ -1808,6 +1869,7 @@ async function main() {
         fusedZ: r.fusedZ ?? null,
         fusion: r.fusion ?? null,
         btcPair: r.btcPair ?? null,
+        book: r.book ?? null,
         vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
