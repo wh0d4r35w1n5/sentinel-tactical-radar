@@ -231,9 +231,17 @@ export function attribute(war, fills, log = () => {}) {
     // trades go unattributed)
     const isClose = f && (f.tradeSide === 'close' || (+f.profit || 0) !== 0);
     if (!isClose || !f.tradeId || done.has(f.tradeId)) continue;
-    // newest open intent on this symbol before the close
+    // pass A: newest intent carrying a verified order binding (orderId
+    // stamped at fill-confirm upstream — survives the live flag flipping
+    // off as the position dies). Pass B: timestamp heuristic for
+    // pre-binding intents. Never let a nominated-but-unfilled intent steal
+    // a real position's close.
     let hit = null;
     for (let i = intents.length - 1; i >= 0; i--) {
+      const it = intents[i];
+      if (it.symbol === f.symbol && it.ts <= f.ts && it.orderId) { hit = it; break; }
+    }
+    if (!hit) for (let i = intents.length - 1; i >= 0; i--) {
       const it = intents[i];
       if (it.symbol === f.symbol && it.ts <= f.ts) { hit = it; break; }
     }
@@ -256,12 +264,25 @@ export function attribute(war, fills, log = () => {}) {
     const cr = war.cracks[hit.crack] || (war.retired || {})[hit.crack];
     const pm = hit.pimp ? war.pimps[hit.pimp] : null;
     if (!cr) continue;
-    cr.net += net; cr.closes++;
+    cr.net += net;
+    // episode accounting: one intent = one position = one "trick". A TP
+    // ladder journals N close FILLS but the leaderboard counts TRADES —
+    // closes++ fires once per episode, wins/losses track the episode's
+    // cumulative verdict (and self-correct if a multi-clip episode flips).
+    hit.epNet = +( (hit.epNet || 0) + net ).toFixed(6);
+    const verdict = hit.epNet > 0 ? 1 : hit.epNet < 0 ? -1 : 0;
+    if (!hit.epCounted) { hit.epCounted = true; cr.closes++; }
+    if (verdict !== (hit.epVerdict || 0)) {
+      if (hit.epVerdict === 1) { cr.wins--; if (pm) pm.wins--; }
+      else if (hit.epVerdict === -1) { cr.losses--; if (pm) pm.losses--; }
+      if (verdict === 1) { cr.wins++; if (pm) pm.wins++; }
+      else if (verdict === -1) { cr.losses++; if (pm) pm.losses++; }
+      hit.epVerdict = verdict;
+    }
     // form = EMA of recent tricks (α=0.4 — last ~5 closes dominate).
     // Lifetime net decides pride; recent form decides roster moves — a girl
     // hot three months ago and bleeding now should not hold the corner.
     cr.form = +( ((cr.form ?? 0) * 0.6 + net * 0.4).toFixed(4) );
-    if (net >= 0) cr.wins++; else cr.losses++;
     // personality evolves on every booked trick — wins build swagger and
     // greed, losses build tilt and erode discipline. Moods flip in the
     // drama feed so the dashboard isn't just numbers.
@@ -276,10 +297,7 @@ export function attribute(war, fills, log = () => {}) {
     const m = moodOf(cr);
     if (m !== cr.mood && MOOD_LINES[m]) lines.push(MOOD_LINES[m](hit.crack));
     cr.mood = m;
-    if (pm) {
-      pm.net += net;
-      if (net >= 0) pm.wins++; else pm.losses++;
-    }
+    if (pm) pm.net += net;
     lines.push(`💰 ${hit.crack} (${pm ? `working for ${hit.pimp}` : 'freelance — no pimp took a cut'}) banked ${net >= 0 ? '+' : ''}$${net.toFixed(2)} on ${f.symbol}${entryFee > 0 ? ` incl $${entryFee.toFixed(3)} entry fees` : ''}${net < 0 ? ' — docked her pay' : ''}`);
   }
   war.attributed = [...done].slice(-800);

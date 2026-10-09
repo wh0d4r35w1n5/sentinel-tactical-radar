@@ -36,7 +36,7 @@ const mkWar = () => {
   pc.attribute(war, fills);
   const expected = 0.20 - 0.03 + 0.15 - 0.03 - 0.06; // 0.23
   ok(Math.abs(war.cracks['Diamond Dust'].net - expected) < 1e-9, `multi-clip: expected ${expected} got ${war.cracks['Diamond Dust'].net}`);
-  ok(war.cracks['Diamond Dust'].closes === 2, 'multi-clip: 2 closes counted');
+  ok(war.cracks['Diamond Dust'].closes === 1, 'multi-clip: 1 episode counted (2 fills)');
 }
 
 // --- 3. retired girl's late close still lands on her archived record
@@ -165,6 +165,43 @@ const mkWar = () => {
   const loose = { w: { chg: 0, score: 2 }, persona: { swagger: 0.5, tilt: 0, greed: 0.5, discipline: 0.05 } };
   const evCand = { symbol: 'ETHUSDT', score: 8, changePct: 0, mktType: 'x', strategy: '' };
   ok(pc.crackScore(picky, evCand) > pc.crackScore(loose, evCand), 'discipline amplifies evidence scoring');
+}
+
+// --- 10. episode accounting: a TP ladder is ONE trick, not N
+{
+  const war = mkWar();
+  const c = war.cracks['Diamond Dust'];
+  war.intents.push({ symbol: 'SOLUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Diamond Dust' });
+  const fills = [1, 2, 3, 4].map(i => ({ tradeId: 'tp' + i, tradeSide: 'close', symbol: 'SOLUSDT', ts: 200 + i, fee: 0.01, profit: 0.06 }));
+  pc.attribute(war, fills);
+  ok(c.closes === 1, `ladder counts 1 episode, got ${c.closes}`);
+  ok(c.wins === 1, `episode win counted once, got ${c.wins}`);
+  ok(Math.abs(c.net - (0.24 - 0.04)) < 1e-9, `episode nets all clips: ${c.net}`);
+}
+
+// --- 11. episode verdict self-corrects on a flipping ladder
+{
+  const war = mkWar();
+  const c = war.cracks['Diamond Dust'];
+  war.intents.push({ symbol: 'ETHUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Diamond Dust' });
+  pc.attribute(war, [{ tradeId: 'a', tradeSide: 'close', symbol: 'ETHUSDT', ts: 200, fee: 0, profit: -0.5 }]);
+  ok(c.losses === 1 && c.wins === 0, `clip1 loss counted: ${c.losses}L ${c.wins}W`);
+  pc.attribute(war, [{ tradeId: 'b', tradeSide: 'close', symbol: 'ETHUSDT', ts: 300, fee: 0, profit: 0.8 }]);
+  ok(c.wins === 1 && c.losses === 0, `verdict flipped to win: ${c.wins}W ${c.losses}L`);
+  ok(c.closes === 1, 'still one episode');
+  ok(war.pimps['Silky Slim'].wins === 1 && war.pimps['Silky Slim'].losses === 0, 'pimp verdict mirrors');
+}
+
+// --- 12. orderId-bound intent wins over a newer unverified nomination
+{
+  const war = mkWar();
+  war.cracks['Hot Holly'] = { w: {}, tag: 't', pimp: 'Madam Razor', net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0 };
+  war.pimps['Madam Razor'] = { roster: ['Hot Holly'], crown: false, crippled: false, net: 0, wins: 0, losses: 0 };
+  war.intents.push({ symbol: 'XUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Diamond Dust', orderId: 'oidAAA' }); // verified entry
+  war.intents.push({ symbol: 'XUSDT', direction: 'LONG', ts: 500, pimp: 'Madam Razor', crack: 'Hot Holly' });                    // nominated, never filled
+  pc.attribute(war, [{ tradeId: 'c9', tradeSide: 'close', symbol: 'XUSDT', ts: 600, fee: 0, profit: 0.42 }]);
+  ok(Math.abs(war.cracks['Diamond Dust'].net - 0.42) < 1e-9, `bound intent got the close: DD ${war.cracks['Diamond Dust'].net}`);
+  ok(war.cracks['Hot Holly'].net === 0, 'unverified nomination cannot steal the trick');
 }
 
 console.log(`\n${pass} pass · ${fail} fail`);
