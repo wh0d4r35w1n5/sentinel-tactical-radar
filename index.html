@@ -238,7 +238,7 @@ footer a{color:var(--cyan)}
 /* SIMPLE = normie view: internals hidden, everything stacks one column */
 body.simple .pro{display:none!important}
 body.simple .hero,body.simple .grid,body.simple .duo{grid-template-columns:1fr}
-@media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before,.godchip .eye,.wrap .panel,.tape{animation:none}}
+@media(prefers-reduced-motion:reduce){.tape-inner,.dot,.sky i,.sky::before,.sky::after,.big,.logo,.pressbar i,.neon::before,.godchip .eye,.wrap .panel,.tape,.pc-sign .h{animation:none}}
 /* ---- universal responsiveness — flawless on every viewport & browser ---- */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 img,svg,canvas,video{max-width:100%}
@@ -359,6 +359,40 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .mtfstack.bear{background:rgba(255,77,109,.14);color:#ff4d6d;border:1px solid rgba(255,77,109,.35)}
 .mtfstack.pull{background:rgba(186,104,255,.13);color:#ba68ff;border:1px solid rgba(186,104,255,.35)}
 .mtfstack.flat{color:#8b93b0;border:1px solid var(--line)}
+/* ---- PIMP CITY · vice-city treatment — sunset, skyline, neon ---- */
+#pimpPanel{overflow:hidden;padding-top:0;border-color:rgba(255,46,196,.4)}
+#pimpPanel::before{content:"";position:absolute;inset:0 0 auto 0;height:176px;border-radius:12px 12px 0 0;pointer-events:none;
+  background:radial-gradient(150px 95px at 70% 92%,rgba(255,209,102,.55),rgba(255,94,188,.38) 45%,transparent 72%),
+  linear-gradient(180deg,#160828 0%,#3b0f52 36%,#7a1e6e 62%,#c2337f 82%,#ff7b54 100%);opacity:.92}
+#pimpPanel::after{content:"";position:absolute;inset:0 0 auto 0;height:176px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 176' preserveAspectRatio='xMidYMax slice'%3E%3Cg fill='%23120526'%3E%3Crect x='0' y='96' width='58' height='80'/%3E%3Crect x='66' y='70' width='44' height='106'/%3E%3Crect x='74' y='60' width='12' height='10'/%3E%3Crect x='120' y='110' width='66' height='66'/%3E%3Crect x='196' y='52' width='40' height='124'/%3E%3Crect x='207' y='42' width='12' height='10'/%3E%3Crect x='246' y='98' width='54' height='78'/%3E%3Crect x='310' y='122' width='72' height='54'/%3E%3Crect x='392' y='78' width='48' height='98'/%3E%3Crect x='450' y='104' width='62' height='72'/%3E%3Crect x='522' y='58' width='42' height='118'/%3E%3Crect x='532' y='48' width='10' height='10'/%3E%3Crect x='576' y='100' width='66' height='76'/%3E%3Crect x='652' y='74' width='52' height='102'/%3E%3Crect x='714' y='114' width='58' height='62'/%3E%3Crect x='782' y='84' width='48' height='92'/%3E%3Crect x='840' y='104' width='60' height='72'/%3E%3C/g%3E%3Cg fill='%23ffd166' opacity='.55'%3E%3Crect x='202' y='60' width='4' height='4'/%3E%3Crect x='212' y='70' width='4' height='4'/%3E%3Crect x='202' y='82' width='4' height='4'/%3E%3Crect x='70' y='80' width='4' height='4'/%3E%3Crect x='80' y='92' width='4' height='4'/%3E%3Crect x='90' y='104' width='4' height='4'/%3E%3Crect x='528' y='68' width='4' height='4'/%3E%3Crect x='538' y='80' width='4' height='4'/%3E%3Crect x='660' y='84' width='4' height='4'/%3E%3Crect x='670' y='96' width='4' height='4'/%3E%3Crect x='788' y='94' width='4' height='4'/%3E%3Crect x='798' y='106' width='4' height='4'/%3E%3Crect x='400' y='88' width='4' height='4'/%3E%3Crect x='410' y='100' width='4' height='4'/%3E%3C/g%3E%3Cg fill='%23ff5ebc' opacity='.5'%3E%3Crect x='74' y='86' width='4' height='4'/%3E%3Crect x='532' y='74' width='4' height='4'/%3E%3Crect x='664' y='90' width='4' height='4'/%3E%3C/g%3E%3Cg fill='%2307021a'%3E%3Cpath d='M46 176c1-24 0-42-4-56l5-2c6 13 7 34 6 58z'/%3E%3Cpath d='M46 112C36 103 24 100 15 103c9 2 20 6 28 12z'/%3E%3Cpath d='M47 111c-2-13-8-23-17-28 5 7 10 17 13 28z'/%3E%3Cpath d='M48 111c3-13 11-22 21-26-7 7-12 16-16 27z'/%3E%3Cpath d='M49 112c10-8 22-10 31-8-8 3-18 7-26 13z'/%3E%3Cpath d='M47 113c-7-5-12-7-19-7 6 2 12 5 16 8z'/%3E%3Cpath d='M48 113c7-6 13-8 20-8-6 2-12 5-16 9z'/%3E%3C/g%3E%3Cg fill='%2307021a'%3E%3Cpath d='M852 176c1-30 0-52-5-70l6-3c7 16 9 42 7 73z'/%3E%3Cpath d='M852 98c-12-10-26-14-37-10 11 3 23 8 33 15z'/%3E%3Cpath d='M853 97c-2-16-10-28-21-34 6 8 12 20 15 34z'/%3E%3Cpath d='M854 97c4-16 13-27 26-31-8 8-14 19-19 31z'/%3E%3Cpath d='M855 98c12-9 26-12 37-9-10 3-22 8-31 15z'/%3E%3Cpath d='M853 99c-8-5-15-8-23-8 7 3 14 6 19 9z'/%3E%3Cpath d='M854 99c8-6 15-9 24-9-7 3-14 6-19 10z'/%3E%3C/g%3E%3C/svg%3E") bottom center/cover no-repeat;opacity:.9}
+.pc-sign{position:relative;text-align:center;padding:38px 0 26px;z-index:1}
+.pc-sign .h{font-size:36px;font-weight:900;letter-spacing:.22em;color:#fff;text-shadow:0 0 2px #fff,0 0 12px var(--pink),0 0 30px var(--mag),0 0 60px rgba(255,46,196,.8);animation:pcneon 4s ease-in-out infinite}
+.pc-sign .s{font-size:8.5px;letter-spacing:.34em;color:#ffd8ef;text-shadow:0 0 10px rgba(255,94,188,.6);margin-top:5px}
+.pc-sign .pc-at{font-size:8px;letter-spacing:.2em;color:rgba(255,255,255,.55);margin-top:8px}
+@keyframes pcneon{0%,100%{text-shadow:0 0 2px #fff,0 0 12px var(--pink),0 0 30px var(--mag),0 0 60px rgba(255,46,196,.8)}50%{text-shadow:0 0 2px #fff,0 0 8px var(--pink),0 0 20px var(--mag),0 0 38px rgba(255,46,196,.55)}}
+.pc-sub{position:relative;margin:14px 0 8px;font-size:10px}
+.pc-shift{position:relative;font-size:10px;padding:8px 10px;margin-bottom:4px;border:1px dashed rgba(255,94,188,.35);border-radius:8px;background:rgba(10,5,20,.55)}
+.pc-board{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px}
+.pc-pimp{position:relative;border-radius:11px;padding:12px 13px;background:rgba(9,4,18,.82);backdrop-filter:blur(6px);border:1px solid rgba(255,94,188,.22);transition:transform .2s,border-color .2s}
+.pc-pimp:hover{transform:translateY(-2px);border-color:rgba(255,94,188,.55)}
+.pc-pimp.crown{border-color:var(--gold);box-shadow:0 0 26px rgba(255,209,102,.22),inset 0 0 22px rgba(255,209,102,.05)}
+.pc-pimp.crippled{border-color:rgba(255,77,125,.45);filter:saturate(.55) brightness(.85)}
+.pc-pimp .av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;border:2px solid currentColor;background:rgba(0,0,0,.35);flex-shrink:0}
+.pc-badge{font-size:7.5px;letter-spacing:.14em;padding:2px 7px;border-radius:3px;font-weight:800;white-space:nowrap}
+.pc-badge.king{background:linear-gradient(135deg,#ffd166,#ff9d3d);color:#1a0d00;box-shadow:0 0 14px rgba(255,209,102,.5)}
+.pc-badge.broke{background:rgba(255,77,125,.14);color:var(--red);border:1px solid rgba(255,77,125,.45)}
+.pc-badge.hustle{border:1px solid rgba(255,94,188,.3);color:var(--pink)}
+.pc-stars{color:var(--gold);font-size:9px;letter-spacing:2.5px;text-shadow:0 0 8px rgba(255,209,102,.6)}
+.pc-girls{position:relative;display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:8px}
+.pc-girl{position:relative;border-radius:10px;background:rgba(9,4,18,.78);border:1px solid rgba(140,120,255,.16);padding:10px 11px;overflow:hidden;transition:transform .2s,border-color .2s}
+.pc-girl:hover{transform:translateY(-2px);border-color:rgba(255,94,188,.55)}
+.pc-girl.topgirl{border-color:rgba(255,209,102,.5)}
+.pc-girl.topgirl::before{content:"TOP GIRL";position:absolute;top:9px;right:-26px;transform:rotate(35deg);background:linear-gradient(135deg,#ffd166,#ff9d3d);color:#1a0d00;font-size:7px;font-weight:900;letter-spacing:.1em;padding:2px 28px;box-shadow:0 0 12px rgba(255,209,102,.4)}
+.pc-girl .av{width:32px;height:32px;border-radius:8px;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(255,94,188,.28),rgba(34,229,255,.2));border:1px solid rgba(255,94,188,.45);color:#ffd8ef;flex-shrink:0}
+.pc-girl.free{border-style:dashed;opacity:.75}
+.pc-wire{position:relative;border-left:2px solid rgba(255,46,196,.45);padding-left:11px}
+.pc-wire .w{display:flex;justify-content:space-between;gap:10px;padding:4.5px 0;border-bottom:1px dashed rgba(255,94,188,.13);font-size:10.5px}
 </style>
 </head>
 <body>
@@ -532,13 +566,19 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="sub" id="vaultNote" style="margin-top:8px;font-size:10px"></div>
   </div>
-  <div class="panel neon" id="pimpPanel" style="margin-top:16px;display:none">
-    <div class="ptitle">🚦 PIMP CITY · the crackwhore economy <span class="sub">— every girl is a strategy persona · net-after-fees decides who wears the crown, who gets crippled, who steals the playbook, and who gets retired</span><span id="pimpAt" class="sub" style="float:right"></span></div>
-    <div id="pimpBoard" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-bottom:10px"></div>
-    <div id="pimpWorking" style="margin-bottom:6px"></div>
-    <div class="jscroll" style="max-height:360px"><table><thead><tr><th>Girl</th><th>Vibe</th><th>Works for</th><th>Net</th><th>W/L</th><th>Tricks</th><th>Steals</th><th>Gen</th></tr></thead><tbody id="pimpGirls"></tbody></table></div>
-    <div class="ptitle" style="font-size:9px;margin:10px 0 4px">Street wire <span class="sub">— the beef, the steals, the retirements, live from the corner</span></div>
-    <div id="pimpDrama" class="sub" style="font-size:10px;max-height:190px;overflow-y:auto"></div>
+  <div class="panel" id="pimpPanel" style="margin-top:16px;display:none">
+    <div class="pc-sign">
+      <div class="h">PIMP CITY</div>
+      <div class="s">THE CRACKWHORE ECONOMY · REALIZED NET-AFTER-FEES IS THE ONLY CURRENCY</div>
+      <div id="pimpAt" class="pc-at"></div>
+    </div>
+    <div id="pimpWorking" class="pc-shift" style="display:none"></div>
+    <div class="ptitle pc-sub">🌴 KINGPINS <span class="sub">— every pimp runs a stable · the crown boosts his girls' slots, crippled gets docked</span></div>
+    <div id="pimpBoard" class="pc-board"></div>
+    <div class="ptitle pc-sub">💋 THE STABLE <span class="sub">— every girl is a strategy persona · earn, steal playbooks, get poached or retired</span></div>
+    <div id="pimpGirls" class="pc-girls"></div>
+    <div class="ptitle pc-sub">🚔 STREET WIRE <span class="sub">— the beef, the steals, the retirements — live from the corner</span></div>
+    <div id="pimpDrama" class="pc-wire" style="max-height:200px;overflow-y:auto"></div>
   </div>
   <div class="panel pro" id="edgePanel" style="margin-top:16px;display:none">
     <div class="ptitle">⚖️ Payoff engine · empirical edge × Monte Carlo <span class="sub">— fitted entry edge gates and scales every entry · ladder profile re-picked by billion-roll evidence each 30min</span><span id="edgeSub" class="sub" style="float:right"></span></div>
@@ -1246,22 +1286,43 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     // currency the corner respects. Data: api/pimp-war.json each cycle ----
     if(pimpW&&(pimpW.pimps||[]).length){
       $('pimpPanel').style.display='block';
-      $('pimpAt').textContent=pimpW.at?'corner report '+ago(Date.parse(pimpW.at))+' ago':'';
+      $('pimpAt').textContent=pimpW.at?'LIVE WIRE · '+ago(Date.parse(pimpW.at))+' ago':'';
+      const PIMP_COL={'Silky Slim':'var(--cyan)','Madam Razor':'var(--pink)','Cold Cash Cole':'var(--gold)','Big Daddy Kane':'var(--vio)','Fancy Red':'var(--grn)'};
+      const heat=p=>{const t=(p.wins||0)+(p.losses||0);return t?Math.min(5,Math.max(1,Math.round(t/2))):0};
       $('pimpBoard').innerHTML=pimpW.pimps.map(p=>{
-        const col=p.crown?'var(--gold)':p.crippled?'var(--red)':'var(--mut)';
-        const badge=p.crown?'👑 CROWN':p.crippled?'💀 CRIPPLED':'&nbsp;';
-        return `<div style="border:1px solid ${p.crown?'rgba(255,200,60,.55)':p.crippled?'rgba(255,80,80,.4)':'var(--line)'};border-radius:10px;padding:10px 12px;background:rgba(0,0,0,.22)">
-          <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:12px">${esc(p.name)}</b><span style="color:${col};font-size:9px;letter-spacing:.12em">${badge}</span></div>
-          <div class="num" style="font-size:19px;font-weight:800;color:${p.net>=0?'var(--grn)':'var(--red)'}">${p.net>=0?'+':''}$${(+p.net).toFixed(2)}</div>
+        const col=PIMP_COL[p.name]||'var(--mut)';
+        const st=heat(p),stars='★'.repeat(st)+'<span style="opacity:.25">'+'★'.repeat(5-st)+'</span>';
+        const badge=p.crown?'<span class="pc-badge king">👑 KINGPIN</span>':p.crippled?'<span class="pc-badge broke">💀 CRIPPLED</span>':'<span class="pc-badge hustle">HUSTLIN</span>';
+        return `<div class="pc-pimp${p.crown?' crown':''}${p.crippled?' crippled':''}">
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="av" style="color:${col}">${esc((p.name||'?')[0])}</div>
+            <div style="flex:1;min-width:0"><b style="font-size:12px;letter-spacing:.04em">${esc(p.name)}</b>
+            <div class="pc-stars">${stars}</div></div>
+            ${badge}
+          </div>
+          <div class="num" style="font-size:21px;font-weight:800;margin:6px 0 2px;color:${p.net>=0?'var(--grn)':'var(--red)'}">${p.net>=0?'+':''}$${(+p.net).toFixed(2)}</div>
           <div class="sub" style="font-size:9px">${p.wins}W / ${p.losses}L · stable: ${(p.roster||[]).map(g=>esc(g)).join(' · ')||'<i>empty corner</i>'}</div>
         </div>`;}).join('');
-      $('pimpWorking').innerHTML=(pimpW.intents&&pimpW.intents.length)
-        ?'<div class="sub" style="font-size:10px">💼 on shift: '+pimpW.intents.map(i=>`<b style="color:var(--fg)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; ')+'</div>'
+      const shift=(pimpW.intents||[]);
+      $('pimpWorking').style.display=shift.length?'block':'none';
+      $('pimpWorking').innerHTML=shift.length
+        ?'💼 <b>ON SHIFT:</b> '+shift.map(i=>`<b style="color:var(--pink)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; ')
         :'';
-      $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>
-        `<tr><td><b>${esc(c.name)}</b></td><td class="sub">${esc(c.tag||'')}</td><td>${esc(c.pimp||'— free agent —')}</td><td class="num" style="color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</td><td class="num">${c.wins}/${c.losses}</td><td class="num">${c.closes}</td><td class="num">${c.stolen?'📓'+c.stolen:'—'}</td><td class="num">${c.gen?'g'+c.gen:'—'}</td></tr>`).join('');
+      const leader=(pimpW.cracks||[]).find(c=>c.closes>0);
+      $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>{
+        const pcol=PIMP_COL[c.pimp]||'var(--mut)';
+        const top=leader&&c.name===leader.name;
+        return `<div class="pc-girl${top?' topgirl':''}${c.pimp?'':' free'}">
+          <div style="display:flex;gap:9px;align-items:center;margin-bottom:5px">
+            <div class="av">${esc((c.name||'?')[0])}</div>
+            <div style="flex:1;min-width:0"><b style="font-size:11px">${esc(c.name)}</b>
+            <div class="sub" style="font-size:8.5px">${esc(c.tag||'')}</div></div>
+          </div>
+          <div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>
+          <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}</div>
+        </div>`;}).join('');
       $('pimpDrama').innerHTML=(pimpW.drama||[]).map(d=>
-        `<div class="ledger-row"><span>${errTxt(d.text)}</span><span style="opacity:.55;font-size:9px;white-space:nowrap">${ago(d.ts)}</span></div>`).join('')
+        `<div class="w"><span>${errTxt(d.text)}</span><span style="opacity:.5;white-space:nowrap">${ago(d.ts)}</span></div>`).join('')
         ||'<div class="sub">quiet on the corner…</div>';
     }
     // ---- SENTINEL MIND — the bot's inner voice in plain english ----
