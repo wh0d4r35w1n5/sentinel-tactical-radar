@@ -88,5 +88,28 @@ const mkWar = () => {
   }
 }
 
+// --- 7. free agents nominate and get credited without a pimp
+{
+  const war = mkWar();
+  war.cracks['Fastlane Faye'] = { w: { score: 1.2, chg: 5, mom: 2, stratW: 8, strat: 'Momentum' }, tag: 't', pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0 };
+  const cand = [{ symbol: 'PUMPUSDT', score: 8, changePct: 9, mktType: 'side-normal', strategy: 'Momentum' }];
+  const noms = pc.nominate(war, cand, 1);
+  const fa = noms.find((n) => n.crack === 'Fastlane Faye');
+  ok(!!fa, 'free agent nominates');
+  ok(fa && fa.pimp === null, 'free agent nom has no pimp');
+  // attribution credits her, no pimp row touched
+  war.intents.push({ symbol: 'PUMPUSDT', direction: 'LONG', ts: 1000, pimp: null, crack: 'Fastlane Faye' });
+  pc.attribute(war, [{ tradeId: 'o1', tradeSide: 'open', symbol: 'PUMPUSDT', ts: 1100, fee: 0.02, profit: 0 }, { tradeId: 'c1', tradeSide: 'close', symbol: 'PUMPUSDT', ts: 2000, fee: 0.02, profit: 0.30 }]);
+  ok(Math.abs(war.cracks['Fastlane Faye'].net - 0.26) < 1e-9, `freelance attr: expected 0.26 got ${war.cracks['Fastlane Faye'].net}`);
+  ok(war.pimps['Silky Slim'].net === 0, 'freelance attr: no pimp cut');
+}
+
+// --- 8. loadWar injects new stable girls into saved wars as free agents
+{
+  const war = pc.loadWar();
+  for (const n of ['Fastlane Faye', 'Bolt Betsy', 'Sprint Santana'])
+    ok(!!war.cracks[n], `loadWar merged ${n}`);
+}
+
 console.log(`\n${pass} pass · ${fail} fail`);
 process.exit(fail ? 1 : 0);

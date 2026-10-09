@@ -2457,7 +2457,7 @@ async function main() {
           }
           for (const c of cand) if (!nomCand.some((n) => n.symbol === c.symbol)) nomCand.push(c);
           cand = nomCand;
-          state.actions.push(`🌆 pimpcity: ${noms.slice(0, slotsAvail).map((n) => `${n.pimp} fields ${n.crack}→${n.cand.symbol}`).join(' · ')}`);
+          state.actions.push(`🌆 pimpcity: ${noms.slice(0, slotsAvail).map((n) => `${n.pimp ? `${n.pimp} fields` : 'freelance'} ${n.crack}→${n.cand.symbol}`).join(' · ')}`);
         }
       } catch (e) { state.errors.push('pimpcity: ' + e.message); }
       const perSlotUsd = marginFree / slotsAvail;
@@ -2479,8 +2479,8 @@ async function main() {
             strategy: 'slot-deploy', core: true, mandate: true,
             pimp: c.pimp, crack: c.crack,
           });
-          if (war && c.pimp) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp, crack: c.crack });
-          state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long${c.pimp ? ` · ${c.crack} working for ${c.pimp}` : ` (score ${c.score})`} · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
+          if (war && (c.pimp || c.crack)) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp || null, crack: c.crack });
+          state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long${c.crack ? ` · ${c.crack}${c.pimp ? ` working for ${c.pimp}` : ' freelance (no pimp)'}` : ` (score ${c.score})`} · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
           picked++;
         } catch { /* ticker dead — next candidate */ }
       }
