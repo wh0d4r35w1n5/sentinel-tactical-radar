@@ -1308,7 +1308,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const shift=(pimpW.intents||[]);
       const live=shift.filter(i=>i.live),pend=shift.filter(i=>!i.live);
       $('pimpWorking').style.display=shift.length?'block':'none';
-      $('pimpWorking').innerHTML=(live.length?`💼 <b>ON SHIFT — position open:</b> `+live.map(i=>`<b style="color:var(--grn)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp||'freelance')}</span>`).join(' &nbsp;·&nbsp; '):'')
+      $('pimpWorking').innerHTML=(live.length?`💼 <b>ON SHIFT — position open:</b> `+live.map(i=>`<b style="color:var(--grn)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp||'freelance')}${i.orderId?` · #${esc(String(i.orderId).slice(-6))}`:''}</span>`).join(' &nbsp;·&nbsp; '):'')
         +(pend.length?`${live.length?'<br>':''}📋 <b>NOMINATED — awaiting fill:</b> `+pend.map(i=>`<b style="color:var(--pink);opacity:.75">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp||'freelance')}</span>`).join(' &nbsp;·&nbsp; '):'');
       const leader=(pimpW.cracks||[]).find(c=>c.closes>0&&c.net>0);
       $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>{
@@ -1321,7 +1321,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
             <div class="sub" style="font-size:8.5px">${esc(c.tag||'')}</div></div>
           </div>
           <div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>
-          <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}</div>
+          <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}${+c.form>0.15?' · 🔥 hot':+c.form<-0.15?' · 🧊 cold':''}</div>
         </div>`;}).join('');
       const ret=(pimpW.retired||[]);
       $('pimpRetired').style.display=ret.length?'block':'none';

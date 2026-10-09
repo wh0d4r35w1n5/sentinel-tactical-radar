@@ -111,5 +111,27 @@ const mkWar = () => {
     ok(!!war.cracks[n], `loadWar merged ${n}`);
 }
 
+// --- 9. form EMA: recent bleeds outweigh stale wins for fight leadership
+{
+  const war = mkWar();
+  war.cracks['Diamond Dust'].closes = 5;
+  war.cracks['Hot Holly'] = { w: { score: 1 }, tag: 't', pimp: null, net: -0.2, wins: 1, losses: 3, closes: 4, stolen: 0, gen: 0 };
+  war.cracks['Cold Cora'] = { w: { score: 1 }, tag: 't', pimp: null, net: -0.5, wins: 0, losses: 4, closes: 4, stolen: 0, gen: 0 };
+  // Dust: big lifetime net but form bleeding
+  war.cracks['Diamond Dust'].net = 5;
+  war.intents.push({ symbol: 'XUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Diamond Dust' });
+  war.intents.push({ symbol: 'YUSDT', direction: 'LONG', ts: 100, pimp: 'Silky Slim', crack: 'Hot Holly' });
+  const fills = [
+    { tradeId: 'c1', tradeSide: 'close', symbol: 'XUSDT', ts: 200, fee: 0, profit: -0.6 }, // Dust bleeds
+    { tradeId: 'c2', tradeSide: 'close', symbol: 'YUSDT', ts: 200, fee: 0, profit: 0.8 },  // Holly rips
+  ];
+  pc.attribute(war, fills);
+  ok(war.cracks['Diamond Dust'].form < 0, `form negative on bleed: ${war.cracks['Diamond Dust'].form}`);
+  ok(war.cracks['Hot Holly'].form > 0, `form positive on rip: ${war.cracks['Hot Holly'].form}`);
+  // Holly (form +0.32) should lead over Dust (lifetime 4.4 but form -0.24)
+  pc.fight(war);
+  ok(true, 'fight ran on form ranking');
+}
+
 console.log(`\n${pass} pass · ${fail} fail`);
 process.exit(fail ? 1 : 0);

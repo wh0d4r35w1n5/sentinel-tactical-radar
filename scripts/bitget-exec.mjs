@@ -582,15 +582,29 @@ async function main() {
       for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
       // reconcile intents vs the fill journal: a nomination earns "on
       // shift" only with a matching open fill AND a live position —
-      // queued-never-filled nominations stay pending, expire at 15min
+      // queued-never-filled nominations stay pending, expire at 15min.
+      // Preferred bind: intent.coid → orderMap (exchange orderId written at
+      // submit) → fill.orderId — deterministic. Fallback: newest engine
+      // open fill on the symbol (src 'api' or legacy-unknown — never a
+      // manual ios/android/web fill).
       for (const it of war.intents || []) {
         if (it.filledAt == null) {
-          const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
-          if (of) it.filledAt = +of.ts || Date.now();
+          const ids = it.coid
+            ? [it.coid, it.coid + 'r', it.coid + 'm'].map((k) => war.orderMap?.[k]).filter(Boolean)
+            : [];
+          const of = ids.length
+            ? [...warFills].reverse().find((f) => f.tradeSide === 'open' && ids.includes(String(f.orderId)))
+            : [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol
+                && !/ios|android|web/i.test(f.src || '') && (+f.ts || 0) >= it.ts - 60e3);
+          if (of) { it.filledAt = +of.ts || Date.now(); if (of.orderId) it.orderId = String(of.orderId); }
         }
         it.live = it.filledAt != null && openSyms.has(it.symbol);
       }
       war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+      // orderMap is a bridge, not a ledger — bound intents don't need it
+      // anymore; cap the map so a long session can't grow it unbounded
+      const omk = Object.keys(war.orderMap || {});
+      if (omk.length > 200) for (const k of omk.slice(0, omk.length - 200)) delete war.orderMap[k];
       try { pc.saveWar(war); } catch {}
     } catch (e) { state.errors.push('pimpcity: ' + e.message); }
   };
@@ -2479,7 +2493,10 @@ async function main() {
             strategy: 'slot-deploy', core: true, mandate: true,
             pimp: c.pimp, crack: c.crack,
           });
-          if (war && (c.pimp || c.crack)) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp || null, crack: c.crack });
+          // deterministic persona binding: the order's clientOid is
+          // s{plan.ts}{SYMBOL} — stamp it on the intent so the reconcile can
+          // bind the fill by order id, not a timestamp guess
+          if (war && (c.pimp || c.crack)) (war.intents || (war.intents = [])).push({ symbol: c.symbol, direction: 'LONG', ts: Date.now(), pimp: c.pimp || null, crack: c.crack, coid: `s${plan.ts}${c.symbol}`.slice(0, 38) });
           state.actions.push(`📌 SLOT-FILL mandate — $${round(perSlotUsd, 2)} margin into ${c.symbol} long${c.crack ? ` · ${c.crack}${c.pimp ? ` working for ${c.pimp}` : ' freelance (no pimp)'}` : ` (score ${c.score})`} · ${CORE_LEV}x · stop ${CORE_STOP_PCT}% · slot ${picked + 1}/${slotsAvail}`);
           picked++;
         } catch { /* ticker dead — next candidate */ }
@@ -2850,6 +2867,7 @@ async function main() {
               const pull = touch * (1 - (sgn * PULLBACK_PCT) / 100);
               const lo = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', size, round(pull, cm[o.symbol]?.pricePlace ?? 6), { clientOid: coid });
               const oid = String(lo?.orderId || '');
+              if (war && (o.pimp || o.crack) && oid) (war.orderMap ||= {})[coid] = oid;
               await new Promise((r) => setTimeout(r, 2500));
               let still = (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid);
               if (still) {
@@ -2868,6 +2886,7 @@ async function main() {
                   if (touch2 > 0) {
                     const lo2 = await limitOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, round(touch2, cm[o.symbol]?.pricePlace ?? 6), { clientOid: (coid + 'r').slice(0, 38) }).catch(() => null);
                     const oid2 = String(lo2?.orderId || '');
+                    if (war && (o.pimp || o.crack) && oid2) (war.orderMap ||= {})[(coid + 'r').slice(0, 38)] = oid2;
                     await new Promise((r) => setTimeout(r, 2000));
                     const still2 = oid2 ? (await pendingOrders(o.symbol).catch(() => [])).find((x) => String(x.orderId) === oid2) : null;
                     if (still2) {
@@ -2882,9 +2901,10 @@ async function main() {
           } catch { /* limit path failed — taker covers full size below */ }
         }
         if (needSize > 0) {
-          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup || o.mandate)
-            await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
-          else {
+          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup || o.mandate) {
+            const mo = await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
+            if (war && (o.pimp || o.crack) && mo?.orderId) (war.orderMap ||= {})[(coid + 'm').slice(0, 38)] = String(mo.orderId);
+          } else {
             state.actions.push(`${o.symbol}: 🛡️ pullback unfilled — no market chase at edge ${EDGE_LIVE.v.toFixed(2)} < ${CHASE_EDGE}`);
             continue;
           }
@@ -3335,6 +3355,7 @@ async function main() {
       seen.add(id);
       const rec = {
         tradeId: id,
+        orderId: f.orderId != null ? String(f.orderId) : null,
         symbol: f.symbol,
         side: f.side,
         price: +f.price,
