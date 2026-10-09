@@ -68,10 +68,17 @@ export function loadWar() {
   return freshWar();
 }
 
+// atomic write — a mid-write kill must never leave a truncated json
+// (same failure class that corrupted the vault file once)
+const atomicWrite = (p, s) => {
+  const t = p + '.tmp';
+  fs.writeFileSync(t, s);
+  fs.renameSync(t, p);
+};
 export function saveWar(w) {
-  try { fs.writeFileSync(WAR_PATH, JSON.stringify(w)); } catch {}
+  try { atomicWrite(WAR_PATH, JSON.stringify(w)); } catch {}
   try {
-    fs.writeFileSync(API_PATH, JSON.stringify({
+    atomicWrite(API_PATH, JSON.stringify({
       at: new Date().toISOString(),
       pimps: Object.entries(w.pimps).map(([name, p]) => ({
         name, roster: p.roster, net: +p.net.toFixed(4), wins: p.wins, losses: p.losses,
@@ -86,6 +93,16 @@ export function saveWar(w) {
     }, null, 1));
   } catch {}
 }
+
+// numeric playbook keys blend; non-numeric genes (strat regex strings)
+// copy verbatim — 'Momentum|Ignition' * 0.4 is NaN, not a playbook
+const blendW = (dst, src, k = 0.4) => {
+  for (const key of Object.keys(src)) {
+    const sv = +src[key];
+    if (Number.isFinite(sv) && Number.isFinite(+dst[key])) dst[key] = +dst[key] * (1 - k) + sv * k;
+    else if (dst[key] == null) dst[key] = src[key];
+  }
+};
 
 const say = (w, text) => {
   w.drama.push({ ts: Date.now(), text });
@@ -143,7 +160,11 @@ export function attribute(war, fills, log = () => {}) {
   const done = new Set(war.attributed || (war.attributed = []));
   let moved = false;
   for (const f of fills) {
-    if (!f || f.tradeSide !== 'close' || !f.tradeId || done.has(f.tradeId)) continue;
+    // closes arrive two ways on Bitget: tradeSide 'close' or profit!=0
+    // (same hedge the exec's episode builder uses — miss it and whole
+    // trades go unattributed)
+    const isClose = f && (f.tradeSide === 'close' || (+f.profit || 0) !== 0);
+    if (!isClose || !f.tradeId || done.has(f.tradeId)) continue;
     // newest open intent on this symbol before the close
     let hit = null;
     for (let i = intents.length - 1; i >= 0; i--) {
@@ -181,18 +202,24 @@ export function fight(war, log = () => {}) {
   for (const [lname, lc] of losers) {
     if (lname === leader[0]) continue;
     const before = JSON.stringify(lc.w);
-    for (const k of Object.keys(leader[1].w)) lc.w[k] = +(lc.w[k] ?? 0) * 0.6 + (leader[1].w[k] ?? 0) * 0.4;
-    lc.stolen++;
-    if (lc.w.strat == null && leader[1].w.strat) lc.w.strat = leader[1].w.strat;
-    if (JSON.stringify(lc.w) !== before)
-      lines.push(`📓 ${lname} stole ${leader[0]}'s playbook — third time this week the corner talks about it`);
+    blendW(lc.w, leader[1].w);
+    if (JSON.stringify(lc.w) !== before) {
+      lc.stolen++;
+      // same theft every cycle isn't news — the wire hears about it hourly
+      if (Date.now() - (lc.lastStealAt || 0) > 3600e3) {
+        lc.lastStealAt = Date.now();
+        lines.push(`📓 ${lname} stole ${leader[0]}'s playbook — third time this week the corner talks about it`);
+      }
+    }
   }
 
-  // --- pimp standings: crown + crippled
+  // --- pimp standings: crown is earned in green, crippled in red —
+  // nobody wears a badge on a flat book
   const pimpRows = Object.entries(war.pimps).sort((a, b) => b[1].net - a[1].net);
   for (const [name, p] of pimpRows) { p.crown = false; p.crippled = false; }
-  pimpRows[0][1].crown = true;
-  pimpRows[pimpRows.length - 1][1].crippled = true;
+  if (pimpRows[0][1].net > 0) pimpRows[0][1].crown = true;
+  const botP = pimpRows[pimpRows.length - 1][1];
+  if (botP.net < 0) botP.crippled = true;
 
   // --- poach: the leader girl gets stolen if her pimp is bottom-half
   const [leadName, leadCrack] = leader;
@@ -217,11 +244,26 @@ export function fight(war, log = () => {}) {
     const used = new Set(Object.keys(war.cracks));
     const fresh = BENCH_NAMES.find((n) => !used.has(n)) || `Mutant ${war.gen}`;
     const mutant = { w: {}, tag: 'spawn of ' + worstName, pimp: worst.pimp, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: war.gen };
-    for (const k of Object.keys(leader[1].w)) mutant.w[k] = (leader[1].w[k] ?? 0) * (0.7 + Math.random() * 0.6);
+    for (const k of Object.keys(leader[1].w)) {
+      const sv = +leader[1].w[k];
+      mutant.w[k] = Number.isFinite(sv) ? sv * (0.7 + Math.random() * 0.6) : leader[1].w[k];
+    }
     if (pimp) pimp.roster.push(fresh);
     mutant.pimp = worst.pimp;
     war.cracks[fresh] = mutant;
-    lines.push(`⚰️ ${worstName} got retired — $${worst.net.toFixed(2)} net, ${worst.closes} tricks. ${worst.pimp} brings in ${fresh} (gen ${war.gen}, carrying ${leadName}'s playbook with street mutations)`);
+    lines.push(`⚰️ ${worstName} got retired — $${worst.net.toFixed(2)} net, ${worst.closes} tricks. ${worst.pimp || 'The street'} brings in ${fresh} (gen ${war.gen}, carrying ${leadName}'s playbook with street mutations)`);
+  }
+
+  // --- free agents get recruited: any pimp short-handed after the poach
+  // and retirement picks the best girl standing unowned. Without this the
+  // freelance pool is dead weight and rosters can drain to empty.
+  const free = Object.entries(war.cracks).filter(([, c]) => !c.pimp).sort((a, b) => b[1].net - a[1].net);
+  for (const [pname, p] of Object.entries(war.pimps)) {
+    if ((p.roster || []).length >= 2 || !free.length) continue;
+    const [gname, girl] = free.shift();
+    p.roster.push(gname);
+    girl.pimp = pname;
+    lines.push(`🤝 ${pname} picked ${gname} up off the street — free agent no more, she's got a corner now`);
   }
 
   for (const l of lines) { say(war, l); log(l); }
