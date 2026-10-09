@@ -577,6 +577,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="pimpBoard" class="pc-board"></div>
     <div class="ptitle pc-sub">💋 THE STABLE <span class="sub">— every girl is a strategy persona · earn, steal playbooks, get poached or retired</span></div>
     <div id="pimpGirls" class="pc-girls"></div>
+    <div id="pimpRetired" class="sub" style="display:none;font-size:9.5px;margin:6px 0 2px;opacity:.75"></div>
     <div class="ptitle pc-sub">🚔 STREET WIRE <span class="sub">— the beef, the steals, the retirements — live from the corner</span></div>
     <div id="pimpDrama" class="pc-wire" style="max-height:200px;overflow-y:auto"></div>
   </div>
@@ -1286,7 +1287,8 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     // currency the corner respects. Data: api/pimp-war.json each cycle ----
     if(pimpW&&(pimpW.pimps||[]).length){
       $('pimpPanel').style.display='block';
-      $('pimpAt').textContent=pimpW.at?'LIVE WIRE · '+ago(Date.parse(pimpW.at))+' ago':'';
+      const reportAt=Date.parse(pimpW.at);
+      $('pimpAt').textContent=Number.isFinite(reportAt)?(Date.now()-reportAt>15*60e3?'STALE REPORT':'LATEST REPORT')+' · '+ago(reportAt)+' ago · totals exclude opening fees and funding':'REPORT TIME UNKNOWN';
       const PIMP_COL={'Silky Slim':'var(--cyan)','Madam Razor':'var(--pink)','Cold Cash Cole':'var(--gold)','Big Daddy Kane':'var(--vio)','Fancy Red':'var(--grn)'};
       const heat=p=>{const t=(p.wins||0)+(p.losses||0);return t?Math.min(5,Math.max(1,Math.round(t/2))):0};
       $('pimpBoard').innerHTML=pimpW.pimps.map(p=>{
@@ -1304,11 +1306,11 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           <div class="sub" style="font-size:9px">${p.wins}W / ${p.losses}L · stable: ${(p.roster||[]).map(g=>esc(g)).join(' · ')||'<i>empty corner</i>'}</div>
         </div>`;}).join('');
       const shift=(pimpW.intents||[]);
+      const live=shift.filter(i=>i.live),pend=shift.filter(i=>!i.live);
       $('pimpWorking').style.display=shift.length?'block':'none';
-      $('pimpWorking').innerHTML=shift.length
-        ?'💼 <b>ON SHIFT:</b> '+shift.map(i=>`<b style="color:var(--pink)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; ')
-        :'';
-      const leader=(pimpW.cracks||[]).find(c=>c.closes>0);
+      $('pimpWorking').innerHTML=(live.length?`💼 <b>ON SHIFT — position open:</b> `+live.map(i=>`<b style="color:var(--grn)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; '):'')
+        +(pend.length?`${live.length?'<br>':''}📋 <b>NOMINATED — awaiting fill:</b> `+pend.map(i=>`<b style="color:var(--pink);opacity:.75">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp)}</span>`).join(' &nbsp;·&nbsp; '):'');
+      const leader=(pimpW.cracks||[]).find(c=>c.closes>0&&c.net>0);
       $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>{
         const pcol=PIMP_COL[c.pimp]||'var(--mut)';
         const top=leader&&c.name===leader.name;
@@ -1321,6 +1323,9 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           <div class="num" style="font-size:17px;font-weight:800;color:${c.net>=0?'var(--grn)':'var(--red)'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</div>
           <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}</div>
         </div>`;}).join('');
+      const ret=(pimpW.retired||[]);
+      $('pimpRetired').style.display=ret.length?'block':'none';
+      $('pimpRetired').innerHTML=ret.length?`⚰️ <b>RETIRED:</b> `+ret.map(c=>`${esc(c.name)} <span style="opacity:.6">(${c.wins}W/${c.losses}L · ${c.closes} tricks · ${c.net>=0?'+':''}$${(+c.net).toFixed(2)} net${c.pimp?' · was '+esc(c.pimp)+"'s":''})</span>`).join(' · '):'';
       $('pimpDrama').innerHTML=(pimpW.drama||[]).map(d=>
         `<div class="w"><span>${errTxt(d.text)}</span><span style="opacity:.5;white-space:nowrap">${ago(d.ts)} ago</span></div>`).join('')
         ||'<div class="sub">quiet on the corner…</div>';

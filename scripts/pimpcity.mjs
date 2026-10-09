@@ -46,7 +46,7 @@ const BAD_MKT = new Set(['bull-volatile']);
 const isMajor = (sym) => /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE)L?USDT$/i.test(sym);
 
 function freshWar() {
-  const war = { pimps: {}, cracks: {}, intents: [], drama: [], gen: 0 };
+  const war = { pimps: {}, cracks: {}, retired: {}, intents: [], drama: [], gen: 0 };
   const girls = CRACK_STABLE.map((c) => c.name);
   PIMP_NAMES.forEach((p, i) => {
     const roster = girls.slice(i * 2, i * 2 + 2);
@@ -85,6 +85,10 @@ export function saveWar(w) {
         crown: p.crown, crippled: p.crippled,
       })).sort((a, b) => b.net - a.net),
       cracks: Object.entries(w.cracks).map(([name, c]) => ({
+        name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
+        losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
+      })).sort((a, b) => b.net - a.net),
+      retired: Object.entries(w.retired || {}).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
       })).sort((a, b) => b.net - a.net),
@@ -158,6 +162,9 @@ export function attribute(war, fills, log = () => {}) {
   const lines = [];
   const intents = war.intents || (war.intents = []);
   const done = new Set(war.attributed || (war.attributed = []));
+  // entry fills charged already — a position closed in N clips must pay
+  // its entry leg once, not once per clip
+  const feeSeen = new Set(war.feeSeen || (war.feeSeen = []));
   let moved = false;
   for (const f of fills) {
     // closes arrive two ways on Bitget: tradeSide 'close' or profit!=0
@@ -174,16 +181,30 @@ export function attribute(war, fills, log = () => {}) {
     if (!hit) { done.add(f.tradeId); continue; }
     done.add(f.tradeId);
     moved = true;
-    const net = (+f.profit || 0) - (+f.fee || 0);
-    const cr = war.cracks[hit.crack], pm = war.pimps[hit.pimp];
+    // round-trip fee truth: the entry leg is journaled as an 'open' fill on
+    // the same symbol+direction between the nomination and this close —
+    // charge it, or the board scores every trick half-priced.
+    let entryFee = 0;
+    for (const of2 of fills) {
+      if (of2.tradeSide !== 'open' || of2.symbol !== f.symbol || !of2.tradeId || feeSeen.has(of2.tradeId)) continue;
+      const ots = +of2.ts || 0;
+      if (ots >= hit.ts && ots <= f.ts) { entryFee += +of2.fee || 0; feeSeen.add(of2.tradeId); }
+    }
+    const net = (+f.profit || 0) - (+f.fee || 0) - entryFee;
+    // retired girls keep their record — a persona's lifetime result must
+    // survive her removal from the active stable (retirement is a verdict,
+    // not an erasure)
+    const cr = war.cracks[hit.crack] || (war.retired || {})[hit.crack];
+    const pm = war.pimps[hit.pimp];
     if (!cr || !pm) continue;
     cr.net += net; cr.closes++;
     if (net >= 0) cr.wins++; else cr.losses++;
     pm.net += net;
     if (net >= 0) pm.wins++; else pm.losses++;
-    lines.push(`💰 ${hit.crack} (working for ${hit.pimp}) banked ${net >= 0 ? '+' : ''}$${net.toFixed(2)} on ${f.symbol}${net < 0 ? ' — docked her pay' : ''}`);
+    lines.push(`💰 ${hit.crack} (working for ${hit.pimp}) banked ${net >= 0 ? '+' : ''}$${net.toFixed(2)} on ${f.symbol}${entryFee > 0 ? ` incl $${entryFee.toFixed(3)} entry fees` : ''}${net < 0 ? ' — docked her pay' : ''}`);
   }
   war.attributed = [...done].slice(-800);
+  war.feeSeen = [...feeSeen].slice(-800);
   war.intents = intents.slice(-60);
   if (moved) for (const l of lines.slice(-3)) { say(war, l); log(l); }
   return lines;
@@ -239,6 +260,9 @@ export function fight(war, log = () => {}) {
   if (worst.closes >= 4 && worst.net < -0.5) {
     const pimp = war.pimps[worst.pimp];
     if (pimp) pimp.roster = pimp.roster.filter((g) => g !== worstName);
+    // archive, not delete — her lifetime record survives so late-attributing
+    // closes still land, and the dashboard can show who got retired and why
+    (war.retired || (war.retired = {}))[worstName] = { ...worst, retiredAt: Date.now() };
     delete war.cracks[worstName];
     war.gen++;
     const used = new Set(Object.keys(war.cracks));

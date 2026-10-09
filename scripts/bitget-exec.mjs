@@ -2395,8 +2395,20 @@ async function main() {
     try {
       pc = await import('./pimpcity.mjs');
       war = pc.loadWar();
-      for (const l of pc.attribute(war, loadFills())) state.actions.push('🌆 ' + l);
+      const warFills = loadFills();
+      for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
       for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
+      // reconcile intents against the fill journal: a nomination earns
+      // "on shift" only when a matching open fill exists AND the symbol
+      // still holds a live position — queued-never-filled nominations are
+      // labeled pending and expire after 15min
+      for (const it of war.intents || []) {
+        if (it.filledAt == null) {
+          const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
+          if (of) it.filledAt = +of.ts || Date.now();
+        }
+        it.live = it.filledAt != null && posBySym.has(it.symbol);
+      }
     } catch (e) { state.errors.push('pimpcity: ' + e.message); }
     if (slotsAvail > 0 && marginFree > 0.5) {
       const softOnly = (r) =>
@@ -2458,9 +2470,10 @@ async function main() {
       }
       if (!picked) state.actions.push('📌 SLOT-FILL mandate — no eligible long (all candidates denied/cooling/manual/ambiguous) — slots stay idle');
     }
-    // prune dead intents: a nomination only stays "on shift" while its
-    // position is open or the order is still fresh enough to fill (15min)
-    if (war && war.intents) war.intents = war.intents.filter((it) => posBySym.has(it.symbol) || Date.now() - it.ts < 15 * 60 * 1000);
+    // prune dead intents: live = open position; pending = unfilled but
+    // fresh (<15min); everything else is a dead nomination — drop it so
+    // the dashboard never shows a girl "on shift" who never clocked in
+    if (war && war.intents) war.intents = war.intents.filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
     if (war && pc) { try { pc.saveWar(war); } catch {} }
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
