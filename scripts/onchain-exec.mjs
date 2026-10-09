@@ -40,6 +40,10 @@ const SLIPPAGE_SELL_BPS = +(process.env.ONCHAIN_SLIPPAGE_SELL || 250);
 const KEEP = +(process.env.ONCHAIN_KEEP || 0.72); // trail: keep 72% of peak
 const FEE_LOCK = +(process.env.ONCHAIN_FEE_LOCK || 0.985); // never trail under ~98.5% of cost
 const MAX_HOLD_H = +(process.env.ONCHAIN_MAX_HOLD_H || 36);
+// micro-purse floors — gas on Solana is ~fixed-cent cheap, so a tiny wallet
+// stays economic; env lets the operator scale them up when the purse grows
+const MIN_STABLE_USD = +(process.env.ONCHAIN_MIN_STABLE_USD || 5);
+const MIN_SIZE_USD = +(process.env.ONCHAIN_MIN_SIZE_USD || 4);
 
 const readJ = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const writeJ = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(o)); fs.renameSync(t, f); };
@@ -58,6 +62,22 @@ async function main() {
   const stableUsd = (bal.tokens[sol.MINT.USDC] || 0) + (bal.tokens[sol.MINT.USDT] || 0);
   const deployed = book.positions.reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
   console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
+
+  // bootstrap: funded with raw SOL and no stables → convert most of it to
+  // USDC, keeping a gas reserve. Lets the operator fund with a single SOL
+  // send (CEX SOL withdrawal minimums are tiny vs the $10 USDT floor).
+  const GAS_RESERVE = +(process.env.ONCHAIN_GAS_RESERVE || 0.025);
+  if (stableUsd < MIN_STABLE_USD && bal.sol > GAS_RESERVE + 0.008) {
+    const swapLamports = Math.floor((bal.sol - GAS_RESERVE) * 1e9);
+    console.log(`  bootstrap: swapping ${(swapLamports / 1e9).toFixed(4)} SOL -> USDC (keeping ${GAS_RESERVE} gas)`);
+    try {
+      const r = await sol.swap({ inputMint: sol.MINT.SOL, outputMint: sol.MINT.USDC, amount: swapLamports, slippageBps: 150 });
+      journal({ side: 'bootstrap', usd: 'sol->usdc', lamports: swapLamports, outUsdcRaw: r.outAmount, sig: r.signature });
+      console.log(`  bootstrap filled sig ${r.signature.slice(0, 12)}… — stables land next cycle`);
+    } catch (e) { console.log(`  bootstrap swap failed: ${e.message.slice(0, 100)}`); }
+    writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
+    return;
+  }
 
   if (bal.sol < 0.004) console.log('  ⚠ gas low — need ~0.004 SOL minimum per swap');
 
@@ -91,7 +111,7 @@ async function main() {
   }
 
   // ---- entries: top audited candidate, non-perp only ----
-  if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || stableUsd < 5) {
+  if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || stableUsd < MIN_STABLE_USD) {
     writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
     return;
   }
@@ -110,7 +130,7 @@ async function main() {
   if (!cand) { console.log('onchain-exec: no candidate passed gates'); writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); return; }
 
   const sizeUsd = Math.min(MAX_USD, stableUsd * PCT, MAX_DEPLOYED_USD - deployed);
-  if (sizeUsd < 4) { console.log(`onchain-exec: purse too small ($${sizeUsd.toFixed(2)})`); writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); return; }
+  if (sizeUsd < MIN_SIZE_USD) { console.log(`onchain-exec: purse too small ($${sizeUsd.toFixed(2)})`); writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); return; }
 
   const mint = (bal.tokens[sol.MINT.USDC] || 0) >= sizeUsd ? sol.MINT.USDC : sol.MINT.USDT;
   const inRaw = Math.round(sizeUsd * 1e6);
