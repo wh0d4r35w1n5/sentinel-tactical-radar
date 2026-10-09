@@ -1322,7 +1322,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           <div class="sub" style="font-size:8.5px;margin-top:3px"><span style="color:${pcol}">${esc(c.pimp||'FREE AGENT')}</span> · ${c.wins}W/${c.losses}L · ${c.closes} tricks${c.stolen?' · 📓'+c.stolen+' steal'+(c.stolen>1?'s':''):''}${c.gen?' · gen'+c.gen+' mutant':''}</div>
         </div>`;}).join('');
       $('pimpDrama').innerHTML=(pimpW.drama||[]).map(d=>
-        `<div class="w"><span>${errTxt(d.text)}</span><span style="opacity:.5;white-space:nowrap">${ago(d.ts)}</span></div>`).join('')
+        `<div class="w"><span>${errTxt(d.text)}</span><span style="opacity:.5;white-space:nowrap">${ago(d.ts)} ago</span></div>`).join('')
         ||'<div class="sub">quiet on the corner…</div>';
     }
     // ---- SENTINEL MIND — the bot's inner voice in plain english ----
