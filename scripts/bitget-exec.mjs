@@ -3404,6 +3404,44 @@ async function main() {
     tagManualCloses(store.fills);
     state.realFills = store.fills.slice(0, 50);
     state.realFillCount = store.fills.length;
+    // ---- manual book + churn meter: a held symbol whose most recent OPEN
+    // fill came from the app (src ios/android/web) is operator-originated —
+    // liq-guard runs it under the bagrunner profile (fee-lock at ~breakeven,
+    // dense greedy trail, fast vanish). Closes don't need qty bookkeeping:
+    // the flag rides the journal's newest-first order and only held
+    // symbols matter downstream.
+    try {
+      const lastOpen = {};
+      for (const f of store.fills) {
+        if (f.tradeSide !== 'open' || !f.symbol || lastOpen[f.symbol]) continue;
+        lastOpen[f.symbol] = f;
+      }
+      const held = new Set(posBySym.keys());
+      const manSyms = Object.entries(lastOpen)
+        .filter(([sym, f]) => held.has(sym) && f.src && f.src !== 'api')
+        .map(([sym]) => sym);
+      writeJson(path.join(__dirname, '..', 'state', 'manual-book.json'), { at: Date.now(), syms: manSyms });
+      // 24h churn meter — manual opens are the fee bleed the audit caught;
+      // page the operator when the daily toll crosses thresholds (once each)
+      const day = store.fills.filter((f) => f.src && f.src !== 'api' && (nowMs - (f.ts || 0)) < 864e5);
+      const manFees = day.reduce((a, f) => a + (+f.fee || 0), 0);
+      const manOpens = day.filter((f) => f.tradeSide === 'open').length;
+      state.manualChurn = { opens24h: manOpens, fees24hUsd: round(manFees, 2) };
+      const FLAGS = [5, 10, 20];
+      const flags = (state.manualChurnFlags ||= {});
+      for (const lvl of FLAGS) {
+        const dayKey = `${lvl}:${new Date().toISOString().slice(0, 10)}`;
+        if (manFees >= lvl && !flags[dayKey]) {
+          flags[dayKey] = 1;
+          const msg = `🎰 OPERATOR FEE BURN — ${manOpens} manual opens / $${manFees.toFixed(2)} fees in 24h. Bagrunner rule: fees must come back before the trade ends — let the trail work or don't take the trade.`;
+          state.actions.push(msg);
+          try {
+            fs.appendFileSync(path.join(__dirname, '..', 'state', 'tg-outbox.jsonl'),
+              JSON.stringify({ at: Date.now(), text: msg }) + '\n');
+          } catch {}
+        }
+      }
+    } catch (e) { state.errors.push(`manual-book: ${e.message}`); }
     // ---- wealth vault — high-water-mark incentive fee ----
     // VAULT_SHARE of net-new total-equity highs moves out of the tradable
     // book, permanently: the engine collects carry only when NAV (epoch

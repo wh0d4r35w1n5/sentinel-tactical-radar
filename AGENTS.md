@@ -1,5 +1,40 @@
 # Sentinel — Operator Rules & Project Facts
 
+## Operator manual-trading rules (the bagrunner code)
+
+Written after the Oct 8 audit: 154 manual opens / 4 manual closes in a day,
+−$20.35 net where **$15.31 was pure fees** — 5 of 7 symbols were
+gross-positive and still printed red. These rules prevent the repeat.
+
+**Mechanical enforcement (liq-guard, automatic):**
+- Any held position whose last open fill came from the app
+  (`src != 'api'`, journaled to `state/manual-book.json`) runs the
+  BAGRUNNER trail: fee-lock stop at entry+0.12% once favor hits +0.18%
+  (covers ~round-trip taker fees — the position physically cannot close
+  red past that point), then dense greedy tiers banking ~80-85% of each
+  rung, plus a fast vanish (peak +0.35%, giveback 32% → market close
+  while still green). Tighten-only: a stop the operator set themselves
+  is never loosened. `LIQ_GUARD_BAGRUN=0` disables globally.
+- Churn meter: the exec journals `manualChurn {opens24h, fees24hUsd}` and
+  Telegrams the operator at $5/$10/$20 daily fee-burn thresholds.
+
+**Operator discipline (the human side):**
+1. **Fees come back first or the trade doesn't exist.** ~0.12% price move
+   covers round-trip taker fees; a +0.10% scalp is a donation. If the
+   target isn't at least 3× the fee toll, don't open.
+2. **One clip per idea.** Re-opening a symbol within minutes is churn —
+   59 USELESS opens cost more than they could ever make. Scale in once or
+   don't.
+3. **Never open vault inventory** (USELESS — the vault leg owns it).
+4. **If you set a stop, the machine respects it** — it only tightens.
+   If you don't set one, the bagrunner profile runs defaults.
+5. **The trail is the exit.** Don't market-close a winner early — the
+   bagrunner lock already banked the fees; let tiers carry the runner.
+   Kill losers by stop, not by hope.
+6. **Momentum entries only.** Bagrunning = chasing a move that's already
+   running, not bottom-fishing. If the 1m tape isn't moving your way at
+   entry, the fee math never works.
+
 ## Standing operator mandates
 
 - **Profit is the #1 metric — never win rate.** Grade everything in net
