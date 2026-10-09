@@ -72,6 +72,11 @@ gross-positive and still printed red. These rules prevent the repeat.
   signals for display only.
 - Never loosen evidence gates into measured-negative cells. Widen the
   funnel (candidate count, coverage), never the proof bar.
+- **BTC-pair cross-read** (operator rule 2026-10-09): always check the
+  asset-vs-BTC chart alongside USDT — up on both = real strength, up on
+  USDT but down on BTC = pure beta. Real XBTC spot candles where the pair
+  exists, synthetic XUSDT/BTCUSDT ratio otherwise; pair-less assets still
+  score on synthetic RS — never drop a candidate for lacking a pair.
 
 ## Deploy
 

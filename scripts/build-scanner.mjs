@@ -471,6 +471,66 @@ async function fetchKlines(symbol, light = false) {
 // 5m candles from entry open -> now, for intraperiod settlement replay.
 // 600 bars ≈ 50h — comfortably covers the 24h TTL; the still-forming tail
 // candle is dropped (same rule as the TA klines).
+// ---- BTC-pair relative strength (operator rule): cross-reference the
+// asset-vs-BTC chart alongside USDT. Real XBTC spot candles where the pair
+// exists; synthetic XUSDT/BTCUSDT ratio everywhere else — assets without a
+// spot pair still score, they just run on synthetic RS.
+const SPOT_CANDLES_URL = 'https://api.bitget.com/api/v2/spot/market/candles';
+const SPOT_SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
+const BTC_PAIR_CACHE = path.join(API, 'spot-btc-pairs.json');
+const BTC_KLINES_FILE = path.join(API, '..', 'state', 'spot-btc-klines.json');
+let spotBtcCache = null;
+const btcKCache = () => {
+  if (!spotBtcCache) { try { spotBtcCache = JSON.parse(fs.readFileSync(BTC_KLINES_FILE, 'utf8')); } catch { spotBtcCache = {}; } }
+  return spotBtcCache;
+};
+
+async function spotBtcUniverse() {
+  let j = null;
+  try { j = JSON.parse(fs.readFileSync(BTC_PAIR_CACHE, 'utf8')); } catch {}
+  if (j?.ts && Date.now() - j.ts < 86400e3) return new Set(j.syms || []);
+  try {
+    const res = await fetch(SPOT_SYMBOLS_URL, { signal: TF() });
+    const data = (await res.json()).data || [];
+    const syms = data.filter((s) => s.quoteCoin === 'BTC' && s.status === 'online').map((s) => s.baseCoin);
+    writeJson(BTC_PAIR_CACHE, { ts: Date.now(), syms });
+    return new Set(syms);
+  } catch { return new Set(j?.syms || []); }
+}
+
+async function fetchSpotBtcKlines(asset) {
+  const cache = btcKCache(), key = asset + 'BTC';
+  const hit = cache[key];
+  if (hit?.rows && Date.now() - hit.at < 10 * 60e3) return hit.rows;
+  try {
+    const res = await fetch(`${SPOT_CANDLES_URL}?symbol=${key}&granularity=1h&limit=60`, { signal: TF() });
+    const data = (await res.json()).data;
+    if (!Array.isArray(data) || data.length < 24) return hit?.rows ?? null;
+    const rows = data
+      .map((c) => ({ t: +c[0], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    cache[key] = { at: Date.now(), rows };
+    // bound the cache, same discipline as the kline cache
+    const cutoff = Date.now() - 2 * 3600e3;
+    for (const k of Object.keys(cache)) if (!cache[k].at || cache[k].at < cutoff) delete cache[k];
+    writeJson(BTC_KLINES_FILE, cache);
+    return rows;
+  } catch { return hit?.rows ?? null; }
+}
+
+// RS metrics on a ratio series — XBTC closes or synthetic XUSDT/BTCUSDT.
+// rs24 = %-outperformance vs BTC over ~24h; rsRsi = RSI of the BTC chart;
+// rsBreak = the ratio pressing its own 24-bar extreme (RS breakout/fade).
+function rsMetrics(closes) {
+  if (!closes || closes.length < 30) return null;
+  const n = closes.length, now = closes[n - 1];
+  const rs24 = ((now - closes[n - 25]) / closes[n - 25]) * 100;
+  const rsRsi = rsi(closes);
+  const win = closes.slice(-24), hi = Math.max(...win), lo = Math.min(...win);
+  const rsBreak = now >= hi * 0.995 ? 'high' : now <= lo * 1.005 ? 'low' : null;
+  return { rs24: round(rs24, 2), rsRsi: Math.round(rsRsi), rsBreak };
+}
+
 async function fetchEntryCandles(e) {
   const out = [];
   let start = e.ts;
@@ -657,6 +717,27 @@ async function main() {
   const klineMiss = candidates
     .filter((r) => !enriched.has(r.asset))
     .map((r) => r.asset);
+
+  // ---- BTC-pair confluence data (operator rule: USDT chart + BTC chart
+  // together). Real XBTC spot candles for candidates whose pair exists —
+  // majors mostly; BTC's own 1h closes back the synthetic ratio for the
+  // pair-less memes so every asset still carries RS context.
+  const spotBtcSyms = await spotBtcUniverse().catch(() => new Set());
+  const btcPairKlines = {};
+  {
+    const have = candidates.filter((r) => r.asset !== 'BTC' && spotBtcSyms.has(r.asset));
+    for (let i = 0; i < have.length; i += 6) {
+      await Promise.all(
+        have.slice(i, i + 6).map(async (r) => {
+          const rows = await fetchSpotBtcKlines(r.asset).catch(() => null);
+          if (rows) btcPairKlines[r.asset] = rows;
+        })
+      );
+      if (i + 6 < have.length) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  const btcK = enriched.get('BTC') ?? (await fetchKlines('BTCUSDT', true).catch(() => null));
+  const btcCloses = btcK?.closes ?? btcK?.candles?.map((c) => c.c) ?? null;
 
   // ---- multi-timeframe deep read: 15m/1H/4H/1D frames per enriched asset.
   // TTL caches make this near-free on steady-state cycles; each asset's
@@ -1571,6 +1652,31 @@ async function main() {
       const fundBoost = fr != null && Math.abs(fr) >= 0.05
         ? (dir0 === 'LONG' ? (fr < 0 ? 2 : -2) : (fr > 0 ? 2 : -2))
         : 0;
+      // BTC-pair cross-read (operator rule): an asset up on USDT AND up on
+      // BTC is real strength; up on USDT but down on BTC is pure beta.
+      // Real XBTC candles where the pair exists, synthetic XUSDT/BTCUSDT
+      // ratio otherwise — pair-less assets still score on synth RS.
+      let btcPair = null;
+      {
+        let ratio = null, src = null;
+        if (btcPairKlines[r.asset]?.length) {
+          ratio = btcPairKlines[r.asset].map((c) => c.c); src = 'pair';
+        } else if (k.closes && btcCloses && k.closes.length >= 30 && btcCloses.length >= 30) {
+          const m = Math.min(k.closes.length, btcCloses.length);
+          ratio = k.closes.slice(-m).map((c, i) => c / btcCloses[btcCloses.length - m + i]);
+          src = 'synth';
+        }
+        if (ratio) {
+          const m = rsMetrics(ratio);
+          if (m) btcPair = { pair: src === 'pair' ? r.asset + 'BTC' : 'XUSDT/BTC', src, ...m };
+        }
+      }
+      const rsBoost = !btcPair ? 0 : (dir0 === 'LONG' ? 1 : -1) * clamp(
+        (btcPair.rs24 > 2 ? 2 : btcPair.rs24 > 0.5 ? 1 : btcPair.rs24 < -2 ? -2 : btcPair.rs24 < -0.5 ? -1 : 0) +
+        (btcPair.rsBreak === 'high' ? 1.5 : btcPair.rsBreak === 'low' ? -1.5 : 0) +
+        (btcPair.rsRsi > 60 ? 0.5 : btcPair.rsRsi < 40 ? -0.5 : 0),
+        -4, 4
+      );
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -1586,6 +1692,7 @@ async function main() {
             socialPenalty +
             icAdj +
             fundBoost +
+            rsBoost +
             (climax ? -10 : 0),
           0,
           100
@@ -1599,9 +1706,10 @@ async function main() {
         confl: Math.min((k.ta?.confluence || 0) * 3, 12),
         ic: icAdj, strat: (stratAdj[strategy] || 0) + (stratBoost[strategy] || 0),
         deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
-        soc: socialBoost + socialPenalty, fund: fundBoost, clim: climax ? -10 : 0,
+        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, clim: climax ? -10 : 0,
       };
       return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
+        btcPair, rsBoost,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
@@ -1674,6 +1782,7 @@ async function main() {
         fusedScore: r.fusedScore ?? null,
         fusedZ: r.fusedZ ?? null,
         fusion: r.fusion ?? null,
+        btcPair: r.btcPair ?? null,
         vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,

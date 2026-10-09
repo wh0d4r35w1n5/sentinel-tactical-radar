@@ -23,16 +23,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const FZ_KEYS = ['mom', 'vol', 'liq', 'surg', 'confl', 'ic', 'strat', 'deriv', 'news', 'mc', 'vip', 'soc', 'fund', 'clim'];
+export const FZ_KEYS = ['mom', 'vol', 'liq', 'surg', 'confl', 'ic', 'strat', 'deriv', 'news', 'mc', 'vip', 'soc', 'fund', 'rs', 'clim'];
 
 // priors in z-space — direction-signed relative importance. The hand score's
 // raw weights (mom .4/vol .25/liq .2/surg .15) map directly; boost terms get
 // small positive priors ("context, not trigger"); climax is negative — the
-// ledger's forensic finding is that overextended entries bleed.
+// ledger's forensic finding is that overextended entries bleed. rs = BTC-
+// pair relative strength (operator mandate: real strength outperforms BTC).
 const PRIOR = {
   mom: 0.40, vol: 0.25, liq: 0.20, surg: 0.15, confl: 0.10, ic: 0.08,
   strat: 0.06, vip: 0.05, deriv: 0.04, news: 0.03, soc: 0.03, fund: 0.03,
-  mc: 0.02, clim: -0.06,
+  rs: 0.05, mc: 0.02, clim: -0.06,
 };
 
 const EMA_A = 1 / 30;      // ~30-cycle halflife — hours-scale bias tracking
