@@ -742,6 +742,32 @@ async function main() {
     posBySym.set(p.symbol, p);
   }
   for (const s of ambiguous) state.errors.push(`${s}: both long AND short open — refusing to guess, close manually`);
+  // 🌆 pimpcity — adversarial persona layer. Runs EARLY on purpose: cycles
+  // under box load get killed before the tail, and a stale war file means
+  // stale attribution + a dashboard lying about who's on shift. Everything
+  // here only needs positions + the fill journal — both available now.
+  // Advisory only; failures fall back to plain score ranking downstream.
+  let war = null, pc = null;
+  try {
+    pc = await import('./pimpcity.mjs');
+    war = pc.loadWar();
+    const warFills = loadFills();
+    for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
+    for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
+    // reconcile intents against the fill journal: a nomination earns
+    // "on shift" only when a matching open fill exists AND the symbol
+    // still holds a live position — queued-never-filled nominations are
+    // labeled pending and expire after 15min
+    for (const it of war.intents || []) {
+      if (it.filledAt == null) {
+        const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
+        if (of) it.filledAt = +of.ts || Date.now();
+      }
+      it.live = it.filledAt != null && posBySym.has(it.symbol);
+    }
+    war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+    try { pc.saveWar(war); } catch {}
+  } catch (e) { state.errors.push('pimpcity: ' + e.message); }
   // excursion tracking for the stall-exit gate — peak/trough per open
   // position, refreshed each cycle by the excursion block below
   const maeTrack = (() => {
@@ -2384,32 +2410,9 @@ async function main() {
     // compete for LIVE_TARGET_POSITIONS capacity
     const vaultHeld = posBySym.has(VAULT_SYM) ? 1 : 0;
     const slotsAvail = Math.max(0, TARGET_POSITIONS - (posBySym.size - vaultHeld) - plan.orders.filter((o) => !o.mandate).length);
-    // 🌆 pimpcity — adversarial persona layer. Runs EVERY cycle (the corner
-    // never sleeps): closes get attributed to the girl that opened them, and
-    // the war evolves — losers steal the leader's playbook, the top pimp
-    // poaches the best girl off a weak roster, the bottom pimp is crippled
-    // for next cycle's nominations, the worst girl gets retired for a
-    // mutant. Advisory only — it reorders mandate candidates and journals
-    // drama; failures fall back to plain score ranking.
-    let war = null, pc = null;
-    try {
-      pc = await import('./pimpcity.mjs');
-      war = pc.loadWar();
-      const warFills = loadFills();
-      for (const l of pc.attribute(war, warFills)) state.actions.push('🌆 ' + l);
-      for (const l of pc.fight(war)) state.actions.push('🌆 ' + l);
-      // reconcile intents against the fill journal: a nomination earns
-      // "on shift" only when a matching open fill exists AND the symbol
-      // still holds a live position — queued-never-filled nominations are
-      // labeled pending and expire after 15min
-      for (const it of war.intents || []) {
-        if (it.filledAt == null) {
-          const of = [...warFills].reverse().find((f) => f.tradeSide === 'open' && f.symbol === it.symbol && (+f.ts || 0) >= it.ts - 60e3);
-          if (of) it.filledAt = +of.ts || Date.now();
-        }
-        it.live = it.filledAt != null && posBySym.has(it.symbol);
-      }
-    } catch (e) { state.errors.push('pimpcity: ' + e.message); }
+    // 🌆 pimpcity nomination phase — the war state was loaded, attributed,
+    // fought and SAVED early (killed cycles used to strand it); here we only
+    // need the roster to order slot candidates. war/pc are in scope already.
     if (slotsAvail > 0 && marginFree > 0.5) {
       const softOnly = (r) =>
         r.direction === 'LONG' &&
