@@ -125,6 +125,22 @@ const TRAIL_SCALP = [
   [0.35, 0.3], [0.5, 0.42], [0.7, 0.6], [0.9, 0.78],
   [1.1, 0.95], [1.4, 1.25], [1.7, 1.5], [2.1, 1.9],
 ];
+// bagrunner profile — operator manual opens (state/manual-book.json, last
+// opener non-api). The audit's bleed was fee-churn: gross wins flipped red
+// by round-trip cost. The trail banks fees the moment the move covers them
+// (taker RT ≈ 0.12% of price) then ratchets greedily — profit locked is
+// profit kept, runners still ride the upper tiers. Tighten-only, composes
+// with any stop the operator placed themselves.
+const BAGRUN_ON = process.env.LIQ_GUARD_BAGRUN !== '0';
+const TRAIL_BAGRUN = [
+  [0.18, 0.12],                     // fee-recovery: covers ~RT taker fees
+  [0.28, 0.22], [0.4, 0.33], [0.55, 0.46], [0.75, 0.64],
+  [1.0, 0.87], [1.3, 1.15], [1.7, 1.5], [2.2, 2.0], [3.0, 2.8],
+];
+// manual positions vanish faster too — a bagrunner doesn't ride a turn
+const BAGRUN_VANISH_MIN_PEAK = +(process.env.LIQ_GUARD_BAGRUN_VANISH_PEAK || 0.35);
+const BAGRUN_VANISH_FRAC = +(process.env.LIQ_GUARD_BAGRUN_VANISH_FRAC || 0.32);
+const BAGRUN_VANISH_MIN_FAV = +(process.env.LIQ_GUARD_BAGRUN_VANISH_FAV || 0.12);
 // scalp stall-cut (NO_DEEPEN symbols): a mean-reversion scalp still deep
 // in the red after SCALP_STALL_MS is a failed thesis — closing early
 // banks ~30% of the stop distance instead of donating the whole stop.
@@ -164,6 +180,18 @@ const VANISH_MIN_FAV = +(process.env.LIQ_GUARD_VANISH_MIN_FAV || 0.15);   // bel
 // follows KEEP_FRAC of peak favor — fills the gaps between rungs, never
 // looser than a rung, tighten-only so it composes with the tier ladder.
 const KEEP_FRAC = +(process.env.LIQ_GUARD_KEEP_FRAC || 0.75);
+// manual-book: exec writes the set of held symbols whose last open fill
+// was operator/app-originated (src != api). Cached 20s like plans.
+const manualCache = { at: 0, syms: new Set() };
+const manualSyms = () => {
+  if (Date.now() - manualCache.at < 20e3) return manualCache.syms;
+  manualCache.at = Date.now();
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'manual-book.json'), 'utf8'));
+    manualCache.syms = new Set(d.syms || []);
+  } catch { manualCache.syms = new Set(); }
+  return manualCache.syms;
+};
 const planCache = {}; // sym -> { at, rows } — plans change slowly, poll 20s
 // pc.at only advances on a successful fetch — a network blip used to freeze
 // the plan view for a full 20s (blind stop-approach/vanish tier on stale rows)
@@ -789,13 +817,18 @@ async function tick() {
       }
     }
 
-    // ---- breakeven lock, book-wide: scalp symbols (NO_DEEPEN) arm fast
-    // (exec is hands-off on them — nothing else ratchets); every other
-    // position arms at the deeper swing threshold so live theses keep
-    // their breathing room. Once armed, pin the stop to entry + BE_LOCK_PCT
-    // in favor — fee-covered, can't go red. Tighten-only, so it composes
-    // with the exec's own ratchets on managed positions (tighter wins).
-    const trail = NO_DEEPEN.has(p.sym) ? TRAIL_SCALP : TRAIL_SWING;
+    // ---- breakeven lock, book-wide: manual opens (operator's bagrunners)
+    // get the tightest profile — fee-lock at +0.18% favor, dense greedy
+    // tiers; scalp symbols (NO_DEEPEN) arm fast; swing keeps breathing
+    // room. Tighten-only, so it composes with the exec's own ratchets on
+    // managed positions (tighter wins) and never loosens an operator stop.
+    const isManual = BAGRUN_ON && manualSyms().has(p.sym);
+    const trail = isManual ? TRAIL_BAGRUN : NO_DEEPEN.has(p.sym) ? TRAIL_SCALP : TRAIL_SWING;
+    if (isManual && !g.bagrunTold) {
+      g.bagrunTold = true; dirty = true;
+      outbox(`🏃‍♂️ BAGRUNNER armed — ${p.sym} ${p.side}: operator open detected. Fee-lock at +0.18%, greedy trail, fast vanish. Set your own stop and I'll only tighten it.`);
+    }
+    if (!isManual) g.bagrunTold = false;
     if (p.entry > 0) {
       try {
         const favPct = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
@@ -832,7 +865,7 @@ async function tick() {
             pc.at = 0;
             kickWatcher();
             log(`BE-LOCK ${key}: fav ${favPct.toFixed(2)}% — stop ${curTrig || 'none'} -> ${lockTrig} (entry+${lockPct}%)`);
-            outbox(`🔒 BE-LOCK — ${p.sym} ${p.side}: +${favPct.toFixed(2)}% favor, stop moved to entry+${lockPct}% (${lockTrig}) — worst case is now green after fees.`);
+            outbox(`🔒 ${isManual ? 'BAGRUN-LOCK' : 'BE-LOCK'} — ${p.sym} ${p.side}: +${favPct.toFixed(2)}% favor, stop moved to entry+${lockPct}% (${lockTrig}) — worst case is now green after fees.`);
             dirty = true;
           }
         }
@@ -843,15 +876,17 @@ async function tick() {
     // turn NOW instead of donating the remaining giveback down to wherever
     // the ratcheted stop sits. Whole-position market close, like stall-cut;
     // re-verify on fresh signed truth so a stale mark can't fire it.
-    if ((g.peakFav || 0) >= VANISH_MIN_PEAK && VANISH_FRAC > 0) {
+    if ((g.peakFav || 0) >= (isManual ? BAGRUN_VANISH_MIN_PEAK : VANISH_MIN_PEAK) && VANISH_FRAC > 0) {
       try {
         const favNow = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
         const gb = (g.peakFav - favNow) / g.peakFav;
         // toxic tape halves the patience — one-sided flow against us means
-        // the giveback probably isn't noise, it's the turn
-        const vBase = gates.__tune?.vanish ?? VANISH_FRAC;
+        // the giveback probably isn't noise, it's the turn. Manual bagrunners
+        // run tighter vanish params — bank the turn, don't ride it.
+        const vBase = (gates.__tune?.vanish ?? VANISH_FRAC) * (isManual ? BAGRUN_VANISH_FRAC / VANISH_FRAC : 1);
         const vFrac = toxAdv ? vBase * 0.5 : vBase;
-        if (favNow > VANISH_MIN_FAV && gb >= vFrac && Date.now() - (g.vanishAt || 0) >= 60e3) {
+        const vMinFav = isManual ? BAGRUN_VANISH_MIN_FAV : VANISH_MIN_FAV;
+        if (favNow > vMinFav && gb >= vFrac && Date.now() - (g.vanishAt || 0) >= 60e3) {
           const fresh = await getAllPos().catch(() => null);
           const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
           if (fp && +fp.upl > 0) {
