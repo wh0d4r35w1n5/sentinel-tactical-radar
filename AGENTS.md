@@ -80,6 +80,12 @@ gross-positive and still printed red. These rules prevent the repeat.
 - VPS: `ssh -i ~/.ssh/sentinel_vm_key ubuntu@54.66.217.111`
 - Deploy file: `scp` to `~`, then `sudo mv` into `/opt/sentinel/` (root-owned),
   `node --check`, `sudo systemctl restart sentinel-rapid`.
+- Pushbot (`/opt/pushbot`): Pages api mirror on `sentinel-push.timer` (5 min).
+  `push.sh` self-squashes its own `.git` when >1.2GB (remote is canonical);
+  heavy set (signal-archive, api/history, klines) is UNTRACKED in git —
+  it rsyncs into the tree for the on-box mirror only. Repo copy:
+  `scripts/pushbot-push.sh`. Disk filled to 100% on 2026-10-09 from 7.9GB
+  .git — check `df -h /` on any ssh stall.
 - Verify: `/opt/sentinel/api/god.json` (PERFECT = 22 pass),
   `live-ledger.json` (errors/actions/positionsAfter/sqnR),
   `market-scanner.json` (signals × strategy), `gate-stats.json` (veto buckets).
