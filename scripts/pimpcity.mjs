@@ -103,10 +103,12 @@ export function saveWar(w) {
       cracks: Object.entries(w.cracks).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
+        form: +(c.form ?? 0).toFixed(4),
       })).sort((a, b) => b.net - a.net),
       retired: Object.entries(w.retired || {}).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
+        form: +(c.form ?? 0).toFixed(4),
       })).sort((a, b) => b.net - a.net),
       intents: (w.intents || []).slice(-12),
       drama: w.drama.slice(-30).reverse(),
@@ -226,6 +228,10 @@ export function attribute(war, fills, log = () => {}) {
     const pm = hit.pimp ? war.pimps[hit.pimp] : null;
     if (!cr) continue;
     cr.net += net; cr.closes++;
+    // form = EMA of recent tricks (α=0.4 — last ~5 closes dominate).
+    // Lifetime net decides pride; recent form decides roster moves — a girl
+    // hot three months ago and bleeding now should not hold the corner.
+    cr.form = +( ((cr.form ?? 0) * 0.6 + net * 0.4).toFixed(4) );
     if (net >= 0) cr.wins++; else cr.losses++;
     if (pm) {
       pm.net += net;
@@ -245,7 +251,8 @@ export function fight(war, log = () => {}) {
   const lines = [];
   const crackRows = Object.entries(war.cracks).filter(([, c]) => c.closes >= 2);
   if (crackRows.length < 3) return lines;
-  crackRows.sort((a, b) => b[1].net - a[1].net);
+  // rank by recent form — lifetime net is the résumé, form is who's hot NOW
+  crackRows.sort((a, b) => (b[1].form ?? b[1].net) - (a[1].form ?? a[1].net));
   const leader = crackRows[0];
 
   // --- steal ideas: bottom-third girls copy the leader's playbook (60/40)
