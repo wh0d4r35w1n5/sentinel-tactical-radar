@@ -588,7 +588,25 @@ async function main() {
       // submit) → fill.orderId — deterministic. Fallback: newest engine
       // open fill on the symbol (src 'api' or legacy-unknown — never a
       // manual ios/android/web fill).
+      // onchain intents resolve "on shift" against the DEX book, not the
+      // perp book — a sell-side trail holds up to 36h, so their expiry is
+      // the onchain hold window, not the 15min queue TTL
+      let ocHeld = null;
+      const ocHeldSet = () => {
+        if (ocHeld) return ocHeld;
+        ocHeld = new Set();
+        try {
+          const b = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'onchain-book.json'), 'utf8'));
+          for (const p of b.positions || []) if (p.symbol) ocHeld.add(p.symbol);
+        } catch {}
+        return ocHeld;
+      };
       for (const it of war.intents || []) {
+        if (it.onchain) {
+          it.filledAt ||= it.ts;
+          it.live = ocHeldSet().has(it.symbol);
+          continue;
+        }
         if (it.filledAt == null) {
           const ids = it.coid
             ? [it.coid, it.coid + 'r', it.coid + 'm'].map((k) => war.orderMap?.[k]).filter(Boolean)
@@ -601,7 +619,7 @@ async function main() {
         }
         it.live = it.filledAt != null && openSyms.has(it.symbol);
       }
-      war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+      war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < (it.onchain ? 48 * 3600e3 : 15 * 60 * 1000));
       // orderMap is a bridge, not a ledger — bound intents don't need it
       // anymore; cap the map so a long session can't grow it unbounded
       const omk = Object.keys(war.orderMap || {});

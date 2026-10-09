@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const WAR_PATH = path.join(DIR, '..', 'state', 'pimp-war.json');
 const API_PATH = path.join(DIR, '..', 'api', 'pimp-war.json');
+const ONCHAIN_FILLS_PATH = path.join(DIR, '..', 'state', 'onchain-fills.json');
+const ONCHAIN_CRACK = 'Solana Sadie';
 
 const PIMP_NAMES = ['Silky Slim', 'Madam Razor', 'Cold Cash Cole', 'Big Daddy Kane', 'Fancy Red'];
 
@@ -43,6 +45,11 @@ const CRACK_STABLE = [
   { name: 'Fastlane Faye', tag: 'bagrunner — chase & dump', w: { score: 1.2, chg: 5,   mom: 2,   stratW: 8,  strat: 'Momentum|Breakout|Ignition' } },
   { name: 'Bolt Betsy',    tag: 'bagrunner — pure speed',   w: { score: 0.4, chg: 6,   mom: 3,   stratW: 0 } },
   { name: 'Sprint Santana',tag: 'bagrunner — alt bags',     w: { score: 1,   chg: 4,   mom: 2.5, alt: 6 } },
+  // the DEX corner — the onchain lane's persona. Her tricks come from
+  // state/onchain-fills.json (Jupiter swaps), not the perp book: buys are
+  // injected as her intents, sells bank as her closes. Freelance — the
+  // lane doesn't take nominations and no pimp gets a cut.
+  { name: 'Solana Sadie',  tag: 'onchain runner — DEX bags', w: { score: 0.8, chg: 5, mom: 3, alt: 8 } },
 ];
 
 const BENCH_NAMES = ['Chrome Cherry', 'Plastic Poppy', 'Rusty Ruby', 'Vandal Vicky', 'Nylon Nina', 'Broke Betty', 'Static Stella', 'Lowdown Lola'];
@@ -224,11 +231,38 @@ export function attribute(war, fills, log = () => {}) {
   const lines = [];
   const intents = war.intents || (war.intents = []);
   const done = new Set(war.attributed || (war.attributed = []));
+  // ---- onchain lane joins the war: every 'buy' in the DEX fill journal
+  // becomes an intent on Solana Sadie, every 'sell' becomes a close she
+  // banks (net = sale proceeds - entry cost, swap fees ride inside the
+  // fill price). tradeIds are prefixed 'oc:' so a tx signature can never
+  // collide with an exchange fill id. Intents carry onchain:true so the
+  // reconcile pass uses the onchain book, not Bitget positions, for
+  // "on shift" truth.
+  const ocCloses = [];
+  try {
+    const oc = JSON.parse(fs.readFileSync(ONCHAIN_FILLS_PATH, 'utf8'));
+    if (Array.isArray(oc)) {
+      const seen = new Set(intents.filter((i) => i.onchain).map((i) => i.coid));
+      for (const f of oc) {
+        if (f.side === 'buy' && f.symbol && f.sig) {
+          const coid = 'oc:' + f.sig;
+          if (!seen.has(coid)) { intents.push({ symbol: f.symbol, direction: 'LONG', ts: f.ts || 0, pimp: null, crack: ONCHAIN_CRACK, coid, onchain: true }); seen.add(coid); }
+        } else if (f.side === 'sell' && f.symbol && f.sig) {
+          ocCloses.push({ tradeId: 'oc:' + f.sig, symbol: f.symbol, ts: f.ts || 0,
+            profit: (+f.estUsd || 0) - (+f.costUsd || 0), fee: 0, tradeSide: 'close' });
+        }
+      }
+    }
+  } catch {}
+  // her record must exist even if the war predates the stable addition —
+  // loadWar's backfill covers saved wars; this guards hand-edited state
+  if (!war.cracks[ONCHAIN_CRACK])
+    war.cracks[ONCHAIN_CRACK] = { w: {}, tag: 'onchain runner — DEX bags', pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
   // entry fills charged already — a position closed in N clips must pay
   // its entry leg once, not once per clip
   const feeSeen = new Set(war.feeSeen || (war.feeSeen = []));
   let moved = false;
-  for (const f of fills) {
+  for (const f of fills.concat(ocCloses)) {
     // closes arrive two ways on Bitget: tradeSide 'close' or profit!=0
     // (same hedge the exec's episode builder uses — miss it and whole
     // trades go unattributed)
