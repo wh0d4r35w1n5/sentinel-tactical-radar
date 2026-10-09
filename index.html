@@ -570,7 +570,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     </details>
   </div>
   <div class="panel neon" id="vaultPanel" style="margin-top:16px;display:none">
-    <div class="ptitle">🏦 Wealth vault · profits locked forever <span class="sub">— 50% of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever</span><span id="vaultSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">🏦 Wealth vault · profits locked forever <span class="sub" id="vaultHdr">— a cut of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever</span><span id="vaultSub" class="sub" style="float:right"></span></div>
     <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="sub" id="vaultNote" style="margin-top:8px;font-size:10px"></div>
   </div>
@@ -1252,13 +1252,15 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         }
       }
     }
-    // ---- wealth vault — the untouchable 50%, front and center ----
+    // ---- wealth vault — the untouchable carry, front and center ----
     // src lives at render scope: the live-panel block's const died with it
     const src=liveLedger;
-    if(src&&src.vaultUsd>0){
+    if(src&&src.vaultUsd!=null){
       $('vaultPanel').style.display='block';
-      $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['📈 high-water',src.vaultHwmUsd!=null?'$'+(+src.vaultHwmUsd).toFixed(2):'—','nothing banks below the mark'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net','$'+(src.epochNetUsd??'—'),'live P&L of the clean test book'],['💸 carry','50%','of net-new equity highs only']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
-      $('vaultNote').innerHTML='🔑 <b style="color:var(--gold)">incentive-fee structure</b> — the engine pays itself 50% carry on net-new equity highs and nothing while underwater. Cash-out only, never trade-in; compounding happens in the vault, risk stays in the book.';
+      const carryPct=src.vaultSharePct??50;
+      const vh=$('vaultHdr');if(vh)vh.textContent=`— ${carryPct}% of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever`;
+      $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['📈 high-water',src.vaultHwmUsd!=null?'$'+(+src.vaultHwmUsd).toFixed(2):'—','nothing banks below the mark'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net',src.epochNetUsd!=null?'$'+(+src.epochNetUsd).toFixed(2):'—','journaled net of real fills'],['💸 carry',carryPct+'%','of net-new equity highs only']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      $('vaultNote').innerHTML=`🔑 <b style="color:var(--gold)">incentive-fee structure</b> — the engine pays itself ${carryPct}% carry on net-new equity highs and nothing while underwater. Cash-out only, never trade-in; compounding happens in the vault, risk stays in the book.`;
     }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
     if(rrOpt&&rrOpt.winner){

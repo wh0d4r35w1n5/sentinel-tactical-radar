@@ -744,8 +744,9 @@ async function main() {
   const equityUsd = EQ_OVERRIDE > 0
     ? Math.max(0, Math.min(acct.equity, EQ_OVERRIDE + epochNet) - vaultUnmoved)
     : Math.max(0, acct.equity - vaultUnmoved);
-  state.epochNetUsd = EQ_OVERRIDE ? round(epochNet, 2) : undefined;
+  state.epochNetUsd = round(epochNet, 2); // live too — the fills journal IS the epoch record
   state.vaultUsd = round(vaultNow, 2);
+  state.vaultSharePct = round(VAULT_SHARE * 100, 1); // real carry %, not a hardcoded label
   state.vaultSweeps = (loadVault().sweeps || []).length;
   state.edgeLive = round(EDGE_LIVE.v, 3);
   state.edgeSrc = EDGE_LIVE.src;
