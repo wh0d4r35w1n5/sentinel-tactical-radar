@@ -63,18 +63,37 @@ async function main() {
   const deployed = book.positions.reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
   console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
 
-  // bootstrap: funded with raw SOL and no stables → convert most of it to
-  // USDC, keeping a gas reserve. Lets the operator fund with a single SOL
-  // send (CEX SOL withdrawal minimums are tiny vs the $10 USDT floor).
+  // bootstrap: convert whatever landed into the USDC purse. Two rails —
+  // raw SOL converts via the classic swap keeping a gas reserve; ANY other
+  // SPL token (USDGO/ME/… — the cheap CEX-withdrawal-minimum escape hatches)
+  // converts via Jupiter Ultra GASLESS, where the relayer fronts the SOL
+  // fee. A zero-SOL wallet can bootstrap itself entirely this way.
   const GAS_RESERVE = +(process.env.ONCHAIN_GAS_RESERVE || 0.025);
-  if (stableUsd < MIN_STABLE_USD && bal.sol > GAS_RESERVE + 0.008) {
-    const swapLamports = Math.floor((bal.sol - GAS_RESERVE) * 1e9);
-    console.log(`  bootstrap: swapping ${(swapLamports / 1e9).toFixed(4)} SOL -> USDC (keeping ${GAS_RESERVE} gas)`);
-    try {
-      const r = await sol.swap({ inputMint: sol.MINT.SOL, outputMint: sol.MINT.USDC, amount: swapLamports, slippageBps: 150 });
-      journal({ side: 'bootstrap', usd: 'sol->usdc', lamports: swapLamports, outUsdcRaw: r.outAmount, sig: r.signature });
-      console.log(`  bootstrap filled sig ${r.signature.slice(0, 12)}… — stables land next cycle`);
-    } catch (e) { console.log(`  bootstrap swap failed: ${e.message.slice(0, 100)}`); }
+  if (stableUsd < MIN_STABLE_USD) {
+    if (bal.sol > GAS_RESERVE + 0.008) {
+      const swapLamports = Math.floor((bal.sol - GAS_RESERVE) * 1e9);
+      console.log(`  bootstrap: swapping ${(swapLamports / 1e9).toFixed(4)} SOL -> USDC (keeping ${GAS_RESERVE} gas)`);
+      try {
+        const r = await sol.swap({ inputMint: sol.MINT.SOL, outputMint: sol.MINT.USDC, amount: swapLamports, slippageBps: 150 });
+        journal({ side: 'bootstrap', usd: 'sol->usdc', lamports: swapLamports, outUsdcRaw: r.outAmount, sig: r.signature });
+        console.log(`  bootstrap filled sig ${r.signature.slice(0, 12)}… — stables land next cycle`);
+      } catch (e) { console.log(`  bootstrap swap failed: ${e.message.slice(0, 100)}`); }
+    }
+    // orphan SPL tokens — convert up to 2 per cycle, gasless rail when
+    // gas is short (Ultra relayer pays), classic when SOL exists
+    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT);
+    for (const mint of orphans.slice(0, 2)) {
+      const raw = bal.tokensRaw?.[mint];
+      if (!raw || !(+raw > 0)) continue;
+      const rail = bal.sol > 0.004 ? 'classic' : 'gasless';
+      try {
+        const r = bal.sol > 0.004
+          ? await sol.swap({ inputMint: mint, outputMint: sol.MINT.USDC, amount: +raw, slippageBps: 200 })
+          : await sol.swapUltra({ inputMint: mint, outputMint: sol.MINT.USDC, amount: +raw, slippageBps: 200 });
+        journal({ side: 'bootstrap', usd: `${mint.slice(0, 8)}->usdc`, raw, rail, sig: r.signature });
+        console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… -> USDC sig ${(r.signature || '').slice(0, 12)}…`);
+      } catch (e) { console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… failed: ${e.message.slice(0, 80)}`); }
+    }
     writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
     return;
   }
@@ -103,7 +122,7 @@ async function main() {
     console.log(`  ${pos.symbol}: $${mark.toFixed(2)} (cost $${pos.costUsd.toFixed(2)}, peak $${pos.peakUsd.toFixed(2)})${reason ? ' → ' + reason : ''}`);
     if (!reason) continue;
     try {
-      const r = await sol.swap({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: pos.qtyRaw, slippageBps: SLIPPAGE_SELL_BPS });
+      const r = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: pos.qtyRaw, slippageBps: SLIPPAGE_SELL_BPS, solBal: bal.sol });
       journal({ side: 'sell', symbol: pos.symbol, mint: pos.mint, qtyRaw: pos.qtyRaw, estUsd: mark, costUsd: pos.costUsd, sig: r.signature, reason });
       book.positions = book.positions.filter((p) => p.mint !== pos.mint);
       console.log(`  SOLD ${pos.symbol} ~$${mark.toFixed(2)} sig ${r.signature.slice(0, 12)}… (${reason})`);
@@ -137,7 +156,7 @@ async function main() {
   console.log(`  BUY ${cand.symbol} $${sizeUsd.toFixed(2)} — score ${cand.score} liq $${(cand.liqUsd / 1e3).toFixed(0)}k vol $${(cand.vol24hUsd / 1e6).toFixed(1)}M mc $${(cand.mcapUsd / 1e6).toFixed(1)}M`);
   try {
     const q = await sol.quote({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
-    const r = await sol.swap({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
+    const r = await sol.swapAny({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS, solBal: bal.sol });
     book.positions.push({
       mint: cand.contract, symbol: cand.symbol, qtyRaw: +q.outAmount,
       costUsd: sizeUsd, peakUsd: sizeUsd, lastValueUsd: sizeUsd, ts: Date.now(),

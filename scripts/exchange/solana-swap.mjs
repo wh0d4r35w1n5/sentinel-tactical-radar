@@ -12,6 +12,7 @@ import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
 import '../load-env.mjs';
 
 const JUP = process.env.JUP_API || 'https://lite-api.jup.ag/swap/v1';
+const ULTRA = process.env.JUP_ULTRA_API || 'https://lite-api.jup.ag/ultra/v1';
 const RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 const TF = () => AbortSignal.timeout(15000);
 
@@ -39,13 +40,15 @@ export async function balances() {
   const toks = await conn
     .getParsedTokenAccountsByOwner(pub, { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') })
     .catch(() => ({ value: [] }));
-  const tokens = {};
+  const tokens = {}, tokensRaw = {};
   for (const t of toks.value || []) {
     const info = t.account.data.parsed?.info;
-    if (info && +info.tokenAmount.uiAmount > 0)
+    if (info && +info.tokenAmount.uiAmount > 0) {
       tokens[info.mint] = +info.tokenAmount.uiAmount;
+      tokensRaw[info.mint] = info.tokenAmount.amount;
+    }
   }
-  return { ok: true, address: pub.toBase58(), sol, tokens };
+  return { ok: true, address: pub.toBase58(), sol, tokens, tokensRaw };
 }
 
 export async function quote({ inputMint, outputMint, amount, slippageBps = 100 }) {
@@ -84,4 +87,42 @@ export async function swap({ inputMint, outputMint, amount, slippageBps = 100 })
   return { signature: sig, confirmed: !(conf?.value?.err), inAmount: q.inAmount, outAmount: q.outAmount, priceImpactPct: q.priceImpactPct };
 }
 
-export default { walletReady, keypair, address, balances, quote, swap, MINT };
+// Jupiter Ultra order+execute — GASLESS-capable: Jupiter's relayer pays the
+// SOL signature/rent/priority fees when the taker can't (gasless:true is
+// auto-detected from the taker balance). That's what lets a wallet funded
+// with pure SPL tokens and zero SOL bootstrap itself — e.g. a cheap-minimum
+// withdrawal (USDGO/ME) that arrives without gas money.
+export async function swapUltra({ inputMint, outputMint, amount, slippageBps = 150 }) {
+  const kp = keypair();
+  const q = new URLSearchParams({
+    inputMint, outputMint, amount: String(Math.round(amount)),
+    taker: kp.publicKey.toBase58(),
+  });
+  if (slippageBps != null) q.set('slippageBps', String(slippageBps));
+  const res = await fetch(`${ULTRA}/order?${q}`, { signal: TF() });
+  const j = await res.json();
+  if (!res.ok || j.error || j.errorCode || !j.transaction)
+    throw new Error(`ultra order: ${j.errorMessage || j.error || res.status}`);
+  const tx = VersionedTransaction.deserialize(Buffer.from(j.transaction, 'base64'));
+  tx.sign([kp]);
+  const ex = await fetch(`${ULTRA}/execute`, {
+    method: 'POST', signal: TF(), headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ signedTransaction: Buffer.from(tx.serialize()).toString('base64'), requestId: j.requestId }),
+  });
+  const ej = await ex.json();
+  if (!ex.ok || ej.error || ej.status === 'Failed')
+    throw new Error(`ultra execute: ${ej.error || ej.errorMessage || ej.code || ex.status}`);
+  return { signature: ej.signature, confirmed: ej.status === 'Success', gasless: !!j.gasless,
+    inAmount: j.inAmount, outAmount: ej.outputAmountResult || j.outAmount, priceImpactPct: j.priceImpactPct };
+}
+
+// rail picker: Ultra when the wallet can't pay its own gas (<~0.004 SOL),
+// classic quote+swap otherwise. Pass a known solBal to skip the RPC probe.
+export async function swapAny({ inputMint, outputMint, amount, slippageBps = 150, solBal = null }) {
+  if (solBal == null) solBal = (await balances()).sol;
+  return solBal < 0.004
+    ? swapUltra({ inputMint, outputMint, amount, slippageBps })
+    : swap({ inputMint, outputMint, amount, slippageBps });
+}
+
+export default { walletReady, keypair, address, balances, quote, swap, swapUltra, swapAny, MINT };
