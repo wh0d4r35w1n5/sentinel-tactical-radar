@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32hex, integrityCheck, integrityNote } from './crc32.mjs';
+import { kellyF as kellyFn } from './signal-fusion.mjs';
 import { makeExchange } from './exchange/index.mjs';
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 
@@ -1048,7 +1049,7 @@ async function main() {
         : (Number.isFinite(epochTs) && fTs < epochTs
           ? `campaign-pre:${f.symbol}:${f.side}`   // pre-epoch legacy fill
           : `campaign:${f.symbol}:${f.side}`);
-      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0 };
+      const g = groups.get(key) || { key, symbol: f.symbol, side: f.side, fills: 0, netUsd: 0, riskUsd: ent?.riskUsd ?? null, openTs: ent?.ts ?? null, lastTs: 0, strategy: ent?.strategy ?? null };
       g.fills += 1;
       g.netUsd += netFn(f);
       g.lastTs = Math.max(g.lastTs, fTs);
@@ -1065,6 +1066,7 @@ async function main() {
   // ate a deposit). Rolling 24h on BOT fills only (src 'api' + untagged
   // legacy) — the user's manual trades never trip the engine's breakers.
   let cbReason = null;
+  var kellyStrat = {}; // empirical-Kelly multiplier per strategy — survives the try
   try {
     // loss measured against equity at the START of the 24h window, not the
     // shrunken current equity — otherwise the same dollar loss trips an
@@ -1171,6 +1173,30 @@ async function main() {
       tripped: cbReason,
     };
     var kellyRiskUsd = kelly ? kelly.halfKellyRiskUsd : null;
+    // ---- empirical Kelly per strategy (Stanford step 4): each strategy's
+    // realized R stream implies its own f* = p − q/b. Deployment scales by
+    // the strategy's half-f* RELATIVE to the book's half-f* — measured-edge
+    // cells keep full size, measured-negative cells decay to 0.3x probe
+    // size until their record recovers. Never raises size above the
+    // existing caps; n<8 gets no opinion.
+    {
+      const bkt = {};
+      for (const g of pos) {
+        if (!(g.riskUsd > 0)) continue;
+        const s = g.strategy || (g.key.startsWith('campaign') ? 'campaign' : 'unattributed');
+        (bkt[s] ??= []).push(g.netUsd / g.riskUsd);
+      }
+      const fBook = kelly && kelly.fStar > 0 ? kelly.fStar : null;
+      for (const [s, rs] of Object.entries(bkt)) {
+        if (rs.length < 8) continue;
+        const k = kellyFn(rs);
+        if (!k) continue;
+        kellyStrat[s] = { n: k.n, winPct: k.winPct, payoff: k.payoff, fStar: k.fStar, mult: 1 };
+        if (k.fStar <= 0) kellyStrat[s].mult = 0.3;
+        else if (fBook) kellyStrat[s].mult = round(Math.min(1, Math.max(0.3, k.fStar / fBook)), 2);
+      }
+      if (Object.keys(kellyStrat).length) state.kellyByStrategy = kellyStrat;
+    }
     // ---- per-symbol bleed quarantine: a symbol whose last AQ_N grouped
     // positions are ALL losers AND that has bled >= AQ_USD net in the window
     // is a measured-negative cell — deny it before redeploy churn grinds the
@@ -2799,6 +2825,9 @@ async function main() {
       // their full slot, unproven ones take a probe-size fraction. The
       // per-position cap below stays the absolute ceiling either way.
       const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1))) * metaMul;
+      // empirical Kelly per strategy — measured-positive cells keep full
+      // size, measured-negative decay to 0.3x probe (never a raise)
+      const kellyMul = (o.strategy && kellyStrat[o.strategy]?.mult) || 1;
       const marginUsd = o.mandate
         ? // flat-book deployment: max available margin, fee-headroom only —
           // the mandate IS the position; conviction/risk ceilings are for
@@ -2815,7 +2844,7 @@ async function main() {
             marginFree / (1 + lev * FEE_RT * 1.3)
           )
         : Math.min(
-            (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul,
+            (Math.min(riskMul / denom, 1) * marginFree) / (1 + lev * FEE_RT * 1.3) * convMul * kellyMul,
             // single-position margin cap — 85%: near-full aggression on a
             // qualifying shot while still banking one reload. Ruin is the
             // only unrecoverable outcome; every other loss is tuition.

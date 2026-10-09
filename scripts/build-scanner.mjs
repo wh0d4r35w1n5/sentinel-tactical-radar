@@ -11,6 +11,7 @@ import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
 import '../ta-engine.js';  // sets globalThis.TAEngine
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 import { integrityNote } from './crc32.mjs';
+import * as sf from './signal-fusion.mjs';
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
@@ -1590,11 +1591,27 @@ async function main() {
           100
         )
       );
-      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score,
+      // raw fusion components — the four-step combiner consumes these;
+      // the emitted z-map is journaled so the residual-weight learner can
+      // join it to realized alpha later
+      const fz = {
+        mom: momentumScore, vol: volumeScore, liq: liquidityScore, surg: surgeScore,
+        confl: Math.min((k.ta?.confluence || 0) * 3, 12),
+        ic: icAdj, strat: (stratAdj[strategy] || 0) + (stratBoost[strategy] || 0),
+        deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
+        soc: socialBoost + socialPenalty, fund: fundBoost, clim: climax ? -10 : 0,
+      };
+      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
     .sort((a, b) => b.score - a.score);
+  // ---- Stanford fusion pass: serial-demean each component vs its rolling
+  // EMA, z-score cross-sectionally across this board, combine by the
+  // ridge-learned residual weights (shrunk to priors until evidence is
+  // deep), blend into score by evidence weight, then re-rank.
+  try { sf.fuseBoard(ranked, path.join(API, '..', 'state')); } catch {}
+  ranked.sort((a, b) => b.score - a.score);
   // fillable-first emission: the active environment's contract catalog
   // (exec-catalog.json) is authoritative — a signal that can't route is
   // board intel, not a candidate. Demo lists ~45 contracts vs the ~435
@@ -1654,6 +1671,9 @@ async function main() {
         boardRank: boardIdx + 1, // position on the emitted board this run
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
+        fusedScore: r.fusedScore ?? null,
+        fusedZ: r.fusedZ ?? null,
+        fusion: r.fusion ?? null,
         vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
@@ -4007,6 +4027,7 @@ async function main() {
         rsi: s.rsi ?? null,
         volRatio: s.volRatio ?? null,
         momScore: s.momScore ?? null,
+        fusion: s.fusion ?? null,
         boardRank: s.boardRank ?? null,
         entry,
         // bracket the signal designed — journal charts need it to draw the
@@ -4096,6 +4117,17 @@ async function main() {
       for (const r of eh.records || []) allComplete.push(r);
     } catch {}
   }
+  // Stanford step 3 — residual weighting: ridge-fit every sealed signal's
+  // emitted fusion z-map onto its realized 24h alpha, shrunk toward priors.
+  // fuseBoard consumes the persisted weights next cycle.
+  try {
+    const fitRows = [];
+    for (const r of allComplete)
+      if (r.alpha24h != null && r.fusion)
+        fitRows.push({ c: r.fusion, a: Math.max(-8, Math.min(8, +r.alpha24h)) });
+    const fit = sf.fitWeights(fitRows.slice(-6000));
+    if (fit) sf.saveWeights(path.join(API, '..', 'state'), fit);
+  } catch {}
   // predictive-power stats. Per-horizon metrics (dirAcc, avgFwd, alpha)
   // use every record that has that field — a signal labeled at +1h counts
   // for 1h accuracy immediately instead of waiting 24h. Outcome-dependent
