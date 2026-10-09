@@ -37,6 +37,12 @@ const CRACK_STABLE = [
   { name: 'Baby Back',     tag: 'dip buyer',           w: { score: 1.2, chg: 1,   mom: -2,  stratW: 6, strat: 'Quartile' } },
   { name: 'Miss Behave',   tag: 'contrarian',          w: { score: 1,   chg: 1,   mom: -3,  stratW: 0 } },
   { name: 'Gold Teeth',    tag: 'carry queen',         w: { score: 1.5, chg: 0.5, mom: 0.5, stratW: 10, strat: 'Carry|Momentum' } },
+  // the bagrunner crew — freelance sprinters, nobody's property. High
+  // chg/mom pulls = they chase whatever's already moving and get off fast.
+  // pimp:null forever unless a pimp earns a roster slot to recruit them.
+  { name: 'Fastlane Faye', tag: 'bagrunner — chase & dump', w: { score: 1.2, chg: 5,   mom: 2,   stratW: 8,  strat: 'Momentum|Breakout|Ignition' } },
+  { name: 'Bolt Betsy',    tag: 'bagrunner — pure speed',   w: { score: 0.4, chg: 6,   mom: 3,   stratW: 0 } },
+  { name: 'Sprint Santana',tag: 'bagrunner — alt bags',     w: { score: 1,   chg: 4,   mom: 2.5, alt: 6 } },
 ];
 
 const BENCH_NAMES = ['Chrome Cherry', 'Plastic Poppy', 'Rusty Ruby', 'Vandal Vicky', 'Nylon Nina', 'Broke Betty', 'Static Stella', 'Lowdown Lola'];
@@ -63,7 +69,17 @@ function freshWar() {
 export function loadWar() {
   try {
     const w = JSON.parse(fs.readFileSync(WAR_PATH, 'utf8'));
-    if (w && w.pimps && w.cracks) return w;
+    if (w && w.pimps && w.cracks) {
+      // stable additions land as free agents in saved wars — a redeploy
+      // can't leave new girls invisible just because the corner predates
+      // them. Retired names stay dead; a mutant wearing a retired girl's
+      // pimp doesn't resurrect her.
+      for (const c of CRACK_STABLE) {
+        if (!w.cracks[c.name] && !(w.retired || {})[c.name])
+          w.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0 };
+      }
+      return w;
+    }
   } catch {}
   return freshWar();
 }
@@ -145,6 +161,18 @@ export function nominate(war, cand, slotsAvail) {
       if (best) noms.push({ cand: best, sc: bestS, pimp: pname, crack: crack.name });
     }
   }
+  // freelance pass: unowned girls (bagrunners, not-yet-recruited) nominate
+  // for themselves — no crown boost, no crippled dock, no pimp's cut. Raw
+  // scores only; if they outrun the stables they take the slot.
+  for (const [gname, crack] of Object.entries(war.cracks)) {
+    if (crack.pimp) continue;
+    let best = null, bestS = -1e9;
+    for (const c of cand) {
+      const sc = crackScore({ name: gname, ...crack }, c);
+      if (sc > bestS) { bestS = sc; best = c; }
+    }
+    if (best) noms.push({ cand: best, sc: bestS, pimp: null, crack: gname });
+  }
   noms.sort((a, b) => b.sc - a.sc);
   const seen = new Set(), out = [];
   for (const n of noms) {
@@ -195,13 +223,15 @@ export function attribute(war, fills, log = () => {}) {
     // survive her removal from the active stable (retirement is a verdict,
     // not an erasure)
     const cr = war.cracks[hit.crack] || (war.retired || {})[hit.crack];
-    const pm = war.pimps[hit.pimp];
-    if (!cr || !pm) continue;
+    const pm = hit.pimp ? war.pimps[hit.pimp] : null;
+    if (!cr) continue;
     cr.net += net; cr.closes++;
     if (net >= 0) cr.wins++; else cr.losses++;
-    pm.net += net;
-    if (net >= 0) pm.wins++; else pm.losses++;
-    lines.push(`💰 ${hit.crack} (working for ${hit.pimp}) banked ${net >= 0 ? '+' : ''}$${net.toFixed(2)} on ${f.symbol}${entryFee > 0 ? ` incl $${entryFee.toFixed(3)} entry fees` : ''}${net < 0 ? ' — docked her pay' : ''}`);
+    if (pm) {
+      pm.net += net;
+      if (net >= 0) pm.wins++; else pm.losses++;
+    }
+    lines.push(`💰 ${hit.crack} (${pm ? `working for ${hit.pimp}` : 'freelance — no pimp took a cut'}) banked ${net >= 0 ? '+' : ''}$${net.toFixed(2)} on ${f.symbol}${entryFee > 0 ? ` incl $${entryFee.toFixed(3)} entry fees` : ''}${net < 0 ? ' — docked her pay' : ''}`);
   }
   war.attributed = [...done].slice(-800);
   war.feeSeen = [...feeSeen].slice(-800);
