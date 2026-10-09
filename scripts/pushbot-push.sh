@@ -19,8 +19,10 @@ export GIT_TERMINAL_PROMPT=0
 G="git -c gc.auto=0 -c pack.threads=1 -c pack.windowMemory=32m -c pack.deltaCacheSize=16m -c core.bigFileThreshold=16m"
 SQUASH_MB=${PUSHBOT_SQUASH_MB:-1200}
 
-$G fetch origin main -q 2>/dev/null || exit 0
-$G reset --hard origin/main -q 2>/dev/null || $G pull --rebase -X ours -q 2>/dev/null || true
+# depth-1 fetch — a full fetch unshallows the repo and re-pulls months of
+# heavy blob history every cycle (re-bloat 1.6M->5.4G in <1h, 2026-10-09)
+$G fetch --depth 1 origin main -q 2>/dev/null || exit 0
+$G reset --hard FETCH_HEAD -q 2>/dev/null || true
 
 if [ "$(du -sm .git 2>/dev/null | cut -f1)" -ge "$SQUASH_MB" ]; then
   rm -rf .git
