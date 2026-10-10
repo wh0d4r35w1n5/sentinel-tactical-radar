@@ -50,7 +50,12 @@ gross-positive and still printed red. These rules prevent the repeat.
 - Equity anchor: `SENTINEL_EQUITY_OVERRIDE_USD=65` ($100 AUD epoch start);
   book = 65 + journaled net, capped by real equity, minus vault carry.
 - Vault: `SENTINEL_VAULT_SHARE=0.25`, HWM-gated (pays only on new NAV highs;
-  `hwmUsd` must persist — fixed 2026-10-01).
+  `hwmUsd` must persist — fixed 2026-10-01). **Vault stays USDT** (operator
+  order 2026-10-10): no auto-deploy into spot assets —
+  `SENTINEL_VAULT_BUY_MIN_USD=999999999` keeps the USELESS/BTC buy path
+  permanently off. Swept USDT earmarks in-ledger and moves futures->spot
+  only when the API key carries transfer perms (currently 40014 — key is
+  futures-trade-only; operator can move `pendingFutures` manually).
 - **Min leverage 20x** (`SENTINEL_MIN_LEV=20`) — operator order 2026-10-08:
   carry/mandate/top-up orders ride >=20x whenever the liquidation band
   holds it; the band cap (lev<=80/(stopPct+0.64)) still wins when it

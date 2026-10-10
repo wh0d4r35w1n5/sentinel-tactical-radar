@@ -8,7 +8,7 @@
 //  - every swap goes through quote-then-build; slippageBps caps execution
 //  - secrets never leave the VPS; only signatures hit the wire
 
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import '../load-env.mjs';
 
 const JUP = process.env.JUP_API || 'https://lite-api.jup.ag/swap/v1';
@@ -32,14 +32,25 @@ export function keypair() {
 
 export const address = () => (walletReady() ? keypair().publicKey.toBase58() : null);
 
+// both SPL token program families — legacy Token AND Token-2022. Ondo's
+// USDGO (and a growing share of new issuance) lives under Token-2022; a
+// balances() that only queries the legacy program is blind to it.
+const TOKEN_PROGRAMS = [
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', // legacy SPL Token
+  'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', // Token-2022
+];
+
 export async function balances() {
   if (!walletReady()) return { ok: false, reason: 'no-wallet' };
   const conn = new Connection(RPC, 'confirmed');
   const pub = keypair().publicKey;
   const sol = (await conn.getBalance(pub)) / 1e9;
-  const toks = await conn
-    .getParsedTokenAccountsByOwner(pub, { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') })
-    .catch(() => ({ value: [] }));
+  const toksLists = await Promise.all(
+    TOKEN_PROGRAMS.map((pid) =>
+      conn.getParsedTokenAccountsByOwner(pub, { programId: new PublicKey(pid) }).catch(() => ({ value: [] }))
+    )
+  );
+  const toks = { value: toksLists.flatMap((t) => t.value || []) };
   const tokens = {}, tokensRaw = {};
   for (const t of toks.value || []) {
     const info = t.account.data.parsed?.info;
