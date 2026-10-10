@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T19:09:44.948Z",
+ "at": "2026-10-10T19:15:22.474Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.61,
+   "equityUsd": 23.67,
    "marginFreeUsd": 18.57,
    "epochNetUsd": -42.09,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": 0.33,
+     "upl": 0.39,
      "lev": 35,
      "margin": 4.71
     }
@@ -20,13 +20,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0158,
    "stableUsd": 1.96,
-   "purseUsd": 5.46,
-   "positions": 9,
-   "laneNet": -0.46,
-   "laneTrades": 10,
-   "laneWins": 2
+   "purseUsd": 4.82,
+   "positions": 8,
+   "laneNet": -0.29,
+   "laneTrades": 11,
+   "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791659653096,
+    "symbol": "SECRETFROG",
+    "sig": "5bKqoGDY7qVmt9rwQmscN8RpFyUXRL1SgeixnvcDNzkuWvumQeF899r9kVdeC5HSZQAP7ZHtGnwTkSU18d5oXsVU",
+    "text": "SELL SECRETFROG"
+   },
    {
     "venue": "solana",
     "ts": 1791658563111,
@@ -88,13 +95,6 @@
     "ts": 1791637280485,
     "symbol": null,
     "sig": "3dyHPWiiv4wNCbywWnKfKimtGsmuaXQk95u6NH4CB3YyHTJ7cNC7CCNWXvpvBnp2TvNp4Y28iJLieudWFiHjYiRM",
-    "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791637197178,
-    "symbol": null,
-    "sig": "3UfmJmNnTMrh17krChASXdzidyRnpw6U8bCxgMsxvSoF8QXX8Gau5kYwzC8gKWFUScf1HaN7dnoHndjvr5Ugvxmz",
     "text": "BOOTSTRAP boot"
    }
   ]
@@ -499,13 +499,13 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -0.6441,
-   "wins": 1,
+   "net": -0.4713,
+   "wins": 2,
    "losses": 8,
-   "closes": 13,
+   "closes": 14,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0295,
+   "form": 0.0514,
    "mood": "working",
    "vault": 0,
    "hist": [
@@ -517,54 +517,19 @@
     -0.5788,
     -0.6128,
     -0.6198,
-    -0.6441
+    -0.6441,
+    -0.4713
    ],
    "persona": {
-    "swagger": 0.46,
-    "tilt": 0.21,
-    "greed": 0.49,
-    "discipline": 0.47
+    "swagger": 0.55,
+    "tilt": 0.11,
+    "greed": 0.53,
+    "discipline": 0.5
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "STRKUSDT",
-   "direction": "LONG",
-   "ts": 1791658870902,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791658818746STRKUSDT",
-   "live": false
-  },
-  {
-   "symbol": "WLDUSDT",
-   "direction": "LONG",
-   "ts": 1791658871090,
-   "pimp": "Silky Slim",
-   "crack": "Crystal Meth",
-   "coid": "s1791658818746WLDUSDT",
-   "live": false
-  },
-  {
-   "symbol": "ERAUSDT",
-   "direction": "LONG",
-   "ts": 1791658951841,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791658905945ERAUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791658951958,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791658905945XRPUSDT",
-   "live": false
-  },
   {
    "symbol": "MOODENGUSDT",
    "direction": "LONG",
@@ -634,10 +599,51 @@
    "ts": 1791659384704,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791659340244XRPUSDT"
+   "coid": "s1791659340244XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "BILLUSDT",
+   "direction": "LONG",
+   "ts": 1791659469336,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791659423667BILLUSDT",
+   "live": false
+  },
+  {
+   "symbol": "WLDUSDT",
+   "direction": "LONG",
+   "ts": 1791659550324,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791659507767WLDUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791659550442,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791659507767XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791659631499,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791659588147XRPUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791659720305,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on SECRETFROG"
+  },
   {
    "ts": 1791655966897,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
