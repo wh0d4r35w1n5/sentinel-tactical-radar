@@ -22,6 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './load-env.mjs';
 import * as sol from './exchange/solana-swap.mjs';
+import { emitCustody } from './custody-proof.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const API = path.join(ROOT, 'api');
@@ -90,7 +91,7 @@ async function main() {
 
   const stableUsd = (bal.tokens[sol.MINT.USDC] || 0) + (bal.tokens[sol.MINT.USDT] || 0);
   const deployed = book.positions.reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
-  const done = (note) => { writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); emitLane(book, bal, stableUsd, note); };
+  const done = (note) => { writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); emitLane(book, bal, stableUsd, note); emitCustody().catch(() => {}); };
   console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
 
   // bootstrap: convert whatever landed into the USDC purse. Two rails —

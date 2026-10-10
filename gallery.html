@@ -110,6 +110,13 @@ details.xtab th{font-size:8px;letter-spacing:.1em;color:var(--mut)}
   </div>
 </header>
 <div class="stats" id="stats"></div>
+<div class="edge" id="ocEdge" style="display:none"><h2>⛓ ON-CHAIN LANE — Solana self-custody purse · every balance a live RPC read · every fill a solscan-verifiable signature <span id="ocSub" style="float:right;font-weight:400"></span></h2>
+  <div class="edrow">
+    <div class="cell"><div class="pt">WALLET — bot-owned, operator-watchable in Bitget Wallet</div><div id="ocWallet"></div></div>
+    <div class="cell"><div class="pt">CUSTODY LOOP PROOF — wallet ↔ Bitget main · legs re-verified on-chain</div><div id="ocCustody"></div></div>
+    <div class="cell"><div class="pt">POSITIONS + RECENT FILLS — signatures resolve on solscan</div><div id="ocFills"></div></div>
+  </div>
+</div>
 <div class="edge"><h2>EDGE DESK — attribution by entry family · measured on real fills, not modeled <span id="edgeNote" style="float:right;font-weight:400"></span></h2>
   <div class="edrow">
     <div class="cell"><table class="etbl" id="etbl"><tr><td class="sub">measuring — mount cards to fill this table</td></tr></table><div class="pt" style="margin-top:10px">BY SYMBOL — where the book actually earns</div><table class="etbl" id="symtbl"><tr><td class="sub">—</td></tr></table></div>
@@ -969,8 +976,36 @@ ${shots.map(s=>`<div><b>${s.r.symbol} ${s.r.dir}</b> · ${fmtP(s.r.entryPx)}→$
 // ---- wire: R badge + forensics refresh whenever a card measures -----------
 const _nm=noteMeasured;
 noteMeasured=function(r){_nm(r);paintFore(r);renderEdge()};
+const renderOnchain=(oc,cust,pnl)=>{
+  if(!oc||!oc.address)return;
+  const edge=document.getElementById('ocEdge');edge.style.display='block';
+  document.getElementById('ocSub').textContent=(oc.ts?ago(oc.ts)+' ago':'')+(oc.enabled===false?' · lane off':'');
+  const pos=oc.positions||[],fills=(oc.recentFills||[]).slice(0,8);
+  const ocPnl=pnl&&pnl.onchain?pnl.onchain:null;
+  document.getElementById('ocWallet').innerHTML=`<table class="etbl"><tr><td style="text-align:left">address</td><td><a style="color:var(--cyan)" target="_blank" href="https://solscan.io/account/${oc.address}">${oc.address.slice(0,10)}…${oc.address.slice(-6)}</a></td></tr>
+    <tr><td style="text-align:left">👛 purse</td><td><b>$${(+(oc.purseUsd||0)).toFixed(2)}</b></td></tr>
+    <tr><td style="text-align:left">💵 stables</td><td>$${(+(oc.stableUsd||0)).toFixed(2)}</td></tr>
+    <tr><td style="text-align:left">⛽ gas</td><td>${(+(oc.sol||0)).toFixed(4)} SOL${oc.sol!=null&&oc.sol<0.004?' ⚠ low':''}</td></tr>
+    ${ocPnl?`<tr><td style="text-align:left">lane net since seed</td><td><b class="${(ocPnl.netSinceBootstrapUsd||0)>=0?'up':'dn'}">${fmt$(ocPnl.netSinceBootstrapUsd)}</b></td></tr>
+    <tr><td style="text-align:left">seeded / purse now</td><td>$${(+ocPnl.bootstrapUsd||0).toFixed(2)} / $${(+ocPnl.purseUsd||0).toFixed(2)}</td></tr>
+    <tr><td style="text-align:left">open unrealized</td><td class="${(ocPnl.unrealizedUsd||0)>=0?'up':'dn'}">${fmt$(ocPnl.unrealizedUsd)}</td></tr>`:''}
+    <tr><td style="text-align:left">gates</td><td class="sub" style="font-size:9px">score≥${oc.gates?.minScore??'—'} · ≤${oc.gates?.maxPositions??'—'} pos · deploy≤$${oc.gates?.maxDeployedUsd??'—'} · hold<${oc.gates?.maxHoldH??'—'}h</td></tr></table>
+  <div class="evnote">the whole purse is engine-autonomous by construction — wallet keys live on the VPS, every spend signs from there. watch it read-only in Bitget Wallet (Watch wallet → Solana → address above).</div>`;
+  const kindIcon={sell:'🔄',return:'🏦',credit:'✅',sweep:'💸'};
+  const legs=(cust&&cust.legs)||[];
+  document.getElementById('ocCustody').innerHTML=legs.length?`<table class="etbl"><tr><th style="text-align:left">leg</th><th>amount</th><th>age</th><th>proof</th></tr>`
+    +legs.slice(0,8).map(l=>`<tr><td style="text-align:left">${kindIcon[l.kind]||'•'} ${l.label||l.kind}${l.dest?` → ${l.dest.slice(0,8)}…`:''}</td><td>${l.amountUsd!=null?'$'+(+l.amountUsd).toFixed(2):'—'}</td><td>${l.ts?ago(l.ts):'—'}</td><td>${l.verified&&l.sig?`<a style="color:var(--grn)" target="_blank" href="https://solscan.io/tx/${l.sig}">✓ on-chain${l.slot?' slot '+l.slot:''}</a>`:l.sig?`<a style="color:var(--mut)" target="_blank" href="https://solscan.io/tx/${l.sig}">sig…</a>`:l.verified?'<span class="up">✓ venue receipt</span>':'<span class="sub">pending</span>'}</td></tr>`).join('')+`</table>
+    <div class="evnote">${cust.summary?`${cust.summary.verifiedLegs}/${cust.summary.nLegs} legs verified on-chain · $${(cust.summary.returnedUsd||0).toFixed(2)} returned to the Bitget main account`:'—'} · ${cust.note||''}</div>`
+    :'<div class="sub" style="font-size:10px">no custody legs journaled yet — chain-return.mjs records each wallet→Bitget proof here</div>';
+  document.getElementById('ocFills').innerHTML=(pos.length?`<table class="etbl"><tr><th style="text-align:left">position</th><th>cost→mark</th><th>age</th><th>entry sig</th></tr>`
+    +pos.map(p=>{const mk=p.lastValueUsd||p.costUsd||0,pnl=mk-(p.costUsd||0);return `<tr><td style="text-align:left"><b>${p.symbol||'?'}</b>${p.qtyUi!=null?' '+fmtP(p.qtyUi):''}</td><td>$${(+(p.costUsd||0)).toFixed(2)} → <b class="${pnl>=0?'up':'dn'}">$${(+mk).toFixed(2)}</b></td><td>${p.ageH??'—'}h</td><td>${p.sig?`<a style="color:var(--cyan)" target="_blank" href="https://solscan.io/tx/${p.sig}">${p.sig.slice(0,8)}…</a>`:'—'}</td></tr>`}).join('')+'</table>':'<div class="sub" style="font-size:10px;margin-bottom:6px">no open positions</div>')
+    +(fills.length?`<table class="etbl"><tr><th style="text-align:left">fill</th><th>usd</th><th>sig</th></tr>`
+    +fills.map(f=>`<tr><td style="text-align:left">${f.side==='sell'?'🔴':f.side==='buy'?'🟢':'⚪'} ${f.side} ${f.symbol||f.usd||''}</td><td>${f.estUsd?'~$'+(+f.estUsd).toFixed(2):f.usd?'$'+(+f.usd).toFixed(2):'—'}</td><td>${f.sig?`<a style="color:var(--cyan)" target="_blank" href="https://solscan.io/tx/${f.sig}">${f.sig.slice(0,8)}…</a>`:'—'}</td></tr>`).join('')+'</table>':'')
+    ||'<div class="sub" style="font-size:10px">purse waits for a gated candidate</div>';
+};
 (async()=>{
-  const [tk,ll]=await Promise.all([j(API+'trades-taken.json'),j(API+'live-ledger.json')]);
+  const [tk,ll,ocLane,custody,autoPnl]=await Promise.all([j(API+'trades-taken.json'),j(API+'live-ledger.json'),j(API+'onchain-lane.json'),j(API+'chain-custody.json'),j(API+'autonomous-pnl.json')]);
+  renderOnchain(ocLane,custody,autoPnl);
   if(ll&&ll.exchange){VEX=ll.exchange;const vn=document.getElementById('vNote');if(vn)vn.textContent=VTITLE();}
   EPOCH_MS=(ll&&ll.circuitBreakers&&ll.circuitBreakers.epochMs)||null;
   RECS=((tk&&tk.trades)||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
@@ -1014,7 +1049,9 @@ noteMeasured=function(r){_nm(r);paintFore(r);renderEdge()};
   // auto-refresh: live positions move — re-pull the record set every 90s and
   // soft-rebuild. Preserves scroll unless the trade count changed.
   setInterval(async()=>{
-    const tk2=await j(API+'trades-taken.json');if(!tk2)return;
+    const [tk2,oc2,cust2,pnl2]=await Promise.all([j(API+'trades-taken.json'),j(API+'onchain-lane.json'),j(API+'chain-custody.json'),j(API+'autonomous-pnl.json')]);
+    renderOnchain(oc2,cust2,pnl2);
+    if(!tk2)return;
     const recs=(tk2.trades||[]).map(r=>({...r,key:r.symbol+'|'+r.entryTs}));
     if(recs.length===RECS.length){RECS.forEach((r,i)=>{const n=recs[i];
       if(n&&n.key===r.key){r.net=n.net;r.upl=n.upl;r.status=n.status;r.holdMin=n.holdMin}});return}

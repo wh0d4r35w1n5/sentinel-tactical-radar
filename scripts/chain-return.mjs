@@ -12,6 +12,7 @@ import {
   SystemProgram, sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { keypair, balances, swapAny, MINT } from './exchange/solana-swap.mjs';
+import { appendLeg, emitCustody } from './custody-proof.mjs';
 
 const RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 const USDC = new PublicKey(MINT.USDC);
@@ -84,6 +85,7 @@ const main = async () => {
     console.log('SELL leg:', sellMint.slice(0, 12), 'raw', raw);
     const sw = await swapAny({ inputMint: sellMint, outputMint: MINT.USDC, amount: +raw, slippageBps: 250, solBal: b0.sol });
     console.log('  sell sig:', sw.signature, '| confirmed:', sw.confirmed, '| out:', sw.outAmount, '| impact:', sw.priceImpactPct);
+    appendLeg({ kind: 'sell', label: `DEX sell → USDC`, asset: sellMint, amountUsd: +(sw.outAmount || 0) / 1e6 || null, sig: sw.signature });
     await new Promise((r) => setTimeout(r, 4000));
   } else console.log('SELL leg: no balance for', sellMint.slice(0, 12), '— skipping');
 
@@ -109,10 +111,13 @@ const main = async () => {
   const sig = await sendAndConfirmTransaction(conn, tx, [kp], { commitment: 'confirmed' });
   console.log('  sent', amt.toFixed(2), 'USDC | sig:', sig);
   console.log('  solscan: https://solscan.io/tx/' + sig);
+  appendLeg({ kind: 'return', label: `USDC → Bitget deposit (${dep.chain || 'SOL'} chain)`, asset: 'USDC', amountUsd: +amt.toFixed(4), dest: dep.address, sig });
 
   const b2 = await balances();
   console.log('after: sol', b2.sol.toFixed(4), '| usdc', (b2.tokens[MINT.USDC] || 0).toFixed(2));
   console.log('DONE — check Bitget deposit history for', amt.toFixed(2), 'USDC on SOL chain');
+  const n = await emitCustody().catch(() => 0);
+  console.log('custody artifact refreshed —', n, 'leg(s)');
 };
 
 main().catch((e) => { console.error('FATAL:', e.message); process.exit(1); });
