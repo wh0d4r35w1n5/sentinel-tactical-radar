@@ -1,23 +1,16 @@
 {
- "at": "2026-10-10T09:23:01.624Z",
+ "at": "2026-10-10T09:41:38.936Z",
  "wallets": {
   "futures": {
-   "equityUsd": 13.32,
-   "marginFreeUsd": 0,
+   "equityUsd": 11.99,
+   "marginFreeUsd": 1.25,
    "epochNetUsd": -60.18,
    "fills": 400,
    "positions": [
     {
-     "symbol": "WLDUSDT",
-     "side": "long",
-     "upl": -0.19,
-     "lev": 75,
-     "margin": 2.6
-    },
-    {
      "symbol": "MUUSDT",
      "side": "long",
-     "upl": -0.03,
+     "upl": -0.18,
      "lev": 37,
      "margin": 10.93
     }
@@ -27,13 +20,41 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0249,
    "stableUsd": 10.99,
-   "purseUsd": 10.99,
-   "positions": 0,
+   "purseUsd": 16.24,
+   "positions": 4,
    "laneNet": 0.23,
    "laneTrades": 2,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791624701231,
+    "symbol": "MOIN",
+    "sig": "5t57oiUfVUUdHATkkw8ScPjAcxKNMHJQsQhiiRYhRawjzQtn3dEvdtY3s9aQQM5mRxoDoBvdcioZGrEf8nNnVKVU",
+    "text": "BUY MOIN $1.01"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791624698550,
+    "symbol": "GOMO",
+    "sig": "3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
+    "text": "BUY GOMO $1.19"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791624696112,
+    "symbol": "SI276",
+    "sig": "4DpAqgDaQvHTrac2RXSVGsG8fXKQwi9UFC6Ucd5hoh1qJ9z1pVDMUK2FDBjceGhJywyhT8Dn7Vv9ggYDaLK9HhgH",
+    "text": "BUY SI276 $1.40"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791624693825,
+    "symbol": "QOMPUTE",
+    "sig": "4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
+    "text": "BUY QOMPUTE $1.65"
+   },
    {
     "venue": "solana",
     "ts": 1791623136195,
@@ -75,34 +96,6 @@
     "symbol": "GOMO",
     "sig": null,
     "text": "RECONCILE GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791601504284,
-    "symbol": "QOMPUTE",
-    "sig": null,
-    "text": "RECONCILE QOMPUTE"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791601504283,
-    "symbol": "JEANPHIL",
-    "sig": null,
-    "text": "RECONCILE JEANPHIL"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791598755762,
-    "symbol": null,
-    "sig": "MnLRgeGkFHRm2BcAF4TixFwboDLsubeQwKXUrpgQjdAQFXJ9j8qMqj7u5V2AMYokr8JWk8DUxbE6t24vYudqDbW",
-    "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791598689862,
-    "symbol": null,
-    "sig": "4pZceEfxDPajYs2EtL9Bpx1eiQuVW2asDu9CZkK3MoYzvKHgVNQgvYMUwBKRJBh5QTSLXuxfNRPsft826ZjGHf7k",
-    "text": "BOOTSTRAP boot"
    }
   ]
  },
@@ -206,7 +199,7 @@
    "persona": {
     "swagger": 0.58,
     "tilt": 0.06,
-    "greed": 0.54,
+    "greed": 0.53,
     "discipline": 0.53
    }
   },
@@ -549,7 +542,7 @@
    "coid": "oc:2EHYJ96ZgzfNM9sHCktGeow7UbamdGhUFwcPjKsjz1MeKYu3wDnoRmhniKroQKnFXn79UifvoMDkjwDfs3ZCp1a9",
    "onchain": true,
    "filledAt": 1791598003872,
-   "live": false,
+   "live": true,
    "closedAt": 1791601504284
   },
   {
@@ -561,7 +554,7 @@
    "coid": "oc:Y9pFW8QHQfYL5kheybFFPwh4j3g2MYeFhfR9Toumuez8mfYwQyfyWEF9Wmat1qSiA5GCK8qdpVmtM7S24NnsSLz",
    "onchain": true,
    "filledAt": 1791598006122,
-   "live": false,
+   "live": true,
    "closedAt": 1791601504287,
    "epNet": 0,
    "epCounted": true,
@@ -576,7 +569,7 @@
    "coid": "oc:6wrBF8yCYhze5Q1m8eDXcykUrqo1yC1m8mE1EHJExHNujaH8rfH3ezUhBL1PXX8cSGgwY9vZARSeUZ1vUycn9eN",
    "onchain": true,
    "filledAt": 1791601506385,
-   "live": false,
+   "live": true,
    "closedAt": 1791619115847
   },
   {
@@ -588,11 +581,71 @@
    "coid": "oc:2yJCFnmYV8Zq22N75GqEDN6PxaasEKPrrqUCiYvJQW1zQozuoKgRobvBTA2ucUJJZZhaz7BUtnBGcVaFNFAK5QBZ",
    "onchain": true,
    "filledAt": 1791601508964,
-   "live": false,
+   "live": true,
    "closedAt": 1791614952306,
    "epNet": 0.0415,
    "epVerdict": 1,
    "epCounted": true
+  },
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791624693825,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
+   "onchain": true,
+   "filledAt": 1791624693825,
+   "live": true
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791624696112,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4DpAqgDaQvHTrac2RXSVGsG8fXKQwi9UFC6Ucd5hoh1qJ9z1pVDMUK2FDBjceGhJywyhT8Dn7Vv9ggYDaLK9HhgH",
+   "onchain": true,
+   "filledAt": 1791624696112,
+   "live": true
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791624698550,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
+   "onchain": true,
+   "filledAt": 1791624698550,
+   "live": true
+  },
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791624701231,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5t57oiUfVUUdHATkkw8ScPjAcxKNMHJQsQhiiRYhRawjzQtn3dEvdtY3s9aQQM5mRxoDoBvdcioZGrEf8nNnVKVU",
+   "onchain": true,
+   "filledAt": 1791624701231,
+   "live": true
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1791625298458,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791624678945SOXLUSDT"
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791625298578,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791624678945ETHUSDT"
   }
  ],
  "drama": [
