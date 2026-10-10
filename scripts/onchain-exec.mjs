@@ -121,8 +121,14 @@ async function main() {
     // gas is short (Ultra relayer pays), classic when SOL exists.
     // NEVER sweep an open position's mint — a post-buy purse dip below
     // MIN_STABLE_USD must not liquidate the book (fixed: held-mint guard).
+    // Operator manual holds ride too: state/onchain-hold.json {mints:[...]}
+    // — a token the operator bought through the app into this shared
+    // address is not purse fodder (SIB buys were being insta-swept).
     const heldMints = new Set(book.positions.map((p) => p.mint));
-    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT && !heldMints.has(m));
+    const HOLD_MINTS = new Set(readJ(path.join(STATE, 'onchain-hold.json'), {}).mints || []);
+    const heldOrphans = Object.keys(bal.tokens).filter((m) => HOLD_MINTS.has(m) && !heldMints.has(m) && +bal.tokens[m] > 0);
+    if (heldOrphans.length) console.log(`  🖐 hold-list: ${heldOrphans.map((m) => m.slice(0, 8) + '…').join(', ')} spared from orphan sweep`);
+    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT && !heldMints.has(m) && !HOLD_MINTS.has(m));
     for (const mint of orphans.slice(0, 2)) {
       const raw = bal.tokensRaw?.[mint];
       if (!raw || !(+raw > 0)) continue;

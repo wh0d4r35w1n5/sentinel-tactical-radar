@@ -184,6 +184,12 @@ ft.mjs, rr-config.json, env.txt).
   close), software TP. Book-wide BE-lock also covers non-scalp
   positions at `BE_ARM_SWING_PCT` 1.2 (tighten-only — composes with
   exec ratchets).
+- On-chain manual holds (`state/onchain-hold.json` `{"mints":[...]}`):
+  the lane's orphan-sweep bootstraps ANY non-position SPL token to USDC
+  whenever stables < MIN_STABLE_USD — that includes operator app buys
+  landing in the shared wallet (`kpevjJ…`). Held mints are spared; log
+  line `🖐 hold-list: <mint8>… spared from orphan sweep` proves it.
+  SIB = 3HKKrXhDvGFWPdkALw3KofESZexsEx9opGtq37n9pump held 2026-10-10.
 
 ## Exchange drivers
 
