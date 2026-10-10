@@ -88,6 +88,7 @@ for (;;) {
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
     await run('scripts/onchain-scan.mjs').catch((e) => console.log('[rapid] onchain-scan:', e.message || e));
     await run('scripts/onchain-exec.mjs').catch((e) => console.log('[rapid] onchain-exec:', e.message || e));
+    await run('scripts/onchain-trades.mjs').catch((e) => console.log('[rapid] onchain-trades:', e.message || e));
     // evidence layer (Will M1-M6): every cycle recomputes the audit surface —
     // forensics -> policy must precede exec-critical reads next cycle
     await run('scripts/eval-forensics.mjs').catch((e) => console.log('[rapid] eval-forensics:', e.message || e));

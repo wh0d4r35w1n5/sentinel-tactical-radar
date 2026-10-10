@@ -16,7 +16,7 @@ const HOT = [
   'market-scanner', 'prices', 'health', 'live-ledger', 'live-plan',
   'gate-stats', 'funding', 'liq-guard', 'bitget-watch', 'integrity',
   'onchain-lane', 'chain-custody', 'signal-ledger', 'thoughts', 'god',
-  'breakouts',
+  'breakouts', 'onchain-trades',
 ];
 const COLD = [
   'coin-detail', 'signal-eval', 'sentiment', 'news', 'hypotheses', 'correlation',
