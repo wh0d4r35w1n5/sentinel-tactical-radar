@@ -972,9 +972,21 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark,libEdge,livePlan,bitWatch,markouts,ocHot,custody]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json'),j(API+'autonomous-pnl.json'),j(API+'reject-markout.json'),j(API+'libedge.json'),j(API+'live-plan.json'),j(API+'bitget-watch.json'),j(API+'markouts.json'),j(API+'onchain-hot.json'),j(API+'chain-custody.json')]);
+// artifact fan-out collapsed to ONE fetch: api-bundle.mjs emits
+// dashboard.json at the tail of every rapid cycle. Fresh bundle => unpack
+// client-side; stale/missing => legacy 49-file fan-out (rapid-down safe).
+const NAMES=['market-scanner','coin-detail','signal-ledger','prices','health','funding','sentiment','signal-eval','news','hypotheses','correlation','benchmark','live-ledger','god','volcore','confluence','breakouts','einstein','mtf','social','trades-taken','sqn-report','thoughts','liq-guard','gate-stats','freqtrade-bench','mae-mfe','rr-optimize','rr-backtest','integrity','alltime-stats','equity-bridge','pimp-war','onchain-lane','shadow-ab','eval-independence','edge-attribution','ledger-recon','failover-audit','validator-report','strategy-policy','autonomous-pnl','reject-markout','libedge','live-plan','bitget-watch','markouts','onchain-hot','chain-custody'];
+const bundle=await j(API+'dashboard.json');
+const rows=(bundle&&bundle.data&&bundle.ts&&Date.now()-bundle.ts<180e3)
+  ? NAMES.map(n=>bundle.data[n]??null)
+  : await Promise.all(NAMES.map(n=>j(API+n+'.json')));
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark,libEdge,livePlan,bitWatch,markouts,ocHot,custody]=rows;
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
+  // incremental render: when the freshness-driving artifacts are identical
+  // to last poll, the DOM is already correct — skip the rebuild entirely
+  const rsig=[scan&&scan.refreshedAt,liveLedger&&liveLedger.ts,ocLane&&ocLane.ts,custody&&custody.ts,livePlan&&livePlan.ts].join('|');
+  if(rsig===window.__lastRenderSig)return;
+  window.__lastRenderSig=rsig;
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
   applyVenue();
