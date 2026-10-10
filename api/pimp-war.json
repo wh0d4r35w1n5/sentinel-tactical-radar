@@ -1,12 +1,19 @@
 {
- "at": "2026-10-10T09:48:44.594Z",
+ "at": "2026-10-10T09:56:32.220Z",
  "wallets": {
   "futures": {
-   "equityUsd": 11.91,
-   "marginFreeUsd": 8.73,
+   "equityUsd": 11.87,
+   "marginFreeUsd": 6.57,
    "epochNetUsd": -62.28,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "LINKUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 37,
+     "margin": 2.11
+    },
     {
      "symbol": "MUUSDT",
      "side": "long",
@@ -20,7 +27,7 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0189,
    "stableUsd": 5.74,
-   "purseUsd": 10.44,
+   "purseUsd": 10.45,
    "positions": 4,
    "laneNet": 0.23,
    "laneTrades": 2,
@@ -522,28 +529,6 @@
  "retired": [],
  "intents": [
   {
-   "symbol": "QOMPUTE",
-   "direction": "LONG",
-   "ts": 1791624693825,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
-   "onchain": true,
-   "filledAt": 1791624693825,
-   "live": true
-  },
-  {
-   "symbol": "SI276",
-   "direction": "LONG",
-   "ts": 1791624696112,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:4DpAqgDaQvHTrac2RXSVGsG8fXKQwi9UFC6Ucd5hoh1qJ9z1pVDMUK2FDBjceGhJywyhT8Dn7Vv9ggYDaLK9HhgH",
-   "onchain": true,
-   "filledAt": 1791624696112,
-   "live": true
-  },
-  {
    "symbol": "GOMO",
    "direction": "LONG",
    "ts": 1791624698550,
@@ -634,7 +619,24 @@
    "ts": 1791625724351,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791625641228ETHUSDT"
+   "coid": "s1791625641228ETHUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791626191982,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791625752575ETHUSDT"
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1791626192102,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791625752575SOXLUSDT"
   }
  ],
  "drama": [
