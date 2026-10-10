@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T18:54:28.678Z",
+ "at": "2026-10-10T18:59:48.938Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.71,
+   "equityUsd": 23.67,
    "marginFreeUsd": 18.57,
    "epochNetUsd": -42.09,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": 0.43,
+     "upl": 0.39,
      "lev": 35,
      "margin": 4.71
     }
@@ -18,15 +18,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.019,
-   "stableUsd": 2.7,
-   "purseUsd": 5.28,
-   "positions": 7,
+   "sol": 0.0158,
+   "stableUsd": 1.96,
+   "purseUsd": 5.27,
+   "positions": 9,
    "laneNet": -0.46,
    "laneTrades": 10,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791658563111,
+    "symbol": "SECRETFROG",
+    "sig": "Xq33wWxhdYiWJyp9hpmaTpXqA6fJ6PVVbV98iNtRuPPqDSosHjCgSeZfXCKzpVAvh4xVSb3S9w6N8m8sYpTV85A",
+    "text": "BUY SECRETFROG $0.34"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791658560661,
+    "symbol": "SWOLF",
+    "sig": "4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
+    "text": "BUY SWOLF $0.40"
+   },
    {
     "venue": "solana",
     "ts": 1791656065047,
@@ -81,20 +95,6 @@
     "ts": 1791637197178,
     "symbol": null,
     "sig": "3UfmJmNnTMrh17krChASXdzidyRnpw6U8bCxgMsxvSoF8QXX8Gau5kYwzC8gKWFUScf1HaN7dnoHndjvr5Ugvxmz",
-    "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791637123817,
-    "symbol": "QOMPUTE",
-    "sig": "4tkv3pT2raNFQtXUnuUAhx1Ab45Hq8ZuZPqC8VcthmqCh2G9LsLUaNn4wL7TZRVBVewE8jVKooGhbAppBMwz6epM",
-    "text": "BUY QOMPUTE $0.57"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791637046583,
-    "symbol": null,
-    "sig": "2e2uxhYxB8rDWv5Tssin5HaC91rBYhDZUk2gW7u99wC2etcGJGycfsSzhnfNbJpukcJqx34ENw7xBH2cU9KZiyP8",
     "text": "BOOTSTRAP boot"
    }
   ]
@@ -530,60 +530,6 @@
  "retired": [],
  "intents": [
   {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791657831007,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791657790046XRPUSDT",
-   "live": false
-  },
-  {
-   "symbol": "PENDLEUSDT",
-   "direction": "LONG",
-   "ts": 1791657831124,
-   "pimp": "Big Daddy Kane",
-   "crack": "Foxy",
-   "coid": "s1791657790046PENDLEUSDT",
-   "live": false
-  },
-  {
-   "symbol": "WLDUSDT",
-   "direction": "LONG",
-   "ts": 1791657907499,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791657862883WLDUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791658053874,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791658011290XRPUSDT",
-   "live": false
-  },
-  {
-   "symbol": "MOODENGUSDT",
-   "direction": "LONG",
-   "ts": 1791658131497,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791658086122MOODENGUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791658131617,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791658086122XRPUSDT",
-   "live": false
-  },
-  {
    "symbol": "ONDOUSDT",
    "direction": "LONG",
    "ts": 1791658214405,
@@ -625,7 +571,8 @@
    "ts": 1791658468147,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791658416387XRPUSDT"
+   "coid": "s1791658416387XRPUSDT",
+   "live": false
   },
   {
    "symbol": "POLUSDT",
@@ -633,7 +580,65 @@
    "ts": 1791658468263,
    "pimp": "Big Daddy Kane",
    "crack": "Trixie",
-   "coid": "s1791658416387POLUSDT"
+   "coid": "s1791658416387POLUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791658547658,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791658497486XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "SWOLF",
+   "direction": "LONG",
+   "ts": 1791658560661,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
+   "onchain": true,
+   "filledAt": 1791658560661,
+   "live": true
+  },
+  {
+   "symbol": "SECRETFROG",
+   "direction": "LONG",
+   "ts": 1791658563111,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:Xq33wWxhdYiWJyp9hpmaTpXqA6fJ6PVVbV98iNtRuPPqDSosHjCgSeZfXCKzpVAvh4xVSb3S9w6N8m8sYpTV85A",
+   "onchain": true,
+   "filledAt": 1791658563111,
+   "live": true
+  },
+  {
+   "symbol": "WLDUSDT",
+   "direction": "LONG",
+   "ts": 1791658633363,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791658584814WLDUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791658633479,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791658584814XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791658788336,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791658740000XRPUSDT"
   }
  ],
  "drama": [
