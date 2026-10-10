@@ -3,6 +3,7 @@
 // the trading stack. The validator must not share code paths with the system
 // it validates — every number here is recomputed from exchange bills, wallet
 // RPC and journal files, then published to api/ledger-recon.json.
+import './load-env.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
