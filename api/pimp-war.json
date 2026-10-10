@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T10:57:11.525Z",
+ "at": "2026-10-10T11:09:37.666Z",
  "wallets": {
   "futures": {
-   "equityUsd": 10.56,
+   "equityUsd": 10.27,
    "marginFreeUsd": 0,
    "epochNetUsd": -62.19,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.31,
+     "upl": -0.6,
      "lev": 75,
      "margin": 2.72
     },
@@ -25,15 +25,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0199,
-   "stableUsd": 1.61,
-   "purseUsd": 2.75,
-   "positions": 1,
+   "sol": 0.0198,
+   "stableUsd": 2.6,
+   "purseUsd": 4.42,
+   "positions": 3,
    "laneNet": -0.25,
    "laneTrades": 5,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791629845135,
+    "symbol": "MOIN",
+    "sig": "5SshNJuDMcrSXu8w5argerD9kUJ9P5xPwJ5KUyv7bzVB8kS9zbmhrBvanLSytA3aXGn8REWnXSv9jD7om8uJw2YX",
+    "text": "BUY MOIN $0.32"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791629840423,
+    "symbol": "QI",
+    "sig": "41WdXLxCTjTkWnaafGS8R5XFPsWqYtet1y4x72kkZd9GB3oGVJ1FafzNveP2GHHabdQVaU6WsWZmRYRYgeUkQoxj",
+    "text": "BUY QI $0.38"
+   },
    {
     "venue": "solana",
     "ts": 1791629715046,
@@ -89,20 +103,6 @@
     "symbol": null,
     "sig": "tk3efYzuBjKY53CVxH1vuJndRagJWwcuYwTkXdmQsoXXwVpcjgUFKdgBytyzx9isQ4YrUkALi8LWSfE9ATAjtvs",
     "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791619115847,
-    "symbol": "QOMPUTE",
-    "sig": null,
-    "text": "RECONCILE QOMPUTE"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791614952306,
-    "symbol": "GOMO",
-    "sig": null,
-    "text": "RECONCILE GOMO"
    }
   ]
  },
@@ -522,8 +522,8 @@
     -0.4398
    ],
    "persona": {
-    "swagger": 0.36,
-    "tilt": 0.57,
+    "swagger": 0.37,
+    "tilt": 0.56,
     "greed": 0.47,
     "discipline": 0.38
    }
@@ -647,11 +647,33 @@
    "coid": "oc:5t57oiUfVUUdHATkkw8ScPjAcxKNMHJQsQhiiRYhRawjzQtn3dEvdtY3s9aQQM5mRxoDoBvdcioZGrEf8nNnVKVU",
    "onchain": true,
    "filledAt": 1791624701231,
-   "live": false,
+   "live": true,
    "closedAt": 1791629715046,
    "epNet": -0.025316,
    "epCounted": true,
    "epVerdict": -1
+  },
+  {
+   "symbol": "QI",
+   "direction": "LONG",
+   "ts": 1791629840423,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:41WdXLxCTjTkWnaafGS8R5XFPsWqYtet1y4x72kkZd9GB3oGVJ1FafzNveP2GHHabdQVaU6WsWZmRYRYgeUkQoxj",
+   "onchain": true,
+   "filledAt": 1791629840423,
+   "live": true
+  },
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791629845135,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5SshNJuDMcrSXu8w5argerD9kUJ9P5xPwJ5KUyv7bzVB8kS9zbmhrBvanLSytA3aXGn8REWnXSv9jD7om8uJw2YX",
+   "onchain": true,
+   "filledAt": 1791629845135,
+   "live": true
   }
  ],
  "drama": [
