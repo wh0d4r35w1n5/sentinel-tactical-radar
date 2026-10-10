@@ -2827,7 +2827,16 @@ async function main() {
   // When dirN rides the allowlist the gate checks the DIRECTION cell's sample
   // size: <EVAL_MIN_N graded trades in that direction is unproven — probe
   // routing, not a ban (same courtesy blended-unproven strategies already get).
-  const sqnAllows = (s) => {
+  const sqnAllows = (s, score) => {
+    // policy deference (operator order 2026-10-10): the lifecycle board is
+    // the authority on who may trade. sqn-chain is at most as strict as the
+    // strat-blocked gate it defers to — same condition, same override: a
+    // strategy the board hasn't condemned, or a score strong enough to
+    // clear STRAT_OVERRIDE, probes through. The chain's refusal is reserved
+    // for cells the eval system also measured negative. Without this the
+    // two evidence systems disagreed — and a stale allowlist failing
+    // CLOSED vetoed every proven-name candidate — the book starved.
+    if (!(stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) || score >= STRAT_OVERRIDE) return true;
     // missing/stale allowlist fails CLOSED for proven strategies — a dead
     // optimizer must never re-open measured-negative cells
     if (!sqnAllowed)
@@ -3166,7 +3175,7 @@ async function main() {
     gate(RELAX || !recentClosed(s.asset, s.direction), 'recent-closed');
     gate(RELAX || !recentReversed(s.asset), 'recent-reversed');
     gate(RELAX || !lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
-    gate(RELAX || sqnAllows(s), 'sqn-chain');
+    gate(RELAX || sqnAllows(s, tradeScore), 'sqn-chain');
     // measured-evidence gates — the IC table is the engine's own record of
     // which votes predict. Net-negative factor evidence (icAdj < IC_VETO)
     // is a veto; so is a signal with no measured-predictive sponsor. Hard
