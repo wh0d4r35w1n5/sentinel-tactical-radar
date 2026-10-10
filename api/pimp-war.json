@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T11:30:31.686Z",
+ "at": "2026-10-10T11:34:32.425Z",
  "wallets": {
   "futures": {
-   "equityUsd": 10.32,
+   "equityUsd": 10.76,
    "marginFreeUsd": 0,
    "epochNetUsd": -62.19,
    "fills": 400,
@@ -10,14 +10,14 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.74,
+     "upl": -0.34,
      "lev": 75,
      "margin": 2.72
     },
     {
      "symbol": "BAUSDT",
      "side": "long",
-     "upl": 0.21,
+     "upl": 0.25,
      "lev": 20,
      "margin": 8.13
     }
@@ -25,15 +25,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0165,
-   "stableUsd": 1.62,
-   "purseUsd": 3.66,
+   "sol": 0.0164,
+   "stableUsd": 1.52,
+   "purseUsd": 3.8,
    "positions": 4,
-   "laneNet": -0.25,
-   "laneTrades": 5,
+   "laneNet": -0.36,
+   "laneTrades": 6,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791631919928,
+    "symbol": "QOMPUTE",
+    "sig": "Kjgiayu9uBzKTRDyEpwnzcNyfHwG8aMBazw1KLqGLfATJDnkTK7GLwDXBkuzuAJbkMUmwxsaL8cyskxxBDWnCPf",
+    "text": "BUY QOMPUTE $0.26"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791631841042,
+    "symbol": "QOMPUTE",
+    "sig": "5JBx8nPpdb95UU8ofcxjTQXfxEXWNmquXsVfbH3zoEVGb2CiCVShQWzYwKLghHQ3XBxEfJFXnQp4FQP3gPKnuD6D",
+    "text": "SELL QOMPUTE"
+   },
    {
     "venue": "solana",
     "ts": 1791630586077,
@@ -89,20 +103,6 @@
     "symbol": "GOMO",
     "sig": "3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
     "text": "BUY GOMO $1.19"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791624696112,
-    "symbol": "SI276",
-    "sig": "4DpAqgDaQvHTrac2RXSVGsG8fXKQwi9UFC6Ucd5hoh1qJ9z1pVDMUK2FDBjceGhJywyhT8Dn7Vv9ggYDaLK9HhgH",
-    "text": "BUY SI276 $1.40"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791624693825,
-    "symbol": "QOMPUTE",
-    "sig": "4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
-    "text": "BUY QOMPUTE $1.65"
    }
   ]
  },
@@ -506,43 +506,32 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -0.4398,
+   "net": -0.5482,
    "wins": 1,
-   "losses": 3,
-   "closes": 8,
+   "losses": 4,
+   "closes": 9,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0633,
-   "mood": "working",
+   "form": -0.0813,
+   "mood": "tilt",
    "vault": 0,
    "hist": [
     0.0415,
     -0.3769,
     -0.4145,
-    -0.4398
+    -0.4398,
+    -0.5482
    ],
    "persona": {
-    "swagger": 0.38,
-    "tilt": 0.51,
-    "greed": 0.47,
-    "discipline": 0.4
+    "swagger": 0.32,
+    "tilt": 0.67,
+    "greed": 0.46,
+    "discipline": 0.35
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "JEANPHIL",
-   "direction": "LONG",
-   "ts": 1791598001615,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:DuheGMJVou3wxSwz4g412QBMmbMPQ4znewT2tCFeMx35gqBjeVRg5Zxok3Tsht2mjTTNfEmWJ6bRyE8UbFkGFrf",
-   "onchain": true,
-   "filledAt": 1791598001615,
-   "live": false,
-   "closedAt": 1791601504283
-  },
   {
    "symbol": "QOMPUTE",
    "direction": "LONG",
@@ -684,10 +673,33 @@
    "coid": "oc:666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
    "onchain": true,
    "filledAt": 1791630586077,
+   "live": true,
+   "closedAt": 1791631841042,
+   "epNet": -0.108376,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791631919928,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:Kjgiayu9uBzKTRDyEpwnzcNyfHwG8aMBazw1KLqGLfATJDnkTK7GLwDXBkuzuAJbkMUmwxsaL8cyskxxBDWnCPf",
+   "onchain": true,
+   "filledAt": 1791631919928,
    "live": true
   }
  ],
  "drama": [
+  {
+   "ts": 1791631910363,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.11 on QOMPUTE — docked her pay"
+  },
+  {
+   "ts": 1791631910363,
+   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
+  },
   {
    "ts": 1791629830624,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on MOIN — docked her pay"
