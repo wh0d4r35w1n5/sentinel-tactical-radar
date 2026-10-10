@@ -32,9 +32,9 @@ const FILLS_FILE = path.join(STATE, 'onchain-fills.json');
 const ENABLED = process.env.SENTINEL_ONCHAIN_LANE === '1';
 const PCT = +(process.env.ONCHAIN_PCT || 0.25); // of spendable stable balance
 const MAX_USD = +(process.env.ONCHAIN_MAX_USD || 25); // per position cap
-const MAX_POSITIONS = +(process.env.ONCHAIN_MAX_POS || 2);
+const MAX_POSITIONS = +(process.env.ONCHAIN_MAX_POS || 3);
 const MAX_DEPLOYED_USD = +(process.env.ONCHAIN_MAX_DEPLOYED || 40);
-const MIN_SCORE = +(process.env.ONCHAIN_MIN_SCORE || 72);
+const MIN_SCORE = +(process.env.ONCHAIN_MIN_SCORE || 65);
 const SLIPPAGE_BUY_BPS = +(process.env.ONCHAIN_SLIPPAGE_BUY || 150);
 const SLIPPAGE_SELL_BPS = +(process.env.ONCHAIN_SLIPPAGE_SELL || 250);
 const KEEP = +(process.env.ONCHAIN_KEEP || 0.72); // trail: keep 72% of peak
@@ -165,32 +165,40 @@ async function main() {
     done('hot feed stale');
     return;
   }
+  // fill every open slot this cycle, best-scored first — the purse updates
+  // locally as each clip deploys so later buys shrink honestly
   const held = new Set(book.positions.map((p) => p.mint));
-  const cand = (hot.hot || []).find((h) =>
+  const cands = (hot.hot || []).filter((h) =>
     h.chain === 'solana' && !h.perpAvailable && !held.has(h.contract) &&
     (h.score || 0) >= MIN_SCORE &&
     h.audit && !h.audit.rugged && (h.audit.risks || []).length <= 3 &&
     h.liqUsd >= 50e3
   );
-  if (!cand) { console.log('onchain-exec: no candidate passed gates'); done('no candidate passed gates'); return; }
+  if (!cands.length) { console.log('onchain-exec: no candidate passed gates'); done('no candidate passed gates'); return; }
 
-  const sizeUsd = Math.min(MAX_USD, stableUsd * PCT, MAX_DEPLOYED_USD - deployed);
-  if (sizeUsd < MIN_SIZE_USD) { console.log(`onchain-exec: purse too small ($${sizeUsd.toFixed(2)})`); done(`clip below floor ($${sizeUsd.toFixed(2)} < $${MIN_SIZE_USD})`); return; }
-
-  const mint = (bal.tokens[sol.MINT.USDC] || 0) >= sizeUsd ? sol.MINT.USDC : sol.MINT.USDT;
-  const inRaw = Math.round(sizeUsd * 1e6);
-  console.log(`  BUY ${cand.symbol} $${sizeUsd.toFixed(2)} — score ${cand.score} liq $${(cand.liqUsd / 1e3).toFixed(0)}k vol $${(cand.vol24hUsd / 1e6).toFixed(1)}M mc $${(cand.mcapUsd / 1e6).toFixed(1)}M`);
-  try {
-    const q = await sol.quote({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
-    const r = await sol.swapAny({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS, solBal: bal.sol });
-    book.positions.push({
-      mint: cand.contract, symbol: cand.symbol, qtyRaw: +q.outAmount,
-      costUsd: sizeUsd, peakUsd: sizeUsd, lastValueUsd: sizeUsd, ts: Date.now(),
-      score: cand.score, liqUsd: cand.liqUsd, sig: r.signature,
-    });
-    journal({ side: 'buy', symbol: cand.symbol, mint: cand.contract, usd: sizeUsd, qtyRaw: +q.outAmount, sig: r.signature, score: cand.score });
-    console.log(`  FILLED ${cand.symbol} sig ${r.signature.slice(0, 12)}…`);
-  } catch (e) { console.log(`  ${cand.symbol}: buy failed ${e.message.slice(0, 100)}`); }
+  let stableLeft = stableUsd, deployLeft = MAX_DEPLOYED_USD - deployed;
+  let usdcLeft = bal.tokens[sol.MINT.USDC] || 0, usdtLeft = bal.tokens[sol.MINT.USDT] || 0;
+  for (const cand of cands.slice(0, MAX_POSITIONS - book.positions.length)) {
+    const sizeUsd = Math.min(MAX_USD, stableLeft * PCT, deployLeft);
+    if (sizeUsd < MIN_SIZE_USD) { console.log(`  purse drained below clip floor ($${sizeUsd.toFixed(2)} < $${MIN_SIZE_USD}) — done entering`); break; }
+    // pay with whichever stable actually covers this clip
+    const mint = usdcLeft >= sizeUsd ? sol.MINT.USDC : sol.MINT.USDT;
+    const inRaw = Math.round(sizeUsd * 1e6);
+    console.log(`  BUY ${cand.symbol} $${sizeUsd.toFixed(2)} — score ${cand.score} liq $${(cand.liqUsd / 1e3).toFixed(0)}k vol $${(cand.vol24hUsd / 1e6).toFixed(1)}M mc $${(cand.mcapUsd / 1e6).toFixed(1)}M`);
+    try {
+      const q = await sol.quote({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
+      const r = await sol.swapAny({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS, solBal: bal.sol });
+      book.positions.push({
+        mint: cand.contract, symbol: cand.symbol, qtyRaw: +q.outAmount,
+        costUsd: sizeUsd, peakUsd: sizeUsd, lastValueUsd: sizeUsd, ts: Date.now(),
+        score: cand.score, liqUsd: cand.liqUsd, sig: r.signature,
+      });
+      journal({ side: 'buy', symbol: cand.symbol, mint: cand.contract, usd: sizeUsd, qtyRaw: +q.outAmount, sig: r.signature, score: cand.score });
+      stableLeft -= sizeUsd; deployLeft -= sizeUsd; held.add(cand.contract);
+      if (mint === sol.MINT.USDC) usdcLeft -= sizeUsd; else usdtLeft -= sizeUsd;
+      console.log(`  FILLED ${cand.symbol} sig ${r.signature.slice(0, 12)}…`);
+    } catch (e) { console.log(`  ${cand.symbol}: buy failed ${e.message.slice(0, 100)}`); }
+  }
 
   done('cycle complete');
 }
