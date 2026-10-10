@@ -22,6 +22,35 @@ const PROMOTE_N = 30, HALT_N = 25;
 
 const attr = readJ(path.join(API, 'edge-attribution.json'), null);
 const hold = readJ(path.join(API, 'eval-independence.json'), null);
+// trader.dev library — external cross-validation prior per archetype family.
+// ADVISORY ONLY: it annotates each strategy with what ~390k independent
+// backtests say about its logic family; lifecycle status remains gated on
+// our own forward episodes alone (Will's rule — external priors never
+// promote or kill, they inform the operator's read).
+const lib = readJ(path.join(API, 'libedge.json'), null);
+const OUR_FAMILY = (strategy) =>
+  /carry|funding/i.test(strategy) ? 'carry'
+  : /breakout|continuation|sweep|liq/i.test(strategy) ? 'breakout'
+  : /fade|vwap|effort|revert|mean|eq.?edge|quartile|\bsfp\b|rejection/i.test(strategy) ? 'meanrev'
+  : /momentum|tsmom|trend|major|runner|ignition/i.test(strategy) ? 'trend'
+  : null;
+const extFor = (strategy) => {
+  const fam = OUR_FAMILY(strategy);
+  if (!fam || !lib?.symbols) return null;
+  let witnesses = 0, syms = 0, supportive = 0, negative = 0;
+  const sharpes = [];
+  for (const le of Object.values(lib.symbols)) {
+    const a = le?.archEdge?.[fam];
+    if (!a || a.n == null) continue;
+    syms++; witnesses += a.n;
+    if (a.n >= 3 && a.medSharpe >= 1) supportive++;
+    if (a.n >= 3 && a.medPf < 1.2) negative++;
+    if (Number.isFinite(a.medSharpe)) sharpes.push(a.medSharpe);
+  }
+  if (!syms) return null;
+  sharpes.sort((x, y) => x - y);
+  return { family: fam, symbols: syms, witnesses, medSharpe: +sharpes[Math.floor(sharpes.length / 2)].toFixed(2), supportiveSyms: supportive, negativeSyms: negative };
+};
 if (!attr?.byStrategy) { console.warn('strategy-policy: edge-attribution missing — keeping existing policy'); process.exit(0); }
 
 const prev = readJ(path.join(STATE, 'strategy-policy.json'), { strategies: {} });
@@ -38,7 +67,7 @@ for (const [s, st] of Object.entries(attr.byStrategy)) {
   } else if (n >= PROMOTE_N && lo != null && lo > 0 && net > 0) {
     status = 'live'; why = `${n} episodes, CI lower +${lo}, netAfterCost +${net}`;
   }
-  policies[s] = { status, why, episodes: n, meanDirFwd24h: st.meanDirFwd24h?.mean ?? null, ci: st.meanDirFwd24h?.ci ?? null, netAfterCost: net, hitRate: st.hitRate?.p ?? null, reviewedAt: new Date().toISOString() };
+  policies[s] = { status, why, episodes: n, meanDirFwd24h: st.meanDirFwd24h?.mean ?? null, ci: st.meanDirFwd24h?.ci ?? null, netAfterCost: net, hitRate: st.hitRate?.p ?? null, extLib: extFor(s), reviewedAt: new Date().toISOString() };
 }
 const out = { ts: Date.now(), updatedAt: new Date().toISOString(), source: 'edge-attribution + codified rules', rules: RULES, thresholds: { promoteN: PROMOTE_N, haltN: HALT_N }, strategies: policies };
 writeJ(path.join(STATE, 'strategy-policy.json'), out);

@@ -12,7 +12,7 @@ import '../ta-engine.js';  // sets globalThis.TAEngine
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 import { integrityNote } from './crc32.mjs';
 import * as sf from './signal-fusion.mjs';
-import { getLibEdge, OUR_FAMILY } from './libedge-scan.mjs';
+import { getLibEdge, OUR_FAMILY, familyTilt } from './libedge-scan.mjs';
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
@@ -1776,9 +1776,10 @@ async function main() {
       // library's dominant archetype for this symbol — unsigned prior,
       // tape quality isn't directional.
       const le = libEdge[r.asset];
+      const famTilt = familyTilt(le, strategy);
       const libBoost = !le || !le.n
         ? 0
-        : clamp(le.edge + (OUR_FAMILY(strategy) && OUR_FAMILY(strategy) === le.domArch ? 1 : 0), -1.5, 3.5);
+        : clamp(le.edge + famTilt, -2, 3.5);
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
@@ -1814,7 +1815,7 @@ async function main() {
       };
       return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
         btcPair, rsBoost, book, obiBoost, libBoost,
-        libedge: le && le.n ? { density: le.density, topSharpe: le.topSharpe, domArch: le.domArch, domTf: le.domTf } : null,
+        libedge: le && le.n ? { density: le.density, topSharpe: le.topSharpe, domArch: le.domArch, domTf: le.domTf, famTilt, famEdge: OUR_FAMILY(strategy) ? le.archEdge?.[OUR_FAMILY(strategy)] ?? null : null } : null,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })

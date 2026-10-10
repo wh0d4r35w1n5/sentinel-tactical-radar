@@ -971,8 +971,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json'),j(API+'autonomous-pnl.json'),j(API+'reject-markout.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark,libEdge]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json'),j(API+'autonomous-pnl.json'),j(API+'reject-markout.json'),j(API+'libedge.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1398,8 +1398,19 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         const counts={};st.forEach(([,p])=>counts[p.status]=(counts[p.status]||0)+1);
         $('evidRows').innerHTML=`<div class="sub" style="font-size:10px;margin:6px 0 4px">⚖️ STRATEGY LIFECYCLE — evidence-driven (${Object.entries(counts).map(([k,v])=>`${v} ${k}`).join(' · ')})</div>`
           +st.sort((a,b)=>({live:0,probation:1,halted:2,abandoned:3}[a[1].status]??4)-({live:0,probation:1,halted:2,abandoned:3}[b[1].status]??4)).map(([s,p])=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #222;flex-wrap:wrap;gap:2px 8px">
-            <span><b style="color:${col[p.status]||'#888'}">●</b> ${esc(s)} <span class="sub">${p.episodes} eps · ${p.meanDirFwd24h!=null?(p.meanDirFwd24h>=0?'+':'')+p.meanDirFwd24h+'%':''}</span></span>
+            <span><b style="color:${col[p.status]||'#888'}">●</b> ${esc(s)} <span class="sub">${p.episodes} eps · ${p.meanDirFwd24h!=null?(p.meanDirFwd24h>=0?'+':'')+p.meanDirFwd24h+'%':''}${p.extLib?` · 📚${p.extLib.family}:${p.extLib.witnesses}w·${p.extLib.symbols}sym·sh${p.extLib.medSharpe}`:''}</span></span>
             <span style="color:${col[p.status]||'#888'}">${p.status.toUpperCase()} <span class="sub">${esc((p.why||'').slice(0,70))}</span></span></div>`).join('');
+      }
+      // trader.dev library — the ~390k-strategy external evidence layer:
+      // coverage + per-family witness mass across the scanned universe
+      if(libEdge?.symbols){
+        const leSyms=Object.entries(libEdge.symbols).filter(([,v])=>v&&v.n>0);
+        const famAgg={};
+        for(const [,v] of leSyms)for(const [a,e] of Object.entries(v.archEdge||{})){famAgg[a]=famAgg[a]||{w:0,syms:0};famAgg[a].w+=e.n;famAgg[a].syms++;}
+        const topD=leSyms.sort((a,b)=>(b[1].density||0)-(a[1].density||0)).slice(0,6).map(([s,v])=>`${esc(s)} ${v.density}q·${esc(v.domArch||'—')}`).join(' · ');
+        $('evidRows').insertAdjacentHTML('beforeend',
+          `<div class="sub" style="font-size:10px;margin:8px 0 4px">📚 LIBRARY EDGE — trader.dev ${esc(libEdge.source||'')} · ${leSyms.length} symbols probed · family witnesses: ${Object.entries(famAgg).sort((a,b)=>b[1].w-a[1].w).map(([a,e])=>`${a}:${e.w}`).join(' · ')||'—'}</div>`
+          +`<div class="sub" style="font-size:9px;opacity:.8">dense tape: ${topD||'—'} · refreshed ${esc((libEdge.refreshedAt||'').slice(0,16))} · prior only — never an entry trigger</div>`);
       }
       // Will's headline number — fully-autonomous cumulative net after every
       // fee, exchange vs on-chain separated, manual book excluded
