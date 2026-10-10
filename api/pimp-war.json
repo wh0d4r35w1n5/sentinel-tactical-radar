@@ -1,25 +1,25 @@
 {
- "at": "2026-10-10T08:56:35.394Z",
+ "at": "2026-10-10T09:01:45.729Z",
  "wallets": {
   "futures": {
-   "equityUsd": 13.15,
-   "marginFreeUsd": 0,
-   "epochNetUsd": -59.96,
+   "equityUsd": 12.69,
+   "marginFreeUsd": 0.29,
+   "epochNetUsd": -59.93,
    "fills": 400,
    "positions": [
     {
      "symbol": "WLDUSDT",
      "side": "long",
-     "upl": -0.79,
+     "upl": -0.84,
      "lev": 37,
      "margin": 2.36
     },
     {
      "symbol": "MUUSDT",
      "side": "long",
-     "upl": 0.12,
+     "upl": -0.02,
      "lev": 37,
-     "margin": 11.46
+     "margin": 10.9
     }
    ]
   },
@@ -191,7 +191,7 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": 0.1861,
+   "net": 0.0415,
    "wins": 1,
    "losses": 0,
    "closes": 5,
@@ -201,7 +201,7 @@
    "mood": "working",
    "vault": 0,
    "hist": [
-    0.1861
+    0.0415
    ],
    "persona": {
     "swagger": 0.59,
@@ -563,9 +563,9 @@
    "filledAt": 1791598006122,
    "live": false,
    "closedAt": 1791601504287,
-   "epNet": 0.18611,
+   "epNet": 0,
    "epCounted": true,
-   "epVerdict": 1
+   "epVerdict": 0
   },
   {
    "symbol": "QOMPUTE",
@@ -589,10 +589,17 @@
    "onchain": true,
    "filledAt": 1791601508964,
    "live": false,
-   "closedAt": 1791614952306
+   "closedAt": 1791614952306,
+   "epNet": 0.0415,
+   "epVerdict": 1,
+   "epCounted": true
   }
  ],
  "drama": [
+  {
+   "ts": 1791622746040,
+   "text": "⚖️ ledger correction — the GOMO sell paid the second bag: +bash.04, not +bash.19 (custody leg re-matched by nearest timestamp)"
+  },
   {
    "ts": 1791622571406,
    "text": "🌫 Solana Sadie let QOMPUTE go — left the wallet off-book, proceeds unverifiable"
