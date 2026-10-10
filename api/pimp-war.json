@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T10:54:56.941Z",
+ "at": "2026-10-10T10:57:11.525Z",
  "wallets": {
   "futures": {
-   "equityUsd": 10.66,
+   "equityUsd": 10.56,
    "marginFreeUsd": 0,
    "epochNetUsd": -62.19,
    "fills": 400,
@@ -10,14 +10,14 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.25,
+     "upl": -0.31,
      "lev": 75,
      "margin": 2.72
     },
     {
      "symbol": "BAUSDT",
      "side": "long",
-     "upl": 0.05,
+     "upl": 0.02,
      "lev": 20,
      "margin": 8.13
     }
@@ -27,13 +27,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0199,
    "stableUsd": 1.61,
-   "purseUsd": 3.8,
-   "positions": 2,
-   "laneNet": -0.23,
-   "laneTrades": 4,
+   "purseUsd": 2.75,
+   "positions": 1,
+   "laneNet": -0.25,
+   "laneTrades": 5,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791629715046,
+    "symbol": "MOIN",
+    "sig": "4kceU518NR2NxAtpGshpN5fRpHQKeEVk9sXf1DhMr7PKCgp95HrLSKZcq9nvKBdH1iLEVXMfHi2VtwqB1dhEtyV8",
+    "text": "SELL MOIN"
+   },
    {
     "venue": "solana",
     "ts": 1791629353692,
@@ -96,13 +103,6 @@
     "symbol": "GOMO",
     "sig": null,
     "text": "RECONCILE GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791601508964,
-    "symbol": "GOMO",
-    "sig": "2yJCFnmYV8Zq22N75GqEDN6PxaasEKPrrqUCiYvJQW1zQozuoKgRobvBTA2ucUJJZZhaz7BUtnBGcVaFNFAK5QBZ",
-    "text": "BUY GOMO $0.45"
    }
   ]
  },
@@ -506,25 +506,26 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -0.4145,
+   "net": -0.4398,
    "wins": 1,
-   "losses": 2,
-   "closes": 7,
+   "losses": 3,
+   "closes": 8,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0887,
+   "form": -0.0633,
    "mood": "working",
    "vault": 0,
    "hist": [
     0.0415,
     -0.3769,
-    -0.4145
+    -0.4145,
+    -0.4398
    ],
    "persona": {
-    "swagger": 0.43,
-    "tilt": 0.4,
-    "greed": 0.49,
-    "discipline": 0.43
+    "swagger": 0.36,
+    "tilt": 0.57,
+    "greed": 0.47,
+    "discipline": 0.38
    }
   }
  ],
@@ -646,10 +647,18 @@
    "coid": "oc:5t57oiUfVUUdHATkkw8ScPjAcxKNMHJQsQhiiRYhRawjzQtn3dEvdtY3s9aQQM5mRxoDoBvdcioZGrEf8nNnVKVU",
    "onchain": true,
    "filledAt": 1791624701231,
-   "live": true
+   "live": false,
+   "closedAt": 1791629715046,
+   "epNet": -0.025316,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1791629830624,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on MOIN — docked her pay"
+  },
   {
    "ts": 1791629488893,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.04 on QOMPUTE — docked her pay"
