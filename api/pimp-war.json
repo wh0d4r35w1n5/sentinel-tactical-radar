@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T12:25:35.009Z",
+ "at": "2026-10-10T12:30:25.193Z",
  "wallets": {
   "futures": {
-   "equityUsd": 9.84,
+   "equityUsd": 10.23,
    "marginFreeUsd": 0,
    "epochNetUsd": -62.93,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": 0.13,
+     "upl": 0.52,
      "lev": 75,
      "margin": 9.71
     }
@@ -18,15 +18,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0148,
-   "stableUsd": 0,
-   "purseUsd": 2.04,
-   "positions": 6,
-   "laneNet": -0.39,
-   "laneTrades": 7,
+   "sol": 0.0146,
+   "stableUsd": 0.23,
+   "purseUsd": 2,
+   "positions": 5,
+   "laneNet": -0.43,
+   "laneTrades": 8,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791635357535,
+    "symbol": null,
+    "sig": "5knXknxmGimqfAfCeDEBuibNehtTH529L8WVq1aHnZsMcrktcMW6LbZ3mhks1H9A6sdoFNsTiNFvcXSWAC9nznfW",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791635284468,
+    "symbol": "QOMPUTE",
+    "sig": "2T7HEJ72BaX6LJpR5G5t7C4ZkyunyyiGTk4nLck3Skeoi4vib8HffkFKMo8AB9SMWJ3c9JCje2zyTT7MZcHcdgEH",
+    "text": "SELL QOMPUTE"
+   },
    {
     "venue": "solana",
     "ts": 1791633181615,
@@ -82,20 +96,6 @@
     "symbol": "MOIN",
     "sig": "5SshNJuDMcrSXu8w5argerD9kUJ9P5xPwJ5KUyv7bzVB8kS9zbmhrBvanLSytA3aXGn8REWnXSv9jD7om8uJw2YX",
     "text": "BUY MOIN $0.32"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791629840423,
-    "symbol": "QI",
-    "sig": "41WdXLxCTjTkWnaafGS8R5XFPsWqYtet1y4x72kkZd9GB3oGVJ1FafzNveP2GHHabdQVaU6WsWZmRYRYgeUkQoxj",
-    "text": "BUY QI $0.38"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791629715046,
-    "symbol": "MOIN",
-    "sig": "4kceU518NR2NxAtpGshpN5fRpHQKeEVk9sXf1DhMr7PKCgp95HrLSKZcq9nvKBdH1iLEVXMfHi2VtwqB1dhEtyV8",
-    "text": "SELL MOIN"
    }
   ]
  },
@@ -499,13 +499,13 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -0.5788,
+   "net": -0.6128,
    "wins": 1,
-   "losses": 5,
-   "closes": 10,
+   "losses": 6,
+   "closes": 11,
    "stolen": 0,
    "gen": 0,
-   "form": -0.061,
+   "form": -0.0502,
    "mood": "tilt",
    "vault": 0,
    "hist": [
@@ -514,13 +514,14 @@
     -0.4145,
     -0.4398,
     -0.5482,
-    -0.5788
+    -0.5788,
+    -0.6128
    ],
    "persona": {
-    "swagger": 0.35,
-    "tilt": 0.54,
-    "greed": 0.46,
-    "discipline": 0.38
+    "swagger": 0.29,
+    "tilt": 0.68,
+    "greed": 0.45,
+    "discipline": 0.34
    }
   }
  ],
@@ -550,7 +551,7 @@
    "coid": "oc:4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
    "onchain": true,
    "filledAt": 1791624693825,
-   "live": true,
+   "live": false,
    "closedAt": 1791629353692,
    "epNet": -0.037642,
    "epCounted": true,
@@ -632,7 +633,7 @@
    "coid": "oc:666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
    "onchain": true,
    "filledAt": 1791630586077,
-   "live": true,
+   "live": false,
    "closedAt": 1791631841042,
    "epNet": -0.108376,
    "epCounted": true,
@@ -647,7 +648,11 @@
    "coid": "oc:Kjgiayu9uBzKTRDyEpwnzcNyfHwG8aMBazw1KLqGLfATJDnkTK7GLwDXBkuzuAJbkMUmwxsaL8cyskxxBDWnCPf",
    "onchain": true,
    "filledAt": 1791631919928,
-   "live": true
+   "live": false,
+   "closedAt": 1791635284468,
+   "epNet": -0.034031,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "GOMO",
@@ -684,6 +689,10 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1791635349154,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on QOMPUTE — docked her pay"
+  },
   {
    "ts": 1791633166929,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on GOMO — docked her pay"
