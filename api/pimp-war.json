@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T18:10:00.610Z",
+ "at": "2026-10-10T18:14:11.810Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.82,
+   "equityUsd": 23.81,
    "marginFreeUsd": 22.13,
    "epochNetUsd": -40.94,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.82,
+     "upl": -0.83,
      "lev": 70,
      "margin": 2.51
     }
@@ -18,15 +18,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0237,
-   "stableUsd": 0,
+   "sol": 0.0221,
+   "stableUsd": 0.44,
    "purseUsd": 2.26,
-   "positions": 6,
-   "laneNet": -0.43,
-   "laneTrades": 9,
+   "positions": 5,
+   "laneNet": -0.46,
+   "laneTrades": 10,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791655983161,
+    "symbol": null,
+    "sig": "5rE4aiku3FBWxrP4vGpkvm1ajJiu15KRfz9ooj1agufPo5VhCs1SvzifsDfaD31kaboJFio3MJkvtHfzx4qukUPE",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791655899427,
+    "symbol": "MOIN",
+    "sig": "4Px8dERYpRQQF9HkxwNW44p1HCoHmnoEGbd534L46KLZKvvzchvegE8jEF2kwZo6MEUpB1y2dJQfAY5ducDRGSeJ",
+    "text": "SELL MOIN"
+   },
    {
     "venue": "solana",
     "ts": 1791639737825,
@@ -82,20 +96,6 @@
     "symbol": null,
     "sig": "5knXknxmGimqfAfCeDEBuibNehtTH529L8WVq1aHnZsMcrktcMW6LbZ3mhks1H9A6sdoFNsTiNFvcXSWAC9nznfW",
     "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791635284468,
-    "symbol": "QOMPUTE",
-    "sig": "2T7HEJ72BaX6LJpR5G5t7C4ZkyunyyiGTk4nLck3Skeoi4vib8HffkFKMo8AB9SMWJ3c9JCje2zyTT7MZcHcdgEH",
-    "text": "SELL QOMPUTE"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791633181615,
-    "symbol": "ABU",
-    "sig": "5Lf9hZuUL7m2gXU8mYAioCjQw8vQ9VLnpquVdZ6xUCaAxiwY8ghUcjgjEom2Wm41VbindY2hcebxgJUfCdLEvoTt",
-    "text": "BUY ABU $0.28"
    }
   ]
  },
@@ -499,13 +499,13 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -0.6198,
+   "net": -0.6441,
    "wins": 1,
-   "losses": 7,
-   "closes": 12,
+   "losses": 8,
+   "closes": 13,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0329,
+   "form": -0.0295,
    "mood": "working",
    "vault": 0,
    "hist": [
@@ -516,67 +516,19 @@
     -0.5482,
     -0.5788,
     -0.6128,
-    -0.6198
+    -0.6198,
+    -0.6441
    ],
    "persona": {
-    "swagger": 0.49,
-    "tilt": 0.12,
-    "greed": 0.5,
-    "discipline": 0.49
+    "swagger": 0.42,
+    "tilt": 0.3,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "QOMPUTE",
-   "direction": "LONG",
-   "ts": 1791637123817,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:4tkv3pT2raNFQtXUnuUAhx1Ab45Hq8ZuZPqC8VcthmqCh2G9LsLUaNn4wL7TZRVBVewE8jVKooGhbAppBMwz6epM",
-   "onchain": true,
-   "filledAt": 1791637123817,
-   "live": true
-  },
-  {
-   "symbol": "MOIN",
-   "direction": "LONG",
-   "ts": 1791639737825,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:2ZaaAjYTaLf1FWHBbG4FkKZ5Bk9A7K55tCKgRAVdurqGXPdKi8yfyJ6HBTNEiLUf9PnpCan1fQmoCn98n3yy4CCB",
-   "onchain": true,
-   "filledAt": 1791639737825,
-   "live": true
-  },
-  {
-   "symbol": "TAOUSDT",
-   "direction": "LONG",
-   "ts": 1791654957058,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791654906684TAOUSDT",
-   "live": false
-  },
-  {
-   "symbol": "ALGOUSDT",
-   "direction": "LONG",
-   "ts": 1791655037877,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791654987846ALGOUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791655276845,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791655227894XRPUSDT",
-   "live": false
-  },
   {
    "symbol": "HOODUSDT",
    "direction": "LONG",
@@ -637,10 +589,57 @@
    "ts": 1791655800610,
    "pimp": null,
    "crack": "Solana Sadie",
-   "coid": "s1791655757473TAOUSDT"
+   "coid": "s1791655757473TAOUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791655882237,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791655836275XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791655968087,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791655921065XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ORDIUSDT",
+   "direction": "LONG",
+   "ts": 1791656051575,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791656006773ORDIUSDT"
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791656051688,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791656006773XRPUSDT"
+  },
+  {
+   "symbol": "FARTCOINUSDT",
+   "direction": "LONG",
+   "ts": 1791656051810,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1791656006773FARTCOINUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791655966897,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
+  },
   {
    "ts": 1791639813621,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on MOIN — docked her pay"
