@@ -1,39 +1,39 @@
 {
- "at": "2026-10-10T10:17:54.876Z",
+ "at": "2026-10-10T10:23:49.028Z",
  "wallets": {
   "futures": {
-   "equityUsd": 11.41,
-   "marginFreeUsd": 6.57,
-   "epochNetUsd": -62.32,
+   "equityUsd": 10.76,
+   "marginFreeUsd": 8.23,
+   "epochNetUsd": -62.3,
    "fills": 400,
    "positions": [
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.46,
-     "lev": 37,
-     "margin": 2.11
-    },
-    {
-     "symbol": "MUUSDT",
-     "side": "long",
-     "upl": 0.07,
-     "lev": 37,
-     "margin": 3.12
+     "upl": -0.19,
+     "lev": 75,
+     "margin": 2.72
     }
    ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0189,
-   "stableUsd": 5.74,
-   "purseUsd": 10.63,
-   "positions": 4,
-   "laneNet": 0.23,
-   "laneTrades": 2,
+   "sol": 0.0187,
+   "stableUsd": 0.98,
+   "purseUsd": 4.85,
+   "positions": 3,
+   "laneNet": -0.19,
+   "laneTrades": 3,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791627626267,
+    "symbol": "SI276",
+    "sig": "2EAT1PjfjaQ2BFGP9NN1GVmzg5rMPMAjPmoZknhSw6TzBWaSSGnt6HzyxFTPrNARWtZymoMbrYw7hAd86JDSXf6K",
+    "text": "SELL SI276"
+   },
    {
     "venue": "solana",
     "ts": 1791624701231,
@@ -96,13 +96,6 @@
     "symbol": "QOMPUTE",
     "sig": "6wrBF8yCYhze5Q1m8eDXcykUrqo1yC1m8mE1EHJExHNujaH8rfH3ezUhBL1PXX8cSGgwY9vZARSeUZ1vUycn9eN",
     "text": "BUY QOMPUTE $0.68"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791601504287,
-    "symbol": "GOMO",
-    "sig": null,
-    "text": "RECONCILE GOMO"
    }
   ]
  },
@@ -187,29 +180,6 @@
   "house": 0
  },
  "cracks": [
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": null,
-   "net": 0.0415,
-   "wins": 1,
-   "losses": 0,
-   "closes": 5,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0.0744,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    0.0415
-   ],
-   "persona": {
-    "swagger": 0.57,
-    "tilt": 0.06,
-    "greed": 0.53,
-    "discipline": 0.52
-   }
-  },
   {
    "name": "Diamond Dust",
    "tag": "momentum fiend",
@@ -524,22 +494,34 @@
     "greed": 0.5,
     "discipline": 0.5
    }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": -0.3769,
+   "wins": 1,
+   "losses": 1,
+   "closes": 6,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.1227,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    0.0415,
+    -0.3769
+   ],
+   "persona": {
+    "swagger": 0.5,
+    "tilt": 0.24,
+    "greed": 0.51,
+    "discipline": 0.47
+   }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "JEANPHIL",
-   "direction": "LONG",
-   "ts": 1791598001615,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:DuheGMJVou3wxSwz4g412QBMmbMPQ4znewT2tCFeMx35gqBjeVRg5Zxok3Tsht2mjTTNfEmWJ6bRyE8UbFkGFrf",
-   "onchain": true,
-   "filledAt": 1791598001615,
-   "live": false,
-   "closedAt": 1791601504283
-  },
   {
    "symbol": "QOMPUTE",
    "direction": "LONG",
@@ -614,7 +596,11 @@
    "coid": "oc:4DpAqgDaQvHTrac2RXSVGsG8fXKQwi9UFC6Ucd5hoh1qJ9z1pVDMUK2FDBjceGhJywyhT8Dn7Vv9ggYDaLK9HhgH",
    "onchain": true,
    "filledAt": 1791624696112,
-   "live": true
+   "live": false,
+   "closedAt": 1791627626267,
+   "epNet": -0.418365,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "GOMO",
@@ -641,14 +627,44 @@
   {
    "symbol": "ETHUSDT",
    "direction": "LONG",
-   "ts": 1791626843021,
+   "ts": 1791627605003,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791626220298ETHUSDT",
+   "coid": "s1791627476684ETHUSDT",
    "live": false
+  },
+  {
+   "symbol": "GRIFFAINUSDT",
+   "direction": "LONG",
+   "ts": 1791627732602,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791627647940GRIFFAINUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791627732732,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791627647940ETHUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791627828544,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791627767804ETHUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791627731151,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.42 on SI276 — docked her pay"
+  },
   {
    "ts": 1791622746040,
    "text": "⚖️ ledger correction — the GOMO sell paid the second bag: +bash.04, not +bash.19 (custody leg re-matched by nearest timestamp)"
