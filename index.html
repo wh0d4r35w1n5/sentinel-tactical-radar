@@ -577,7 +577,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
   </div>
 
   <div class="panel neon" id="ocPanel" style="margin-top:16px;display:none">
-    <div class="ptitle">⛓️ On-chain lane · Solana purse <span class="sub" id="ocHdr">— DEX spot book, self-custody wallet — every fill is a solscan-verifiable signature</span><span id="ocSub" class="sub" style="float:right"></span></div>
+    <div class="ptitle">⛓️ On-chain lane · Solana purse <span class="sub" id="ocHdr">— DEX spot book, self-custody wallet — every fill is a solscan-verifiable signature</span><span id="ocSub" class="sub" style="float:right"></span> <span class="sub" data-ocfresh style="float:right;color:var(--cyan,#6cf)"></span></div>
     <div class="stats" id="ocStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="ocRows" style="margin-top:8px"></div>
     <div class="sub" id="ocNote" style="margin-top:6px;font-size:10px"></div>
@@ -676,6 +676,56 @@ function applyVenue(){
 }
 const LK=(h,t)=>`<a class="al" href="${h}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t}</a>`;
 const fmtP=p=>p==null?'—':p>=1000?p.toLocaleString(void 0,{maximumFractionDigits:0}):p>=1?p.toFixed(2):p.toPrecision(3);
+const fmtQty=n=>n==null?'—':n>=1e9?(n/1e9).toFixed(2)+'B':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':(+n).toFixed(2);
+// live on-chain marks — ONE batched DexScreener call covers every held mint
+// (up to 30 per request), Jupiter price API as fallback. 4s cadence + fires
+// immediately after every render → realtime ticks, no per-mint rate limits.
+const ocPxCache={}; let ocLastTick=0,ocTickBusy=false;
+async function ocMarkTick(){
+  const pos=window.__ocPos||[]; if(!pos.length||ocTickBusy)return;
+  const mints=[...new Set(pos.map(p=>p.mint).filter(Boolean))]; if(!mints.length)return;
+  ocTickBusy=true;
+  try{
+  try{
+    const r=await fetch('https://api.dexscreener.com/latest/dex/tokens/'+mints.join(','),{cache:'no-store'});
+    const j=await r.json();
+    const best={};
+    for(const pr of (j.pairs||[])){
+      const m=pr.baseToken?.address; if(!m)continue;
+      if(!best[m]||(+pr.liquidity?.usd||0)>(+best[m].liquidity?.usd||0))best[m]=pr;
+    }
+    const t=Date.now();
+    for(const m of mints){
+      const pr=best[m];
+      if(pr&&+pr.priceUsd>0)ocPxCache[m]={px:+pr.priceUsd,chg24:+pr.priceChange?.h24||0,chg1:+pr.priceChange?.h1||0,t};
+    }
+    if(Object.keys(best).length)ocLastTick=t;
+  }catch{}
+  // jupiter price fallback for mints DexScreener didn't cover
+  const missing=mints.filter(m=>!ocPxCache[m]||Date.now()-ocPxCache[m].t>15e3);
+  if(missing.length){
+    try{
+      const r2=await fetch('https://lite-api.jup.ag/price/v3?ids='+missing.join(','),{cache:'no-store'});
+      const j2=await r2.json();
+      for(const m of missing){const px=+j2?.[m]?.usdPrice||0;if(px>0)ocPxCache[m]={px,chg24:0,chg1:0,t:Date.now()};}
+      ocLastTick=Date.now();
+    }catch{}
+  }
+  pos.forEach(p=>{
+    const el=document.querySelector(`[data-oc="${p.mint}"]`);if(!el)return;
+    el.innerHTML=window.__ocPnlHtml(p,ocPxCache[p.mint]||null);
+  });
+  // purse recomputes live: stables (chain truth each cycle) + Σ live marks
+  const purseEl=document.querySelector('[data-ocpurse]');
+  if(purseEl&&window.__ocStable!=null){
+    const dep=pos.reduce((a,p)=>a+(p.qtyUi!=null&&ocPxCache[p.mint]?.px?p.qtyUi*ocPxCache[p.mint].px:(p.lastValueUsd||p.costUsd||0)),0);
+    purseEl.textContent='$'+(window.__ocStable+dep).toFixed(2);
+  }
+  }finally{ocTickBusy=false}
+}
+setInterval(ocMarkTick,4000);
+// freshness label ticks every second so "live Ns" stays honest between polls
+setInterval(()=>{const el=document.querySelector('[data-ocfresh]');if(el)el.textContent=ocLastTick?('● live marks '+Math.round((Date.now()-ocLastTick)/1e3)+'s ago'):'';},1000);
 const ago=t=>{const s=(Date.now()-t)/1e3;return !Number.isFinite(s)?'—':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.round(s/3600)+'h'};
 // fetch discipline: 10s abort timeout -> one retry with jitter -> the
 // last-known-good localStorage snapshot. Transient blips never blank a
@@ -1277,15 +1327,22 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       $('ocSub').textContent=`${agoOc} ago`;
       const pos=o.positions||[],fills=(o.recentFills||[]).slice(0,5);
       $('ocStats').innerHTML=[
-        ['👛 purse',o.purseUsd!=null?'$'+(+o.purseUsd).toFixed(2):'—','stables + open bags'],
+        ['👛 purse',o.purseUsd!=null?`<span data-ocpurse>$${(+o.purseUsd).toFixed(2)}</span>`:'—','stables + open bags · live'],
         ['💵 stables',o.stableUsd!=null?'$'+(+o.stableUsd).toFixed(2):'—','deployable USDC/USDT'],
         ['⛽ gas',o.sol!=null?(+o.sol).toFixed(4)+' SOL':'—',o.sol!=null&&o.sol<0.004?'⚠ low — swaps need ~0.004':'self-paying'],
         ['📦 positions',pos.length,'of '+(o.gates?.maxPositions??'—')+' max'],
       ].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--cyan,#6cf);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
-      $('ocRows').innerHTML=(pos.map(p=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #222">
-          <span><b>${esc(p.symbol||'?')}</b> <span class="sub">${p.ageH}h · <a style="color:var(--cyan,#6cf)" target="_blank" href="https://solscan.io/tx/${p.sig||''}">sig</a></span></span>
-          <span>$${(+p.lastValueUsd||0).toFixed(2)} <span class="sub">cost $${(+p.costUsd||0).toFixed(2)}</span></span></div>`).join(''))
+      // positions get LIVE marks — batched DexScreener/Jupiter ticks every
+      // 4s into data-oc cells; qtyUi from the wallet's own token acct
+      const markUsd=(p,px)=>p.qtyUi!=null&&px!=null?p.qtyUi*px:(p.lastValueUsd||p.costUsd||0);
+      const pnlHtml=(p,mk)=>{const v=markUsd(p,mk?.px),pnl=v-(p.costUsd||0),pc=(p.costUsd>0?pnl/p.costUsd*100:0);
+        const pxLine=mk?.px?`<span class="sub" style="font-size:9px">@ $${fmtP(mk.px)} · <span style="color:${(mk.chg24||0)>=0?'var(--grn)':'var(--pink)'}">${(mk.chg24||0)>=0?'+':''}${(mk.chg24||0).toFixed(1)}% 24h</span>${mk.chg1?` · <span style="color:${mk.chg1>=0?'var(--grn)':'var(--pink)'}">${mk.chg1>=0?'+':''}${mk.chg1.toFixed(1)}% 1h</span>`:''}</span>`:'';
+        return `<b style="color:${pnl>=0?'var(--grn)':'var(--pink)'}">$${v.toFixed(2)}</b> <span class="sub" style="color:${pnl>=0?'var(--grn)':'var(--pink)'}">${pnl>=0?'+':''}${pnl.toFixed(2)} (${pc>=0?'+':''}${pc.toFixed(1)}%)</span><br>${pxLine}`};
+      $('ocRows').innerHTML=(pos.map(p=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid #222;flex-wrap:wrap;gap:2px 8px">
+          <span><b>${esc(p.symbol||'?')}</b> <span class="sub">${p.qtyUi!=null?fmtQty(p.qtyUi)+' · ':''}${p.ageH}h · <a style="color:var(--cyan,#6cf)" target="_blank" href="https://solscan.io/tx/${p.sig||''}">sig</a></span></span>
+          <span data-oc="${p.mint}" style="text-align:right">${pnlHtml(p,null)}</span></div>`).join(''))
         +fills.map(f=>`<div class="sub" style="font-size:9px;padding:1px 0">${f.side==='sell'?'🔴':'🟢'} ${f.side} ${f.symbol||f.usd||''} ${f.estUsd?'~$'+(+f.estUsd).toFixed(2):f.usd?'$'+f.usd:''} <a style="color:#888" target="_blank" href="https://solscan.io/tx/${f.sig||''}">${(f.sig||'').slice(0,10)}…</a></div>`).join('')||'<div class="sub" style="font-size:10px">no positions · purse waits for a gated candidate</div>';
+      window.__ocPos=pos; window.__ocPnlHtml=pnlHtml; window.__ocStable=+o.stableUsd||0; ocMarkTick();
       $('ocNote').innerHTML=`🔍 <span class="mono" style="font-size:9px">${o.address||''}</span> · ${o.note?esc(o.note)+' · ':''}every balance is a live RPC read — nothing here is an estimate`;
     } else if(ocLane&&ocLane.enabled===false){ $('ocPanel').style.display='block'; $('ocStats').innerHTML=''; $('ocRows').innerHTML=''; $('ocNote').innerHTML='on-chain lane disabled (SENTINEL_ONCHAIN_LANE!=1)'; $('ocSub').textContent='off'; }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----

@@ -38,7 +38,9 @@ const MIN_SCORE = +(process.env.ONCHAIN_MIN_SCORE || 65);
 const SLIPPAGE_BUY_BPS = +(process.env.ONCHAIN_SLIPPAGE_BUY || 150);
 const SLIPPAGE_SELL_BPS = +(process.env.ONCHAIN_SLIPPAGE_SELL || 250);
 const KEEP = +(process.env.ONCHAIN_KEEP || 0.72); // trail: keep 72% of peak
-const FEE_LOCK = +(process.env.ONCHAIN_FEE_LOCK || 0.985); // never trail under ~98.5% of cost
+const FEE_LOCK = +(process.env.ONCHAIN_FEE_LOCK || 0.985); // once profitable, never give back under ~98.5% of cost
+const LOCK_ARM = +(process.env.ONCHAIN_LOCK_ARM || 1.03); // peak must clear cost+round-trip before FEE_LOCK engages
+const STOP_LOSS = +(process.env.ONCHAIN_STOP_LOSS || 0.7); // pre-profit hard floor — wide enough to survive entry spread
 const MAX_HOLD_H = +(process.env.ONCHAIN_MAX_HOLD_H || 36);
 // micro-purse floors — gas on Solana is ~fixed-cent cheap, so a tiny wallet
 // stays economic; env lets the operator scale them up when the purse grows
@@ -65,6 +67,8 @@ const emitLane = (book, bal, stableUsd, note) => {
       purseUsd: +(deployed + (stableUsd || 0)).toFixed(4),
       positions: (book.positions || []).map((p) => ({
         symbol: p.symbol, mint: p.mint, costUsd: p.costUsd, lastValueUsd: p.lastValueUsd,
+        qtyUi: bal?.ok && bal.tokens?.[p.mint] ? +(+bal.tokens[p.mint]).toFixed(6) : null,
+        entryPxUsd: p.entryPxUsd || null,
         peakUsd: p.peakUsd, ageH: +(((Date.now() - p.ts) / 36e5) || 0).toFixed(2), sig: p.sig,
       })),
       recentFills: readJ(FILLS_FILE, []).slice(-12).reverse(),
@@ -106,8 +110,11 @@ async function main() {
       } catch (e) { console.log(`  bootstrap swap failed: ${e.message.slice(0, 100)}`); }
     }
     // orphan SPL tokens — convert up to 2 per cycle, gasless rail when
-    // gas is short (Ultra relayer pays), classic when SOL exists
-    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT);
+    // gas is short (Ultra relayer pays), classic when SOL exists.
+    // NEVER sweep an open position's mint — a post-buy purse dip below
+    // MIN_STABLE_USD must not liquidate the book (fixed: held-mint guard).
+    const heldMints = new Set(book.positions.map((p) => p.mint));
+    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT && !heldMints.has(m));
     for (const mint of orphans.slice(0, 2)) {
       const raw = bal.tokensRaw?.[mint];
       if (!raw || !(+raw > 0)) continue;
@@ -120,11 +127,24 @@ async function main() {
         console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… -> USDC sig ${(r.signature || '').slice(0, 12)}…`);
       } catch (e) { console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… failed: ${e.message.slice(0, 80)}`); }
     }
-    done('bootstrap');
-    return;
+    // positions still open → fall through to the exit trail; only an
+    // empty book parks here waiting for a funded purse
+    if (!book.positions.length) { done('bootstrap'); return; }
   }
 
   if (bal.sol < 0.004) console.log('  ⚠ gas low — need ~0.004 SOL minimum per swap');
+
+  // ---- reconcile: wallet truth beats book state — a position whose token
+  // account reads zero is closed regardless of what the book believes
+  // (bootstrap sweeps, external moves). Quote-marks on zero balance are
+  // fiction and their sells can only ever simulation-fail.
+  const walletQty = (m) => +(bal.tokens?.[m] || 0);
+  for (const pos of [...book.positions]) {
+    if (walletQty(pos.mint) > 0) continue;
+    journal({ side: 'reconcile', symbol: pos.symbol, mint: pos.mint, costUsd: pos.costUsd, note: 'wallet balance zero — closed outside trail' });
+    book.positions = book.positions.filter((p) => p.mint !== pos.mint);
+    console.log(`  ${pos.symbol}: wallet empty — book reconciled (cost $${(pos.costUsd || 0).toFixed(2)} returned via sweeps)`);
+  }
 
   // ---- exits first: trail every open position ----
   const hot = readJ(path.join(API, 'onchain-hot.json'), null);
@@ -139,7 +159,11 @@ async function main() {
     } catch (e) { console.log(`  ${pos.symbol}: quote fail ${e.message.slice(0, 60)} — trail holds`); continue; }
     pos.lastValueUsd = mark;
     pos.peakUsd = Math.max(pos.peakUsd || mark, mark);
-    const trailStop = Math.max((pos.costUsd || 0) * FEE_LOCK, pos.peakUsd * KEEP);
+    // FEE_LOCK is a profit lock, not a -1.5% entry stop — a memecoin
+    // sell-quote sits structurally below buy-in on tick one, so the cost
+    // floor only tightens once peak has cleared the round-trip (LOCK_ARM).
+    const locked = (pos.peakUsd || 0) > (pos.costUsd || 0) * LOCK_ARM;
+    const trailStop = Math.max((pos.costUsd || 0) * (locked ? FEE_LOCK : STOP_LOSS), (pos.peakUsd || 0) * KEEP);
     const heldH = (Date.now() - pos.ts) / 36e5;
     const reason =
       mark < trailStop ? `trail ${mark.toFixed(2)}<${trailStop.toFixed(2)}` :
@@ -191,6 +215,7 @@ async function main() {
       book.positions.push({
         mint: cand.contract, symbol: cand.symbol, qtyRaw: +q.outAmount,
         costUsd: sizeUsd, peakUsd: sizeUsd, lastValueUsd: sizeUsd, ts: Date.now(),
+        entryPxUsd: +cand.priceUsd || null,
         score: cand.score, liqUsd: cand.liqUsd, sig: r.signature,
       });
       journal({ side: 'buy', symbol: cand.symbol, mint: cand.contract, usd: sizeUsd, qtyRaw: +q.outAmount, sig: r.signature, score: cand.score });
