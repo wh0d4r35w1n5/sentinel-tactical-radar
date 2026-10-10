@@ -215,6 +215,18 @@ async function cycle() {
   }
 
   const manualSet = loadManual();
+  // margin/size delta baseline from last cycle's heartbeat. Survives
+  // restarts (the heartbeat file persists), so a daemon bounce never
+  // re-fires an already-handled event, and a first boot records the
+  // baseline instead of inventing events.
+  const prevSnap = prev?.posSnap || {};
+  const snapNext = {};
+  const marginEvents = [];
+  const DERISK_CAP = +(process.env.SENTINEL_POS_DERISK_CAP_PCT || 0.30);
+  const equityUsd = (() => {
+    try { return +JSON.parse(fs.readFileSync(path.join(ROOT, 'api', 'live-ledger.json'), 'utf8'))?.equityUsd || 0; }
+    catch { return 0; }
+  })();
   for (const p of open.values()) {
     try {
       const c = cmCache[p.symbol] || {};
@@ -240,6 +252,41 @@ async function cycle() {
       const size = +p.total;
       const liq = +p.liquidationPrice || 0;
 
+      // ---- margin/size event: posted margin or contracts changed since
+      // the last snapshot (manual isolated top-up, auto-margin-transfer,
+      // add-order resize). marginSize on CROSSED positions drifts with
+      // uPL, so only the uPL-unexplained part of the delta counts; on
+      // isolated it never drifts, so any delta beyond the threshold is a
+      // real add/remove. The snapshot updates at the END of the try —
+      // if the re-adapt below errors, the event re-fires next cycle.
+      const mNow = +p.marginSize || 0;
+      const eNow = +p.openPriceAvg || 0;
+      const uNow = +p.unrealizedPL || 0;
+      const ctNow = +p.cTime || 0;
+      const snap = prevSnap[p.symbol];
+      // cTime guard: a flat->reopen between cycles is a NEW position —
+      // baseline only, never an event.
+      const samePos = snap && (!snap.ct || !ctNow || String(snap.ct) === String(ctNow));
+      let marginEvent = null;
+      if (samePos) {
+        const thr = Math.max(0.10, Math.abs(+snap.m || 0) * 0.015);
+        const mD = mNow - (+snap.m || 0);
+        const uD = uNow - (+snap.u || 0);
+        const addU = mD - Math.max(0, uD);    // margin grew beyond PnL share
+        const remU = -mD + Math.min(0, uD);   // margin shrank beyond PnL drag
+        const sD = size - (+snap.s || 0);
+        if (addU > thr) marginEvent = { kind: 'margin-added', amt: addU, m: mNow, prevM: +snap.m || 0 };
+        else if (remU > thr) marginEvent = { kind: 'margin-removed', amt: remU, m: mNow, prevM: +snap.m || 0 };
+        if (Math.abs(sD) * sp >= 0.5) {
+          // size change outranks margin noise — adds reslice margin anyway
+          marginEvent = { kind: sD > 0 ? 'size-added' : 'size-reduced', amt: sD, m: mNow, prevM: +snap.m || 0 };
+        }
+      }
+      if (marginEvent) {
+        actions.push(`${p.symbol}: ${marginEvent.kind} ${marginEvent.kind.startsWith('margin') ? `$${marginEvent.amt.toFixed(2)} ($${marginEvent.prevM.toFixed(2)}→$${marginEvent.m.toFixed(2)})` : `Δ${marginEvent.amt}`} — re-adapting SL/TP`);
+        marginEvents.push({ ts: Date.now(), sym: p.symbol, kind: marginEvent.kind, amt: +marginEvent.amt.toFixed(4), margin: mNow });
+      }
+
       // ---- STOP: exactly one whole-position pos_loss (or an engine trail)
       const lossRows = rows.filter((r) => /loss|stop|moving/i.test(r.planType || ''));
       const moving = lossRows.find((r) => /moving/i.test(r.planType || ''));
@@ -259,6 +306,26 @@ async function cycle() {
         // liquidation, a short's BELOW it. A direction-blind `> liq` made
         // every short look invalid — refusing to place and erroring each cycle.
         const liqSafe = (pxv) => !(liq > 0) || (long ? pxv > liq : pxv < liq);
+        // margin/size-add re-fit: same % stop on a bigger base is a bigger
+        // $ worst-case. Exec's de-risk band (worst-case at stop ≤ 30% equity)
+        // enforced here at stop level — tighten-only, so it can never loosen
+        // an existing stop, only pull it inside the band on a margin event.
+        if (marginEvent && /added/.test(marginEvent.kind) && equityUsd > 0 && want.mark > 0) {
+          const capUsd = equityUsd * DERISK_CAP;
+          if (Math.abs(eNow - want.px) * size > capUsd) {
+            const fit = long ? eNow - capUsd / size : eNow + capUsd / size;
+            const fp = long ? floorTick(fit, dec) : ceilTick(fit, dec);
+            // only tighten, and only if the fitted px stays placeable
+            // (inside the mark and on the liq-safe side — otherwise the
+            // position is beyond stop-level repair and exec's trim owns it)
+            const tighter = long ? fp > want.px : fp < want.px;
+            const insideMark = long ? fp < want.mark * 0.9995 : fp > want.mark * 1.0005;
+            if (tighter && insideMark && liqSafe(fp)) {
+              actions.push(`${p.symbol}: worst-case $${(Math.abs(eNow - want.px) * size).toFixed(2)} > ${DERISK_CAP * 100}% equity on ${marginEvent.kind} — stop re-fit @ ${fp}`);
+              want.px = fp;
+            }
+          }
+        }
         // hysteresis: the move-lock target recomputes from the live mark every
         // cycle, so a 1-tick tolerance re-clamped the stop on EVERY cycle —
         // order churn that invites rate limits. Only move the stop when it
@@ -379,6 +446,9 @@ async function cycle() {
           }
         }
       }
+      // baseline commit — AFTER the re-adapt attempt so a failed cycle
+      // re-fires the same event next pass rather than swallowing it
+      snapNext[p.symbol] = { m: mNow, s: size, e: eNow, l: liq, u: uNow, ct: ctNow };
     } catch (e) { errors.push(`${p.symbol}: ${e.message.slice(0, 120)}`); }
   }
 
@@ -388,6 +458,8 @@ async function cycle() {
     cycleMs: Date.now() - t0,
     positions: open.size,
     flatWatched: [...open.keys()],
+    posSnap: snapNext,
+    marginEvents: [...marginEvents, ...(prev?.marginEvents || [])].slice(0, 20),
     actions: actions.slice(-20),
     errors: errors.slice(-10),
   };
