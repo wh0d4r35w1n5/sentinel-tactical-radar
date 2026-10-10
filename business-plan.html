@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Sentinel Tactical Radar — Business Plan</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #1a2233; background: #fff; font-size: 10.5pt; line-height: 1.55; }
+.page { width: 210mm; min-height: 297mm; padding: 18mm 18mm 16mm; page-break-after: always; position: relative; }
+.page:last-child { page-break-after: auto; }
+.cover { background: linear-gradient(160deg,#0b1020 0%,#101a33 55%,#0d1f3c 100%); color: #eef2ff; display: flex; flex-direction: column; justify-content: space-between; }
+.cover .brand { font-size: 9pt; letter-spacing: .35em; color: #22e5ff; text-transform: uppercase; }
+.cover h1 { font-size: 42pt; font-weight: 800; letter-spacing: .02em; line-height: 1.05; margin: 12mm 0 4mm; }
+.cover h1 em { font-style: normal; background: linear-gradient(90deg,#22e5ff,#8a5bff,#ff2ec4,#ffd166); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cover .sub { font-size: 13pt; color: #aab6dd; max-width: 150mm; }
+.cover .meta { border-top: 1px solid #2a3760; padding-top: 6mm; display: flex; justify-content: space-between; font-size: 9pt; color: #7c8ab5; }
+.cover .stats { display: flex; gap: 8mm; margin-top: 10mm; }
+.cover .stat { border: 1px solid #2a3760; border-radius: 4mm; padding: 5mm 7mm; }
+.cover .stat b { display: block; font-size: 17pt; color: #ffd166; }
+.cover .stat span { font-size: 8pt; color: #7c8ab5; letter-spacing: .12em; text-transform: uppercase; }
+h2 { font-size: 16pt; font-weight: 800; color: #0d1f3c; margin-bottom: 4mm; padding-bottom: 2mm; border-bottom: 2.5px solid #22e5ff; display: inline-block; }
+h2 .n { color: #b9c4e2; font-weight: 400; margin-right: 3mm; }
+h3 { font-size: 11pt; color: #0d1f3c; margin: 5mm 0 2mm; }
+p { margin-bottom: 3mm; }
+.lede { font-size: 11.5pt; color: #3a4763; }
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 4mm; font-size: 9.5pt; }
+th { text-align: left; font-size: 8pt; letter-spacing: .1em; text-transform: uppercase; color: #7c8ab5; border-bottom: 1.5px solid #0d1f3c; padding: 1.5mm 2mm; }
+td { padding: 1.8mm 2mm; border-bottom: 1px solid #e3e8f4; vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.good { color: #0a8f5b; font-weight: 600; } .bad { color: #c2334d; font-weight: 600; } .warn { color: #b07d10; font-weight: 600; }
+.card { border: 1px solid #dfe6f5; border-radius: 3mm; padding: 4mm 5mm; margin-bottom: 3mm; background: #fafbff; }
+.card b.t { display: block; font-size: 9pt; letter-spacing: .12em; text-transform: uppercase; color: #5a6894; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3.5mm; }
+.kpi { text-align: center; border: 1px solid #dfe6f5; border-radius: 3mm; padding: 4mm 2mm; }
+.kpi b { display: block; font-size: 16pt; color: #0d1f3c; }
+.kpi span { font-size: 7.5pt; letter-spacing: .1em; text-transform: uppercase; color: #7c8ab5; }
+ul { margin: 2mm 0 3mm 5mm; } li { margin-bottom: 1.2mm; }
+.callout { border-left: 3px solid #22e5ff; background: #f0f9ff; padding: 3mm 5mm; margin: 4mm 0; font-size: 10pt; }
+.callout.warn { border-color: #e8a020; background: #fff8ec; }
+.callout.bad { border-color: #c2334d; background: #fff1f3; }
+.footer { position: absolute; bottom: 8mm; left: 18mm; right: 18mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #9aa7c9; border-top: 1px solid #e3e8f4; padding-top: 2.5mm; }
+.tag { display: inline-block; background: #eef3ff; color: #3b4d85; font-size: 8pt; padding: .5mm 2.5mm; border-radius: 2mm; margin-right: 1.5mm; }
+.mono { font-family: Consolas, monospace; font-size: 8.5pt; }
+blockquote { font-style: italic; color: #445; border-left: 3px solid #ffd166; padding: 2mm 4mm; margin: 3mm 0; background: #fffdf5; }
+</style></head><body>
+
+<!-- COVER -->
+<div class="page cover">
+  <div>
+    <div class="brand">Sentinel Tactical Radar</div>
+    <h1>Autonomous market<br>intelligence.<br><em>Business plan.</em></h1>
+    <div class="sub">A self-improving, evidence-gated trading engine for crypto futures and on-chain markets — engineered for net profit after every cost, audited by machine and by external review.</div>
+    <div class="stats">
+      <div class="stat"><b>7</b><span>live daemons</span></div>
+      <div class="stat"><b>17</b><span>fusion keys</span></div>
+      <div class="stat"><b>26k+</b><span>sealed evals</span></div>
+      <div class="stat"><b>2</b><span>markets</span></div>
+    </div>
+  </div>
+  <div class="meta"><span>SENTINEL TACTICAL RADAR · BUSINESS PLAN</span><span>10 October 2026 · Private &amp; Confidential</span></div>
+</div>
+
+<!-- 1 EXEC SUMMARY -->
+<div class="page">
+  <h2><span class="n">01</span>Executive summary</h2>
+  <p class="lede">Sentinel Tactical Radar is a production autonomous trading system for cryptocurrency markets. It scans a live multi-venue universe, scores candidates through a statistically-fused signal stack, sizes positions on measured evidence, protects every position with a three-daemon defense mesh, and journals every decision for audit.</p>
+  <p><b>The honest position.</b> The engineering is ahead of the evidence. Sentinel's machinery — evidence-gated scoring, regime-conditional strategy weighting, empirical-Kelly sizing, inventory-aware exposure control, and a self-custody on-chain execution lane — is institutional-grade in design. Live realized performance to date is net negative (−$54.80 all-time across 232 closes at the time of writing), which this plan reports plainly rather than disguising. The business case rests on a deliberate sequence: <b>prove the edge on a small live book → scale only what survives measurement → productize the infrastructure.</b></p>
+  <div class="callout"><b>Operating principle:</b> profit is the only metric. Never win-rate alone, never gross before net. Every gate, every grade, every roadmap item is subordinate to net dollars after fees, slippage and funding.</div>
+  <h3>What exists today</h3>
+  <ul>
+    <li><b>Futures lane</b> — Bitget USDT-M perpetuals, live since Oct 2026: 20-signal scan board, 17-key statistical fusion, longs-only mandate, bounded inventory skew, Kelly-negative vetoes.</li>
+    <li><b>On-chain lane</b> — self-custody Solana wallet trading DEX candidates via Jupiter (gasless-capable), with Rugcheck screening, purse caps, and software trails. Every fill is a solscan-verifiable signature.</li>
+    <li><b>Protection mesh</b> — three daemons: execution supervisor, 10s protection watcher (band-clamped stop repair, staggered TP ladders), and a ~5s liquidation guard (crash brake, liq-zone trims, naked-stop synthesis).</li>
+    <li><b>Wealth vault</b> — 25% carry on net-new equity highs, high-water-mark gated, physically segregated from the tradable book.</li>
+    <li><b>Attribution layer</b> — "Pimp City": every fill assigned to a persona, per-pimp and per-girl P&amp;L, vault-carry KPIs, form/mood evolution — the ledger that answers "who made the money."</li>
+    <li><b>Ops surface</b> — live dashboard, Telegram command-and-control, VIP signal ingestion as confluence, TradingView webhooks, integrity checksums on all state.</li>
+  </ul>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>2</span></div>
+</div>
+
+<!-- 2 SYSTEM -->
+<div class="page">
+  <h2><span class="n">02</span>The system</h2>
+  <div class="grid2">
+    <div class="card"><b>SCAN</b> — ~200 instruments/cycle (CEX perps + DEX pairs across Solana/Base/BSC). Regime classification, microprice + queue imbalance, BTC-relative strength, funding/carry, social + VIP confluence, strategy-library edge priors (390k external backtests indexed per symbol).</div>
+    <div class="card"><b>SCORE</b> — 17-key fusion: serially-demeaned components, cross-sectional z-scores, Bayesian-ridge residual weighting onto realized alpha (shrunk to priors, n/(n+300) evidence gate).</div>
+    <div class="card"><b>SIZE</b> — empirical Kelly per strategy (f* = p − q/b, half-Kelly deployed), inventory skew exp(−γ·q<sub>eff</sub>) with 1.5× correlated-name weight, hard risk ceilings independent of conviction.</div>
+    <div class="card"><b>PROTECT</b> — exchange-side stops + software mesh: crash brake (≥0.8%/5s gap), liq-zone trims, fee-lock ratchet, TP ladders, stall-cuts, margin-loss cap, manual-hold arbitration.</div>
+  </div>
+  <h3>Signal-to-execution pipeline</h3>
+  <table>
+    <tr><th>Stage</th><th>Mechanism</th><th>Honest status</th></tr>
+    <tr><td>Discovery</td><td>Multi-venue universe scan, exec-catalog gating</td><td class="good">Live, verified</td></tr>
+    <tr><td>Evidence</td><td>26,344 forward-labeled signal evals; grade + outcome joins</td><td class="warn">Large n, autocorrelated — independence clustering queued</td></tr>
+    <tr><td>Fusion</td><td>17-key ridge, synthetic test R²=0.98</td><td class="warn">Math verified; live predictive alpha unproven (IC24h ≈ 0.005)</td></tr>
+    <tr><td>Gates</td><td>RR floors, drift guard, meta-label p(profit), family/kelly vetoes, deny lists</td><td class="good">Live; rejects journaled with named gates</td></tr>
+    <tr><td>Execution</td><td>Stop/plan-triggered entries, leverage from stop width, markout grading</td><td class="good">Live</td></tr>
+    <tr><td>Exit</td><td>Fee-aware trails, TP ladders, ratchets — tighten-only</td><td class="good">Live, net-RR enforced</td></tr>
+    <tr><td>Accounting</td><td>Per-fill journal, episode joins, per-strategy/per-persona attribution</td><td class="good">Live; fee % disclosed</td></tr>
+  </table>
+  <div class="callout warn"><b>External review built in.</b> An independent critical review (ChatGPT-graded, via the project's external advisor) is treated as a defect tracker: its October review produced a live code change — a measured-negative Kelly cell now vetoes outright rather than taking a 0.3× probe size.</div>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>3</span></div>
+</div>
+
+<!-- 3 EDGE MACHINERY -->
+<div class="page">
+  <h2><span class="n">03</span>Edge machinery</h2>
+  <p>Sentinel's stack is built around one desk rule: <b>never widen the proof bar to widen the funnel.</b> Components compete on measured marginal contribution, and measured-negative cells lose their bullets.</p>
+  <h3>The 17-key fusion</h3>
+  <ul>
+    <li><b>Serial demeaning</b> — each component minus its ~30-cycle EMA; only the surprise carries signal.</li>
+    <li><b>Cross-sectional z</b> — every key z-scored across the board each cycle (±4 clamp); ranks over raw units.</li>
+    <li><b>Residual weighting</b> — Bayesian ridge of the z-map onto realized 24h alpha, λ=30 shrunk to hand priors. The momentum/volume/surge triple-count dies here — each key earns only its marginal lift.</li>
+    <li><b>Evidence ramp</b> — blend = n/(n+300), capped 0.7. Hand-tuned prior is the floor until sealed evals accumulate.</li>
+  </ul>
+  <h3>Standout mechanisms</h3>
+  <table>
+    <tr><th>Mechanism</th><th>Function</th><th>Source basis</th></tr>
+    <tr><td>BTC-pair confluence</td><td>±4 tilt: up vs USDT but down vs BTC = pure beta, penalized</td><td>Relative-strength doctrine</td></tr>
+    <tr><td>Regime strategy weights</td><td>Strategy × tape-type cross-tab; regime-local overrides once cells mature</td><td>Post-regime audit</td></tr>
+    <tr><td>Inventory skew</td><td>exp(−2.2·q<sub>eff</sub>) size decay vs same-direction deployed margin</td><td>Avellaneda–Stoikov (Stanford MS&amp;E 448)</td></tr>
+    <tr><td>Microprice + OBI</td><td>Top-5 book: micro-vs-mid in half-spread units + queue imbalance</td><td>Microstructure lit</td></tr>
+    <tr><td>Library edge priors</td><td>390k-strategy public leaderboard density per symbol → ±3.5 prior</td><td>trader.dev public API</td></tr>
+    <tr><td>Kelly vetoes</td><td>Per-strategy f*≤0 → full stand-down (post-review hardening)</td><td>Empirical Kelly</td></tr>
+  </table>
+  <div class="callout"><b>Ablation commitment.</b> The next major build is a shadow reference: every signal scored by the frozen v1.0-master logic alongside the current stack on identical tape, both forward-marked — a controlled A/B so improvements are measured, not asserted.</div>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>4</span></div>
+</div>
+
+<!-- 4 PERFORMANCE -->
+<div class="page">
+  <h2><span class="n">04</span>Current performance — reported plainly</h2>
+  <p>This section reports the live journal exactly as the ledger stores it. Nothing here is projected.</p>
+  <div class="grid3">
+    <div class="kpi"><b class="bad">−$54.80</b><span>net realized, all-time</span></div>
+    <div class="kpi"><b>232</b><span>closes journaled</span></div>
+    <div class="kpi"><b>0.22</b><span>profit factor</span></div>
+    <div class="kpi"><b>$23.85</b><span>total fees paid</span></div>
+    <div class="kpi"><b class="bad">23.7%</b><span>win rate</span></div>
+    <div class="kpi"><b class="bad">~100%</b><span>max drawdown of funded equity</span></div>
+  </div>
+  <h3>Attribution</h3>
+  <table>
+    <tr><th>Book</th><th class="num">Closes</th><th class="num">Net USD</th><th class="num">Fees</th><th class="num">PF</th></tr>
+    <tr><td>Bot-attributed</td><td class="num">48</td><td class="num bad">−$4.18</td><td class="num">$0.91</td><td class="num">0.16</td></tr>
+    <tr><td>Manual / foreign fills</td><td class="num">184</td><td class="num bad">−$50.62</td><td class="num">$22.94</td><td class="num">0.23</td></tr>
+  </table>
+  <p>The journal separates machine decisions from operator interventions. The largest loss clusters were correlated manual campaigns (e.g. concentrated same-direction alt exposure), which is precisely the failure class the new inventory-skew and corr-cluster machinery now gates.</p>
+  <h3>What the eval engine says about its own score</h3>
+  <table>
+    <tr><th>Metric (n=26,344 evals)</th><th class="num">Value</th><th>Reading</th></tr>
+    <tr><td>Directional accuracy, 24h</td><td class="num">52.6%</td><td class="warn">marginally better than chance</td></tr>
+    <tr><td>Information coefficient, 24h</td><td class="num">0.005</td><td class="bad">≈ zero predictive alpha in raw score</td></tr>
+    <tr><td>A-grade cohort hit rate</td><td class="num">25.2%</td><td class="bad">inverted vs B-grades (37.7%)</td></tr>
+    <tr><td>Avg alpha vs BTC, 24h</td><td class="num">−0.04%</td><td class="warn">slightly negative pre-fusion</td></tr>
+  </table>
+  <div class="callout bad"><b>The thesis being tested:</b> the fusion layer exists because the hand score demonstrably lacks predictive alpha. If the ridge + evidence stack cannot produce a measurable lift in IC and net $/trade over the next evidence window, the correct engineering outcome is to say so — and this plan budgets for that honest answer.</div>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>5</span></div>
+</div>
+
+<!-- 5 MARKET & MODEL -->
+<div class="page">
+  <h2><span class="n">05</span>Market &amp; business model</h2>
+  <h3>The opportunity</h3>
+  <p>Retail crypto trading remains dominated by discretionary losses and unsystematic bots. The durable gap is not signal generation — it is <b>audited, cost-aware, self-evaluating execution</b>. Sentinel's moat, if it earns one, is the evidence pipeline: every signal sealed and labeled, every strategy scored on its own realized record, every fee accounted.</p>
+  <h3>Phased model</h3>
+  <table>
+    <tr><th>Phase</th><th>Business</th><th>Trigger to enter</th></tr>
+    <tr><td><b>0 · Now</b></td><td>Proprietary micro-book. Small live capital, maximal instrumentation.</td><td>— in progress</td></tr>
+    <tr><td><b>1 · Proof</b></td><td>Scaled prop trading. Vault carry compounds internally.</td><td>3+ months positive net PF&gt;1.15 after costs, IC lift demonstrated</td></tr>
+    <tr><td><b>2 · Signals</b></td><td>Subscription signal board (the scan stack already produces ranked, graded outputs with sealed-eval audit trails).</td><td>Demonstrated eval outperformance vs grade baseline</td></tr>
+    <tr><td><b>3 · Platform</b></td><td>Managed vault / copy-trading surface; on-chain lane productized as audited micro-cap discovery.</td><td>Regulatory review + sustained Phase-1 record</td></tr>
+  </table>
+  <h3>Unit economics (targets, not history)</h3>
+  <div class="grid3">
+    <div class="kpi"><b>&lt;15%</b><span>fees as % of gross P&amp;L target</span></div>
+    <div class="kpi"><b>&gt;$0.15</b><span>net per close target</span></div>
+    <div class="kpi"><b>&gt;1.15</b><span>profit factor gate to scale</span></div>
+  </div>
+  <h3>Cost structure</h3>
+  <ul>
+    <li>VPS hosting ~$15/mo · API keys $0 · data feeds $0 (public APIs)</li>
+    <li>Trading fees: ~0.06%/side futures taker; DEX swaps 0.15–0.4% + spread</li>
+    <li>Dominant cost center to date: fee drag on high-churn books — engineered down via net-RR floors and churn breakers</li>
+  </ul>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>6</span></div>
+</div>
+
+<!-- 6 RISK -->
+<div class="page">
+  <h2><span class="n">06</span>Risk — the pre-mortem is written</h2>
+  <p>Sentinel keeps a standing pre-mortem register: every way the system can lose money, mapped to its guard. Highlights:</p>
+  <table>
+    <tr><th>Failure mode</th><th>Guard</th></tr>
+    <tr><td>Adverse selection on entries</td><td>Stop/plan triggers into the level, RR re-check at fill, markout grading</td></tr>
+    <tr><td>Redeploy-after-loss churn</td><td>Entry dedup, auto-quarantine (4 losers + $1 bleed → 24h deny), account breakers</td></tr>
+    <tr><td>Correlated stack = one bet</td><td>Corr-cluster veto + continuous inventory skew (1.5× corr weight)</td></tr>
+    <tr><td>Cascade faster than polling</td><td>Crash brake + exchange-side stops (VPS outage never leaves the book naked)</td></tr>
+    <tr><td>Profit round-tripping</td><td>Fee-lock ratchet, dense trail tiers, vanish-close on giveback</td></tr>
+    <tr><td>Fee churn</td><td>Dust-floor clip skips, fee-burn breaker, net-RR floors include costs</td></tr>
+    <tr><td>Edge evaporation</td><td>CUSUM edge-death + Kelly vetoes on measured-negative cells</td></tr>
+    <tr><td>Stale feed as truth</td><td>WS marks anchored to REST, &gt;5% deviation rejected</td></tr>
+    <tr><td>On-chain tail risk</td><td>Purse caps, Rugcheck screen, audit pass, software trails (disclosed limit: no exchange-side stop exists on-chain)</td></tr>
+    <tr><td>Operator override decay</td><td>Bounded self-expiring override channel</td></tr>
+  </table>
+  <h3>Known limitations — disclosed, not hidden</h3>
+  <ul>
+    <li>API key is futures-trade-only: vault transfers to spot require manual action or a perms upgrade (documented).</li>
+    <li>Software on-chain trails can fail when liquidity evaporates; Rugcheck is a screen, not a guarantee.</li>
+    <li>Signal evals are hypothetical forward-marks, not fill-linked; independence clustering for eval evidence is queued.</li>
+    <li>No ablation harness yet — frozen reference exists, live shadow scoring is the next build.</li>
+  </ul>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR</span><span>7</span></div>
+</div>
+
+<!-- 7 ROADMAP -->
+<div class="page">
+  <h2><span class="n">07</span>Roadmap &amp; governance</h2>
+  <h3>Now → next evidence window</h3>
+  <table>
+    <tr><th>Item</th><th>Type</th><th>Status</th></tr>
+    <tr><td>Shadow A/B scorer (v1.0 vs current, identical tape)</td><td>Evidence</td><td class="warn">next build</td></tr>
+    <tr><td>Eval independence clustering (symbol+day buckets)</td><td>Evidence</td><td class="warn">queued</td></tr>
+    <tr><td>Fee/slippage decomposition in eval labels</td><td>Accounting</td><td class="warn">queued</td></tr>
+    <tr><td>On-chain lane first fills under audit</td><td>Live</td><td class="good">armed, purse funded</td></tr>
+    <tr><td>Kelly-negative veto + inventory skew</td><td>Risk</td><td class="good">deployed</td></tr>
+    <tr><td>Vault physical transfer</td><td>Ops</td><td class="warn">awaiting API perms / manual</td></tr>
+  </table>
+  <h3>Governance</h3>
+  <ul>
+    <li><b>Integrity manifest</b> — CRC checksums on all mutable state; tamper-evident journals.</li>
+    <li><b>Every fill verifiable</b> — exchange fills journaled; on-chain fills carry solscan signatures.</li>
+    <li><b>External review loop</b> — independent critiques (W. Evans) triaged to code changes, evidenced by commit hash.</li>
+    <li><b>Standing mandates</b> — longs-only, min-leverage band, profit-first grading, "cut losers quickly" enforcement, take-profit discipline.</li>
+  </ul>
+  <h3>The operating thesis</h3>
+  <blockquote>"You've reached a point where demonstrating that Sentinel works is more important than adding further capabilities."<br>— external review, 10 Oct 2026 (adopted as the standing order)</blockquote>
+  <p>The next report is a measured-live-evidence report — or an honest account of why the edge isn't there. Either way, the journal decides.</p>
+  <div class="footer"><span>SENTINEL TACTICAL RADAR · contact via project Telegram</span><span>8</span></div>
+</div>
+
+</body></html>
