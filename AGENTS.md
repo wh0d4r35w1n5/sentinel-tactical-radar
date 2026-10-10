@@ -63,10 +63,12 @@ gross-positive and still printed red. These rules prevent the repeat.
 - **Longs only** (`SENTINEL_LONG_ONLY=1`) — operator order 2026-10-07:
   every SHORT order refused (`longs-only-mandate` / `shorts-banned`).
   BTC/ETH/majors tradable (`SENTINEL_DENY_SYMS=` empty).
-- **Balanced book**: up to 5 longs + 5 shorts held concurrently
-  (`SENTINEL_SIDE_CAP=5` per direction, `LIVE_TARGET_POSITIONS=10` when
-  the env is editable). Capacity, not quota — only gate-passing cells
-  fill slots; never force a measured-loser to balance.
+- **Capacity 10** (operator order 2026-10-10): up to 10 best trades on
+  **each** wallet — `LIVE_TARGET_POSITIONS=10`, `LIVE_MAX_POSITIONS=10`,
+  `SENTINEL_SIDE_CAP=10` futures-side; `ONCHAIN_MAX_POS=10`,
+  `ONCHAIN_PCT=0.15`, `ONCHAIN_MIN_SCORE=55` chain-side (override.conf
+  drop-in). Capacity, not quota — only gate-passing cells fill slots;
+  never force a measured-loser to fill a seat.
 - **Exploit funding as income**: carry earners rank up in trade score
   (+0–5 tilt by |rate|), payers penalized; `carryYieldDayPct` is journaled
   per order so carry income is auditable.

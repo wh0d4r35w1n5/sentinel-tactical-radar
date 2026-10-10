@@ -54,6 +54,7 @@ const journal = (f) => { const a = readJ(FILLS_FILE, []); a.push({ ts: Date.now(
 
 // lane state is published every cycle so the dashboard can show the purse —
 // an operator should never have to wonder where onchain funds went again.
+let lastVaultRes = 0; // set each cycle before emitLane — sealed vault share
 const emitLane = (book, bal, stableUsd, note) => {
   const tokens = {};
   if (bal?.ok) for (const [m, v] of Object.entries(bal.tokens || {})) if (+v > 0) tokens[m] = +(+v).toFixed(6);
@@ -74,7 +75,7 @@ const emitLane = (book, bal, stableUsd, note) => {
       })),
       recentFills: readJ(FILLS_FILE, []).slice(-12).reverse(),
       note: note || null,
-      gates: { minScore: MIN_SCORE, minStableUsd: MIN_STABLE_USD, minSizeUsd: MIN_SIZE_USD, pct: PCT, maxPositions: MAX_POSITIONS, maxDeployedUsd: MAX_DEPLOYED_USD, keep: KEEP, maxHoldH: MAX_HOLD_H },
+      gates: { minScore: MIN_SCORE, minStableUsd: MIN_STABLE_USD, minSizeUsd: MIN_SIZE_USD, pct: PCT, maxPositions: MAX_POSITIONS, maxDeployedUsd: MAX_DEPLOYED_USD, keep: KEEP, maxHoldH: MAX_HOLD_H, vaultReservedUsd: +lastVaultRes.toFixed(4) },
     });
   } catch {}
 };
@@ -91,8 +92,14 @@ async function main() {
 
   const stableUsd = (bal.tokens[sol.MINT.USDC] || 0) + (bal.tokens[sol.MINT.USDT] || 0);
   const deployed = book.positions.reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
+  // lane vault reserve: swept profits are sealed out of the deploy pool —
+  // they stay USDC in this wallet but never size new entries (the vault is
+  // accounting-segregated; at purse scale a second address just burns gas)
+  const vaultRes = Math.max(0, +(readJ(path.join(STATE, 'onchain-vault.json'), {}).balanceUsd || 0));
+  const spendableUsd = Math.max(0, stableUsd - vaultRes);
+  lastVaultRes = vaultRes;
   const done = (note) => { writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); emitLane(book, bal, stableUsd, note); emitCustody().catch(() => {}); };
-  console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
+  console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)}${vaultRes > 0 ? ` (🏦 $${vaultRes.toFixed(2)} sealed, $${spendableUsd.toFixed(2)} spendable)` : ''} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
 
   // bootstrap: convert whatever landed into the USDC purse. Two rails —
   // raw SOL converts via the classic swap keeping a gas reserve; ANY other
@@ -181,8 +188,8 @@ async function main() {
   }
 
   // ---- entries: top audited candidate, non-perp only ----
-  if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || stableUsd < MIN_STABLE_USD) {
-    done(stableUsd < MIN_STABLE_USD ? `purse below floor ($${stableUsd.toFixed(2)} < $${MIN_STABLE_USD})` : 'capacity full');
+  if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || spendableUsd < MIN_STABLE_USD) {
+    done(spendableUsd < MIN_STABLE_USD ? `purse below floor ($${spendableUsd.toFixed(2)} spendable < $${MIN_STABLE_USD}${vaultRes > 0 ? ` · vault sealed $${vaultRes.toFixed(2)}` : ''})` : 'capacity full');
     return;
   }
   if (!hot || Date.now() - hot.ts > (hot.ttlMs || 900e3)) {
@@ -201,7 +208,7 @@ async function main() {
   );
   if (!cands.length) { console.log('onchain-exec: no candidate passed gates'); done('no candidate passed gates'); return; }
 
-  let stableLeft = stableUsd, deployLeft = MAX_DEPLOYED_USD - deployed;
+  let stableLeft = spendableUsd, deployLeft = MAX_DEPLOYED_USD - deployed;
   let usdcLeft = bal.tokens[sol.MINT.USDC] || 0, usdtLeft = bal.tokens[sol.MINT.USDT] || 0;
   for (const cand of cands.slice(0, MAX_POSITIONS - book.positions.length)) {
     const sizeUsd = Math.min(MAX_USD, stableLeft * PCT, deployLeft);

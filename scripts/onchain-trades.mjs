@@ -86,6 +86,43 @@ for (const [mint, open] of Object.entries(lots)) {
 trades.sort((a, b) => b.entryTs - a.entryTs);
 const closed = trades.filter((t) => t.status === 'closed' && t.net != null);
 const wins = closed.filter((t) => t.net > 0);
+
+// ---- lane vault: SENTINEL_VAULT_SHARE of every net-positive close banks
+// into a sealed reserve (state/onchain-vault.json) when the purse NAV is at
+// new highs — the same HWM discipline as the futures vault: nothing banks
+// while underwater, sweptIds dedupe means a trade can never pay twice.
+// Segregation is accounting-level: the reserve stays USDC in the same
+// wallet, subtracted from onchain-exec's spendable stables — on an $11
+// purse a separate vault address would burn more in gas than it protects.
+const VAULT_SHARE = Math.min(0.9, Math.max(0, +(process.env.SENTINEL_VAULT_SHARE ?? 0.25)));
+const VAULT_PATH = path.join(ROOT, 'state', 'onchain-vault.json');
+const vault = { balanceUsd: 0, hwmUsd: 0, sweptIds: {}, sweeps: [], ...readJ(VAULT_PATH, {}) };
+vault.sweptIds ||= {}; vault.sweeps ||= [];
+let vaultChg = 0;
+if (VAULT_SHARE > 0) {
+  const hwmLoaded = +vault.hwmUsd || 0;
+  const navNow = +lane.purseUsd || 0; // stables + deployed marks — reserve lives inside this
+  let room = Math.max(0, navNow - (vault.hwmUsd || 0));
+  for (const t of closed.sort((a, b) => a.exitTs - b.exitTs)) {
+    const sid = `ot:${t.mint}:${t.exitTs}`;
+    if (vault.sweptIds[sid]) continue;
+    if (!(t.net > 0)) { vault.sweptIds[sid] = 1; continue; }
+    const amt = Math.max(0, Math.min(t.net * VAULT_SHARE, room));
+    room = Math.max(0, room - t.net);
+    if (!(amt > 0)) { vault.sweptIds[sid] = 1; continue; }
+    vault.sweptIds[sid] = 1;
+    vault.sweeps.push({ ts: t.exitTs, sid, symbol: t.symbol, amountUsd: +amt.toFixed(4), hwm: +navNow.toFixed(2) });
+    vault.balanceUsd = +(vault.balanceUsd + amt).toFixed(4);
+    vaultChg += amt;
+  }
+  vault.hwmUsd = +Math.max(vault.hwmUsd || 0, navNow).toFixed(4);
+  if (vaultChg > 0 || vault.hwmUsd !== hwmLoaded || !vault.updatedAt) {
+    vault.sweeps = vault.sweeps.slice(-500);
+    vault.updatedAt = new Date().toISOString();
+    writeJ(VAULT_PATH, vault);
+  }
+}
+
 writeJ(path.join(API, 'onchain-trades.json'), {
   ts: Date.now(), updatedAt: new Date().toISOString(),
   trades,
@@ -94,6 +131,11 @@ writeJ(path.join(API, 'onchain-trades.json'), {
     net: +closed.reduce((a, t) => a + t.net, 0).toFixed(4),
     open: trades.filter((t) => t.status === 'open').length,
     externalCloses: trades.filter((t) => t.status === 'closed-ext').length,
+  },
+  vault: {
+    share: VAULT_SHARE, reservedUsd: +(+vault.balanceUsd || 0).toFixed(4),
+    hwmUsd: +(+vault.hwmUsd || 0).toFixed(4), sweeps: (vault.sweeps || []).length,
+    note: 'reserve sealed in-wallet — subtracted from lane spendable, never a separate address',
   },
   note: 'Solana lane round-trips folded from onchain-fills.json — FIFO per mint; gas is the declared lamports blind spot; closed-ext = tokens left the wallet outside the lane journal (proceeds unknown unless a custody sell leg matched).',
 });
