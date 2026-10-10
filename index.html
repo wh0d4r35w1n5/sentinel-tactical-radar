@@ -582,6 +582,13 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div id="ocRows" style="margin-top:8px"></div>
     <div class="sub" id="ocNote" style="margin-top:6px;font-size:10px"></div>
   </div>
+  <div class="panel neon" id="evidPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">🧪 Evidence · independent validation <span class="sub" id="evidHdr">— the three-way shadow race, episode-adjusted evals, strategy lifecycle, reconciled dollars — verified, not asserted</span><span id="evidSub" class="sub" style="float:right"></span></div>
+    <div id="evidShadow" style="margin:8px 0 4px"></div>
+    <div class="stats" id="evidStats" style="grid-template-columns:repeat(4,1fr);margin-top:8px"></div>
+    <div id="evidRows" style="margin-top:8px"></div>
+    <div class="sub" id="evidNote" style="margin-top:6px;font-size:10px"></div>
+  </div>
   <div class="panel" id="pimpPanel" style="margin-top:16px;display:none">
     <div class="pc-sign">
       <div class="h">PIMP CITY</div>
@@ -962,8 +969,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1345,6 +1352,57 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       window.__ocPos=pos; window.__ocPnlHtml=pnlHtml; window.__ocStable=+o.stableUsd||0; ocMarkTick();
       $('ocNote').innerHTML=`🔍 <span class="mono" style="font-size:9px">${o.address||''}</span> · ${o.note?esc(o.note)+' · ':''}every balance is a live RPC read — nothing here is an estimate`;
     } else if(ocLane&&ocLane.enabled===false){ $('ocPanel').style.display='block'; $('ocStats').innerHTML=''; $('ocRows').innerHTML=''; $('ocNote').innerHTML='on-chain lane disabled (SENTINEL_ONCHAIN_LANE!=1)'; $('ocSub').textContent='off'; }
+    // ---- evidence layer — the audit surface: shadow race, episode-adjusted
+    // evals, strategy lifecycle, reconciled dollars, failover + validator ----
+    if(shadowAb||evalInd||stratPol||ledgerRecon||failover||validatorR){
+      $('evidPanel').style.display='block';
+      const fo=failover?.summary||null,va=validatorR?.summary||null;
+      $('evidSub').textContent=`${fo?fo.pass+'/'+fo.total+' failover checks':''}${va?' · '+va.verdict.slice(0,60):''}`;
+      // THE chart Will asked for: three books + benchmark on identical tape
+      if(shadowAb?.variants){
+        const vs=shadowAb.variants,names=Object.keys(vs);
+        const colors={'V0 original':'#8a94b8','V1 current':'#6cf','V2 evidence-only':'var(--gold)','BENCH market':'var(--grn)'};
+        const allPts=names.flatMap(n=>(vs[n].curve||[]).map(p=>p.eq));
+        const lo=Math.min(...allPts),hi=Math.max(...allPts),rng=Math.max(hi-lo,0.01);
+        const W=600,H=110;
+        const lines=names.map(n=>{
+          const c=(vs[n].curve||[]);if(c.length<2)return'';
+          const pts=c.map((p,i)=>`${(i/(c.length-1)*W).toFixed(1)},${(H-6-((p.eq-lo)/rng)*(H-16)).toFixed(1)}`).join(' ');
+          const last=c[c.length-1];
+          const y=(H-6-((last.eq-lo)/rng)*(H-16)).toFixed(1);
+          return`<polyline points="${pts}" fill="none" stroke="${colors[n]||'#888'}" stroke-width="${n==='BENCH market'?1.6:1.2}" opacity="0.9"/>
+            <text x="${W+4}" y="${+y+3}" font-size="8" fill="${colors[n]||'#888'}" font-family="monospace">${n.replace('V0 ','o:').replace('V1 ','c:').replace('V2 ','e:').replace('BENCH market','bench')} ${last.eq}</text>`;
+        }).join('');
+        const cards=names.map(n=>{const v=vs[n],col=colors[n]||'#888';
+          return`<div class="stat"><div class="k" style="color:${col}">${n}</div><div class="v" style="color:${col};font-size:15px">$${v.endUsd}</div><div class="sub">${v.retPct>=0?'+':''}${v.retPct}% · DD ${v.maxDDPct}% · ${v.trades} trades · $${v.feesUsd} fees</div></div>`}).join('');
+        $('evidShadow').innerHTML=`<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+          <svg viewBox="0 0 ${W+90} ${H}" style="flex:1;min-width:260px;max-width:560px;background:rgba(0,0,0,.25);border-radius:8px" preserveAspectRatio="none">${lines}<line x1="0" y1="${H-6-((100-lo)/rng)*(H-16)}" x2="${W}" y2="${H-6-((100-lo)/rng)*(H-16)}" stroke="#444" stroke-dasharray="3 4"/></svg>
+          <div class="stats" style="grid-template-columns:repeat(2,1fr);flex:1;min-width:240px">${cards}</div></div>
+        <div class="sub" style="font-size:9px;margin-top:4px">${esc(shadowAb.method||'')} · ${shadowAb.days}d · ${shadowAb.evalsLabeled} labeled evals</div>`;
+      }
+      const ind=evalInd;
+      $('evidStats').innerHTML=[
+        ['🔬 effective N',ind?`${ind.totals.episodes} episodes`:'—',ind?`${ind.totals.rawEvals} evals → ${ind.totals.compressionPct}% redundant`:''],
+        ['🅰 A-grade edge',ind?.byGrade?.A?`${ind.byGrade.A.meanDirFwd24h.mean>=0?'+':''}${ind.byGrade.A.meanDirFwd24h.mean}%`:'—',ind?.byGrade?.A?`n${ind.byGrade.A.episodes} · CI ${ind.byGrade.A.meanDirFwd24h.ci.join('…')}`:''],
+        ['✅ validator',va?va.verdict.slice(0,44):'—',va?`${va.matches}/${va.diffs} metrics match`:''],
+        ['🛡 failover',fo?`${fo.pass}/${fo.total} pass`:'—',fo&&fo.fails.length?fo.fails.join(','):'all failure modes verified live'],
+      ].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:14px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      // strategy lifecycle — the policy board: who may trade, who's on
+      // probation, who's halted, who's marked for removal
+      if(stratPol?.strategies){
+        const st=Object.entries(stratPol.strategies);
+        const chip={live:'var(--grn)',probation:'var(--gold)',halted:'var(--pink)',abandoned:'#888'}[0]||'#888';
+        const col={live:'var(--grn)',probation:'var(--gold)',halted:'var(--pink)',abandoned:'#8a94b8'};
+        const counts={};st.forEach(([,p])=>counts[p.status]=(counts[p.status]||0)+1);
+        $('evidRows').innerHTML=`<div class="sub" style="font-size:10px;margin:6px 0 4px">⚖️ STRATEGY LIFECYCLE — evidence-driven (${Object.entries(counts).map(([k,v])=>`${v} ${k}`).join(' · ')})</div>`
+          +st.sort((a,b)=>({live:0,probation:1,halted:2,abandoned:3}[a[1].status]??4)-({live:0,probation:1,halted:2,abandoned:3}[b[1].status]??4)).map(([s,p])=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #222;flex-wrap:wrap;gap:2px 8px">
+            <span><b style="color:${col[p.status]||'#888'}">●</b> ${esc(s)} <span class="sub">${p.episodes} eps · ${p.meanDirFwd24h!=null?(p.meanDirFwd24h>=0?'+':'')+p.meanDirFwd24h+'%':''}</span></span>
+            <span style="color:${col[p.status]||'#888'}">${p.status.toUpperCase()} <span class="sub">${esc((p.why||'').slice(0,70))}</span></span></div>`).join('');
+      }
+      // reconciled dollars — where every dollar provably sits
+      const rc=ledgerRecon?.reconcile;
+      $('evidNote').innerHTML=rc?`💵 <b>every dollar:</b> futures $${rc.zones?.futuresAccount?.equityUsd ?? '—'} · on-chain $${rc.zones?.onchainWallet?.purseUsd ?? '—'} · flows in $${rc.flows?.transfersIntoFuturesUsd ?? '—'}/out $${rc.flows?.transfersOutToSpotUsd ?? '—'} · exchange realized $${rc.flows?.exchangeRealizedUsd ?? '—'} on $${rc.flows?.exchangeFeesUsd ?? '—'} fees${rc.blindSpots?.length?` · ⚠ blind: ${rc.blindSpots.map(b=>b.zone).join(', ')}`:''}`:'';
+    }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
     if(rrOpt&&rrOpt.winner){
       $('edgePanel').style.display='block';

@@ -88,6 +88,14 @@ for (;;) {
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
     await run('scripts/onchain-scan.mjs').catch((e) => console.log('[rapid] onchain-scan:', e.message || e));
     await run('scripts/onchain-exec.mjs').catch((e) => console.log('[rapid] onchain-exec:', e.message || e));
+    // evidence layer (Will M1-M6): every cycle recomputes the audit surface —
+    // forensics -> policy must precede exec-critical reads next cycle
+    await run('scripts/eval-forensics.mjs').catch((e) => console.log('[rapid] eval-forensics:', e.message || e));
+    await run('scripts/shadow-ab.mjs').catch((e) => console.log('[rapid] shadow-ab:', e.message || e));
+    await run('scripts/strategy-policy.mjs').catch((e) => console.log('[rapid] strategy-policy:', e.message || e));
+    await run('scripts/ledger-recon.mjs').catch((e) => console.log('[rapid] ledger-recon:', e.message || e));
+    await run('scripts/failover-audit.mjs').catch((e) => console.log('[rapid] failover-audit:', e.message || e));
+    await run('scripts/validator-report.mjs').catch((e) => console.log('[rapid] validator-report:', e.message || e));
     consecFails = 0; lastErr = null;
   } catch (e) {
     consecFails++;

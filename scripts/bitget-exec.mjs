@@ -1091,6 +1091,8 @@ async function main() {
   // legacy) — the user's manual trades never trip the engine's breakers.
   let cbReason = null;
   var kellyStrat = {}; // empirical-Kelly multiplier per strategy — survives the try
+  var stratPolicy = {}; // evidence-driven strategy lifecycle — state/strategy-policy.json
+  try { stratPolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'strategy-policy.json'), 'utf8')).strategies || {}; } catch {}
   try {
     // loss measured against equity at the START of the 24h window, not the
     // shrunken current equity — otherwise the same dollar loss trips an
@@ -2773,6 +2775,18 @@ async function main() {
         state.actions.push(`${o.symbol}: ⛔ kelly-veto — '${o.strategy}' f*=${round(kStar.fStar, 3)} <= 0 over n=${kStar.n} — measured-negative cell stands down`);
         (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['kelly-negative'] });
         continue;
+      }
+      // strategy-policy veto — evidence-driven lifecycle (Will M6/Q5):
+      // strategies are promoted to 'live' only on independent-episode proof
+      // of positive expectancy; probation/halted/abandoned take NO orders.
+      // Operator/setup orders exempt — they don't ride the edge estimate.
+      if (!o.setup && !o.mandate && o.strategy) {
+        const sp = stratPolicy[o.strategy];
+        if (sp && sp.status !== 'live') {
+          state.actions.push(`${o.symbol}: ⛔ policy-veto — '${o.strategy}' status=${sp.status} (${(sp.why || '').slice(0, 90)})`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['strategy-policy-' + sp.status] });
+          continue;
+        }
       }
       // drift guard — the plan can be up to 15min old; a market order at a
       // price that already ran past the modeled entry breaks the 3:1
