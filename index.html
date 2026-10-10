@@ -1288,7 +1288,6 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         +fills.map(f=>`<div class="sub" style="font-size:9px;padding:1px 0">${f.side==='sell'?'🔴':'🟢'} ${f.side} ${f.symbol||f.usd||''} ${f.estUsd?'~$'+(+f.estUsd).toFixed(2):f.usd?'$'+f.usd:''} <a style="color:#888" target="_blank" href="https://solscan.io/tx/${f.sig||''}">${(f.sig||'').slice(0,10)}…</a></div>`).join('')||'<div class="sub" style="font-size:10px">no positions · purse waits for a gated candidate</div>';
       $('ocNote').innerHTML=`🔍 <span class="mono" style="font-size:9px">${o.address||''}</span> · ${o.note?esc(o.note)+' · ':''}every balance is a live RPC read — nothing here is an estimate`;
     } else if(ocLane&&ocLane.enabled===false){ $('ocPanel').style.display='block'; $('ocStats').innerHTML=''; $('ocRows').innerHTML=''; $('ocNote').innerHTML='on-chain lane disabled (SENTINEL_ONCHAIN_LANE!=1)'; $('ocSub').textContent='off'; }
-    }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
     if(rrOpt&&rrOpt.winner){
       $('edgePanel').style.display='block';
@@ -1348,7 +1347,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           `<rect x="19" y="28" width="11" height="7" rx="3" fill="#0b0d16"/><rect x="34" y="28" width="11" height="7" rx="3" fill="#0b0d16"/><path d="M30 30h4M19 29l-3-2M45 29l3-2" stroke="#0b0d16" stroke-width="1.6" fill="none"/>`
           :`<circle cx="25" cy="31" r="1.8" fill="#14101c"/><circle cx="39" cy="31" r="1.8" fill="#14101c"/>${girl?`<path d="M22 28l3 1M42 28l-3 1" stroke="#14101c" stroke-width="1.4"/>`:''}`;
         const MOUTHS={tilt:'M24 46q8-7 16 0',heater:'M24 42q8 9 16 0',cold:'M24 47q8-8 16-1',cocky:'M25 43q8 6 15-2',working:'M26 44q6 4 12 0',retired:'M26 47q6-3 12 0'};
-        const mouth=`<path d="${(MOUTHS[mood]||MOUTHS.working).slice(1,-1)}" stroke="${girl?lip:'#3a2418'}" stroke-width="${girl?2.6:2}" fill="none" stroke-linecap="round"/>`;
+        const mouth=`<path d="${MOUTHS[mood]||MOUTHS.working}" stroke="${girl?lip:'#3a2418'}" stroke-width="${girl?2.6:2}" fill="none" stroke-linecap="round"/>`;
         const brow=mood==='tilt'?`<path d="M20 25l9 3M44 25l-9 3" stroke="#1a120b" stroke-width="2.2" fill="none" stroke-linecap="round"/>`:'';
         const hatSvg=hat?`<ellipse cx="32" cy="18" rx="20" ry="4.5" fill="#241c3a" stroke="${glow}" stroke-width="1"/><rect x="20" y="4" width="24" height="14" rx="3" fill="#2c2245" stroke="${glow}" stroke-width="1"/><rect x="20" y="13" width="24" height="4" fill="${glow}" opacity=".85"/>`:'';
         const chainSvg=chain?`<path d="M24 53q8 8 16 0" stroke="#ffd166" stroke-width="1.8" fill="none"/><circle cx="32" cy="58" r="2" fill="#ffd166"/>`:'';
