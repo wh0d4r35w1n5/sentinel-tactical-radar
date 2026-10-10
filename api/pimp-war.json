@@ -1,32 +1,39 @@
 {
- "at": "2026-10-10T13:01:12.254Z",
+ "at": "2026-10-10T13:05:49.182Z",
  "wallets": {
   "futures": {
-   "equityUsd": 11.12,
-   "marginFreeUsd": 7.91,
-   "epochNetUsd": -61.38,
+   "equityUsd": 11.1,
+   "marginFreeUsd": 8.98,
+   "epochNetUsd": -58.33,
    "fills": 400,
    "positions": [
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": 0.55,
+     "upl": 0.34,
      "lev": 75,
-     "margin": 2.66
+     "margin": 1.78
     }
    ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.015,
-   "stableUsd": 0,
-   "purseUsd": 2.29,
+   "stableUsd": 3.13,
+   "purseUsd": 5.47,
    "positions": 6,
    "laneNet": -0.43,
    "laneTrades": 8,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791637280485,
+    "symbol": null,
+    "sig": "3dyHPWiiv4wNCbywWnKfKimtGsmuaXQk95u6NH4CB3YyHTJ7cNC7CCNWXvpvBnp2TvNp4Y28iJLieudWFiHjYiRM",
+    "text": "BOOTSTRAP boot"
+   },
    {
     "venue": "solana",
     "ts": 1791637197178,
@@ -89,13 +96,6 @@
     "symbol": "GOMO",
     "sig": "cVBh1iCPV8eWEy4A8ur65ZvGrkDQWHNaY4y9WZHb32Xj1A2KYipZVyzGCEg4MLU7g3wU1et7fya7GiQenhdPUbH",
     "text": "BUY GOMO $0.39"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791633102671,
-    "symbol": "GOMO",
-    "sig": "4oZJG1pCXaRiGx6LvyoRkZwceVKL1Ui54TrpA7nVT299wnFoYp27tchN8LXcbuZmPna9nGcw2sADP7p237dqUrDs",
-    "text": "SELL GOMO"
    }
   ]
  },
@@ -518,8 +518,8 @@
     -0.6128
    ],
    "persona": {
-    "swagger": 0.35,
-    "tilt": 0.51,
+    "swagger": 0.36,
+    "tilt": 0.49,
     "greed": 0.46,
     "discipline": 0.39
    }
@@ -527,51 +527,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "ETHUSDT",
-   "direction": "LONG",
-   "ts": 1791636966255,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791636922850ETHUSDT",
-   "live": false
-  },
-  {
-   "symbol": "2ZUSDT",
-   "direction": "LONG",
-   "ts": 1791636966372,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s17916369228502ZUSDT",
-   "live": false
-  },
-  {
-   "symbol": "ETHUSDT",
-   "direction": "LONG",
-   "ts": 1791637038126,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791636995525ETHUSDT",
-   "live": false
-  },
-  {
-   "symbol": "SOXLUSDT",
-   "direction": "LONG",
-   "ts": 1791637038241,
-   "pimp": "Big Daddy Kane",
-   "crack": "Trixie",
-   "coid": "s1791636995525SOXLUSDT",
-   "live": false
-  },
-  {
-   "symbol": "BMNRUSDT",
-   "direction": "LONG",
-   "ts": 1791637038373,
-   "pimp": null,
-   "crack": "Miss Behave",
-   "coid": "s1791636995525BMNRUSDT",
-   "live": false
-  },
   {
    "symbol": "ETHUSDT",
    "direction": "LONG",
@@ -616,7 +571,8 @@
    "ts": 1791637271774,
    "pimp": "Big Daddy Kane",
    "crack": "Trixie",
-   "coid": "s1791637222476CAKEUSDT"
+   "coid": "s1791637222476CAKEUSDT",
+   "live": false
   },
   {
    "symbol": "ETHUSDT",
@@ -624,7 +580,8 @@
    "ts": 1791637271895,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791637222476ETHUSDT"
+   "coid": "s1791637222476ETHUSDT",
+   "live": false
   },
   {
    "symbol": "SOXLUSDT",
@@ -632,7 +589,51 @@
    "ts": 1791637272014,
    "pimp": "Madam Razor",
    "crack": "Velvet Vice",
-   "coid": "s1791637222476SOXLUSDT"
+   "coid": "s1791637222476SOXLUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791637377720,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791637303737ETHUSDT",
+   "live": false
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1791637377836,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791637303737SOXLUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791637458883,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791637408163ETHUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ETHUSDT",
+   "direction": "LONG",
+   "ts": 1791637548574,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791637493760ETHUSDT"
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1791637548695,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791637493760SOXLUSDT"
   }
  ],
  "drama": [
