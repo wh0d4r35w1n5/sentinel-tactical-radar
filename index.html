@@ -360,6 +360,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
 .mtfstack.pull{background:rgba(186,104,255,.13);color:#ba68ff;border:1px solid rgba(186,104,255,.35)}
 .mtfstack.flat{color:#8b93b0;border:1px solid var(--line)}
 /* ---- PIMP CITY · vice-city treatment — sunset, skyline, neon ---- */
+.pc-street{margin:0 0 6px}
 #pimpPanel{overflow:hidden;padding-top:0;border-color:rgba(255,46,196,.4)}
 #pimpPanel::before{content:"";position:absolute;inset:0 0 auto 0;height:176px;border-radius:12px 12px 0 0;pointer-events:none;
   background:radial-gradient(150px 95px at 70% 92%,rgba(255,209,102,.55),rgba(255,94,188,.38) 45%,transparent 72%),
@@ -597,6 +598,7 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
       <div id="pimpAt" class="pc-at"></div>
     </div>
     <div id="pimpWorking" class="pc-shift" style="display:none"></div>
+    <div id="pimpStreet" class="pc-street"></div>
     <div class="ptitle pc-sub">🌴 KINGPINS <span class="sub">— every pimp runs a stable · the crown boosts his girls' slots, crippled gets docked</span></div>
     <div id="pimpBoard" class="pc-board"></div>
     <div class="ptitle pc-sub">💋 THE STABLE <span class="sub">— every girl is a strategy persona · earn, steal playbooks, get poached or retired</span></div>
@@ -1619,10 +1621,33 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           <div class="sub" style="font-size:9px;color:var(--gold);margin-top:2px">🏦 vault $${(+p.vault||0).toFixed(2)}${p.vaultSweeps?` · ${p.vaultSweeps} sweeps`:''}</div>
         </div>`;}).join('');
       const shift=(pimpW.intents||[]);
-      const live=shift.filter(i=>i.live),pend=shift.filter(i=>!i.live);
+      const live=shift.filter(i=>i.live),closed=shift.filter(i=>!i.live&&i.closedAt),pend=shift.filter(i=>!i.live&&!i.closedAt);
       $('pimpWorking').style.display=shift.length?'block':'none';
-      $('pimpWorking').innerHTML=(live.length?`💼 <b>ON SHIFT — position open:</b> `+live.map(i=>`<b style="color:var(--grn)">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} ${+i.epNet?`<b style="color:${i.epNet>=0?'var(--grn)':'var(--red)'}">${i.epNet>=0?'+':''}$${(+i.epNet).toFixed(2)}</b> `:''}<span style="opacity:.6">· ${esc(i.pimp||'freelance')}${i.orderId?` · #${esc(String(i.orderId).slice(-6))}`:''}</span>`).join(' &nbsp;·&nbsp; '):'')
-        +(pend.length?`${live.length?'<br>':''}📋 <b>NOMINATED — awaiting fill:</b> `+pend.map(i=>`<b style="color:var(--pink);opacity:.75">${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp||'freelance')}</span>`).join(' &nbsp;·&nbsp; '):'');
+      $('pimpWorking').innerHTML=(live.length?`💼 <b>ON SHIFT — position open:</b> `+live.map(i=>`<b style="color:var(--grn)">${i.onchain?'⛓ ':''}${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} ${+i.epNet?`<b style="color:${i.epNet>=0?'var(--grn)':'var(--red)'}">${i.epNet>=0?'+':''}$${(+i.epNet).toFixed(2)}</b> `:''}<span style="opacity:.6">· ${esc(i.pimp||'freelance')}${i.orderId?` · #${esc(String(i.orderId).slice(-6))}`:''}</span>`).join(' &nbsp;·&nbsp; '):'')
+        +(closed.length?`${live.length?'<br>':''}🧾 <b>CLOCKED OUT — bag moved:</b> `+closed.map(i=>`<b style="color:var(--gold)">${i.onchain?'⛓ ':''}${esc(i.crack)}</b> ${esc(i.symbol)} ${+i.epNet?`<b style="color:${i.epNet>=0?'var(--grn)':'var(--red)'}">${i.epNet>=0?'+':''}$${(+i.epNet).toFixed(2)}</b> `:''}<span style="opacity:.6">· ${ago(i.closedAt)} ago</span>`).join(' &nbsp;·&nbsp; '):'')
+        +(pend.length?`${live.length||closed.length?'<br>':''}📋 <b>NOMINATED — awaiting fill:</b> `+pend.map(i=>`<b style="color:var(--pink);opacity:.75">${i.onchain?'⛓ ':''}${esc(i.crack)}</b> ${esc(i.direction||'')} ${esc(i.symbol)} <span style="opacity:.6">· ${esc(i.pimp||'freelance')}</span>`).join(' &nbsp;·&nbsp; '):'');
+      // ---- STREET LEDGER — the real wallets behind the personas: Bitget
+      // futures equity/open/upl + the on-chain purse. This is the wallet
+      // activity strip — the personas below are the narrative layer ----
+      const wal=pimpW.wallets||{};
+      const fut=wal.futures,ocw=wal.onchain;
+      const uplSum=fut?(fut.positions||[]).reduce((s,p)=>s+(+p.upl||0),0):0;
+      const futCell=fut?`<div style="flex:1;min-width:200px;border:1px solid rgba(91,141,255,.25);border-radius:8px;padding:8px 10px;background:rgba(91,141,255,.05)">
+        <div style="font-size:9px;letter-spacing:.12em;color:var(--cyan);font-weight:700">🏦 BITGET FUTURES — live wallet</div>
+        <div style="font-size:15px;font-weight:800;margin:4px 0 2px">$${(+fut.equityUsd||0).toFixed(2)} <span class="sub" style="font-size:9px;font-weight:400">equity · ${(fut.positions||[]).length} open</span></div>
+        <div class="sub" style="font-size:8.5px">upl <b style="color:${uplSum>=0?'var(--grn)':'var(--red)'}">${uplSum>=0?'+':''}$${uplSum.toFixed(2)}</b> · epoch net <b>${(+fut.epochNetUsd||0)>=0?'+':''}$${(+fut.epochNetUsd||0).toFixed(2)}</b> · ${fut.fills||0} fills journaled</div>
+        ${(fut.positions||[]).length?`<div class="sub" style="font-size:8px;margin-top:3px;opacity:.8">${fut.positions.map(p=>`${esc(p.symbol)} ${+p.upl>=0?'+':''}$${(+p.upl).toFixed(2)}`).join(' · ')}</div>`:''}
+      </div>`:'';
+      const ocCell=ocw?`<div style="flex:1;min-width:200px;border:1px solid rgba(120,255,180,.25);border-radius:8px;padding:8px 10px;background:rgba(120,255,180,.05)">
+        <div style="font-size:9px;letter-spacing:.12em;color:var(--grn);font-weight:700">⛓ ON-CHAIN WALLET — Solana Sadie's purse</div>
+        <div style="font-size:15px;font-weight:800;margin:4px 0 2px">$${(+ocw.purseUsd||0).toFixed(2)} <span class="sub" style="font-size:9px;font-weight:400">purse · ${+ocw.sol||0} SOL gas</span></div>
+        <div class="sub" style="font-size:8.5px">stables $${(+ocw.stableUsd||0).toFixed(2)} · ${ocw.positions||0} bags held · lane net ${ocw.laneNet==null?'—':`<b style="color:${+ocw.laneNet>=0?'var(--grn)':'var(--red)'}">${+ocw.laneNet>=0?'+':''}$${(+ocw.laneNet).toFixed(2)}</b> over ${ocw.laneTrades} trades`}</div>
+        ${ocw.address?`<div class="sub" style="font-size:8px;margin-top:3px"><a class="al" href="https://solscan.io/account/${esc(ocw.address)}" target="_blank" rel="noopener">${esc(ocw.address.slice(0,6))}…${esc(ocw.address.slice(-4))} on solscan ↗</a></div>`:''}
+      </div>`:'';
+      const acts=(wal.activity||[]).map(a=>`<span style="white-space:nowrap">${a.venue==='solana'?'⛓':'⚡'} ${esc(a.text)}${a.sig?` <a class="al" href="https://solscan.io/tx/${esc(a.sig)}" target="_blank" rel="noopener">↗</a>`:''} <span style="opacity:.5">${ago(a.ts)}</span></span>`).join(' &nbsp;·&nbsp; ');
+      $('pimpStreet').innerHTML=(futCell||ocCell||acts)?`<div class="ptitle pc-sub" style="margin-top:2px">💵 THE CORNER'S BOOKS <span class="sub">— the real wallets the personas trade from</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px">${futCell}${ocCell}</div>
+        ${acts?`<div class="sub" style="font-size:8.5px;opacity:.85;line-height:1.9">street wire: ${acts}</div>`:''}`:'';
       const leader=(pimpW.cracks||[]).find(c=>c.closes>0&&c.net>0);
       $('pimpGirls').innerHTML=(pimpW.cracks||[]).map(c=>{
         const pcol=PIMP_COL[c.pimp]||'var(--mut)';

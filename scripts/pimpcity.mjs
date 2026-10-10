@@ -19,6 +19,11 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const WAR_PATH = path.join(DIR, '..', 'state', 'pimp-war.json');
 const API_PATH = path.join(DIR, '..', 'api', 'pimp-war.json');
 const ONCHAIN_FILLS_PATH = path.join(DIR, '..', 'state', 'onchain-fills.json');
+const CUSTODY_LEGS_PATH = path.join(DIR, '..', 'state', 'custody-legs.json');
+const LEDGER_PATH = path.join(DIR, '..', 'api', 'live-ledger.json');
+const LANE_PATH = path.join(DIR, '..', 'api', 'onchain-lane.json');
+const OCTRADES_PATH = path.join(DIR, '..', 'api', 'onchain-trades.json');
+const REALFILLS_PATH = path.join(DIR, '..', 'state', 'real-fills.json');
 const ONCHAIN_CRACK = 'Solana Sadie';
 
 const PIMP_NAMES = ['Silky Slim', 'Madam Razor', 'Cold Cash Cole', 'Big Daddy Kane', 'Fancy Red'];
@@ -119,11 +124,62 @@ const atomicWrite = (p, s) => {
   fs.writeFileSync(t, s);
   fs.renameSync(t, p);
 };
+// the corner's real books — every saveWar snapshots the two wallets the
+// personas trade out of, so PIMP CITY shows live money movement, not just
+// the economy narrative. Read-only, every source optional — a dead file
+// renders as nulls, never throws the tick.
+function streetLedger() {
+  const out = { futures: null, onchain: null, activity: [] };
+  const act = out.activity;
+  try {
+    const l = JSON.parse(fs.readFileSync(LEDGER_PATH, 'utf8'));
+    out.futures = {
+      equityUsd: +(+l.equityUsd || 0).toFixed(2),
+      marginFreeUsd: +(+l.marginFreeUsd || 0).toFixed(2),
+      epochNetUsd: +(+l.epochNetUsd || 0).toFixed(2),
+      fills: +l.realFillCount || 0,
+      positions: (l.positions || []).map((p) => ({ symbol: p.symbol, side: p.side, upl: +(+p.upl || 0).toFixed(2), lev: +p.lev || 0, margin: +(+p.margin || 0).toFixed(2) })),
+    };
+  } catch {}
+  try {
+    const rf = JSON.parse(fs.readFileSync(REALFILLS_PATH, 'utf8'));
+    const arr = Array.isArray(rf) ? rf : rf.fills || [];
+    for (const f of arr.slice(-12)) {
+      const net = (+f.profit || 0) - (+f.fee || 0);
+      act.push({ venue: 'bitget', ts: +f.ts || 0, symbol: f.symbol, text: `${f.tradeSide === 'open' ? 'OPEN' : 'CLOSE'} ${f.symbol} ${net ? (net >= 0 ? '+' : '') + '$' + net.toFixed(2) : ''}`.trim() });
+    }
+  } catch {}
+  try {
+    const o = JSON.parse(fs.readFileSync(LANE_PATH, 'utf8'));
+    const t = JSON.parse(fs.readFileSync(OCTRADES_PATH, 'utf8'));
+    out.onchain = {
+      address: o.address || null,
+      sol: +(+o.sol || 0).toFixed(4),
+      stableUsd: +(+o.stableUsd || 0).toFixed(2),
+      purseUsd: +(+o.purseUsd || 0).toFixed(2),
+      positions: (o.positions || []).length,
+      laneNet: t && t.stats ? +(+t.stats.net || 0).toFixed(2) : null,
+      laneTrades: t && t.stats ? +t.stats.n || 0 : null,
+      laneWins: t && t.stats ? +t.stats.wins || 0 : null,
+    };
+  } catch {}
+  try {
+    const oc = JSON.parse(fs.readFileSync(ONCHAIN_FILLS_PATH, 'utf8'));
+    if (Array.isArray(oc)) for (const f of oc.slice(-12)) {
+      act.push({ venue: 'solana', ts: +f.ts || 0, symbol: f.symbol || null, sig: f.sig || null,
+        text: `${String(f.side || '').toUpperCase()} ${f.symbol || 'boot'} ${+f.usd ? '$' + (+f.usd).toFixed(2) : ''}`.trim() });
+    }
+  } catch {}
+  out.activity = act.filter((a) => a.ts).sort((a, b) => b.ts - a.ts).slice(0, 10);
+  return out;
+}
+
 export function saveWar(w) {
   try { atomicWrite(WAR_PATH, JSON.stringify(w)); } catch {}
   try {
     atomicWrite(API_PATH, JSON.stringify({
       at: new Date().toISOString(),
+      wallets: streetLedger(),
       pimps: Object.entries(w.pimps).map(([name, p]) => ({
         name, roster: p.roster, net: +p.net.toFixed(4), wins: p.wins, losses: p.losses,
         crown: p.crown, crippled: p.crippled,
@@ -244,18 +300,58 @@ export function attribute(war, fills, log = () => {}) {
   const ocCloses = [];
   try {
     const oc = JSON.parse(fs.readFileSync(ONCHAIN_FILLS_PATH, 'utf8'));
+    // wallet-side exits journal two ways: 'sell' rows (lane-initiated
+    // Jupiter dumps with proceeds in the fill) and 'reconcile' rows —
+    // "wallet balance zero" sightings after tokens left off-trail. A
+    // reconcile only carries costUsd; proceeds are recovered by matching
+    // the custody-legs journal (kind:'sell', same mint, ±6h) and stay
+    // honestly unknown when no leg exists — never booked as a loss.
+    let legs = [];
+    try {
+      const lj = JSON.parse(fs.readFileSync(CUSTODY_LEGS_PATH, 'utf8'));
+      legs = (Array.isArray(lj) ? lj : lj.legs || []).filter((l) => l && l.kind === 'sell' && l.sig);
+    } catch {}
+    const legsSeen = new Set(war.custodySeen || (war.custodySeen = []));
     if (Array.isArray(oc)) {
+      // global greedy pairing: every (reconcile, sell-leg) candidate pair
+      // sorted by |Δts| — the closest pair claims first, so a leg pays the
+      // bag it actually emptied (a sell zeroes the wallet seconds before
+      // the recon journals it), never the oldest unmatched recon
+      const legFor = new Map();
+      {
+        const pairs = [];
+        oc.forEach((f, i) => {
+          if (!(f.side === 'reconcile' && f.symbol && f.mint)) return;
+          for (const l of legs) if (l.asset === f.mint) pairs.push({ i, l, d: Math.abs((+l.ts || 0) - (+f.ts || 0)) });
+        });
+        pairs.sort((a, b) => a.d - b.d);
+        for (const p of pairs) {
+          if (p.d >= 6 * 3600e3) break;
+          if (legFor.has(p.i) || legsSeen.has(p.l.sig)) continue;
+          legFor.set(p.i, p.l); legsSeen.add(p.l.sig);
+        }
+      }
       const seen = new Set(intents.filter((i) => i.onchain).map((i) => i.coid));
-      for (const f of oc) {
+      for (const [i, f] of oc.entries()) {
         if (f.side === 'buy' && f.symbol && f.sig) {
           const coid = 'oc:' + f.sig;
           if (!seen.has(coid)) { intents.push({ symbol: f.symbol, direction: 'LONG', ts: f.ts || 0, pimp: null, crack: ONCHAIN_CRACK, coid, onchain: true }); seen.add(coid); }
         } else if (f.side === 'sell' && f.symbol && f.sig) {
           ocCloses.push({ tradeId: 'oc:' + f.sig, symbol: f.symbol, ts: f.ts || 0,
             profit: (+f.estUsd || 0) - (+f.costUsd || 0), fee: 0, tradeSide: 'close' });
+        } else if (f.side === 'reconcile' && f.symbol && f.mint) {
+          const tid = 'oc:recon:' + f.mint.slice(0, 8) + ':' + (f.ts || 0);
+          const leg = legFor.get(i);
+          if (leg) {
+            ocCloses.push({ tradeId: tid, symbol: f.symbol, ts: f.ts || 0,
+              profit: (+leg.amountUsd || 0) - (+f.costUsd || 0), fee: 0, tradeSide: 'close', sig: leg.sig });
+          } else {
+            ocCloses.push({ tradeId: tid, symbol: f.symbol, ts: f.ts || 0, tradeSide: 'close', pnlUnknown: true });
+          }
         }
       }
     }
+    war.custodySeen = [...legsSeen].slice(-200);
   } catch {}
   // her record must exist even if the war predates the stable addition —
   // loadWar's backfill covers saved wars; this guards hand-edited state
@@ -292,6 +388,21 @@ export function attribute(war, fills, log = () => {}) {
     // close→owner map: the vault sweep for this fill pays the pimp who
     // owned the trick — recorded here so carry KPI survives intent expiry
     owners[f.tradeId] = { pimp: hit.pimp || null, crack: hit.crack || null };
+    // the intent's episode is over either way — the shift board should say
+    // "clocked out", not "awaiting fill" for a bag that already left
+    hit.closedAt = f.ts;
+    // off-book exits: the trick happened (tokens left the wallet — that's a
+    // real close) but proceeds never hit a ledger we can read. Count the
+    // episode, keep net/wins/losses untouched — unknown ≠ a loss.
+    if (f.pnlUnknown) {
+      const cr0 = war.cracks[hit.crack] || (war.retired || {})[hit.crack];
+      if (cr0) {
+        cr0.closes++;
+        moved = true;
+        lines.push(`🌫 ${hit.crack} let ${f.symbol} go — left the wallet off-book, proceeds unverifiable`);
+      }
+      continue;
+    }
     // round-trip fee truth: the entry leg is journaled as an 'open' fill on
     // the same symbol+direction between the nomination and this close —
     // charge it, or the board scores every trick half-priced.

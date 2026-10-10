@@ -16,13 +16,13 @@ const HOT = [
   'market-scanner', 'prices', 'health', 'live-ledger', 'live-plan',
   'gate-stats', 'funding', 'liq-guard', 'bitget-watch', 'integrity',
   'onchain-lane', 'chain-custody', 'signal-ledger', 'thoughts', 'god',
-  'breakouts', 'onchain-trades',
+  'breakouts', 'onchain-trades', 'pimp-war',
 ];
 const COLD = [
   'coin-detail', 'signal-eval', 'sentiment', 'news', 'hypotheses', 'correlation',
   'benchmark', 'volcore', 'confluence', 'einstein', 'mtf', 'social',
   'trades-taken', 'sqn-report', 'freqtrade-bench', 'mae-mfe', 'rr-optimize',
-  'rr-backtest', 'alltime-stats', 'equity-bridge', 'pimp-war', 'shadow-ab',
+  'rr-backtest', 'alltime-stats', 'equity-bridge', 'shadow-ab',
   'eval-independence', 'edge-attribution', 'ledger-recon', 'failover-audit',
   'validator-report', 'strategy-policy', 'autonomous-pnl', 'reject-markout',
   'libedge', 'markouts', 'onchain-hot',

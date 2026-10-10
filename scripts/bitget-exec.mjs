@@ -622,7 +622,9 @@ async function main() {
         }
         it.live = it.filledAt != null && openSyms.has(it.symbol);
       }
-      war.intents = (war.intents || []).filter((it) => it.live || Date.now() - it.ts < (it.onchain ? 48 * 3600e3 : 15 * 60 * 1000));
+      // closedAt memorial: a trick that banked stays on the shift board for
+      // 24h as "clocked out" — evidence of activity, not a stale pending row
+      war.intents = (war.intents || []).filter((it) => it.live || (it.closedAt ? Date.now() - it.closedAt < 24 * 3600e3 : Date.now() - it.ts < (it.onchain ? 48 * 3600e3 : 15 * 60 * 1000)));
       // orderMap is a bridge, not a ledger — bound intents don't need it
       // anymore; cap the map so a long session can't grow it unbounded
       const omk = Object.keys(war.orderMap || {});
@@ -2614,8 +2616,13 @@ async function main() {
     }
     // prune dead intents: live = open position; pending = unfilled but
     // fresh (<15min); everything else is a dead nomination — drop it so
-    // the dashboard never shows a girl "on shift" who never clocked in
-    if (war && war.intents) war.intents = war.intents.filter((it) => it.live || Date.now() - it.ts < 15 * 60 * 1000);
+    // the dashboard never shows a girl "on shift" who never clocked in.
+    // Onchain intents ride the DEX book, not the perp queue — their window
+    // is the 48h trail TTL the pimpTick reconcile uses, not the 15min
+    // order-queue expiry (without this, Sadie's tricks die every cycle).
+    // closedAt intents keep a 24h memorial — the shift board says "clocked
+    // out" for a bag that already moved instead of "awaiting fill".
+    if (war && war.intents) war.intents = war.intents.filter((it) => it.live || (it.closedAt ? Date.now() - it.closedAt < 24 * 3600e3 : Date.now() - it.ts < (it.onchain ? 48 * 3600e3 : 15 * 60 * 1000)));
     if (war && pc) { try { pc.saveWar(war); } catch {} }
     for (const [oi, o] of plan.orders.entries()) {
       // ambiguous symbols are excluded from posBySym — a .has() check would
