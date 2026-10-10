@@ -1,16 +1,23 @@
 {
- "at": "2026-10-10T18:14:11.810Z",
+ "at": "2026-10-10T18:19:14.136Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.81,
-   "marginFreeUsd": 22.13,
-   "epochNetUsd": -40.94,
+   "equityUsd": 23.63,
+   "marginFreeUsd": 19.57,
+   "epochNetUsd": -40.92,
    "fills": 400,
    "positions": [
     {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0.09,
+     "lev": 35,
+     "margin": 2.51
+    },
+    {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.83,
+     "upl": -1.04,
      "lev": 70,
      "margin": 2.51
     }
@@ -18,15 +25,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0221,
-   "stableUsd": 0.44,
-   "purseUsd": 2.26,
-   "positions": 5,
+   "sol": 0.019,
+   "stableUsd": 2.7,
+   "purseUsd": 5.45,
+   "positions": 7,
    "laneNet": -0.46,
    "laneTrades": 10,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791656065047,
+    "symbol": "MOIN",
+    "sig": "3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
+    "text": "BUY MOIN $0.47"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791656062829,
+    "symbol": "FRANK",
+    "sig": "4UPCYqP7o879xq3pvvq15mBCqGYU6MtoVz4HhB2xm1HagFRWw1Y2PpwZLNyc3zQs2WkBkJGZaTi2koapmg9fSXyV",
+    "text": "BUY FRANK $0.55"
+   },
    {
     "venue": "solana",
     "ts": 1791655983161,
@@ -81,20 +102,6 @@
     "ts": 1791637046583,
     "symbol": null,
     "sig": "2e2uxhYxB8rDWv5Tssin5HaC91rBYhDZUk2gW7u99wC2etcGJGycfsSzhnfNbJpukcJqx34ENw7xBH2cU9KZiyP8",
-    "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791636269098,
-    "symbol": null,
-    "sig": "4hpkyMYN1uxmnP2dMa5UQ9HTuKRE3nQFie861F6UEWoWpzRjTLyZSKTAdPk3ZA2hBqR5ycwUG8he3pKgqQr2SUg8",
-    "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791635357535,
-    "symbol": null,
-    "sig": "5knXknxmGimqfAfCeDEBuibNehtTH529L8WVq1aHnZsMcrktcMW6LbZ3mhks1H9A6sdoFNsTiNFvcXSWAC9nznfW",
     "text": "BOOTSTRAP boot"
    }
   ]
@@ -520,8 +527,8 @@
     -0.6441
    ],
    "persona": {
-    "swagger": 0.42,
-    "tilt": 0.3,
+    "swagger": 0.43,
+    "tilt": 0.28,
     "greed": 0.48,
     "discipline": 0.45
    }
@@ -529,78 +536,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "HOODUSDT",
-   "direction": "LONG",
-   "ts": 1791655276962,
-   "pimp": "Madam Razor",
-   "crack": "Velvet Vice",
-   "coid": "s1791655227894HOODUSDT",
-   "live": false
-  },
-  {
-   "symbol": "EIGENUSDT",
-   "direction": "LONG",
-   "ts": 1791655361197,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791655312670EIGENUSDT",
-   "live": false
-  },
-  {
-   "symbol": "MUUUSDT",
-   "direction": "LONG",
-   "ts": 1791655557003,
-   "pimp": "Big Daddy Kane",
-   "crack": "Trixie",
-   "coid": "s1791655507509MUUUSDT",
-   "live": false
-  },
-  {
-   "symbol": "MOODENGUSDT",
-   "direction": "LONG",
-   "ts": 1791655641570,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791655593739MOODENGUSDT",
-   "live": false
-  },
-  {
-   "symbol": "ERAUSDT",
-   "direction": "LONG",
-   "ts": 1791655721598,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791655677617ERAUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791655721714,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791655677617XRPUSDT",
-   "live": false
-  },
-  {
-   "symbol": "TAOUSDT",
-   "direction": "LONG",
-   "ts": 1791655800610,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791655757473TAOUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791655882237,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791655836275XRPUSDT",
-   "live": false
-  },
   {
    "symbol": "XRPUSDT",
    "direction": "LONG",
@@ -616,7 +551,8 @@
    "ts": 1791656051575,
    "pimp": null,
    "crack": "Solana Sadie",
-   "coid": "s1791656006773ORDIUSDT"
+   "coid": "s1791656006773ORDIUSDT",
+   "live": false
   },
   {
    "symbol": "XRPUSDT",
@@ -624,7 +560,8 @@
    "ts": 1791656051688,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791656006773XRPUSDT"
+   "coid": "s1791656006773XRPUSDT",
+   "live": false
   },
   {
    "symbol": "FARTCOINUSDT",
@@ -632,7 +569,82 @@
    "ts": 1791656051810,
    "pimp": "Madam Razor",
    "crack": "Velvet Vice",
-   "coid": "s1791656006773FARTCOINUSDT"
+   "coid": "s1791656006773FARTCOINUSDT",
+   "live": false
+  },
+  {
+   "symbol": "FRANK",
+   "direction": "LONG",
+   "ts": 1791656062829,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4UPCYqP7o879xq3pvvq15mBCqGYU6MtoVz4HhB2xm1HagFRWw1Y2PpwZLNyc3zQs2WkBkJGZaTi2koapmg9fSXyV",
+   "onchain": true,
+   "filledAt": 1791656062829,
+   "live": true
+  },
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791656065047,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
+   "onchain": true,
+   "filledAt": 1791656065047,
+   "live": true
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791656130306,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791656087259XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "FRAXUSDT",
+   "direction": "LONG",
+   "ts": 1791656206448,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791656162340FRAXUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791656206567,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791656162340XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "BMNRUSDT",
+   "direction": "LONG",
+   "ts": 1791656278435,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791656236037BMNRUSDT",
+   "live": false
+  },
+  {
+   "symbol": "WLDUSDT",
+   "direction": "LONG",
+   "ts": 1791656354019,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791656310229WLDUSDT"
+  },
+  {
+   "symbol": "MUUUSDT",
+   "direction": "LONG",
+   "ts": 1791656354135,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1791656310229MUUUSDT"
   }
  ],
  "drama": [
