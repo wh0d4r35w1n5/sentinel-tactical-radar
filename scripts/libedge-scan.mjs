@@ -98,9 +98,17 @@ export async function getLibEdge(symbols, { maxAgeMs = MAX_AGE_MS, log = () => {
     await Promise.all(todo.slice(i, i + 6).map(async (sym) => {
       try {
         // library symbols are full pairs (BTCUSDT, XAUUSD) — our scan
-        // universe is base assets, so quote-join unless already paired
-        const q = /USD[T]?$/i.test(sym) ? sym : sym + 'USDT';
-        const j = await fetchJson(`${BASE}/strategies/search?symbol=${encodeURIComponent(q)}&sort=sharpe&limit=${PER_SYMBOL}&minTrades=30`);
+        // universe is base assets, so quote-join unless already paired.
+        // USD-quoted perps (BTCUSD) fall back to the USDT tape — same
+        // underlying tape, different margin currency.
+        const cands = /USDT$/i.test(sym) ? [sym]
+          : /USD$/i.test(sym) ? [sym, sym + 'T']
+          : [sym + 'USDT', sym];
+        let j = null;
+        for (const q of cands) {
+          j = await fetchJson(`${BASE}/strategies/search?symbol=${encodeURIComponent(q)}&sort=sharpe&limit=${PER_SYMBOL}&minTrades=30`);
+          if ((j.results || []).length) break;
+        }
         cache.map[sym] = summarize(sym, j.results);
       } catch (e) { cache.map[sym] = { n: 0, density: 0, edge: 0, err: String(e.message || e).slice(0, 60) }; }
       done++;

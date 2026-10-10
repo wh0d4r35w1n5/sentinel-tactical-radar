@@ -1889,6 +1889,7 @@ async function main() {
         fusion: r.fusion ?? null,
         btcPair: r.btcPair ?? null,
         book: r.book ?? null,
+        libedge: r.libedge ?? null,
         vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
