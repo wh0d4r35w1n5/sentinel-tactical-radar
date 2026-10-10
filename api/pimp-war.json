@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T11:09:37.666Z",
+ "at": "2026-10-10T11:14:11.056Z",
  "wallets": {
   "futures": {
-   "equityUsd": 10.27,
+   "equityUsd": 10.29,
    "marginFreeUsd": 0,
    "epochNetUsd": -62.19,
    "fills": 400,
@@ -10,14 +10,14 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.6,
+     "upl": -0.81,
      "lev": 75,
      "margin": 2.72
     },
     {
      "symbol": "BAUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": 0.25,
      "lev": 20,
      "margin": 8.13
     }
@@ -25,15 +25,22 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0198,
-   "stableUsd": 2.6,
-   "purseUsd": 4.42,
-   "positions": 3,
+   "sol": 0.0165,
+   "stableUsd": 1.62,
+   "purseUsd": 3.64,
+   "positions": 4,
    "laneNet": -0.25,
    "laneTrades": 5,
    "laneWins": 2
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791630586077,
+    "symbol": "QOMPUTE",
+    "sig": "666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
+    "text": "BUY QOMPUTE $0.28"
+   },
    {
     "venue": "solana",
     "ts": 1791629845135,
@@ -96,13 +103,6 @@
     "symbol": "QOMPUTE",
     "sig": "4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
     "text": "BUY QOMPUTE $1.65"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791623136195,
-    "symbol": null,
-    "sig": "tk3efYzuBjKY53CVxH1vuJndRagJWwcuYwTkXdmQsoXXwVpcjgUFKdgBytyzx9isQ4YrUkALi8LWSfE9ATAjtvs",
-    "text": "BOOTSTRAP boot"
    }
   ]
  },
@@ -523,9 +523,9 @@
    ],
    "persona": {
     "swagger": 0.37,
-    "tilt": 0.56,
+    "tilt": 0.54,
     "greed": 0.47,
-    "discipline": 0.38
+    "discipline": 0.39
    }
   }
  ],
@@ -552,7 +552,7 @@
    "coid": "oc:2EHYJ96ZgzfNM9sHCktGeow7UbamdGhUFwcPjKsjz1MeKYu3wDnoRmhniKroQKnFXn79UifvoMDkjwDfs3ZCp1a9",
    "onchain": true,
    "filledAt": 1791598003872,
-   "live": false,
+   "live": true,
    "closedAt": 1791601504284
   },
   {
@@ -579,7 +579,7 @@
    "coid": "oc:6wrBF8yCYhze5Q1m8eDXcykUrqo1yC1m8mE1EHJExHNujaH8rfH3ezUhBL1PXX8cSGgwY9vZARSeUZ1vUycn9eN",
    "onchain": true,
    "filledAt": 1791601506385,
-   "live": false,
+   "live": true,
    "closedAt": 1791619115847
   },
   {
@@ -606,7 +606,7 @@
    "coid": "oc:4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
    "onchain": true,
    "filledAt": 1791624693825,
-   "live": false,
+   "live": true,
    "closedAt": 1791629353692,
    "epNet": -0.037642,
    "epCounted": true,
@@ -673,6 +673,17 @@
    "coid": "oc:5SshNJuDMcrSXu8w5argerD9kUJ9P5xPwJ5KUyv7bzVB8kS9zbmhrBvanLSytA3aXGn8REWnXSv9jD7om8uJw2YX",
    "onchain": true,
    "filledAt": 1791629845135,
+   "live": true
+  },
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791630586077,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
+   "onchain": true,
+   "filledAt": 1791630586077,
    "live": true
   }
  ],
