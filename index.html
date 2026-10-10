@@ -971,8 +971,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json'),j(API+'shadow-ab.json'),j(API+'eval-independence.json'),j(API+'edge-attribution.json'),j(API+'ledger-recon.json'),j(API+'failover-audit.json'),j(API+'validator-report.json'),j(API+'strategy-policy.json'),j(API+'autonomous-pnl.json'),j(API+'reject-markout.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1356,7 +1356,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     } else if(ocLane&&ocLane.enabled===false){ $('ocPanel').style.display='block'; $('ocStats').innerHTML=''; $('ocRows').innerHTML=''; $('ocNote').innerHTML='on-chain lane disabled (SENTINEL_ONCHAIN_LANE!=1)'; $('ocSub').textContent='off'; }
     // ---- evidence layer — the audit surface: shadow race, episode-adjusted
     // evals, strategy lifecycle, reconciled dollars, failover + validator ----
-    if(shadowAb||evalInd||stratPol||ledgerRecon||failover||validatorR){
+    if(shadowAb||evalInd||stratPol||ledgerRecon||failover||validatorR||autoPnl||rejMark){
       $('evidPanel').style.display='block';
       const fo=failover?.summary||null,va=validatorR?.summary||null;
       $('evidSub').textContent=`${fo?fo.pass+'/'+fo.total+' failover checks':''}${va?' · '+va.verdict.slice(0,60):''}`;
@@ -1400,6 +1400,29 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
           +st.sort((a,b)=>({live:0,probation:1,halted:2,abandoned:3}[a[1].status]??4)-({live:0,probation:1,halted:2,abandoned:3}[b[1].status]??4)).map(([s,p])=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #222;flex-wrap:wrap;gap:2px 8px">
             <span><b style="color:${col[p.status]||'#888'}">●</b> ${esc(s)} <span class="sub">${p.episodes} eps · ${p.meanDirFwd24h!=null?(p.meanDirFwd24h>=0?'+':'')+p.meanDirFwd24h+'%':''}</span></span>
             <span style="color:${col[p.status]||'#888'}">${p.status.toUpperCase()} <span class="sub">${esc((p.why||'').slice(0,70))}</span></span></div>`).join('');
+      }
+      // Will's headline number — fully-autonomous cumulative net after every
+      // fee, exchange vs on-chain separated, manual book excluded
+      if(autoPnl){
+        const ex=autoPnl.exchange?.autonomous,oc=autoPnl.onchain,h=autoPnl.headline;
+        const pc=v=>v>=0?'var(--grn)':'var(--pink)';
+        $('evidRows').insertAdjacentHTML('beforeend',
+          `<div class="sub" style="font-size:10px;margin:8px 0 4px">🤖 AUTONOMOUS-ONLY NET — cumulative realised after every fee, manual book excluded</div>`
+          +`<div class="stats" style="grid-template-columns:repeat(3,1fr)">`
+          +`<div class="stat"><div class="k">exchange (bot only)</div><div class="v" style="color:${pc(ex?.netUsd||0)};font-size:15px">$${ex?.netUsd ?? '—'}</div><div class="sub">${ex?.closes ?? 0} closes · $${ex?.feesUsd ?? '—'} fees · manual book: $${autoPnl.exchange?.manual?.netUsd ?? '—'} (${autoPnl.exchange?.manual?.closes ?? 0}c)</div></div>`
+          +`<div class="stat"><div class="k">on-chain lane</div><div class="v" style="color:${pc(oc?.netSinceBootstrapUsd||0)};font-size:15px">${(oc?.netSinceBootstrapUsd??0)>=0?'+':''}$${oc?.netSinceBootstrapUsd ?? '—'}</div><div class="sub">purse $${oc?.purseUsd ?? '—'} − $${oc?.bootstrapUsd ?? '—'} seeded · gas ${oc?.gasSol ?? '—'} SOL separate</div></div>`
+          +`<div class="stat"><div class="k">combined</div><div class="v" style="color:${pc(h?.combinedUsd||0)};font-size:15px">${(h?.combinedUsd??0)>=0?'+':''}$${h?.combinedUsd ?? '—'}</div><div class="sub">${esc(h?.honesty||'')}</div></div></div>`);
+      }
+      // veto scoreboard — did rejecting the candidates protect capital?
+      // avoided<0 = good veto; >0 = the filter refused a winner
+      if(rejMark?.byGate&&Object.keys(rejMark.byGate).length){
+        const ov=rejMark.overall,h=ov.h60;
+        const rows=Object.entries(rejMark.byGate).slice(0,10).map(([g,a])=>{const m=a.h60.n?a.h60:(a.h15.n?a.h15:a.h5);
+          const hz=a.h60.n?'60m':a.h15.n?'15m':'5m';
+          return`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #222"><span>${esc(g)} <span class="sub">${m.n}@${hz}</span></span><span style="color:${(m.meanAvoidedPct??0)<=0?'var(--grn)':'var(--pink)'}">${(m.meanAvoidedPct??0)>0?'+':''}${m.meanAvoidedPct}% avoided <span class="sub">win ${m.vetoWinPct}%</span></span></div>`}).join('');
+        $('evidRows').insertAdjacentHTML('beforeend',
+          `<div class="sub" style="font-size:10px;margin:8px 0 4px">🚫 VETO SCOREBOARD — forward move of refused candidates (negative = filter protected capital)</div>`
+          +`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid var(--gold,#fc6)"><span><b>ALL VETOES</b> <span class="sub">${h.n}@${h.n?'60m':'—'} · ${rejMark.tracked} tracked</span></span><b style="color:${(h.meanAvoidedPct??0)<=0?'var(--grn)':'var(--pink)'}">${(h.meanAvoidedPct??0)>0?'+':''}${h.meanAvoidedPct??'—'}% <span class="sub">veto win ${h.vetoWinPct??'—'}%</span></b></div>`+rows);
       }
       // reconciled dollars — where every dollar provably sits
       const rc=ledgerRecon?.reconcile;

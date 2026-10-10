@@ -3193,6 +3193,9 @@ async function main() {
         targetPct: s.targetPct, gates: gateFails,
         rangePosition: s.rangePosition ?? null, changePct: s.changePct ?? null,
         mktType: s.mktType ?? null,
+        // markout ledger: reject-time stamp+price so the veto scoreboard can
+        // measure what would have happened to every refused candidate
+        px: s.entryPrice ?? s.lastPrice ?? null, ts: Date.now(),
       });
       continue;
     }

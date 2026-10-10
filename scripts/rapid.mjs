@@ -96,6 +96,8 @@ for (;;) {
     await run('scripts/ledger-recon.mjs').catch((e) => console.log('[rapid] ledger-recon:', e.message || e));
     await run('scripts/failover-audit.mjs').catch((e) => console.log('[rapid] failover-audit:', e.message || e));
     await run('scripts/validator-report.mjs').catch((e) => console.log('[rapid] validator-report:', e.message || e));
+    await run('scripts/autonomous-pnl.mjs').catch((e) => console.log('[rapid] autonomous-pnl:', e.message || e));
+    await run('scripts/reject-markout.mjs').catch((e) => console.log('[rapid] reject-markout:', e.message || e));
     consecFails = 0; lastErr = null;
   } catch (e) {
     consecFails++;

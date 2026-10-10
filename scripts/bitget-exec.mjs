@@ -2660,7 +2660,7 @@ async function main() {
       // mandate roles alike. Placed before all other gates.
       if (DENY_SYMS.has(o.symbol)) {
         state.actions.push(`${o.symbol} ${o.direction}: 🚫 denied-symbol — entries refused by mandate`);
-        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['denied-symbol'] });
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['denied-symbol'] });
         continue;
       }
       // user mandate: no shorts — hard refusal independent of scanner gating,
@@ -2686,7 +2686,7 @@ async function main() {
       if (!o.core && !o.setup) { // mandate roles (core-carry deploys) and operator setups are exempt from tape gates
         if (regimeChop) {
           state.actions.push(`${o.symbol} ${o.direction}: regime-chop — entries halted this window`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['regime-chop'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['regime-chop'] });
           continue;
         }
         const corrHit = Object.entries(corrMap[o.symbol] || {}).find(([s2]) => {
@@ -2696,13 +2696,13 @@ async function main() {
         });
         if (corrHit) {
           state.actions.push(`${o.symbol} ${o.direction}: 🧬 corr-cluster — ${corrHit[0]} already held same direction (rho ${corrHit[1]})`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['corr-cluster'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['corr-cluster'] });
           continue;
         }
         const fr = fundMap[o.symbol];
         if (fr != null && ((o.direction === 'LONG' && fr > FUND_VETO) || (o.direction === 'SHORT' && fr < -FUND_VETO))) {
           state.actions.push(`${o.symbol} ${o.direction}: 💸 funding ${fr}%/8h hostile — vetoed`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['funding-hostile'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['funding-hostile'] });
           continue;
         }
       }
@@ -2747,7 +2747,7 @@ async function main() {
       if (!o.setup && metaP != null && META.evN >= META_MIN_N) {
         if (metaP < META_MIN_P) {
           state.actions.push(`${o.symbol} ${o.direction}: 🧠 meta-label — p(profit) ${round(metaP, 2)} < ${META_MIN_P} over n=${META.evN} graded signals — skipped`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['meta-label'] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['meta-label'] });
           continue;
         }
         // above the floor the estimate modulates size — LdP: the meta
@@ -2773,7 +2773,7 @@ async function main() {
       const kStar = !o.setup && !o.mandate && o.strategy ? kellyStrat[o.strategy] : null;
       if (kStar && kStar.fStar <= 0) {
         state.actions.push(`${o.symbol}: ⛔ kelly-veto — '${o.strategy}' f*=${round(kStar.fStar, 3)} <= 0 over n=${kStar.n} — measured-negative cell stands down`);
-        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['kelly-negative'] });
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['kelly-negative'] });
         continue;
       }
       // strategy-policy veto — evidence-driven lifecycle (Will M6/Q5):
@@ -2784,7 +2784,7 @@ async function main() {
         const sp = stratPolicy[o.strategy];
         if (sp && sp.status !== 'live') {
           state.actions.push(`${o.symbol}: ⛔ policy-veto — '${o.strategy}' status=${sp.status} (${(sp.why || '').slice(0, 90)})`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['strategy-policy-' + sp.status] });
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['strategy-policy-' + sp.status] });
           continue;
         }
       }
