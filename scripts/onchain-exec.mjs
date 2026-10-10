@@ -49,18 +49,44 @@ const readJ = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 const writeJ = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(o)); fs.renameSync(t, f); };
 const journal = (f) => { const a = readJ(FILLS_FILE, []); a.push({ ts: Date.now(), ...f }); writeJ(FILLS_FILE, a.slice(-500)); };
 
+// lane state is published every cycle so the dashboard can show the purse —
+// an operator should never have to wonder where onchain funds went again.
+const emitLane = (book, bal, stableUsd, note) => {
+  const tokens = {};
+  if (bal?.ok) for (const [m, v] of Object.entries(bal.tokens || {})) if (+v > 0) tokens[m] = +(+v).toFixed(6);
+  const deployed = (book.positions || []).reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
+  try {
+    writeJ(path.join(API, 'onchain-lane.json'), {
+      ts: Date.now(), updatedAt: new Date().toISOString(), enabled: ENABLED,
+      address: sol.walletReady() ? sol.address() : null,
+      sol: bal?.ok ? +(+bal.sol).toFixed(6) : null,
+      stableUsd: bal?.ok ? +(+stableUsd).toFixed(4) : null,
+      tokens,
+      purseUsd: +(deployed + (stableUsd || 0)).toFixed(4),
+      positions: (book.positions || []).map((p) => ({
+        symbol: p.symbol, mint: p.mint, costUsd: p.costUsd, lastValueUsd: p.lastValueUsd,
+        peakUsd: p.peakUsd, ageH: +(((Date.now() - p.ts) / 36e5) || 0).toFixed(2), sig: p.sig,
+      })),
+      recentFills: readJ(FILLS_FILE, []).slice(-12).reverse(),
+      note: note || null,
+      gates: { minScore: MIN_SCORE, minStableUsd: MIN_STABLE_USD, minSizeUsd: MIN_SIZE_USD, pct: PCT, maxPositions: MAX_POSITIONS, maxDeployedUsd: MAX_DEPLOYED_USD, keep: KEEP, maxHoldH: MAX_HOLD_H },
+    });
+  } catch {}
+};
+
 async function main() {
   const book = readJ(BOOK_FILE, { positions: [], updatedAt: null });
   book.positions ??= [];
 
-  if (!ENABLED) { console.log('onchain-exec: lane off (SENTINEL_ONCHAIN_LANE!=1)'); return; }
-  if (!sol.walletReady()) { console.log('onchain-exec: no wallet — awaiting SOLANA_BOT_SECRET'); return; }
+  if (!ENABLED) { console.log('onchain-exec: lane off (SENTINEL_ONCHAIN_LANE!=1)'); emitLane(book, null, null, 'lane off'); return; }
+  if (!sol.walletReady()) { console.log('onchain-exec: no wallet — awaiting SOLANA_BOT_SECRET'); emitLane(book, null, null, 'no wallet'); return; }
 
   const bal = await sol.balances().catch((e) => ({ ok: false, err: e.message }));
-  if (!bal.ok) { console.log(`onchain-exec: wallet probe failed — ${bal.err || bal.reason}`); return; }
+  if (!bal.ok) { console.log(`onchain-exec: wallet probe failed — ${bal.err || bal.reason}`); emitLane(book, null, null, `probe failed: ${bal.err || bal.reason}`); return; }
 
   const stableUsd = (bal.tokens[sol.MINT.USDC] || 0) + (bal.tokens[sol.MINT.USDT] || 0);
   const deployed = book.positions.reduce((a, p) => a + (p.lastValueUsd || p.costUsd || 0), 0);
+  const done = (note) => { writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); emitLane(book, bal, stableUsd, note); };
   console.log(`onchain-exec: ${bal.address.slice(0, 8)}… sol=${bal.sol.toFixed(4)} stables=$${stableUsd.toFixed(2)} positions=${book.positions.length} (~$${deployed.toFixed(2)})`);
 
   // bootstrap: convert whatever landed into the USDC purse. Two rails —
@@ -94,7 +120,7 @@ async function main() {
         console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… -> USDC sig ${(r.signature || '').slice(0, 12)}…`);
       } catch (e) { console.log(`  bootstrap ${rail} ${mint.slice(0, 8)}… failed: ${e.message.slice(0, 80)}`); }
     }
-    writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
+    done('bootstrap');
     return;
   }
 
@@ -131,12 +157,12 @@ async function main() {
 
   // ---- entries: top audited candidate, non-perp only ----
   if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || stableUsd < MIN_STABLE_USD) {
-    writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
+    done(stableUsd < MIN_STABLE_USD ? `purse below floor ($${stableUsd.toFixed(2)} < $${MIN_STABLE_USD})` : 'capacity full');
     return;
   }
   if (!hot || Date.now() - hot.ts > (hot.ttlMs || 900e3)) {
     console.log('onchain-exec: hot feed stale/absent — no entries');
-    writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
+    done('hot feed stale');
     return;
   }
   const held = new Set(book.positions.map((p) => p.mint));
@@ -146,10 +172,10 @@ async function main() {
     h.audit && !h.audit.rugged && (h.audit.risks || []).length <= 3 &&
     h.liqUsd >= 50e3
   );
-  if (!cand) { console.log('onchain-exec: no candidate passed gates'); writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); return; }
+  if (!cand) { console.log('onchain-exec: no candidate passed gates'); done('no candidate passed gates'); return; }
 
   const sizeUsd = Math.min(MAX_USD, stableUsd * PCT, MAX_DEPLOYED_USD - deployed);
-  if (sizeUsd < MIN_SIZE_USD) { console.log(`onchain-exec: purse too small ($${sizeUsd.toFixed(2)})`); writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() }); return; }
+  if (sizeUsd < MIN_SIZE_USD) { console.log(`onchain-exec: purse too small ($${sizeUsd.toFixed(2)})`); done(`clip below floor ($${sizeUsd.toFixed(2)} < $${MIN_SIZE_USD})`); return; }
 
   const mint = (bal.tokens[sol.MINT.USDC] || 0) >= sizeUsd ? sol.MINT.USDC : sol.MINT.USDT;
   const inRaw = Math.round(sizeUsd * 1e6);
@@ -166,7 +192,7 @@ async function main() {
     console.log(`  FILLED ${cand.symbol} sig ${r.signature.slice(0, 12)}…`);
   } catch (e) { console.log(`  ${cand.symbol}: buy failed ${e.message.slice(0, 100)}`); }
 
-  writeJ(BOOK_FILE, { ...book, updatedAt: new Date().toISOString() });
+  done('cycle complete');
 }
 
 main().catch((e) => console.warn(`onchain-exec failed: ${e.message}`));

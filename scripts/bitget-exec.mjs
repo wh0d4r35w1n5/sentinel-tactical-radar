@@ -731,7 +731,9 @@ async function main() {
   // the override is the STARTING book, not a permanent pin — the test
   // account compounds/suffers its own realized record: book = base +
   // epoch net (every journaled fill: open fees + close P&L) - the vault.
-  const epochNet = EQ_OVERRIDE > 0 ? loadFills().reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0) : 0;
+  // On live the same journal is the book's real cumulative net — compute
+  // it unconditionally; the epoch-base blend below still gates on override.
+  const epochNet = loadFills().reduce((a, f) => a + (+f.profit || 0) - (+f.fee || 0), 0);
   const vaultState0 = loadVault();
   const vaultNow = +vaultState0.balanceUsd || 0;
   // subtract only the UNMOVED vault balance: funds already transferred to

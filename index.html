@@ -574,6 +574,13 @@ tbody tr.sig,tr.jrow{transition-property:background;transition-duration:.25s}
     <div class="stats" id="vaultStats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="sub" id="vaultNote" style="margin-top:8px;font-size:10px"></div>
   </div>
+
+  <div class="panel neon" id="ocPanel" style="margin-top:16px;display:none">
+    <div class="ptitle">⛓️ On-chain lane · Solana purse <span class="sub" id="ocHdr">— DEX spot book, self-custody wallet — every fill is a solscan-verifiable signature</span><span id="ocSub" class="sub" style="float:right"></span></div>
+    <div class="stats" id="ocStats" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div id="ocRows" style="margin-top:8px"></div>
+    <div class="sub" id="ocNote" style="margin-top:6px;font-size:10px"></div>
+  </div>
   <div class="panel" id="pimpPanel" style="margin-top:16px;display:none">
     <div class="pc-sign">
       <div class="h">PIMP CITY</div>
@@ -904,8 +911,8 @@ function renderFunding(){
 }
 async function render(){
 
-const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW]=await Promise.all([
-    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json')]);
+const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane]=await Promise.all([
+    j(API+'market-scanner.json'),j(API+'coin-detail.json'),j(API+'signal-ledger.json'),j(API+'prices.json'),j(API+'health.json'),j(API+'funding.json'),j(API+'sentiment.json'),j(API+'signal-eval.json'),j(API+'news.json'),j(API+'hypotheses.json'),j(API+'correlation.json'),j(API+'benchmark.json'),j(API+'live-ledger.json'),j(API+'god.json'),j(API+'volcore.json'),j(API+'confluence.json'),j(API+'breakouts.json'),j(API+'einstein.json'),j(API+'mtf.json'),j(API+'social.json'),j(API+'trades-taken.json'),j(API+'sqn-report.json'),j(API+'thoughts.json'),j(API+'liq-guard.json'),j(API+'gate-stats.json'),j(API+'freqtrade-bench.json'),j(API+'mae-mfe.json'),j(API+'rr-optimize.json'),j(API+'rr-backtest.json'),j(API+'integrity.json'),j(API+'alltime-stats.json'),j(API+'equity-bridge.json'),j(API+'pimp-war.json'),j(API+'onchain-lane.json')]);
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   LAST={scan,detail,ledger,evals,confl,funding,taken:takenR,sqn:sqnR};
   VEX=(liveLedger&&liveLedger.exchange)||((scan.source||'').startsWith('bybit')?'bybit':'bitget');
@@ -1261,6 +1268,25 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const vh=$('vaultHdr');if(vh)vh.textContent=`— ${carryPct}% of every winning close sweeps out of the tradable book — the engine cannot touch it, not ever`;
       $('vaultStats').innerHTML=[['🏦 vaulted','$'+(+src.vaultUsd).toFixed(2),'locked — engine cannot size with it'],['📈 high-water',src.vaultHwmUsd!=null?'$'+(+src.vaultHwmUsd).toFixed(2):'—','nothing banks below the mark'],['🔒 sweeps',src.vaultSweeps??'—','winning closes paid tribute'],['📊 epoch net',src.epochNetUsd!=null?'$'+(+src.epochNetUsd).toFixed(2):'—','journaled net of real fills'],['💸 carry',carryPct+'%','of net-new equity highs only']].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--gold);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
       $('vaultNote').innerHTML=`🔑 <b style="color:var(--gold)">incentive-fee structure</b> — the engine pays itself ${carryPct}% carry on net-new equity highs and nothing while underwater. Cash-out only, never trade-in; compounding happens in the vault, risk stays in the book.`;
+    }
+    // ---- on-chain lane — the Solana purse, positions, fills, gates ----
+    if(ocLane&&ocLane.address){
+      $('ocPanel').style.display='block';
+      const o=ocLane,agoOc=o.ts?ago(o.ts):'—';
+      $('ocSub').textContent=`${agoOc} ago`;
+      const pos=o.positions||[],fills=(o.recentFills||[]).slice(0,5);
+      $('ocStats').innerHTML=[
+        ['👛 purse',o.purseUsd!=null?'$'+(+o.purseUsd).toFixed(2):'—','stables + open bags'],
+        ['💵 stables',o.stableUsd!=null?'$'+(+o.stableUsd).toFixed(2):'—','deployable USDC/USDT'],
+        ['⛽ gas',o.sol!=null?(+o.sol).toFixed(4)+' SOL':'—',o.sol!=null&&o.sol<0.004?'⚠ low — swaps need ~0.004':'self-paying'],
+        ['📦 positions',pos.length,'of '+(o.gates?.maxPositions??'—')+' max'],
+      ].map(([k,v,s])=>`<div class="stat"><div class="k">${k}</div><div class="v" style="color:var(--cyan,#6cf);font-size:17px">${v}</div><div class="sub">${s}</div></div>`).join('');
+      $('ocRows').innerHTML=(pos.map(p=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #222">
+          <span><b>${esc(p.symbol||'?')}</b> <span class="sub">${p.ageH}h · <a style="color:var(--cyan,#6cf)" target="_blank" href="https://solscan.io/tx/${p.sig||''}">sig</a></span></span>
+          <span>$${(+p.lastValueUsd||0).toFixed(2)} <span class="sub">cost $${(+p.costUsd||0).toFixed(2)}</span></span></div>`).join(''))
+        +fills.map(f=>`<div class="sub" style="font-size:9px;padding:1px 0">${f.side==='sell'?'🔴':'🟢'} ${f.side} ${f.symbol||f.usd||''} ${f.estUsd?'~$'+(+f.estUsd).toFixed(2):f.usd?'$'+f.usd:''} <a style="color:#888" target="_blank" href="https://solscan.io/tx/${f.sig||''}">${(f.sig||'').slice(0,10)}…</a></div>`).join('')||'<div class="sub" style="font-size:10px">no positions · purse waits for a gated candidate</div>';
+      $('ocNote').innerHTML=`🔍 <span class="mono" style="font-size:9px">${o.address||''}</span> · ${o.note?esc(o.note)+' · ':''}every balance is a live RPC read — nothing here is an estimate`;
+    } else if(ocLane&&ocLane.enabled===false){ $('ocPanel').style.display='block'; $('ocStats').innerHTML=''; $('ocRows').innerHTML=''; $('ocNote').innerHTML='on-chain lane disabled (SENTINEL_ONCHAIN_LANE!=1)'; $('ocSub').textContent='off'; }
     }
     // ---- payoff engine — fitted edge + the Monte Carlo ladder verdict ----
     if(rrOpt&&rrOpt.winner){

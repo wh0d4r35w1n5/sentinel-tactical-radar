@@ -62,13 +62,13 @@ const summarize = (symbol, results) => {
   const rows = (results || []).map((x) => x.result).filter(Boolean);
   const q = rows.filter(QUALITY);
   const archW = {};
-  let top = null;
   for (const s of results || []) {
     if (!s.result || !QUALITY(s.result)) continue;
     for (const [a, re] of ARCH) if (re.test(s.name || '')) archW[a] = (archW[a] || 0) + s.result.sharpeRatio;
   }
-  if (!top && results?.length) top = results[0];
-  else if (results?.length) top = results.find((s) => QUALITY(s.result)) || results[0];
+  // results arrive sharpe-sorted — the top row for the timeframe read is
+  // the first strategy that clears the bar (or row 0 if none did)
+  const top = (results || []).find((s) => s.result && QUALITY(s.result)) || results?.[0] || null;
   const domArch = Object.entries(archW).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
   const topSharpe = rows.length ? Math.max(...rows.map((r) => r.sharpeRatio || 0)) : 0;
   const topPf = rows.length ? Math.max(...rows.map((r) => r.profitFactor || 0)) : 0;
@@ -104,11 +104,14 @@ export async function getLibEdge(symbols, { maxAgeMs = MAX_AGE_MS, log = () => {
         const cands = /USDT$/i.test(sym) ? [sym]
           : /USD$/i.test(sym) ? [sym, sym + 'T']
           : [sym + 'USDT', sym];
-        let j = null;
+        let j = null, lastErr = null;
         for (const q of cands) {
-          j = await fetchJson(`${BASE}/strategies/search?symbol=${encodeURIComponent(q)}&sort=sharpe&limit=${PER_SYMBOL}&minTrades=30`);
-          if ((j.results || []).length) break;
+          try {
+            j = await fetchJson(`${BASE}/strategies/search?symbol=${encodeURIComponent(q)}&sort=sharpe&limit=${PER_SYMBOL}&minTrades=30`);
+            if ((j.results || []).length) break;
+          } catch (e) { lastErr = e; }
         }
+        if (!j) throw lastErr || new Error('fetch failed');
         cache.map[sym] = summarize(sym, j.results);
       } catch (e) { cache.map[sym] = { n: 0, density: 0, edge: 0, err: String(e.message || e).slice(0, 60) }; }
       done++;
