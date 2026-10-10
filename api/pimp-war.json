@@ -1,8 +1,8 @@
 {
- "at": "2026-10-10T17:49:18.279Z",
+ "at": "2026-10-10T17:54:35.072Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.81,
+   "equityUsd": 23.76,
    "marginFreeUsd": 22.13,
    "epochNetUsd": -40.94,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "LINKUSDT",
      "side": "long",
-     "upl": -0.83,
+     "upl": -0.88,
      "lev": 70,
      "margin": 2.51
     }
@@ -20,7 +20,7 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0237,
    "stableUsd": 0,
-   "purseUsd": 2.13,
+   "purseUsd": 2.14,
    "positions": 6,
    "laneNet": -0.43,
    "laneTrades": 9,
@@ -529,6 +529,21 @@
  "retired": [],
  "intents": [
   {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791631919928,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:Kjgiayu9uBzKTRDyEpwnzcNyfHwG8aMBazw1KLqGLfATJDnkTK7GLwDXBkuzuAJbkMUmwxsaL8cyskxxBDWnCPf",
+   "onchain": true,
+   "filledAt": 1791631919928,
+   "live": true,
+   "closedAt": 1791635284468,
+   "epNet": -0.034031,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
    "symbol": "GOMO",
    "direction": "LONG",
    "ts": 1791633177077,
@@ -584,15 +599,6 @@
    "live": true
   },
   {
-   "symbol": "2ZUSDT",
-   "direction": "LONG",
-   "ts": 1791653689880,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s17916536408592ZUSDT",
-   "live": false
-  },
-  {
    "symbol": "UNIUSDT",
    "direction": "LONG",
    "ts": 1791654085960,
@@ -634,7 +640,8 @@
    "ts": 1791654558152,
    "pimp": null,
    "crack": "Solana Sadie",
-   "coid": "s1791654516138EIGENUSDT"
+   "coid": "s1791654516138EIGENUSDT",
+   "live": false
   },
   {
    "symbol": "XRPUSDT",
@@ -642,7 +649,8 @@
    "ts": 1791654558279,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791654516138XRPUSDT"
+   "coid": "s1791654516138XRPUSDT",
+   "live": false
   }
  ],
  "drama": [
