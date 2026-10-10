@@ -106,6 +106,18 @@ gross-positive and still printed red. These rules prevent the repeat.
   edit values in place, never append a second line). Check `mode`/`exchange`
   in `api/live-ledger.json` before assuming demo.
 
+## v1.1 master baseline (2026-10-10)
+
+Frozen copies on VPS: `/opt/sentinel/state/v1.1-master/` (liq-guard,
+bitget-watch, bitget-exec, ft.mjs, rr-config.json, env.txt — mode 600).
+Full offline snapshot: `/opt/sentinel/state/sentinel-v1.1-master.tar.gz`
+(code + api artifacts + state config; credentials/sessions excluded —
+sent to Will Evans on Telegram). Adds since v1.0: evidence layer
+(shadow race, episode clustering, edge attribution, strategy lifecycle
+wired into the order gate), autonomous-P&L headline, reject markouts,
+trader.dev libedge archetype matrix, on-chain lane with realtime marks
++ proven USDC round-trip, dashboard full-mesh artifact surface.
+
 ## v1.0 master baseline (2026-10-07)
 
 Operator-declared stable config. Frozen copies on VPS:
