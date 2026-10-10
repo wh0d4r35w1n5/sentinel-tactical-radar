@@ -1200,9 +1200,10 @@ async function main() {
     // ---- empirical Kelly per strategy (Stanford step 4): each strategy's
     // realized R stream implies its own f* = p − q/b. Deployment scales by
     // the strategy's half-f* RELATIVE to the book's half-f* — measured-edge
-    // cells keep full size, measured-negative cells decay to 0.3x probe
-    // size until their record recovers. Never raises size above the
-    // existing caps; n<8 gets no opinion.
+    // cells keep full size, measured-negative cells are VETOED by the
+    // kelly-negative gate (operator order: no probe size into proven
+    // bleeders). Never raises size above the existing caps; n<8 gets no
+    // opinion.
     {
       const bkt = {};
       for (const g of pos) {
@@ -1216,7 +1217,9 @@ async function main() {
         const k = kellyFn(rs);
         if (!k) continue;
         kellyStrat[s] = { n: k.n, winPct: k.winPct, payoff: k.payoff, fStar: k.fStar, mult: 1 };
-        if (k.fStar <= 0) kellyStrat[s].mult = 0.3;
+        // f*<=0 = vetoed upstream (kelly-negative gate) — mult records 0 so
+        // the ledger never suggests a measured-negative cell took exposure
+        if (k.fStar <= 0) kellyStrat[s].mult = 0;
         else if (fBook) kellyStrat[s].mult = round(Math.min(1, Math.max(0.3, k.fStar / fBook)), 2);
       }
       if (Object.keys(kellyStrat).length) state.kellyByStrategy = kellyStrat;
@@ -2761,6 +2764,16 @@ async function main() {
         state.actions.push(`${o.symbol}: ⛔ family-gated — '${o.strategy || 'unattributed'}' n=${fam.n} wr ${Math.round(fam.winShare * 100)}% ret ${fam.meanRetPct}% — skipped`);
         continue;
       }
+      // Kelly veto — a strategy whose own realized f* <= 0 (n>=8) is a
+      // measured-negative cell: the answer is zero bullets, not a 0.3x
+      // probe size. Operator/setup orders exempt — they don't ride the
+      // strategy edge estimate.
+      const kStar = !o.setup && !o.mandate && o.strategy ? kellyStrat[o.strategy] : null;
+      if (kStar && kStar.fStar <= 0) {
+        state.actions.push(`${o.symbol}: ⛔ kelly-veto — '${o.strategy}' f*=${round(kStar.fStar, 3)} <= 0 over n=${kStar.n} — measured-negative cell stands down`);
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, gates: ['kelly-negative'] });
+        continue;
+      }
       // drift guard — the plan can be up to 15min old; a market order at a
       // price that already ran past the modeled entry breaks the 3:1
       // geometry the scanner certified. Chase-fade tolerance: 0.6%.
@@ -2850,8 +2863,9 @@ async function main() {
       // per-position cap below stays the absolute ceiling either way.
       const convMul = Math.min(1.1, Math.max(+(process.env.SENTINEL_CONV_FLOOR || 0.2), +(o.conv ?? 1))) * metaMul;
       // empirical Kelly per strategy — measured-positive cells keep full
-      // size, measured-negative decay to 0.3x probe (never a raise)
-      const kellyMul = (o.strategy && kellyStrat[o.strategy]?.mult) || 1;
+      // size, measured-negative are vetoed upstream (kelly-negative gate);
+      // mult here only ever tilts between positive cells (never a raise)
+      const kellyMul = (o.strategy ? kellyStrat[o.strategy]?.mult : undefined) ?? 1;
       // Avellaneda–Stoikov inventory skew (MSE448 strat 2 — the paper's
       // profitable strategy wasn't a better signal, it was quoting AGAINST
       // inventory: AS held inv std 2.99 vs control 8.49 at similar PnL =
