@@ -972,14 +972,26 @@ function renderFunding(){
 }
 async function render(){
 
-// artifact fan-out collapsed to ONE fetch: api-bundle.mjs emits
-// dashboard.json at the tail of every rapid cycle. Fresh bundle => unpack
-// client-side; stale/missing => legacy 49-file fan-out (rapid-down safe).
+// artifact fan-out collapsed into TIERED pre-gzipped bundles: api-bundle.mjs
+// emits dashboard-hot.json (first-viewport artifacts, ~65KB wire) +
+// dashboard-cold.json (evidence/bench panels, lazy-merged) each rapid cycle.
+// Bundle fetches skip the ?v= buster so nginx ETag/IMS returns free 304s on
+// unchanged polls. Stale/missing => legacy 49-file fan-out (rapid-down safe).
 const NAMES=['market-scanner','coin-detail','signal-ledger','prices','health','funding','sentiment','signal-eval','news','hypotheses','correlation','benchmark','live-ledger','god','volcore','confluence','breakouts','einstein','mtf','social','trades-taken','sqn-report','thoughts','liq-guard','gate-stats','freqtrade-bench','mae-mfe','rr-optimize','rr-backtest','integrity','alltime-stats','equity-bridge','pimp-war','onchain-lane','shadow-ab','eval-independence','edge-attribution','ledger-recon','failover-audit','validator-report','strategy-policy','autonomous-pnl','reject-markout','libedge','live-plan','bitget-watch','markouts','onchain-hot','chain-custody'];
-const bundle=await j(API+'dashboard.json');
-const rows=(bundle&&bundle.data&&bundle.ts&&Date.now()-bundle.ts<180e3)
-  ? NAMES.map(n=>bundle.data[n]??null)
-  : await Promise.all(NAMES.map(n=>j(API+n+'.json')));
+const jB=u=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null); // conditional GET — 304 when unchanged
+const freshB=b=>b&&b.data&&b.ts&&Date.now()-b.ts<180e3;
+const hotB=await jB(API+'dashboard-hot.json');
+let rows;
+if(freshB(hotB)){
+  // cold tier merges lazily — evidence panels fill in behind the first paint
+  if(!window.__cold||Date.now()-(window.__coldTs||0)>300e3){
+    window.__coldP=(window.__coldP||jB(API+'dashboard-cold.json')).then(c=>{
+      window.__coldP=null;
+      if(freshB(c)){window.__cold=c.data;window.__coldTs=c.ts;window.__lastRenderSig=null;render()}
+    }).catch(()=>{window.__coldP=null});
+  }
+  rows=NAMES.map(n=>hotB.data[n]??(window.__cold?window.__cold[n]:null)??null);
+}else rows=await Promise.all(NAMES.map(n=>j(API+n+'.json')));
 const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,bench,liveLedger,god,volCore,confl,brkR,ein,mtfM,socR,takenR,sqnR,thR,liqG,gateSt,ftBench,maeMfe,rrOpt,rrBt,integ,allT,bridge,pimpW,ocLane,shadowAb,evalInd,edgeAttr,ledgerRecon,failover,validatorR,stratPol,autoPnl,rejMark,libEdge,livePlan,bitWatch,markouts,ocHot,custody]=rows;
   if(!scan){$('liveTxt').textContent='FEED UNREACHABLE — retrying';$('liveChip').className='live stale';return}
   // incremental render: when the freshness-driving artifacts are identical
