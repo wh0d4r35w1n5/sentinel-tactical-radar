@@ -306,13 +306,18 @@ async function cycle() {
         // liquidation, a short's BELOW it. A direction-blind `> liq` made
         // every short look invalid — refusing to place and erroring each cycle.
         const liqSafe = (pxv) => !(liq > 0) || (long ? pxv > liq : pxv < liq);
-        // margin/size-add re-fit: same % stop on a bigger base is a bigger
-        // $ worst-case. Exec's de-risk band (worst-case at stop ≤ 30% equity)
-        // enforced here at stop level — tighten-only, so it can never loosen
-        // an existing stop, only pull it inside the band on a margin event.
-        if (marginEvent && /added/.test(marginEvent.kind) && equityUsd > 0 && want.mark > 0) {
+        // de-risk band re-fit (EVERY cycle, not just margin events): Bitget
+        // wipes position-bound plans on isolated margin/size churn, so a
+        // band-capped refit placed on an event was re-placed UNCAPPED the
+        // next cycle after the wipe — the band silently re-breached. Same
+        // % stop on a bigger base is a bigger $ worst-case; exec's band
+        // (worst-case at stop ≤ 30% equity) is enforced here at stop level.
+        // Tighten-only + inside-mark/liq-safe guards — it can never loosen
+        // an existing stop or fight liq-guard's tighter trails.
+        if (equityUsd > 0 && want.mark > 0 && size > 0) {
           const capUsd = equityUsd * DERISK_CAP;
-          if (Math.abs(eNow - want.px) * size > capUsd) {
+          const worstUsd = Math.abs(eNow - want.px) * size;
+          if (worstUsd > capUsd) {
             const fit = long ? eNow - capUsd / size : eNow + capUsd / size;
             const fp = long ? floorTick(fit, dec) : ceilTick(fit, dec);
             // only tighten, and only if the fitted px stays placeable
@@ -321,7 +326,7 @@ async function cycle() {
             const tighter = long ? fp > want.px : fp < want.px;
             const insideMark = long ? fp < want.mark * 0.9995 : fp > want.mark * 1.0005;
             if (tighter && insideMark && liqSafe(fp)) {
-              actions.push(`${p.symbol}: worst-case $${(Math.abs(eNow - want.px) * size).toFixed(2)} > ${DERISK_CAP * 100}% equity on ${marginEvent.kind} — stop re-fit @ ${fp}`);
+              actions.push(`${p.symbol}: worst-case $${worstUsd.toFixed(2)} > ${DERISK_CAP * 100}% equity${marginEvent ? ` on ${marginEvent.kind}` : ''} — stop re-fit @ ${fp}`);
               want.px = fp;
             }
           }
