@@ -1289,6 +1289,7 @@ async function main() {
     const rail = cmdHalt || (realDdPct >= DD_KILL ? `dd ${state.ddPct}%` : null) || (dd24 >= DAILY_HALT ? `dd24 ${state.dd24Pct}%` : null) || cbReason;
     state.actions.push(`⚠️ OVERRIDE active until ${new Date(+cmdOverride.until).toISOString().slice(11, 19)}Z — entries forced past ${rail || 'breakers'}`);
   }
+  const effDdScale = cmdOverride ? 1 : ddRiskScale; // operator override restores full-size clips
 
   // published risk rails — the machine-readable answer to "where are the
   // kill-switches / position limits / disconnect handling" — rendered on
@@ -2441,7 +2442,7 @@ async function main() {
         const costPct = 0.20; // same fee+slip floor the RR gate applies
         const netRR = (targetPct - costPct) / (stopPct + costPct);
         if (!(netRR >= SETUP_RR_FLOOR)) { rej(`net-rr ${round(netRR, 2)} < ${SETUP_RR_FLOOR}`); continue; }
-        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * ddRiskScale;
+        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * effDdScale;
         plan.orders.push({
           symbol: sym, direction: s.direction, refEntry: last,
           notionalUsd: round(riskUsd / Math.max(0.0005, stopPct / 100), 2),
@@ -3443,7 +3444,7 @@ async function main() {
             }
           }
         } catch {}
-        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3) * ddRiskScale; // same fee headroom as entries; session-DD shrinks size
+        const marginUsd = Math.min(marginFree, room) / (1 + lev * 0.0012 * 1.3) * effDdScale; // same fee headroom as entries; session-DD shrinks size
         const size = sizeFor(cm, p.symbol, marginUsd * lev, px);
         if (!size) { state.actions.push(`${p.symbol}: top-up skipped — below contract minimum`); continue; }
         await marketOrder(p.symbol, p.side === 'short' ? 'sell' : 'buy', size, 'open');
