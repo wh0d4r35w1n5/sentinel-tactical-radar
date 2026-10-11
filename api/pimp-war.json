@@ -1,18 +1,18 @@
 {
- "at": "2026-10-11T01:35:20.554Z",
+ "at": "2026-10-11T01:40:03.962Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.16,
-   "marginFreeUsd": 22.43,
-   "epochNetUsd": -41.65,
+   "equityUsd": 23.09,
+   "marginFreeUsd": 15.84,
+   "epochNetUsd": -41.75,
    "fills": 400,
    "positions": [
     {
      "symbol": "ETHUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0.08,
      "lev": 35,
-     "margin": 0.72
+     "margin": 7.17
     }
    ]
   },
@@ -20,13 +20,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0139,
    "stableUsd": 2.24,
-   "purseUsd": 5.12,
-   "positions": 9,
+   "purseUsd": 5.78,
+   "positions": 10,
    "laneNet": -0.31,
    "laneTrades": 12,
    "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791682726617,
+    "symbol": "SUPMKT",
+    "sig": "3WPQgqu9C9jDgrcbkQPyToL2VefrSrrKqWsx45B1R5jZiFkeXjDxEhGLpRmtypPuGNmg1ZiGdG5K5i3DpFcDed7v",
+    "text": "BUY SUPMKT $0.33"
+   },
    {
     "venue": "solana",
     "ts": 1791670342172,
@@ -89,13 +96,6 @@
     "symbol": null,
     "sig": "5rE4aiku3FBWxrP4vGpkvm1ajJiu15KRfz9ooj1agufPo5VhCs1SvzifsDfaD31kaboJFio3MJkvtHfzx4qukUPE",
     "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791655899427,
-    "symbol": "MOIN",
-    "sig": "4Px8dERYpRQQF9HkxwNW44p1HCoHmnoEGbd534L46KLZKvvzchvegE8jEF2kwZo6MEUpB1y2dJQfAY5ducDRGSeJ",
-    "text": "SELL MOIN"
    }
   ]
  },
@@ -532,28 +532,6 @@
  "retired": [],
  "intents": [
   {
-   "symbol": "SI276",
-   "direction": "LONG",
-   "ts": 1791633179451,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:eoaAffjUJfmnEfHMEjQLsd74TG3mU1VkGRpDLJevfa1SDbCYian8BcMSP11zvPUKMjKT6qafeGUG1Vp7WJiYmVs",
-   "onchain": true,
-   "filledAt": 1791633179451,
-   "live": true
-  },
-  {
-   "symbol": "ABU",
-   "direction": "LONG",
-   "ts": 1791633181615,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:5Lf9hZuUL7m2gXU8mYAioCjQw8vQ9VLnpquVdZ6xUCaAxiwY8ghUcjgjEom2Wm41VbindY2hcebxgJUfCdLEvoTt",
-   "onchain": true,
-   "filledAt": 1791633181615,
-   "live": true
-  },
-  {
    "symbol": "QOMPUTE",
    "direction": "LONG",
    "ts": 1791637123817,
@@ -656,19 +634,39 @@
   {
    "symbol": "BTCUSDT",
    "direction": "LONG",
-   "ts": 1791681860663,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791681229068BTCUSDT",
-   "live": false
-  },
-  {
-   "symbol": "BTCUSDT",
-   "direction": "LONG",
    "ts": 1791682519702,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791681863551BTCUSDT"
+   "coid": "s1791681863551BTCUSDT",
+   "live": false
+  },
+  {
+   "symbol": "PAXGUSDT",
+   "direction": "LONG",
+   "ts": 1791682711903,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791682525066PAXGUSDT",
+   "live": false
+  },
+  {
+   "symbol": "SUPMKT",
+   "direction": "LONG",
+   "ts": 1791682726617,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:3WPQgqu9C9jDgrcbkQPyToL2VefrSrrKqWsx45B1R5jZiFkeXjDxEhGLpRmtypPuGNmg1ZiGdG5K5i3DpFcDed7v",
+   "onchain": true,
+   "filledAt": 1791682726617,
+   "live": true
+  },
+  {
+   "symbol": "SKHYUSDT",
+   "direction": "LONG",
+   "ts": 1791682803566,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1791682748513SKHYUSDT"
   }
  ],
  "drama": [
