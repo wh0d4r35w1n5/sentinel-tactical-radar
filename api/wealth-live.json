@@ -1,38 +1,56 @@
 {
- "ts": "2026-10-11T08:43:45.191Z",
- "ageMs": 6361,
- "src": "rest",
+ "ts": "2026-10-11T08:53:38.967Z",
+ "ageMs": 39670,
+ "src": "ws",
  "futures": {
-  "equityUsd": 2.9089,
-  "availableUsd": 2.5024,
-  "marginUsedUsd": 0.5411,
-  "uplUsd": 0.2086,
+  "equityUsd": 2.8004,
+  "availableUsd": 2.8004,
+  "marginUsedUsd": 0.154,
+  "uplUsd": -0.0495,
   "positions": [
    {
-    "k": "MAGICUSDT:long",
-    "size": 37.6,
-    "marginUsd": 0.1931,
-    "uplUsd": 0.0861
-   },
-   {
     "k": "ACHUSDT:long",
-    "size": 2785,
-    "marginUsd": 0.348,
-    "uplUsd": 0.1225
+    "size": 1178,
+    "marginUsd": 0.154,
+    "uplUsd": -0.0495
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.01127,
-  "solUsd": 1.2336,
+  "solUsd": 1.2334,
   "stableUsd": 0,
-  "bagsUsd": 0.3582,
-  "totalUsd": 1.5918,
-  "staleMs": 304176
+  "bagsUsd": 0.3556,
+  "totalUsd": 1.589,
+  "staleMs": 276146
  },
- "totalUsd": 4.5007,
+ "totalUsd": 4.3894,
  "deltas": [
+  {
+   "ts": 1791708505794,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0715
+  },
+  {
+   "ts": 1791708365329,
+   "kind": "size-reduced",
+   "detail": "ACHUSDT:long Δ-633",
+   "amt": 0
+  },
+  {
+   "ts": 1791708269235,
+   "kind": "position-closed",
+   "detail": "MAGICUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791708261421,
+   "kind": "size-reduced",
+   "detail": "ACHUSDT:long Δ-974",
+   "amt": 0
+  },
   {
    "ts": 1791707880824,
    "kind": "size-reduced",
@@ -128,30 +146,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.4998
-  },
-  {
-   "ts": 1791707592761,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.1561
-  },
-  {
-   "ts": 1791707591414,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -1.738
-  },
-  {
-   "ts": 1791707553853,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 2.0476
-  },
-  {
-   "ts": 1791707553063,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ44.5",
-   "amt": 0
   }
  ]
 }
