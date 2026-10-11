@@ -1,30 +1,18 @@
 {
- "ts": "2026-10-11T20:49:08.356Z",
- "ageMs": 333031,
- "src": "rest",
+ "ts": "2026-10-11T20:59:29.632Z",
+ "ageMs": 29590,
+ "src": "ws",
  "futures": {
-  "equityUsd": 1.5469,
-  "availableUsd": 0.6294,
-  "marginUsedUsd": 1.353,
-  "uplUsd": -0.0487,
+  "equityUsd": 1.2642,
+  "availableUsd": 1.0129,
+  "marginUsedUsd": 0.3724,
+  "uplUsd": -0.1211,
   "positions": [
    {
     "k": "STRKUSDT:long",
     "size": 90.2,
     "marginUsd": 0.3724,
-    "uplUsd": -0.0586
-   },
-   {
-    "k": "AVAXUSDT:long",
-    "size": 1.2,
-    "marginUsd": 0.3519,
-    "uplUsd": 0.0348
-   },
-   {
-    "k": "MAGICUSDT:long",
-    "size": 118.5,
-    "marginUsd": 0.6286,
-    "uplUsd": -0.0249
+    "uplUsd": -0.1211
    }
   ]
  },
@@ -38,10 +26,34 @@
   "tokens": {
    "BQAeeSow": 0.0033
   },
-  "staleMs": 333031
+  "staleMs": 29590
  },
- "totalUsd": 1.5502,
+ "totalUsd": 1.2675,
  "deltas": [
+  {
+   "ts": 1791751849143,
+   "kind": "position-closed",
+   "detail": "MAGICUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791751849143,
+   "kind": "position-closed",
+   "detail": "AVAXUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791751785526,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0656
+  },
+  {
+   "ts": 1791751769856,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1736
+  },
   {
    "ts": 1791751327564,
    "kind": "position-opened",
@@ -137,30 +149,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": -0.0547
-  },
-  {
-   "ts": 1791744948093,
-   "kind": "position-opened",
-   "detail": "BTWUSDT:long",
-   "amt": 1.9938
-  },
-  {
-   "ts": 1791743529643,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 2.0629
-  },
-  {
-   "ts": 1791743379861,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -2.0632
-  },
-  {
-   "ts": 1791742898382,
-   "kind": "position-closed",
-   "detail": "NEARUSDT:long",
-   "amt": 0
   }
  ]
 }
