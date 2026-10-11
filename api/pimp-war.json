@@ -1,12 +1,20 @@
 {
- "at": "2026-10-11T09:08:52.876Z",
+ "at": "2026-10-11T09:19:20.033Z",
  "wallets": {
   "futures": {
-   "equityUsd": 2.8,
-   "marginFreeUsd": 2.8,
-   "epochNetUsd": -30.42,
+   "equityUsd": 3,
+   "marginFreeUsd": 1.84,
+   "epochNetUsd": -30.49,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "STRKUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 30,
+     "margin": 1.16
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -491,18 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -6.7329,
+   "net": -6.5291,
    "wins": 6,
    "losses": 16,
    "closes": 31,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0319,
+   "form": 0.0619,
    "mood": "cocky",
    "vault": 0,
    "hist": [
-    -0.5251,
-    0.5212,
     0.5263,
     0.6247,
     0.7728,
@@ -524,13 +530,15 @@
     -6.809,
     -6.794,
     -6.7699,
-    -6.7329
+    -6.7329,
+    -6.6823,
+    -6.5291
    ],
    "persona": {
     "swagger": 0.99,
-    "tilt": 0.03,
+    "tilt": 0.01,
     "greed": 0.99,
-    "discipline": 0.65
+    "discipline": 0.7
    }
   }
  ],
@@ -545,9 +553,9 @@
    "coid": "s1791696994690STRKUSDT",
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
-   "live": true,
-   "closedAt": 1791707387620,
-   "epNet": -7.648519,
+   "live": false,
+   "closedAt": 1791709626478,
+   "epNet": -7.44473,
    "epCounted": true,
    "epVerdict": -1
   },
@@ -678,10 +686,21 @@
    "ts": 1791709732833,
    "pimp": null,
    "crack": "Solana Sadie",
-   "coid": "s1791709101825MAGICUSDT"
+   "coid": "s1791709101825MAGICUSDT",
+   "filledAt": 1791709735708,
+   "orderId": "1493104330096152577",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791710358469,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.15 on STRKUSDT"
+  },
+  {
+   "ts": 1791710358469,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on STRKUSDT incl $0.049 entry fees"
+  },
   {
    "ts": 1791709098484,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.04 on MAGICUSDT"
@@ -793,14 +812,6 @@
   {
    "ts": 1791699894224,
    "text": "🔥 Solana Sadie is on a heater — swagger through the roof, pimps are circling"
-  },
-  {
-   "ts": 1791699894224,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.27 on STRKUSDT"
-  },
-  {
-   "ts": 1791699265529,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.21 on STRKUSDT"
   }
  ]
 }
