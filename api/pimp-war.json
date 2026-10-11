@@ -1,5 +1,5 @@
 {
- "at": "2026-10-11T11:34:38.872Z",
+ "at": "2026-10-11T11:50:33.579Z",
  "wallets": {
   "futures": {
    "equityUsd": 2.84,
@@ -20,13 +20,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0113,
    "stableUsd": 0,
-   "purseUsd": 0.36,
-   "positions": 1,
+   "purseUsd": 0,
+   "positions": 0,
    "laneNet": -0.32,
    "laneTrades": 13,
    "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791718740803,
+    "symbol": "67",
+    "sig": null,
+    "text": "RECONCILE 67"
+   },
    {
     "venue": "solana",
     "ts": 1791702862763,
@@ -89,13 +96,6 @@
     "symbol": "QT",
     "sig": "4iTsxxnkL3VHRvPWwg1NMx6N4Zh5hJDe2x5LNiQM3eYngEoNXUnfHt5gxryQ6u4oxKf2Dox9Hv8RSZVGgaWU3Dii",
     "text": "BUY QT $0.84"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791700534671,
-    "symbol": "GOMO",
-    "sig": "5tAckd2PfUxVAJRgyb4nu9u4fy9xPicaVnYkVdGqAgDcoeP4YsK7ewveEj4AGArogS6uJgzxET5nGAxAjRGX5zva",
-    "text": "BUY GOMO $0.58"
    }
   ]
  },
@@ -502,7 +502,7 @@
    "net": -6.4521,
    "wins": 7,
    "losses": 16,
-   "closes": 32,
+   "closes": 33,
    "stolen": 0,
    "gen": 0,
    "form": -0.0055,
@@ -537,25 +537,13 @@
    "persona": {
     "swagger": 0.87,
     "tilt": 0.2,
-    "greed": 0.92,
+    "greed": 0.91,
     "discipline": 0.77
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "SI276",
-   "direction": "LONG",
-   "ts": 1791700107659,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:2oZpkaivQf4xt78QrPBB6nPQbw7kvch4RiZuMMoXUGDRn6V4s7AER9HbKuH1fdTsqvPMrhN4p3q5gURJaJYbL6qw",
-   "onchain": true,
-   "filledAt": 1791700107659,
-   "live": false,
-   "closedAt": 1791702861864
-  },
   {
    "symbol": "GOMO",
    "direction": "LONG",
@@ -690,9 +678,24 @@
    "onchain": true,
    "filledAt": 1791624701231,
    "live": false
+  },
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791630586077,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
+   "onchain": true,
+   "filledAt": 1791630586077,
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791719433577,
+   "text": "🌫 Solana Sadie let 67 go — left the wallet off-book, proceeds unverifiable"
+  },
   {
    "ts": 1791714127218,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.05 on STRKUSDT — docked her pay"
@@ -808,10 +811,6 @@
   {
    "ts": 1791703048517,
    "text": "🌫 Solana Sadie let SI276 go — left the wallet off-book, proceeds unverifiable"
-  },
-  {
-   "ts": 1791701791596,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.09 on GOMO — docked her pay"
   }
  ]
 }

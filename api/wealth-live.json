@@ -1,32 +1,38 @@
 {
- "ts": "2026-10-11T11:45:09.427Z",
- "ageMs": 238,
+ "ts": "2026-10-11T11:56:38.725Z",
+ "ageMs": 400,
  "src": "ws",
  "futures": {
-  "equityUsd": 2.8492,
+  "equityUsd": 2.9447,
   "availableUsd": 1.6136,
   "marginUsedUsd": 1.152,
-  "uplUsd": 0.0836,
+  "uplUsd": 0.179,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.001,
     "marginUsd": 1.152,
-    "uplUsd": 0.0836
+    "uplUsd": 0.179
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.01127,
-  "solUsd": 1.234,
+  "solUsd": 1.2355,
   "stableUsd": 0,
   "bagsUsd": 0,
-  "totalUsd": 1.234,
-  "staleMs": 238
+  "totalUsd": 1.2355,
+  "staleMs": 400
  },
- "totalUsd": 4.0832,
+ "totalUsd": 4.1802,
  "deltas": [
+  {
+   "ts": 1791719796735,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": 0.0963
+  },
   {
    "ts": 1791716624347,
    "kind": "balance-move",
@@ -140,12 +146,6 @@
    "kind": "size-reduced",
    "detail": "STRKUSDT:long Δ-97.29999999999998",
    "amt": 0
-  },
-  {
-   "ts": 1791711738688,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1259
   }
  ]
 }
