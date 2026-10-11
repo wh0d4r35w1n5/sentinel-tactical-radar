@@ -43,10 +43,36 @@ const FEE_LOCK = +(process.env.ONCHAIN_FEE_LOCK || 0.985); // once profitable, n
 const LOCK_ARM = +(process.env.ONCHAIN_LOCK_ARM || 1.03); // peak must clear cost+round-trip before FEE_LOCK engages
 const STOP_LOSS = +(process.env.ONCHAIN_STOP_LOSS || 0.7); // pre-profit hard floor — wide enough to survive entry spread
 const MAX_HOLD_H = +(process.env.ONCHAIN_MAX_HOLD_H || 36);
+const DUST_ABANDON_USD = +(process.env.ONCHAIN_DUST_USD || 0.05); // below this an unsellable bag is residue, not a position
 // micro-purse floors — gas on Solana is ~fixed-cent cheap, so a tiny wallet
 // stays economic; env lets the operator scale them up when the purse grows
 const MIN_STABLE_USD = +(process.env.ONCHAIN_MIN_STABLE_USD || 5);
 const MIN_SIZE_USD = +(process.env.ONCHAIN_MIN_SIZE_USD || 4);
+
+// single-flight lock — rapid's cycle spawn AND the 3-min trail timer both
+// call this script; two concurrent runners could double-sell the same bag
+// on the exit pass or double-buy one candidate. Stale locks (>15min =
+// owner died mid-swap) get reclaimed, never honored forever.
+const LOCK = path.join(STATE, 'onchain-exec.lock');
+let lockFd = null;
+try {
+  lockFd = fs.openSync(LOCK, 'wx');
+  fs.writeFileSync(lockFd, String(process.pid));
+} catch {
+  try {
+    const pid = +String(fs.readFileSync(LOCK, 'utf8')).trim();
+    const stale = Date.now() - fs.statSync(LOCK).mtimeMs > 15 * 60e3;
+    let alive = false;
+    if (pid > 0) { try { process.kill(pid, 0); alive = true; } catch {} }
+    if (stale || !alive) {
+      fs.rmSync(LOCK, { force: true });
+      lockFd = fs.openSync(LOCK, 'wx');
+      fs.writeFileSync(lockFd, String(process.pid));
+    }
+  } catch {}
+}
+if (lockFd === null) { console.log('[onchain-exec] lock held — skipping this tick'); process.exit(0); }
+process.on('exit', () => { try { fs.closeSync(lockFd); } catch {} try { fs.rmSync(LOCK, { force: true }); } catch {} });
 
 const readJ = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const writeJ = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(o)); fs.renameSync(t, f); };
@@ -163,12 +189,27 @@ async function main() {
   // ---- exits first: trail every open position ----
   const hot = readJ(path.join(API, 'onchain-hot.json'), null);
   for (const pos of [...book.positions]) {
+    // sell what the WALLET actually holds, not the book's qtyRaw — partial
+    // fills, sweep leftovers, and externally-moved chunks all leave qtyRaw
+    // overstated, and every swap built on it sim-fails 'insufficient funds'.
+    await new Promise((r) => setTimeout(r, 150)); // lite-api burst pacing
+    const qtyRaw = Math.min(+pos.qtyRaw || 0, +(bal.tokensRaw?.[pos.mint] || 0));
+    if (!(qtyRaw > 0)) continue; // zero-balance reconcile above owns this case
     let mark = null;
     try {
-      const q = await sol.quote({
-        inputMint: pos.mint, outputMint: sol.MINT.USDC,
-        amount: pos.qtyRaw, slippageBps: SLIPPAGE_SELL_BPS,
-      });
+      // lite-api free tier answers bursts with Cloudflare HTML — one backoff
+      // retry keeps a transient 429 from freezing a tripped stop. The 150ms
+      // pacing between positions smooths the burst at the source.
+      let q = null, qErr = null;
+      for (let att = 0; att < 2 && !q; att++) {
+        try {
+          q = await sol.quote({
+            inputMint: pos.mint, outputMint: sol.MINT.USDC,
+            amount: qtyRaw, slippageBps: SLIPPAGE_SELL_BPS,
+          });
+        } catch (e) { qErr = e; if (!att) await new Promise((r) => setTimeout(r, 1500)); }
+      }
+      if (!q) throw qErr;
       mark = +q.outAmount / 1e6;
     } catch (e) { console.log(`  ${pos.symbol}: quote fail ${e.message.slice(0, 60)} — trail holds`); continue; }
     pos.lastValueUsd = mark;
@@ -186,11 +227,32 @@ async function main() {
     console.log(`  ${pos.symbol}: $${mark.toFixed(2)} (cost $${pos.costUsd.toFixed(2)}, peak $${pos.peakUsd.toFixed(2)})${reason ? ' → ' + reason : ''}`);
     if (!reason) continue;
     try {
-      const r = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: pos.qtyRaw, slippageBps: SLIPPAGE_SELL_BPS, solBal: bal.sol });
-      journal({ side: 'sell', symbol: pos.symbol, mint: pos.mint, qtyRaw: pos.qtyRaw, estUsd: mark, costUsd: pos.costUsd, sig: r.signature, reason });
+      // exits must LAND — a falling bag reprices inside the quote window,
+      // so a tripped stop escalates slippage and then falls through to the
+      // gasless Ultra rail before it lets the trail hold a loser another
+      // cycle. Better a bad fill than no exit at all.
+      let r = null, lastErr = null;
+      for (const slip of [SLIPPAGE_SELL_BPS, SLIPPAGE_SELL_BPS * 4]) {
+        try { r = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: qtyRaw, slippageBps: slip, solBal: bal.sol }); break; }
+        catch (e) { lastErr = e; }
+      }
+      if (!r) {
+        try { r = await sol.swapUltra({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: qtyRaw, slippageBps: SLIPPAGE_SELL_BPS * 4 }); }
+        catch (e) { lastErr = e; }
+      }
+      if (!r) throw lastErr;
+      journal({ side: 'sell', symbol: pos.symbol, mint: pos.mint, qtyRaw, estUsd: mark, costUsd: pos.costUsd, sig: r.signature, reason });
       book.positions = book.positions.filter((p) => p.mint !== pos.mint);
       console.log(`  SOLD ${pos.symbol} ~$${mark.toFixed(2)} sig ${r.signature.slice(0, 12)}… (${reason})`);
-    } catch (e) { console.log(`  ${pos.symbol}: sell failed ${e.message.slice(0, 80)}`); }
+    } catch (e) {
+      // unsellable dust isn't a position, it's residue — write it off in
+      // the book instead of burning a sim-fail retry every single tick.
+      if (mark > 0 && mark < DUST_ABANDON_USD) {
+        journal({ side: 'abandon', symbol: pos.symbol, mint: pos.mint, estUsd: mark, costUsd: pos.costUsd, note: `unsellable dust — ${String(e.message || e).slice(0, 60)}` });
+        book.positions = book.positions.filter((p) => p.mint !== pos.mint);
+        console.log(`  🗑 ${pos.symbol}: dust $${mark.toFixed(2)} abandoned (cost $${(pos.costUsd || 0).toFixed(2)} written off)`);
+      } else console.log(`  ${pos.symbol}: sell failed ${String(e.message || e).slice(0, 80)}`);
+    }
   }
 
   // ---- entries: top audited candidate, non-perp only ----
@@ -224,6 +286,7 @@ async function main() {
     const inRaw = Math.round(sizeUsd * 1e6);
     console.log(`  BUY ${cand.symbol} $${sizeUsd.toFixed(2)} — score ${cand.score} liq $${(cand.liqUsd / 1e3).toFixed(0)}k vol $${(cand.vol24hUsd / 1e6).toFixed(1)}M mc $${(cand.mcapUsd / 1e6).toFixed(1)}M`);
     try {
+      await new Promise((r) => setTimeout(r, 250)); // same burst pacing as the exit pass
       const q = await sol.quote({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
       const r = await sol.swapAny({ inputMint: mint, outputMint: cand.contract, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS, solBal: bal.sol });
       book.positions.push({
