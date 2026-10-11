@@ -1,12 +1,20 @@
 {
- "at": "2026-10-11T05:46:57.453Z",
+ "at": "2026-10-11T05:57:39.025Z",
  "wallets": {
   "futures": {
-   "equityUsd": 18.98,
-   "marginFreeUsd": 18.98,
-   "epochNetUsd": -36.06,
+   "equityUsd": 20.92,
+   "marginFreeUsd": 15.2,
+   "epochNetUsd": -40.07,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "ERAUSDT",
+     "side": "long",
+     "upl": 0.51,
+     "lev": 20,
+     "margin": 5.2
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -525,21 +533,6 @@
  "retired": [],
  "intents": [
   {
-   "symbol": "MOIN",
-   "direction": "LONG",
-   "ts": 1791656065047,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
-   "onchain": true,
-   "filledAt": 1791656065047,
-   "live": true,
-   "closedAt": 1791670338695,
-   "epNet": -0.02347,
-   "epCounted": true,
-   "epVerdict": -1
-  },
-  {
    "symbol": "SWOLF",
    "direction": "LONG",
    "ts": 1791658560661,
@@ -631,7 +624,9 @@
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
    "coid": "s1791696340878SOLUSDT",
-   "live": false
+   "live": true,
+   "filledAt": 1791697629966,
+   "orderId": "1493053563956006913"
   },
   {
    "symbol": "STRKUSDT",
@@ -639,7 +634,10 @@
    "ts": 1791697617093,
    "pimp": null,
    "crack": "Solana Sadie",
-   "coid": "s1791696994690STRKUSDT"
+   "coid": "s1791696994690STRKUSDT",
+   "filledAt": 1791697623528,
+   "orderId": "1493053536957272065",
+   "live": true
   },
   {
    "symbol": "SOLUSDT",
@@ -647,7 +645,10 @@
    "ts": 1791697617212,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791696994690SOLUSDT"
+   "coid": "s1791696994690SOLUSDT",
+   "filledAt": 1791697629966,
+   "orderId": "1493053563956006913",
+   "live": true
   },
   {
    "symbol": "MONUSDT",
@@ -655,7 +656,16 @@
    "ts": 1791697617333,
    "pimp": "Madam Razor",
    "crack": "Velvet Vice",
-   "coid": "s1791696994690MONUSDT"
+   "coid": "s1791696994690MONUSDT",
+   "live": false
+  },
+  {
+   "symbol": "CPUSDT",
+   "direction": "LONG",
+   "ts": 1791698258909,
+   "pimp": "Fancy Red",
+   "crack": "Baby Back",
+   "coid": "s1791697638524CPUSDT"
   }
  ],
  "drama": [
