@@ -172,3 +172,42 @@ Manual positions keep the operator's bagrunner contract unchanged.
 Every position opened under this rule is a forward-test episode; grade
 the >120min cohort against the historical 82% WR / +0.35% mean after
 30 episodes.
+
+---
+
+## Addendum 2 — Census re-test (direct real episodes, no Monte Carlo)
+
+The 1M Monte-Carlo forward sim killed the naive "hold 2h" reading of the
+dur>120 bucket (SQN −3.9 on random/momentum entries — the bucket was
+largely survivorship). The follow-up discovery used a COMPLETE
+enumeration instead of sampling: every valid start bar in every symbol's
+5m history (10 symbols × ~1,500 bars), 490 strategy cells, deterministic
+— **~120k direct real tests on train** plus full census on the held-out
+40% temporal split.
+
+### Result
+
+15/15 top cells positive on BOTH halves. One parameter family dominates
+the whole top-20 — a broad plateau (real-edge signature), not a spike:
+
+**`2h ROC momentum entry (>1-2%) × stop 1-3% × 30-50% giveback trail armed after 2h`**
+
+Best validated: `mom24>1% × stop3% × trail50% × min-hold-2h`
+— held-out test: **+2.24%/trade, SQN₁₀₀ 2.26, 56% WR, n=1,018 real episodes**
+(train: +0.69%, SQN 1.38 — positive both halves).
+
+Mechanism (now causally consistent): momentum entries find moves already
+running; a wide stop survives noise; the 2h min-hold stops the vanish
+from clipping a developing runner; the trail lets winners pay for the
+losers. Fixed-TP cells were all inferior — runners, not targets, carry
+the expectancy.
+
+### Honest caveats (unchanged)
+
+- Census episodes overlap (adjacent start bars correlate) → effective n
+  smaller than listed; treat SQN as comparative, not inferential.
+- The test window trended hard — regime risk remains.
+- Still a best-of-490 selection; ~SQN 1.5-2 is the honest live
+  expectation, not 2.26.
+- Scripts: `scripts/paper-census.mjs` (enumeration),
+  `scripts/paper-sweep.mjs` (MC A/B), `scripts/paper-1m.mjs` (1M-ep).
