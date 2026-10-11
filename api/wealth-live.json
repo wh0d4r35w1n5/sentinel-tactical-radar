@@ -1,32 +1,116 @@
 {
- "ts": "2026-10-11T08:35:34.378Z",
- "ageMs": 3893,
- "src": "ws",
+ "ts": "2026-10-11T08:43:45.191Z",
+ "ageMs": 6361,
+ "src": "rest",
  "futures": {
-  "equityUsd": 2.6681,
-  "availableUsd": 2.6681,
-  "marginUsedUsd": 3.9988,
-  "uplUsd": -1.293,
+  "equityUsd": 2.9089,
+  "availableUsd": 2.5024,
+  "marginUsedUsd": 0.5411,
+  "uplUsd": 0.2086,
   "positions": [
    {
-    "k": "STRKUSDT:long",
-    "size": 1311.7,
-    "marginUsd": 3.9988,
-    "uplUsd": -1.293
+    "k": "MAGICUSDT:long",
+    "size": 37.6,
+    "marginUsd": 0.1931,
+    "uplUsd": 0.0861
+   },
+   {
+    "k": "ACHUSDT:long",
+    "size": 2785,
+    "marginUsd": 0.348,
+    "uplUsd": 0.1225
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.01127,
-  "solUsd": 1.232,
+  "solUsd": 1.2336,
   "stableUsd": 0,
-  "bagsUsd": 0.3569,
-  "totalUsd": 1.5889,
-  "staleMs": 3893
+  "bagsUsd": 0.3582,
+  "totalUsd": 1.5918,
+  "staleMs": 304176
  },
- "totalUsd": 4.257,
+ "totalUsd": 4.5007,
  "deltas": [
+  {
+   "ts": 1791707880824,
+   "kind": "size-reduced",
+   "detail": "ACHUSDT:long Δ-1499",
+   "amt": 0
+  },
+  {
+   "ts": 1791707876467,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0764
+  },
+  {
+   "ts": 1791707870665,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:long Δ-20.199999999999996",
+   "amt": 0
+  },
+  {
+   "ts": 1791707862725,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:long Δ-31",
+   "amt": 0
+  },
+  {
+   "ts": 1791707861496,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:long Δ-47.7",
+   "amt": 0
+  },
+  {
+   "ts": 1791707861496,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0605
+  },
+  {
+   "ts": 1791707859223,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:long Δ-73.4",
+   "amt": 0
+  },
+  {
+   "ts": 1791707859222,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0854
+  },
+  {
+   "ts": 1791707840589,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0817
+  },
+  {
+   "ts": 1791707840589,
+   "kind": "position-opened",
+   "detail": "ACHUSDT:long",
+   "amt": 0.5342
+  },
+  {
+   "ts": 1791707832109,
+   "kind": "size-added",
+   "detail": "MAGICUSDT:long Δ158.2",
+   "amt": 0
+  },
+  {
+   "ts": 1791707832088,
+   "kind": "position-opened",
+   "detail": "MAGICUSDT:long",
+   "amt": 0.2637
+  },
+  {
+   "ts": 1791707787190,
+   "kind": "position-closed",
+   "detail": "STRKUSDT:long",
+   "amt": 0
+  },
   {
    "ts": 1791707695380,
    "kind": "balance-move",
@@ -68,84 +152,6 @@
    "kind": "size-added",
    "detail": "STRKUSDT:long Δ44.5",
    "amt": 0
-  },
-  {
-   "ts": 1791707222907,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1293
-  },
-  {
-   "ts": 1791707211205,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0684
-  },
-  {
-   "ts": 1791707211204,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ55",
-   "amt": 0
-  },
-  {
-   "ts": 1791707207923,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ774.5",
-   "amt": 0
-  },
-  {
-   "ts": 1791707199321,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1781
-  },
-  {
-   "ts": 1791707199318,
-   "kind": "size-reduced",
-   "detail": "STRKUSDT:long Δ-870.8",
-   "amt": 0
-  },
-  {
-   "ts": 1791707008661,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1766
-  },
-  {
-   "ts": 1791706998723,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1243
-  },
-  {
-   "ts": 1791706942248,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.1753
-  },
-  {
-   "ts": 1791706942047,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.3389
-  },
-  {
-   "ts": 1791706941896,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.3768
-  },
-  {
-   "ts": 1791706935947,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.1976
-  },
-  {
-   "ts": 1791706927697,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.1413
   }
  ]
 }

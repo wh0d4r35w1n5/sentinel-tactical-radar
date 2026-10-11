@@ -1,25 +1,18 @@
 {
- "at": "2026-10-11T08:26:39.992Z",
+ "at": "2026-10-11T08:37:08.126Z",
  "wallets": {
   "futures": {
-   "equityUsd": 4.6,
-   "marginFreeUsd": 2.37,
+   "equityUsd": 3.85,
+   "marginFreeUsd": 0.12,
    "epochNetUsd": -30.16,
    "fills": 400,
    "positions": [
     {
-     "symbol": "NEARUSDT",
+     "symbol": "STRKUSDT",
      "side": "long",
-     "upl": -0.2,
-     "lev": 44,
-     "margin": 1.19
-    },
-    {
-     "symbol": "LINKUSDT",
-     "side": "long",
-     "upl": -0.07,
-     "lev": 75,
-     "margin": 1.31
+     "upl": -0.55,
+     "lev": 37,
+     "margin": 4.28
     }
    ]
   },
@@ -506,17 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -5.0877,
+   "net": -5.5908,
    "wins": 5,
    "losses": 16,
    "closes": 30,
    "stolen": 0,
    "gen": 0,
-   "form": -1.9275,
+   "form": -1.3577,
    "mood": "tilt",
    "vault": 0,
    "hist": [
-    -1.2718,
     -0.9979,
     -0.8908,
     -0.7303,
@@ -539,29 +531,19 @@
     1.0813,
     1.0115,
     -2.5477,
-    -5.0877
+    -5.0877,
+    -5.5908
    ],
    "persona": {
-    "swagger": 0.71,
-    "tilt": 0.7,
-    "greed": 0.9,
-    "discipline": 0.57
+    "swagger": 0.63,
+    "tilt": 0.87,
+    "greed": 0.87,
+    "discipline": 0.52
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "JEANPHIL",
-   "direction": "LONG",
-   "ts": 1791598001615,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:DuheGMJVou3wxSwz4g412QBMmbMPQ4znewT2tCFeMx35gqBjeVRg5Zxok3Tsht2mjTTNfEmWJ6bRyE8UbFkGFrf",
-   "onchain": true,
-   "filledAt": 1791598001615,
-   "live": false
-  },
   {
    "symbol": "MOIN",
    "direction": "LONG",
@@ -583,9 +565,9 @@
    "coid": "s1791696994690STRKUSDT",
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
-   "live": true,
-   "closedAt": 1791704535534,
-   "epNet": -5.831505,
+   "live": false,
+   "closedAt": 1791707199246,
+   "epNet": -6.334584,
    "epCounted": true,
    "epVerdict": -1
   },
@@ -694,9 +676,21 @@
    "onchain": true,
    "filledAt": 1791601506385,
    "live": false
+  },
+  {
+   "symbol": "MAGICUSDT",
+   "direction": "LONG",
+   "ts": 1791707828004,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791707202065MAGICUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791707826502,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.50 on STRKUSDT incl $0.086 entry fees — docked her pay"
+  },
   {
    "ts": 1791705397834,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-2.54 on STRKUSDT incl $0.080 entry fees — docked her pay"
@@ -812,10 +806,6 @@
   {
    "ts": 1791655966897,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
-  },
-  {
-   "ts": 1791639813621,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on MOIN — docked her pay"
   }
  ]
 }
