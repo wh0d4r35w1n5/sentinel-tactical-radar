@@ -504,7 +504,7 @@ try {
 // Stall watchdog: a never-settling API await would leave busy=true forever —
 // process "runs" while protection silently rots. Exceed the wedge threshold
 // and we exit hard; systemd Restart=always revives us within RestartSec.
-const WEDGE_MS = Math.max(120e3, MS * 3);
+const WEDGE_MS = +(process.env.BITGET_WATCH_WEDGE_MS || Math.max(120e3, MS * 3));
 setInterval(() => {
   if (busy && cycleStartedAt && Date.now() - cycleStartedAt > WEDGE_MS) {
     console.error(TAG(), `FATAL: cycle wedged for ${Math.round((Date.now() - cycleStartedAt) / 1000)}s — exiting for systemd restart`);

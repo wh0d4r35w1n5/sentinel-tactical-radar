@@ -1485,7 +1485,7 @@ async function main() {
   // NOTE: percent units, distinct env from the breaker's SENTINEL_FEE_HALT_PCT
   // (that one is also a percent but gates 24h burn at a different threshold)
   const FEE_DAY_HALT_PCT = +(process.env.SENTINEL_FEE_DAY_HALT_PCT || 5);
-  const feeHalted = equityUsd > 0 && feesToday >= equityUsd * FEE_DAY_HALT_PCT / 100;
+  const feeHalted = !cmdOverride && equityUsd > 0 && feesToday >= equityUsd * FEE_DAY_HALT_PCT / 100;
 
   // ---- regime-chop gate: trailing-4h closes running negative net means the
   // tape is unreadable for this engine right now — stand new entries down
