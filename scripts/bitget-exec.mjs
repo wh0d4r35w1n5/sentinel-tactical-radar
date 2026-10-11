@@ -2466,7 +2466,10 @@ async function main() {
     // normal order.
     if (marginFree > Math.max(equityUsd * CORE_FLOOR_PCT, CORE_FLOOR_USD)) {
       for (const sym of CORE_SYMS) {
-        if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || !cm[sym]) continue;
+        // DENY_SYMS must ride the injection skip too — a denied first
+        // symbol used to win the `break` race, emit an order that the
+        // place-gate then vetoed, and poison the carry path every cycle.
+        if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || DENY_SYMS.has(sym) || !cm[sym]) continue;
         try {
           const tk = await X.ticker(sym);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
