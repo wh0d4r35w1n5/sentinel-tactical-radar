@@ -1,12 +1,19 @@
 {
- "at": "2026-10-11T22:28:26.631Z",
+ "at": "2026-10-11T22:38:56.102Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.39,
-   "marginFreeUsd": 0.82,
-   "epochNetUsd": -29.77,
+   "equityUsd": 1.44,
+   "marginFreeUsd": 0.57,
+   "epochNetUsd": -29.76,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "MAGICUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 25,
+     "margin": 0.36
+    },
     {
      "symbol": "BTCUSDT",
      "side": "long",
@@ -17,9 +24,9 @@
     {
      "symbol": "AVAXUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": 0.04,
      "lev": 37,
-     "margin": 0.32
+     "margin": 0.24
     }
    ]
   },
@@ -506,17 +513,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -16.253,
+   "net": -16.2365,
    "wins": 6,
    "losses": 20,
    "closes": 36,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0133,
+   "form": 0.0146,
    "mood": "working",
    "vault": 0,
    "hist": [
-    -14.2336,
     -14.2182,
     -14.09,
     -15.25,
@@ -539,13 +545,14 @@
     -16.3653,
     -16.3618,
     -16.3456,
-    -16.253
+    -16.253,
+    -16.2365
    ],
    "persona": {
-    "swagger": 0.57,
-    "tilt": 0.14,
-    "greed": 0.83,
-    "discipline": 0.28
+    "swagger": 0.66,
+    "tilt": 0.08,
+    "greed": 0.86,
+    "discipline": 0.31
    }
   }
  ],
@@ -698,6 +705,10 @@
  ],
  "drama": [
   {
+   "ts": 1791758334597,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on MAGICUSDT incl $0.003 entry fees"
+  },
+  {
    "ts": 1791757075218,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.09 on MAGICUSDT"
   },
@@ -812,10 +823,6 @@
   {
    "ts": 1791736131551,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$1.33 on STRKUSDT"
-  },
-  {
-   "ts": 1791735385803,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.16 on STRKUSDT"
   }
  ]
 }
