@@ -190,6 +190,21 @@ async function restSnap() {
 }
 
 // ---- solana leg --------------------------------------------------------------
+// DexScreener best-liquidity USD price per mint — covers bags the lane book
+// doesn't know (operator app buys, airdrops, hold-listed mints).
+async function bagPx(mints) {
+  if (!mints.length) return {};
+  try {
+    const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mints.slice(0, 30).join(',')}`, { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    const best = {};
+    for (const p of j?.pairs || []) {
+      const m = p?.baseToken?.address, liq = +p?.liquidity?.usd || 0;
+      if (m && liq > (best[m]?.liq || -1)) best[m] = { px: +p.priceUsd || 0, liq };
+    }
+    return Object.fromEntries(Object.entries(best).map(([k, v]) => [k, v.px]));
+  } catch { return {}; }
+}
 async function solPoll() {
   if (!sola.address) return;
   try {
@@ -199,11 +214,24 @@ async function solPoll() {
     sola.tokens = b.tokens;
     sola.stableUsd = (b.tokens[sol.MINT.USDC] || 0) + (b.tokens[sol.MINT.USDT] || 0);
     if (prevStable && Math.abs(sola.stableUsd - prevStable) > 0.5) delta('chain-stable-move', 'hot wallet', sola.stableUsd - prevStable);
-    // bag USD from the lane's own Jupiter marks (it quotes every cycle anyway)
+    // wallet-truth bags: value EVERY non-stable SPL on the chain, then take the
+    // max with the lane's own Jupiter marks (lane prices its tracked positions
+    // even when dexscreener is thin) — operator-held bags were invisible before.
+    const bagMints = Object.keys(b.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT);
+    const px = await bagPx(bagMints);
+    let walletBags = 0;
+    sola.tokenUsd = {};
+    for (const m of bagMints) {
+      const usd = +(b.tokens[m] * (px[m] || 0)).toFixed(4);
+      if (usd > 0) sola.tokenUsd[m.slice(0, 8)] = usd;
+      walletBags += usd;
+    }
+    let lanePurse = 0;
     try {
       const lane = JSON.parse(fs.readFileSync(A('onchain-lane.json'), 'utf8'));
-      sola.bagsUsd = +(lane.purseUsd || 0);
+      lanePurse = +(lane.purseUsd || 0);
     } catch {}
+    sola.bagsUsd = Math.max(walletBags, lanePurse);
     sola.at = Date.now();
     scheduleWrite();
   } catch {}
@@ -244,6 +272,7 @@ function wealth() {
     solana: {
       address: sola.address, solQty: +sola.solQty.toFixed(6), solUsd: +solUsd.toFixed(4),
       stableUsd: +sola.stableUsd.toFixed(4), bagsUsd: +sola.bagsUsd.toFixed(4), totalUsd: +solTotal.toFixed(4),
+      tokens: sola.tokenUsd || {},
       staleMs: sola.at ? Date.now() - sola.at : null,
     },
     totalUsd: +(fut.equityUsd + solTotal).toFixed(4),
