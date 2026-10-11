@@ -1,16 +1,23 @@
 {
- "at": "2026-10-11T20:31:23.774Z",
+ "at": "2026-10-11T20:42:02.657Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.57,
-   "marginFreeUsd": 1.05,
-   "epochNetUsd": -30.06,
+   "equityUsd": 1.48,
+   "marginFreeUsd": 0.62,
+   "epochNetUsd": -29.58,
    "fills": 400,
    "positions": [
     {
+     "symbol": "STRKUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 37,
+     "margin": 0.37
+    },
+    {
      "symbol": "AVAXUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": 0.01,
      "lev": 37,
      "margin": 0.5
     }
@@ -499,17 +506,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -16.0332,
+   "net": -16.0944,
    "wins": 6,
    "losses": 20,
    "closes": 36,
    "stolen": 0,
    "gen": 0,
-   "form": -0.2291,
+   "form": -0.162,
    "mood": "tilt",
    "vault": 0,
    "hist": [
-    -13.7843,
     -13.8049,
     -13.8252,
     -13.8676,
@@ -532,18 +538,30 @@
     -15.1837,
     -15.5282,
     -15.7367,
-    -16.0332
+    -16.0332,
+    -16.0944
    ],
    "persona": {
-    "swagger": 0.41,
-    "tilt": 0.97,
-    "greed": 0.77,
-    "discipline": 0.26
+    "swagger": 0.34,
+    "tilt": 0.99,
+    "greed": 0.75,
+    "discipline": 0.22
    }
   }
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791624693825,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4h6Gy5uei9tiPLGwKoYRf7ppG9uf1Z3jd2Sre5BsK5NJURFZaDLCxuNCLJVhQ1N4VjqfgHdk4ipjeqsM8a5zGqqy",
+   "onchain": true,
+   "filledAt": 1791624693825,
+   "live": false
+  },
   {
    "symbol": "MOIN",
    "direction": "LONG",
@@ -676,18 +694,13 @@
    "onchain": true,
    "filledAt": 1791658563111,
    "live": false
-  },
-  {
-   "symbol": "BTCUSDT",
-   "direction": "LONG",
-   "ts": 1791750035558,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791749393548BTCUSDT",
-   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791751320151,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.06 on STRKUSDT incl $0.009 entry fees — docked her pay"
+  },
   {
    "ts": 1791750681855,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.30 on STRKUSDT incl $0.004 entry fees — docked her pay"
@@ -803,10 +816,6 @@
   {
    "ts": 1791714127218,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.05 on STRKUSDT — docked her pay"
-  },
-  {
-   "ts": 1791713502414,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on STRKUSDT"
   }
  ]
 }
