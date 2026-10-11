@@ -1,12 +1,20 @@
 {
- "at": "2026-10-11T10:42:56.533Z",
+ "at": "2026-10-11T10:53:18.052Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.08,
-   "marginFreeUsd": 3.08,
+   "equityUsd": 2.93,
+   "marginFreeUsd": 0.07,
    "epochNetUsd": -24.51,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "BTCUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 90,
+     "margin": 2.86
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -529,8 +537,8 @@
    "persona": {
     "swagger": 0.9,
     "tilt": 0.21,
-    "greed": 0.95,
-    "discipline": 0.8
+    "greed": 0.94,
+    "discipline": 0.79
    }
   }
  ],
