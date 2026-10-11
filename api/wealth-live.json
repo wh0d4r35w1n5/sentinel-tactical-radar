@@ -1,44 +1,68 @@
 {
- "ts": "2026-10-11T07:37:20.622Z",
- "ageMs": 1433,
+ "ts": "2026-10-11T07:43:08.352Z",
+ "ageMs": 1799,
  "src": "ws",
  "futures": {
-  "equityUsd": 7.6862,
-  "availableUsd": 0.0136,
+  "equityUsd": 4.8541,
+  "availableUsd": 3.2444,
   "marginUsedUsd": 7.7356,
-  "uplUsd": -0.063,
+  "uplUsd": -2.7168,
   "positions": [
    {
     "k": "NEARUSDT:long",
     "size": 10,
     "marginUsd": 1.1947,
-    "uplUsd": -0.317
+    "uplUsd": -0.198
    },
    {
     "k": "LINKUSDT:long",
     "size": 3,
     "marginUsd": 0.8499,
-    "uplUsd": -0.285
+    "uplUsd": -0.237
    },
    {
     "k": "STRKUSDT:long",
     "size": 1728.4,
     "marginUsd": 5.6909,
-    "uplUsd": 0.539
+    "uplUsd": -2.2818
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.01127,
-  "solUsd": 1.2333,
+  "solUsd": 1.2329,
   "stableUsd": 0,
-  "bagsUsd": 0.37,
-  "totalUsd": 1.6033,
-  "staleMs": 1433
+  "bagsUsd": 0.3697,
+  "totalUsd": 1.6026,
+  "staleMs": 1799
  },
- "totalUsd": 9.2895,
+ "totalUsd": 6.4567,
  "deltas": [
+  {
+   "ts": 1791704535871,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.8501
+  },
+  {
+   "ts": 1791704511610,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0525
+  },
+  {
+   "ts": 1791704493240,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.605
+  },
+  {
+   "ts": 1791704330520,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": -1.4755
+  },
   {
    "ts": 1791704223152,
    "kind": "balance-move",
@@ -133,30 +157,6 @@
    "ts": 1791703431999,
    "kind": "position-closed",
    "detail": "STRKUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1791703426029,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.116
-  },
-  {
-   "ts": 1791703303237,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -3.4141
-  },
-  {
-   "ts": 1791703302157,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.0881
-  },
-  {
-   "ts": 1791703240047,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ77.80000000000018",
    "amt": 0
   }
  ]
