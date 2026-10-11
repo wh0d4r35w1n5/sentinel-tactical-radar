@@ -660,11 +660,13 @@ async function main() {
   const stale = !Number.isFinite(plan.ts) || Date.now() - plan.ts > (plan.ttlMs || 900e3);
 
   if (stale) {
-    state.errors.push(`plan stale (${Math.round((Date.now() - plan.ts) / 6e4)}min > ${(plan.ttlMs / 6e4)|0}min) — refused`);
-    await pimpTick(await openSymsNow());
-    writeJson(outPath, state);
-    log('stale plan — refused to route old prices');
-    return;
+    // Refuse only the stale-priced scanner orders — everything downstream
+    // (reconcile, operator setups, routing, trails) still runs. Operator
+    // setups quote fresh marks at eval time, so they are stale-immune;
+    // returning here starved the setup queue whenever the scanner lagged.
+    state.errors.push(`plan stale (${Math.round((Date.now() - plan.ts) / 6e4)}min > ${(plan.ttlMs / 6e4)|0}min) — scanner orders refused, setups still evaluated`);
+    plan.orders = [];
+    log('stale plan — scanner orders refused, setups still evaluated');
   }
   if (MODE === 'shadow') {
     fs.writeFileSync(
