@@ -1,18 +1,26 @@
 {
- "at": "2026-10-11T00:24:00.045Z",
+ "at": "2026-10-11T00:28:37.314Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.16,
-   "marginFreeUsd": 23.16,
-   "epochNetUsd": -41.7,
+   "equityUsd": 23.14,
+   "marginFreeUsd": 22.43,
+   "epochNetUsd": -41.65,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "ETHUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 35,
+     "margin": 0.72
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0139,
    "stableUsd": 2.24,
-   "purseUsd": 5.32,
+   "purseUsd": 5.29,
    "positions": 9,
    "laneNet": -0.31,
    "laneTrades": 12,
@@ -515,7 +523,7 @@
    ],
    "persona": {
     "swagger": 0.48,
-    "tilt": 0.17,
+    "tilt": 0.16,
     "greed": 0.49,
     "discipline": 0.48
    }
@@ -523,6 +531,17 @@
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791633177077,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:cVBh1iCPV8eWEy4A8ur65ZvGrkDQWHNaY4y9WZHb32Xj1A2KYipZVyzGCEg4MLU7g3wU1et7fya7GiQenhdPUbH",
+   "onchain": true,
+   "filledAt": 1791633177077,
+   "live": true
+  },
   {
    "symbol": "SI276",
    "direction": "LONG",
@@ -646,21 +665,13 @@
    "live": true
   },
   {
-   "symbol": "USELESSUSDT",
-   "direction": "LONG",
-   "ts": 1791677612766,
-   "pimp": "Big Daddy Kane",
-   "crack": "Trixie",
-   "coid": "s1791676991050USELESSUSDT",
-   "live": false
-  },
-  {
    "symbol": "COINUSDT",
    "direction": "LONG",
    "ts": 1791678239288,
    "pimp": "Big Daddy Kane",
    "crack": "Trixie",
-   "coid": "s1791677620695COINUSDT"
+   "coid": "s1791677620695COINUSDT",
+   "live": false
   }
  ],
  "drama": [
