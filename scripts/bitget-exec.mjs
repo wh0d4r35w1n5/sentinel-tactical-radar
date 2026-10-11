@@ -2589,9 +2589,15 @@ async function main() {
         }
       } catch (e) { state.errors.push('pimpcity: ' + e.message); }
       const perSlotUsd = marginFree / slotsAvail;
+      // mandate score floor: capacity is not quota. A score-44 name at 67x
+      // pays the taker toll for a seat it can't hold — the measured bleed.
+      // Below the floor the seat stays idle; CORE_SYMS ride exempt because
+      // the macro mandate is standing, not scored.
+      const MANDATE_MIN_SCORE = +(process.env.SENTINEL_MANDATE_MIN_SCORE || 50);
       let picked = 0;
       for (const c of cand) {
         if (picked >= slotsAvail) break;
+        if ((c.score || 0) < MANDATE_MIN_SCORE && !CORE_SYMS.includes(c.symbol)) continue;
         if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
         const lc = lastCloseBySym[c.symbol];
         if (lc && Date.now() - lc < REENTRY_MS) continue;
