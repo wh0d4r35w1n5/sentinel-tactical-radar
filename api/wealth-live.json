@@ -1,30 +1,24 @@
 {
- "ts": "2026-10-11T22:01:24.412Z",
- "ageMs": 49231,
+ "ts": "2026-10-11T22:05:51.274Z",
+ "ageMs": 2881,
  "src": "ws",
  "futures": {
-  "equityUsd": 1.3874,
+  "equityUsd": 1.3484,
   "availableUsd": 0.8183,
-  "marginUsedUsd": 0.7464,
-  "uplUsd": 0.1139,
+  "marginUsedUsd": 0.5489,
+  "uplUsd": -0.0188,
   "positions": [
-   {
-    "k": "MAGICUSDT:long",
-    "size": 38.1,
-    "marginUsd": 0.1976,
-    "uplUsd": 0.0937
-   },
    {
     "k": "BTCUSDT:long",
     "size": 0.0001,
     "marginUsd": 0.2257,
-    "uplUsd": -0.0029
+    "uplUsd": 0.001
    },
    {
     "k": "AVAXUSDT:long",
     "size": 1.1,
     "marginUsd": 0.3232,
-    "uplUsd": 0.0231
+    "uplUsd": -0.0198
    }
   ]
  },
@@ -33,13 +27,27 @@
   "solQty": 0,
   "solUsd": 0,
   "stableUsd": 0,
-  "bagsUsd": 0,
-  "totalUsd": 0,
-  "tokens": {},
-  "staleMs": 49231
+  "bagsUsd": 0.0032,
+  "totalUsd": 0.0032,
+  "tokens": {
+   "BQAeeSow": 0.0032
+  },
+  "staleMs": 2881
  },
- "totalUsd": 1.3874,
+ "totalUsd": 1.3516,
  "deltas": [
+  {
+   "ts": 1791756212244,
+   "kind": "position-closed",
+   "detail": "MAGICUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791756177932,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0666
+  },
   {
    "ts": 1791755822060,
    "kind": "balance-move",
@@ -147,18 +155,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": 0.0868
-  },
-  {
-   "ts": 1791750239259,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.166
-  },
-  {
-   "ts": 1791750237169,
-   "kind": "size-reduced",
-   "detail": "STRKUSDT:long Δ-43.999999999999986",
-   "amt": 0
   }
  ]
 }
