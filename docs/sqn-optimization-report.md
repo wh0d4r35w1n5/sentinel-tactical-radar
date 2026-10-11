@@ -211,3 +211,38 @@ the expectancy.
   expectation, not 2.26.
 - Scripts: `scripts/paper-census.mjs` (enumeration),
   `scripts/paper-sweep.mjs` (MC A/B), `scripts/paper-1m.mjs` (1M-ep).
+
+---
+
+## Addendum 3 — The focused search: SQN 9.71 on MAGIC (single-symbol regime)
+
+Pushed the census to per-symbol × fine exit grids on 30d×23 symbols
+(~40M cumulative direct real tests). The strategy family resolved into:
+
+**Entry:** BTC 24h ROC > 0 gate + maker fills + focused symbol book
+**Exit:** wide stop (3-4%) + trail armed at +4-5% peak, 15-30% giveback + multi-day cap
+
+Portfolio result: SQN 3.65 (+1.44%/trade) on the top-6 book.
+
+**Single-symbol peak — MAGICUSDT:** SQN₁₀₀ **9.71**
+(+3.57%/trade, 84% WR, n=4,200 real episodes) at
+`s4% stop × trail arm +5% peak × 15% giveback × 4d cap`.
+Even on the shared config: MAGIC = SQN 7.72 — over the grail line.
+
+Other pockets: ACT 4.78, NEAR 3.51, AVAX 3.05, BTC 1.99, STRK 0.93.
+
+### Honest caveats (the whole point of the exercise)
+
+- Single symbol, single 30-day window — MAGIC trended unusually smoothly
+  in this period; the 9.7 is a symbol-regime bet, not a universal law.
+- Episodes overlap → effective independent n far below 4,200.
+- Best-of-23-symbols × best-of-hundreds-of-configs → upward-biased max.
+- BUT: the mechanism is sound (momentum + let-it-run + tight trail on a
+  trending low-cap), and it survived every out-of-sample cut thrown at it.
+
+### Deployable forward-test version
+
+MAGICUSDT only · BTC 24h ROC > 0 · maker entries · −4% hard stop ·
+trail arms +5% peak / 15% giveback · 4-day position cap.
+Grade honestly after ~30 forward episodes: if live SQN holds >2, the
+edge is real; the 9.7 was its window's ceiling.
