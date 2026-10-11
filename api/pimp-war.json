@@ -1,18 +1,32 @@
 {
- "at": "2026-10-11T05:57:39.025Z",
+ "at": "2026-10-11T06:14:28.495Z",
  "wallets": {
   "futures": {
-   "equityUsd": 20.92,
-   "marginFreeUsd": 15.2,
-   "epochNetUsd": -40.07,
+   "equityUsd": 22.59,
+   "marginFreeUsd": 0.02,
+   "epochNetUsd": -33.56,
    "fills": 400,
    "positions": [
     {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": -0.3,
+     "lev": 67,
+     "margin": 3.1
+    },
+    {
+     "symbol": "STRKUSDT",
+     "side": "long",
+     "upl": 0.35,
+     "lev": 37,
+     "margin": 9.45
+    },
+    {
      "symbol": "ERAUSDT",
      "side": "long",
-     "upl": 0.51,
-     "lev": 20,
-     "margin": 5.2
+     "upl": -1.16,
+     "lev": 18,
+     "margin": 11.12
     }
    ]
   },
@@ -20,7 +34,7 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0107,
    "stableUsd": 1.94,
-   "purseUsd": 7.1,
+   "purseUsd": 6.85,
    "positions": 10,
    "laneNet": -0.32,
    "laneTrades": 13,
@@ -180,6 +194,45 @@
   "house": 0
  },
  "cracks": [
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": 1.4723,
+   "wins": 3,
+   "losses": 10,
+   "closes": 17,
+   "stolen": 0,
+   "gen": 0,
+   "form": 0.3113,
+   "mood": "heater",
+   "vault": 0,
+   "hist": [
+    0.0415,
+    -0.3769,
+    -0.4145,
+    -0.4398,
+    -0.5482,
+    -0.5788,
+    -0.6128,
+    -0.6198,
+    -0.6441,
+    -0.4713,
+    -0.4948,
+    -0.5014,
+    -0.8231,
+    0.6124,
+    0.9888,
+    1.267,
+    1.4723
+   ],
+   "persona": {
+    "swagger": 0.73,
+    "tilt": 0.04,
+    "greed": 0.62,
+    "discipline": 0.53
+   }
+  },
   {
    "name": "Diamond Dust",
    "tag": "momentum fiend",
@@ -494,44 +547,25 @@
     "greed": 0.5,
     "discipline": 0.5
    }
-  },
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": null,
-   "net": -0.5014,
-   "wins": 2,
-   "losses": 10,
-   "closes": 16,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0.0103,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    0.0415,
-    -0.3769,
-    -0.4145,
-    -0.4398,
-    -0.5482,
-    -0.5788,
-    -0.6128,
-    -0.6198,
-    -0.6441,
-    -0.4713,
-    -0.4948,
-    -0.5014
-   ],
-   "persona": {
-    "swagger": 0.44,
-    "tilt": 0.25,
-    "greed": 0.48,
-    "discipline": 0.46
-   }
   }
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791656065047,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
+   "onchain": true,
+   "filledAt": 1791656065047,
+   "live": true,
+   "closedAt": 1791670338695,
+   "epNet": -0.02347,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "SWOLF",
    "direction": "LONG",
@@ -637,7 +671,11 @@
    "coid": "s1791696994690STRKUSDT",
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
-   "live": true
+   "live": true,
+   "closedAt": 1791697729561,
+   "epNet": 1.973724,
+   "epCounted": true,
+   "epVerdict": 1
   },
   {
    "symbol": "SOLUSDT",
@@ -651,24 +689,30 @@
    "live": true
   },
   {
-   "symbol": "MONUSDT",
-   "direction": "LONG",
-   "ts": 1791697617333,
-   "pimp": "Madam Razor",
-   "crack": "Velvet Vice",
-   "coid": "s1791696994690MONUSDT",
-   "live": false
-  },
-  {
    "symbol": "CPUSDT",
    "direction": "LONG",
    "ts": 1791698258909,
    "pimp": "Fancy Red",
    "crack": "Baby Back",
-   "coid": "s1791697638524CPUSDT"
+   "coid": "s1791697638524CPUSDT",
+   "filledAt": 1791698264987,
+   "orderId": "1493056227427127297",
+   "live": true
   }
  ],
  "drama": [
+  {
+   "ts": 1791699265529,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.21 on STRKUSDT"
+  },
+  {
+   "ts": 1791699265529,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.28 on STRKUSDT"
+  },
+  {
+   "ts": 1791699265529,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.38 on STRKUSDT"
+  },
   {
    "ts": 1791689212343,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on MOIN — docked her pay"
