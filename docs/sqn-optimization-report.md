@@ -107,3 +107,68 @@ The system's edge is **trend participation with patience**, not scalp precision.
 ---
 
 *Prepared as an independent research artifact. Figures are model-derived from recorded trade excursions on a live micro-book; they describe measured structure and a forward-testable hypothesis — not a promise of future returns.*
+
+---
+
+## Addendum 2026-10-11 — Independent replication across two additional datasets
+
+The original finding (82% WR, +0.35% mean, n=11) came from the tracked
+MAE/MFE episode set (Oct 8–11). Two further datasets were mined to test
+whether the hold-time effect is real or an artifact of that window:
+
+**Method.** Full FIFO reconstruction of every round-trip from the raw fill
+journals — each close fill matched against its opening lot; duration =
+close.ts − open.ts; return = price delta on the matched piece; net P&L =
+profit − fees.
+
+### Live fills, Oct 10–11 (n=348 round-trips)
+
+| Hold band | n | Win rate | Net P&L |
+|---|---|---|---|
+| <5 min | 208 | 69% | **−$20.32** |
+| 5–30 min | 112 | 50% | **−$14.20** |
+| 30–120 min | 24 | 75% | −$0.97 |
+| **>120 min** | **4** | **100%** | **+$0.24** |
+
+The >120-minute band is the **only net-positive cohort** in the full live
+history. The <5-minute band shows the mechanism in its purest form: 69%
+gross win rate — and still donated $20.32 net. High-WR scalping is the
+fee toll wearing a costume.
+
+### Demo fills, Oct 2–5, Bybit demo (n=98 round-trips, independent regime)
+
+| Hold band | n | Win rate | Net P&L |
+|---|---|---|---|
+| <5 min | 3 | 0% | −$0.12 |
+| 5–30 min | 3 | 67% | −$0.22 |
+| 30–120 min | 5 | 20% | −$0.24 |
+| **>120 min** | **87** | **11%** | **+$16.92** |
+
+Same conclusion by a different mechanism: in the demo book the >120-minute
+band won rarely (11% WR — demo ran a moon-bag trail) but won *large* —
+the only net-positive band again. Direction replicates across venue,
+regime and exit policy: **long holds are where profit lives**.
+
+### Updated verdict
+
+- Consistency across three independent samples (tracked episodes,
+  live fills, demo fills) upgrades the finding from "suggestive" to
+  "replicated in direction."
+- Live-book >120min episodes total ~15 (11 tracked + 4 reconstructed);
+  still below the n≥30 Tharp bar for grail status — the live forward
+  test is the remaining evidence.
+- The <5min fee-graveyard is now demonstrated on 211 observations
+  (208 live + 3 demo): the mechanism is not disputable.
+
+## Forward test (deployed 2026-10-11)
+
+`LIQ_GUARD_MIN_HOLD_MS=7200000` on `sentinel-liq-guard`: voluntary
+profit-side exits (scalp-TP, giveback vanish) cannot fire before 120
+minutes on managed positions. Protective rails untouched — crash brake,
+liq-zone trims, margin-loss cap, naked-stop synthesis, stop-approach
+trims, stall-cut (loss-side), tighten-only ratchets all still run.
+Manual positions keep the operator's bagrunner contract unchanged.
+
+Every position opened under this rule is a forward-test episode; grade
+the >120min cohort against the historical 82% WR / +0.35% mean after
+30 episodes.

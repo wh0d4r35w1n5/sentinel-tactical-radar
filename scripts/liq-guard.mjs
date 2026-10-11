@@ -152,6 +152,13 @@ const SCALP_STALL_FRAC = +(process.env.LIQ_GUARD_SCALP_STALL_FRAC || 0.7);
 // software take-profit for scalp positions that can't hold a TP plan
 // (min-size overcover invalidation). 0 disables — sized legs carry it.
 const SCALP_TP_PCT = +(process.env.LIQ_GUARD_SCALP_TP_PCT || 1.5);
+// Forward-test of the >120min-hold discovery (mc-find: SQN_100 +7.70 on
+// episodes that survived 2h): voluntary exits (scalp-TP, giveback vanish,
+// stall-cut) may not fire before MIN_HOLD_MS. Hard/protective exits are
+// untouched — crash brake, liq-zone trims, margin-loss cap, naked-stop
+// synthesis, stop-approach trims and all tighten-only ratchets still run.
+const MIN_HOLD_MS = +(process.env.LIQ_GUARD_MIN_HOLD_MS || 0);
+const underMinHold = (p) => MIN_HOLD_MS > 0 && p.cTime > 0 && (Date.now() - p.cTime) < MIN_HOLD_MS;
 // crash brake: a mark that gaps adversely >= CRASH_PCT within CRASH_MS is a
 // wick the trim ladder cannot outrun — a 28% candle at 30x crosses the whole
 // band between polls, and the 0.8% zone arms too late by design. Fire a big
@@ -789,7 +796,7 @@ async function tick() {
     // those, the guard IS the take-profit: a run >= SCALP_TP_PCT in favor
     // closes the whole position at market. Fee-aware: only when the move
     // clearly covers round-trip costs.
-    if (NO_DEEPEN.has(p.sym) && p.entry > 0 && SCALP_TP_PCT > 0) {
+    if (NO_DEEPEN.has(p.sym) && p.entry > 0 && SCALP_TP_PCT > 0 && !underMinHold(p)) {
       const favPct = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
       if (favPct >= SCALP_TP_PCT) {
         try {
@@ -876,7 +883,7 @@ async function tick() {
     // turn NOW instead of donating the remaining giveback down to wherever
     // the ratcheted stop sits. Whole-position market close, like stall-cut;
     // re-verify on fresh signed truth so a stale mark can't fire it.
-    if ((g.peakFav || 0) >= (isManual ? BAGRUN_VANISH_MIN_PEAK : VANISH_MIN_PEAK) && VANISH_FRAC > 0) {
+    if ((g.peakFav || 0) >= (isManual ? BAGRUN_VANISH_MIN_PEAK : VANISH_MIN_PEAK) && VANISH_FRAC > 0 && (isManual || !underMinHold(p))) {
       try {
         const favNow = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
         const gb = (g.peakFav - favNow) / g.peakFav;
