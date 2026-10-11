@@ -1,62 +1,110 @@
 {
- "ts": "2026-10-11T06:45:59.364Z",
- "ageMs": 1219,
+ "ts": "2026-10-11T06:53:02.065Z",
+ "ageMs": 105,
  "src": "ws",
  "futures": {
-  "equityUsd": 14.0307,
-  "availableUsd": 0.0203,
-  "marginUsedUsd": 26.2786,
-  "uplUsd": 1.5498,
+  "equityUsd": 12.9015,
+  "availableUsd": 0,
+  "marginUsedUsd": 14.8604,
+  "uplUsd": -1.9589,
   "positions": [
    {
     "k": "NEARUSDT:long",
-    "size": 15,
-    "marginUsd": 1.7886,
-    "uplUsd": 0.15
+    "size": 10,
+    "marginUsd": 1.1947,
+    "uplUsd": 0.046
    },
    {
-    "k": "SOLUSDT:long",
-    "size": 1.9,
-    "marginUsd": 3.1039,
-    "uplUsd": 0.1577
-   },
-   {
-    "k": "STRKUSDT:long",
-    "size": 2490.6,
-    "marginUsd": 7.4189,
-    "uplUsd": 1.6507
-   },
-   {
-    "k": "CPUSDT:long",
-    "size": 2798,
-    "marginUsd": 1.5148,
-    "uplUsd": -0.028
-   },
-   {
-    "k": "XRPUSDT:long",
-    "size": 153,
-    "marginUsd": 3.1849,
-    "uplUsd": 0.2024
+    "k": "LINKUSDT:long",
+    "size": 3,
+    "marginUsd": 0.8499,
+    "uplUsd": -0.033
    },
    {
     "k": "USELESSUSDT:long",
-    "size": 996,
-    "marginUsd": 9.2676,
-    "uplUsd": -0.5831
+    "size": 1373,
+    "marginUsd": 12.8158,
+    "uplUsd": -1.9719
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-  "solQty": 0.007468,
-  "solUsd": 0.8192,
-  "stableUsd": 3.4019,
-  "bagsUsd": 6.6237,
-  "totalUsd": 10.8449,
-  "staleMs": 1219
+  "solQty": 0.005868,
+  "solUsd": 0.6442,
+  "stableUsd": 2.2218,
+  "bagsUsd": 6.4801,
+  "totalUsd": 9.3461,
+  "staleMs": 105
  },
- "totalUsd": 24.8755,
+ "totalUsd": 22.2476,
  "deltas": [
+  {
+   "ts": 1791701567870,
+   "kind": "position-closed",
+   "detail": "XRPUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791701567870,
+   "kind": "position-closed",
+   "detail": "CPUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791701567870,
+   "kind": "position-closed",
+   "detail": "STRKUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791701567870,
+   "kind": "position-closed",
+   "detail": "SOLUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791701562161,
+   "kind": "size-reduced",
+   "detail": "NEARUSDT:long Δ-5",
+   "amt": 0
+  },
+  {
+   "ts": 1791701562161,
+   "kind": "position-opened",
+   "detail": "LINKUSDT:long",
+   "amt": 0.8499
+  },
+  {
+   "ts": 1791701562161,
+   "kind": "size-added",
+   "detail": "USELESSUSDT:long Δ377",
+   "amt": 0
+  },
+  {
+   "ts": 1791701562160,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -1.0809
+  },
+  {
+   "ts": 1791701217037,
+   "kind": "chain-stable-move",
+   "detail": "hot wallet",
+   "amt": -1.1802
+  },
+  {
+   "ts": 1791701214282,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.0015
+  },
+  {
+   "ts": 1791701212087,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.0001
+  },
   {
    "ts": 1791701124103,
    "kind": "balance-move",
@@ -110,72 +158,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.1042
-  },
-  {
-   "ts": 1791700794711,
-   "kind": "size-added",
-   "detail": "USELESSUSDT:long Δ51",
-   "amt": 0
-  },
-  {
-   "ts": 1791700794711,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0604
-  },
-  {
-   "ts": 1791700791860,
-   "kind": "position-opened",
-   "detail": "USELESSUSDT:long",
-   "amt": 8.7932
-  },
-  {
-   "ts": 1791700791760,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2638
-  },
-  {
-   "ts": 1791700760050,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.8598
-  },
-  {
-   "ts": 1791700758620,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0638
-  },
-  {
-   "ts": 1791700757910,
-   "kind": "size-reduced",
-   "detail": "STRKUSDT:long Δ-211.80000000000018",
-   "amt": 0
-  },
-  {
-   "ts": 1791700757070,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ137.80000000000018",
-   "amt": 0
-  },
-  {
-   "ts": 1791700745210,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ2105.5",
-   "amt": 0
-  },
-  {
-   "ts": 1791700740710,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0845
-  },
-  {
-   "ts": 1791700709240,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1904
   }
  ]
 }
