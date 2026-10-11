@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-11T07:27:32.396Z",
- "ageMs": 6423,
+ "ts": "2026-10-11T07:32:19.684Z",
+ "ageMs": 174700,
  "src": "ws",
  "futures": {
-  "equityUsd": 6.9156,
-  "availableUsd": 0.0275,
-  "marginUsedUsd": 7.4761,
-  "uplUsd": -0.588,
+  "equityUsd": 7.549,
+  "availableUsd": 0.0136,
+  "marginUsedUsd": 7.7356,
+  "uplUsd": -0.2002,
   "positions": [
    {
     "k": "NEARUSDT:long",
     "size": 10,
     "marginUsd": 1.1947,
-    "uplUsd": -0.219
+    "uplUsd": -0.182
    },
    {
     "k": "LINKUSDT:long",
@@ -22,23 +22,53 @@
    },
    {
     "k": "STRKUSDT:long",
-    "size": 1658.5,
-    "marginUsd": 5.4315,
-    "uplUsd": -0.135
+    "size": 1728.4,
+    "marginUsd": 5.6909,
+    "uplUsd": 0.2158
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.01127,
-  "solUsd": 1.2331,
+  "solUsd": 1.2329,
   "stableUsd": 0,
-  "bagsUsd": 0.3668,
-  "totalUsd": 1.5999,
-  "staleMs": 6423
+  "bagsUsd": 0.3667,
+  "totalUsd": 1.5996,
+  "staleMs": 175010
  },
- "totalUsd": 8.5155,
+ "totalUsd": 9.1486,
  "deltas": [
+  {
+   "ts": 1791703734112,
+   "kind": "size-added",
+   "detail": "STRKUSDT:long Δ69.20000000000005",
+   "amt": 0
+  },
+  {
+   "ts": 1791703732035,
+   "kind": "size-added",
+   "detail": "STRKUSDT:long Δ1120.6",
+   "amt": 0
+  },
+  {
+   "ts": 1791703732034,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1102
+  },
+  {
+   "ts": 1791703692362,
+   "kind": "size-reduced",
+   "detail": "STRKUSDT:long Δ-1119.9",
+   "amt": 0
+  },
+  {
+   "ts": 1791703692271,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.7657
+  },
   {
    "ts": 1791703640342,
    "kind": "balance-move",
@@ -128,36 +158,6 @@
    "kind": "size-added",
    "detail": "STRKUSDT:long Δ1168.7999999999997",
    "amt": 0
-  },
-  {
-   "ts": 1791703191056,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1147
-  },
-  {
-   "ts": 1791703144716,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.3136
-  },
-  {
-   "ts": 1791703114389,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1047
-  },
-  {
-   "ts": 1791703098670,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.9893
-  },
-  {
-   "ts": 1791703076512,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0568
   }
  ]
 }
