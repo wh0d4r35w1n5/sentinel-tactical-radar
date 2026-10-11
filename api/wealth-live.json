@@ -1,10 +1,10 @@
 {
- "ts": "2026-10-11T18:29:03.036Z",
- "ageMs": 252690,
- "src": "rest",
+ "ts": "2026-10-11T18:32:22.540Z",
+ "ageMs": 6151,
+ "src": "ws",
  "futures": {
-  "equityUsd": 2.0632,
-  "availableUsd": 2.0632,
+  "equityUsd": 2.0629,
+  "availableUsd": 2.0629,
   "marginUsedUsd": 0,
   "uplUsd": 0,
   "positions": []
@@ -19,10 +19,22 @@
   "tokens": {
    "BQAeeSow": 0.0025
   },
-  "staleMs": 252690
+  "staleMs": 6151
  },
- "totalUsd": 2.3715,
+ "totalUsd": 2.3712,
  "deltas": [
+  {
+   "ts": 1791743529643,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 2.0629
+  },
+  {
+   "ts": 1791743379861,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -2.0632
+  },
   {
    "ts": 1791742898382,
    "kind": "position-closed",
@@ -130,18 +142,6 @@
    "kind": "position-opened",
    "detail": "WLDUSDT:long",
    "amt": 0.6839
-  },
-  {
-   "ts": 1791737013748,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0648
-  },
-  {
-   "ts": 1791736989819,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.1603
   }
  ]
 }
