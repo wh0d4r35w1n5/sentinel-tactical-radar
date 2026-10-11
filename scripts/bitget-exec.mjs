@@ -3079,7 +3079,7 @@ async function main() {
           } catch { /* limit path failed — taker covers full size below */ }
         }
         if (needSize > 0) {
-          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup || o.mandate) {
+          if (EDGE_LIVE.v >= CHASE_EDGE || o.setup) {
             const mo = await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
             if (war && (o.pimp || o.crack) && mo?.orderId) (war.orderMap ||= {})[(coid + 'm').slice(0, 38)] = String(mo.orderId);
           } else {
