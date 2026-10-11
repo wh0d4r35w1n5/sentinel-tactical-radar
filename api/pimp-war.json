@@ -1,53 +1,60 @@
 {
- "at": "2026-10-11T06:46:05.585Z",
+ "at": "2026-10-11T06:56:34.431Z",
  "wallets": {
   "futures": {
-   "equityUsd": 13.21,
-   "marginFreeUsd": 3.34,
-   "epochNetUsd": -26.36,
+   "equityUsd": 14.07,
+   "marginFreeUsd": 0.02,
+   "epochNetUsd": -25.92,
    "fills": 400,
    "positions": [
     {
      "symbol": "NEARUSDT",
      "side": "long",
-     "upl": -0.15,
+     "upl": 0.17,
      "lev": 44,
      "margin": 1.79
     },
     {
-     "symbol": "SOLUSDT",
+     "symbol": "XRPUSDT",
      "side": "long",
-     "upl": 0.05,
+     "upl": 0.22,
      "lev": 67,
-     "margin": 3.1
-    },
-    {
-     "symbol": "STRKUSDT",
-     "side": "long",
-     "upl": 0.37,
-     "lev": 37,
      "margin": 3.18
     },
     {
-     "symbol": "CPUSDT",
+     "symbol": "USELESSUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": -0.58,
      "lev": 20,
-     "margin": 1.51
+     "margin": 9.27
     }
    ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0075,
-   "stableUsd": 3.4,
-   "purseUsd": 6.62,
+   "sol": 0.0059,
+   "stableUsd": 2.22,
+   "purseUsd": 6.53,
    "positions": 7,
    "laneNet": -0.32,
    "laneTrades": 13,
    "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791701215116,
+    "symbol": "GOMO",
+    "sig": "4BNSd3MntChRqoZRXEUXTYHJkuP1ANdXmeVw9Z5xJdwubq8WDidKCa88feySARB1Hr9Pzx8JPpoi6XMqMBuA7KTc",
+    "text": "BUY GOMO $1.67"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791701212215,
+    "symbol": "GOMO",
+    "sig": "4iRUMe5FnrJQm2g6eCCvwUBQLT419Z93Qze6sNKnX3spmvAQQfTCDsHEdmKNQqwXqBkWhNjtPhC2REtdqcyJHcX4",
+    "text": "SELL GOMO"
+   },
    {
     "venue": "solana",
     "ts": 1791700606509,
@@ -103,20 +110,6 @@
     "symbol": "SI276",
     "sig": "56Z3msnWoyqRcrciZQuWHcmGabeZ7NH89CSg6ecCD5crn9U9fushSY1erzqkGY5J1yBhjELF3uvHeEhedhHfMWZy",
     "text": "SELL SI276"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791700089513,
-    "symbol": "GOMO",
-    "sig": "4MDVFKa1HQvhsURXPJttdSvJK4MSuMLvgp55Ad2Dax1Dm4bubybkrxV52jZuZeCFa4eVVa9VJPeALgT3vLhbejJU",
-    "text": "SELL GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791700087103,
-    "symbol": "QI",
-    "sig": "3TkQJG5Vr1xov9T26mJXippfGQPKRWPab7mccY2jfRH2bdiPdjHCh7LwVe7SQKHvt6fkicLyFxE3Uok7VSbSVdVr",
-    "text": "SELL QI"
    }
   ]
  },
@@ -201,6 +194,52 @@
   "house": 0
  },
  "cracks": [
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": 1.0256,
+   "wins": 5,
+   "losses": 15,
+   "closes": 24,
+   "stolen": 0,
+   "gen": 0,
+   "form": 0.0821,
+   "mood": "cocky",
+   "vault": 0,
+   "hist": [
+    -1.6999,
+    -1.7645,
+    -1.7123,
+    -1.735,
+    -1.7549,
+    -1.9534,
+    -1.6941,
+    -1.3626,
+    -1.2718,
+    -0.9979,
+    -0.8908,
+    -0.7303,
+    -1.8388,
+    -2.0786,
+    -2.0512,
+    -2.0098,
+    -0.5251,
+    0.5212,
+    0.5263,
+    0.6247,
+    0.7728,
+    0.9488,
+    1.1156,
+    1.0256
+   ],
+   "persona": {
+    "swagger": 0.92,
+    "tilt": 0.18,
+    "greed": 0.97,
+    "discipline": 0.66
+   }
+  },
   {
    "name": "Diamond Dust",
    "tag": "momentum fiend",
@@ -515,56 +554,25 @@
     "greed": 0.5,
     "discipline": 0.5
    }
-  },
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": null,
-   "net": -0.5251,
-   "wins": 4,
-   "losses": 15,
-   "closes": 23,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0.5417,
-   "mood": "heater",
-   "vault": 0,
-   "hist": [
-    2.4342,
-    2.2519,
-    2.3254,
-    2.4228,
-    0.6267,
-    -1.6048,
-    -1.531,
-    -1.6999,
-    -1.7645,
-    -1.7123,
-    -1.735,
-    -1.7549,
-    -1.9534,
-    -1.6941,
-    -1.3626,
-    -1.2718,
-    -0.9979,
-    -0.8908,
-    -0.7303,
-    -1.8388,
-    -2.0786,
-    -2.0512,
-    -2.0098,
-    -0.5251
-   ],
-   "persona": {
-    "swagger": 0.99,
-    "tilt": 0.06,
-    "greed": 0.99,
-    "discipline": 0.54
-   }
   }
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791670342172,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4DaKxT5vuzLSk6eDE6VbJuHbmSYniJDvwMXuRjweJ3tGgiRp1DZkR2o6GQfVA42W5t5BU4qzpfBtxAWv21GkjVur",
+   "onchain": true,
+   "filledAt": 1791670342172,
+   "live": true,
+   "closedAt": 1791689142982,
+   "epNet": -0.006613,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "SUPMKT",
    "direction": "LONG",
@@ -608,21 +616,10 @@
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
    "live": false,
-   "closedAt": 1791700054306,
-   "epNet": -1.284568,
+   "closedAt": 1791700588402,
+   "epNet": 0.356162,
    "epCounted": true,
-   "epVerdict": -1
-  },
-  {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791699896213,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791699270985XRPUSDT",
-   "live": true,
-   "filledAt": 1791700536125,
-   "orderId": "1493065753274519553"
+   "epVerdict": 1
   },
   {
    "symbol": "QOMPUTE",
@@ -658,17 +655,6 @@
    "live": true
   },
   {
-   "symbol": "XRPUSDT",
-   "direction": "LONG",
-   "ts": 1791700530062,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1791699904505XRPUSDT",
-   "filledAt": 1791700536125,
-   "orderId": "1493065753274519553",
-   "live": true
-  },
-  {
    "symbol": "GOMO",
    "direction": "LONG",
    "ts": 1791598006122,
@@ -688,7 +674,11 @@
    "coid": "oc:5tAckd2PfUxVAJRgyb4nu9u4fy9xPicaVnYkVdGqAgDcoeP4YsK7ewveEj4AGArogS6uJgzxET5nGAxAjRGX5zva",
    "onchain": true,
    "filledAt": 1791700534671,
-   "live": true
+   "live": true,
+   "closedAt": 1791701212215,
+   "epNet": -0.090049,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "QT",
@@ -700,9 +690,32 @@
    "onchain": true,
    "filledAt": 1791700606509,
    "live": true
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791701215116,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4BNSd3MntChRqoZRXEUXTYHJkuP1ANdXmeVw9Z5xJdwubq8WDidKCa88feySARB1Hr9Pzx8JPpoi6XMqMBuA7KTc",
+   "onchain": true,
+   "filledAt": 1791701215116,
+   "live": true
   }
  ],
  "drama": [
+  {
+   "ts": 1791701791596,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.09 on GOMO — docked her pay"
+  },
+  {
+   "ts": 1791701791596,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on STRKUSDT"
+  },
+  {
+   "ts": 1791701791596,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.18 on STRKUSDT"
+  },
   {
    "ts": 1791701163027,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$1.48 on QT"
@@ -810,14 +823,6 @@
   {
    "ts": 1791622571406,
    "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
-  },
-  {
-   "ts": 1791622571406,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.19 on GOMO"
-  },
-  {
-   "ts": 1791525951563,
-   "text": "🌆 Pimpcity founded — 5 pimps, 10 girls, one $4 corner"
   }
  ]
 }
