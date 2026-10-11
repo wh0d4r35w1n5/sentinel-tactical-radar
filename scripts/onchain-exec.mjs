@@ -36,6 +36,9 @@ const MAX_USD = +(process.env.ONCHAIN_MAX_USD || 25); // per position cap
 const MAX_POSITIONS = +(process.env.ONCHAIN_MAX_POS || 3);
 const MAX_DEPLOYED_USD = +(process.env.ONCHAIN_MAX_DEPLOYED || 40);
 const MIN_SCORE = +(process.env.ONCHAIN_MIN_SCORE || 65);
+// momentum gate — buy what's moving NOW, not what scored well on a stale
+// 24h composite. A runner entry needs +MIN_CHG_PCT on the 24h tape.
+const MIN_CHG_PCT = +(process.env.ONCHAIN_MIN_CHG_PCT || 10);
 const SLIPPAGE_BUY_BPS = +(process.env.ONCHAIN_SLIPPAGE_BUY || 150);
 const SLIPPAGE_SELL_BPS = +(process.env.ONCHAIN_SLIPPAGE_SELL || 250);
 const KEEP = +(process.env.ONCHAIN_KEEP || 0.72); // trail: keep 72% of peak
@@ -271,6 +274,7 @@ async function main() {
   const cands = (hot.hot || []).filter((h) =>
     h.chain === 'solana' && !h.perpAvailable && !held.has(h.contract) &&
     (h.score || 0) >= MIN_SCORE &&
+    (+h.chg24h || 0) >= MIN_CHG_PCT &&
     h.audit && !h.audit.rugged && (h.audit.risks || []).length <= 3 &&
     h.liqUsd >= 50e3
   );

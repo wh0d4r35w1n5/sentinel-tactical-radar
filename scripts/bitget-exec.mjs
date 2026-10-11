@@ -2557,13 +2557,18 @@ async function main() {
           if (Date.now() - (hot.ts || 0) < (hot.ttlMs || 15 * 60e3)) {
             const seen = new Set([...CORE_SYMS, ...pool.map((p) => p.symbol)]);
             let added = 0;
+            // perp-rider gate: a seeded meme perp only earns a slot when
+            // the underlying is actually RUNNING (+15% 24h) — a listed but
+            // flat name is dead margin, not a rider.
+            const PERP_RIDER_MIN_CHG = +(process.env.SENTINEL_PERP_RIDER_MIN_CHG || 15);
             for (const h of (hot.hot || []).slice(0, +(process.env.SENTINEL_ONCHAIN_TOP_N || 10))) {
               if (!h.perpAvailable || !h.perpSymbol || seen.has(h.perpSymbol)) continue;
               if (h.audit && (h.audit.rugged || (h.audit.risks || []).length > 3)) continue;
+              if ((+h.chg24h || 0) < PERP_RIDER_MIN_CHG) continue;
               seen.add(h.perpSymbol);
               pool.push({
                 symbol: h.perpSymbol, direction: 'LONG',
-                score: Math.round(36 + Math.min(16, (h.score || 0) / 4)),
+                score: Math.round(36 + Math.min(16, (h.score || 0) / 4) + Math.min(15, (+h.chg24h || 0) / 5)),
                 gates: ['onchain-seed'], onchain: true,
                 onchainVol: h.vol24hUsd, onchainLiq: h.liqUsd, onchainMcap: h.mcapUsd,
               });
