@@ -1,39 +1,46 @@
 {
- "at": "2026-10-11T06:24:56.214Z",
+ "at": "2026-10-11T06:35:30.088Z",
  "wallets": {
   "futures": {
-   "equityUsd": 18.16,
-   "marginFreeUsd": 0.16,
-   "epochNetUsd": -32.71,
+   "equityUsd": 13.15,
+   "marginFreeUsd": 1.34,
+   "epochNetUsd": -34.11,
    "fills": 400,
    "positions": [
     {
+     "symbol": "NEARUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 44,
+     "margin": 1.79
+    },
+    {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": -0.18,
+     "upl": -0.07,
      "lev": 67,
      "margin": 3.1
     },
     {
      "symbol": "STRKUSDT",
      "side": "long",
-     "upl": -0.11,
-     "lev": 37,
-     "margin": 1.42
+     "upl": 0.08,
+     "lev": 46,
+     "margin": 0.83
     },
     {
      "symbol": "CPUSDT",
      "side": "long",
-     "upl": -0.05,
+     "upl": 0.07,
      "lev": 20,
      "margin": 1.51
     },
     {
      "symbol": "ERAUSDT",
      "side": "long",
-     "upl": -2.73,
-     "lev": 22,
-     "margin": 15.02
+     "upl": 0.38,
+     "lev": 15,
+     "margin": 4.13
     }
    ]
   },
@@ -41,13 +48,62 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0107,
    "stableUsd": 1.94,
-   "purseUsd": 6.8,
-   "positions": 9,
+   "purseUsd": 5.76,
+   "positions": 6,
    "laneNet": -0.32,
    "laneTrades": 13,
    "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791700107659,
+    "symbol": "SI276",
+    "sig": "2oZpkaivQf4xt78QrPBB6nPQbw7kvch4RiZuMMoXUGDRn6V4s7AER9HbKuH1fdTsqvPMrhN4p3q5gURJaJYbL6qw",
+    "text": "BUY SI276 $0.30"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700105516,
+    "symbol": "67",
+    "sig": "4BL1xPA2vQhWRopFLNkuQstuymiFrMDXtncryXKcZnhxaGVwrcn8Gh93JVJwiNBy9APVZd7yp5hcy3saGT2aLJmC",
+    "text": "BUY 67 $0.38"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700098764,
+    "symbol": "FRANK",
+    "sig": "4UKDtNdcSrQSpvMpVS3nsnnqg3Uto9zh35N2QEmNChT6aZ5sPCbFC9F5YJJ9EPbbg6Rz55vkhpARxzCy8CMXnoqG",
+    "text": "SELL FRANK"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700094375,
+    "symbol": "ABU",
+    "sig": "4DLaTpnsmDCfsaUUk2jCsgypPBix2KyVbZxZ7BChYvY1ACnJjs3SQY6opNdtHUqdDuGtqRoSkP6HZRKsAPUTV8Pr",
+    "text": "SELL ABU"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700091930,
+    "symbol": "SI276",
+    "sig": "56Z3msnWoyqRcrciZQuWHcmGabeZ7NH89CSg6ecCD5crn9U9fushSY1erzqkGY5J1yBhjELF3uvHeEhedhHfMWZy",
+    "text": "SELL SI276"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700089513,
+    "symbol": "GOMO",
+    "sig": "4MDVFKa1HQvhsURXPJttdSvJK4MSuMLvgp55Ad2Dax1Dm4bubybkrxV52jZuZeCFa4eVVa9VJPeALgT3vLhbejJU",
+    "text": "SELL GOMO"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791700087103,
+    "symbol": "QI",
+    "sig": "3TkQJG5Vr1xov9T26mJXippfGQPKRWPab7mccY2jfRH2bdiPdjHCh7LwVe7SQKHvt6fkicLyFxE3Uok7VSbSVdVr",
+    "text": "SELL QI"
+   },
    {
     "venue": "solana",
     "ts": 1791699282230,
@@ -68,55 +124,6 @@
     "symbol": "MOIN",
     "sig": "Wg1evR8vLgF2Q6CsXLRa4aTZJnihNjnQdWtZXyG4E8w5EdWxvVp7A2MXmd4dR1AewvBckqf8Tg2ZPZLwMQGtjNL",
     "text": "SELL MOIN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791682726617,
-    "symbol": "SUPMKT",
-    "sig": "3WPQgqu9C9jDgrcbkQPyToL2VefrSrrKqWsx45B1R5jZiFkeXjDxEhGLpRmtypPuGNmg1ZiGdG5K5i3DpFcDed7v",
-    "text": "BUY SUPMKT $0.33"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791670342172,
-    "symbol": "MOIN",
-    "sig": "4DaKxT5vuzLSk6eDE6VbJuHbmSYniJDvwMXuRjweJ3tGgiRp1DZkR2o6GQfVA42W5t5BU4qzpfBtxAWv21GkjVur",
-    "text": "BUY MOIN $0.31"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791670338695,
-    "symbol": "MOIN",
-    "sig": "2xtBiKabQJZse1nsG98rhMigLFe9XcHGpvHBC6VHFy1PvestBxLbuXWYHkmjD2TNEENCJu3SGmgbPNnrxvEX1RXT",
-    "text": "SELL MOIN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791663794297,
-    "symbol": "QT",
-    "sig": "525z35kaKrpBvnJmfWtjDZjwqqyKCrgMPBf92BmsyPMoyNNyghLD87u3soGBR3cqC67vHYU1aAogimWMpoVJQWDN",
-    "text": "BUY QT $0.36"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791659653096,
-    "symbol": "SECRETFROG",
-    "sig": "5bKqoGDY7qVmt9rwQmscN8RpFyUXRL1SgeixnvcDNzkuWvumQeF899r9kVdeC5HSZQAP7ZHtGnwTkSU18d5oXsVU",
-    "text": "SELL SECRETFROG"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791658563111,
-    "symbol": "SECRETFROG",
-    "sig": "Xq33wWxhdYiWJyp9hpmaTpXqA6fJ6PVVbV98iNtRuPPqDSosHjCgSeZfXCKzpVAvh4xVSb3S9w6N8m8sYpTV85A",
-    "text": "BUY SECRETFROG $0.34"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791658560661,
-    "symbol": "SWOLF",
-    "sig": "4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
-    "text": "BUY SWOLF $0.40"
    }
   ]
  },
@@ -201,49 +208,6 @@
   "house": 0
  },
  "cracks": [
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": null,
-   "net": 2.4342,
-   "wins": 3,
-   "losses": 10,
-   "closes": 17,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0.3025,
-   "mood": "heater",
-   "vault": 0,
-   "hist": [
-    0.0415,
-    -0.3769,
-    -0.4145,
-    -0.4398,
-    -0.5482,
-    -0.5788,
-    -0.6128,
-    -0.6198,
-    -0.6441,
-    -0.4713,
-    -0.4948,
-    -0.5014,
-    -0.8231,
-    0.6124,
-    0.9888,
-    1.267,
-    1.4723,
-    1.5856,
-    1.7594,
-    2.0256,
-    2.4342
-   ],
-   "persona": {
-    "swagger": 0.99,
-    "tilt": 0.01,
-    "greed": 0.78,
-    "discipline": 0.65
-   }
-  },
   {
    "name": "Diamond Dust",
    "tag": "momentum fiend",
@@ -558,62 +522,56 @@
     "greed": 0.5,
     "discipline": 0.5
    }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": -1.7549,
+   "wins": 3,
+   "losses": 15,
+   "closes": 22,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0781,
+   "mood": "tilt",
+   "vault": 0,
+   "hist": [
+    -0.6441,
+    -0.4713,
+    -0.4948,
+    -0.5014,
+    -0.8231,
+    0.6124,
+    0.9888,
+    1.267,
+    1.4723,
+    1.5856,
+    1.7594,
+    2.0256,
+    2.4342,
+    2.2519,
+    2.3254,
+    2.4228,
+    0.6267,
+    -1.6048,
+    -1.531,
+    -1.6999,
+    -1.7645,
+    -1.7123,
+    -1.735,
+    -1.7549
+   ],
+   "persona": {
+    "swagger": 0.76,
+    "tilt": 0.68,
+    "greed": 0.79,
+    "discipline": 0.42
+   }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "SWOLF",
-   "direction": "LONG",
-   "ts": 1791658560661,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
-   "onchain": true,
-   "filledAt": 1791658560661,
-   "live": true
-  },
-  {
-   "symbol": "SECRETFROG",
-   "direction": "LONG",
-   "ts": 1791658563111,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:Xq33wWxhdYiWJyp9hpmaTpXqA6fJ6PVVbV98iNtRuPPqDSosHjCgSeZfXCKzpVAvh4xVSb3S9w6N8m8sYpTV85A",
-   "onchain": true,
-   "filledAt": 1791658563111,
-   "live": false,
-   "closedAt": 1791659653096,
-   "epNet": 0.172828,
-   "epCounted": true,
-   "epVerdict": 1
-  },
-  {
-   "symbol": "QT",
-   "direction": "LONG",
-   "ts": 1791663794297,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:525z35kaKrpBvnJmfWtjDZjwqqyKCrgMPBf92BmsyPMoyNNyghLD87u3soGBR3cqC67vHYU1aAogimWMpoVJQWDN",
-   "onchain": true,
-   "filledAt": 1791663794297,
-   "live": true
-  },
-  {
-   "symbol": "MOIN",
-   "direction": "LONG",
-   "ts": 1791670342172,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:4DaKxT5vuzLSk6eDE6VbJuHbmSYniJDvwMXuRjweJ3tGgiRp1DZkR2o6GQfVA42W5t5BU4qzpfBtxAWv21GkjVur",
-   "onchain": true,
-   "filledAt": 1791670342172,
-   "live": true,
-   "closedAt": 1791689142982,
-   "epNet": -0.006613,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "SUPMKT",
    "direction": "LONG",
@@ -668,10 +626,10 @@
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
    "live": true,
-   "closedAt": 1791698287951,
-   "epNet": 2.935537,
+   "closedAt": 1791699358780,
+   "epNet": -1.02963,
    "epCounted": true,
-   "epVerdict": 1
+   "epVerdict": -1
   },
   {
    "symbol": "SOLUSDT",
@@ -701,10 +659,64 @@
    "ts": 1791699896213,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791699270985XRPUSDT"
+   "coid": "s1791699270985XRPUSDT",
+   "live": false
+  },
+  {
+   "symbol": "QOMPUTE",
+   "direction": "LONG",
+   "ts": 1791598003872,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2EHYJ96ZgzfNM9sHCktGeow7UbamdGhUFwcPjKsjz1MeKYu3wDnoRmhniKroQKnFXn79UifvoMDkjwDfs3ZCp1a9",
+   "onchain": true,
+   "filledAt": 1791598003872,
+   "live": false
+  },
+  {
+   "symbol": "67",
+   "direction": "LONG",
+   "ts": 1791700105516,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4BL1xPA2vQhWRopFLNkuQstuymiFrMDXtncryXKcZnhxaGVwrcn8Gh93JVJwiNBy9APVZd7yp5hcy3saGT2aLJmC",
+   "onchain": true,
+   "filledAt": 1791700105516,
+   "live": true
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791700107659,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2oZpkaivQf4xt78QrPBB6nPQbw7kvch4RiZuMMoXUGDRn6V4s7AER9HbKuH1fdTsqvPMrhN4p3q5gURJaJYbL6qw",
+   "onchain": true,
+   "filledAt": 1791700107659,
+   "live": true
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791700530062,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791699904505XRPUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791700527040,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on FRANK — docked her pay"
+  },
+  {
+   "ts": 1791700527040,
+   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
+  },
+  {
+   "ts": 1791700527040,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on ABU — docked her pay"
+  },
   {
    "ts": 1791699894224,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.41 on STRKUSDT"
