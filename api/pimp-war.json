@@ -1,12 +1,20 @@
 {
- "at": "2026-10-11T20:20:35.802Z",
+ "at": "2026-10-11T20:31:23.774Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.85,
-   "marginFreeUsd": 1.85,
-   "epochNetUsd": -30.56,
+   "equityUsd": 1.57,
+   "marginFreeUsd": 1.05,
+   "epochNetUsd": -30.06,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "AVAXUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 37,
+     "margin": 0.5
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -491,17 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -15.7367,
+   "net": -16.0332,
    "wins": 6,
    "losses": 20,
    "closes": 36,
    "stolen": 0,
    "gen": 0,
-   "form": -0.1841,
+   "form": -0.2291,
    "mood": "tilt",
    "vault": 0,
    "hist": [
-    -13.7409,
     -13.7843,
     -13.8049,
     -13.8252,
@@ -524,13 +531,14 @@
     -15.1322,
     -15.1837,
     -15.5282,
-    -15.7367
+    -15.7367,
+    -16.0332
    ],
    "persona": {
-    "swagger": 0.48,
-    "tilt": 0.8,
-    "greed": 0.8,
-    "discipline": 0.31
+    "swagger": 0.41,
+    "tilt": 0.97,
+    "greed": 0.77,
+    "discipline": 0.26
    }
   }
  ],
@@ -675,10 +683,15 @@
    "ts": 1791750035558,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1791749393548BTCUSDT"
+   "coid": "s1791749393548BTCUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791750681855,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.30 on STRKUSDT incl $0.004 entry fees — docked her pay"
+  },
   {
    "ts": 1791747448053,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.21 on BTWUSDT incl $0.006 entry fees — docked her pay"
@@ -794,10 +807,6 @@
   {
    "ts": 1791713502414,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on STRKUSDT"
-  },
-  {
-   "ts": 1791713502414,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.01 on STRKUSDT"
   }
  ]
 }
