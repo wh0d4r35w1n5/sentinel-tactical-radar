@@ -16,7 +16,7 @@ const HOT = [
   'market-scanner', 'prices', 'health', 'live-ledger', 'live-plan',
   'gate-stats', 'funding', 'liq-guard', 'bitget-watch', 'integrity',
   'onchain-lane', 'chain-custody', 'signal-ledger', 'thoughts', 'god',
-  'breakouts', 'onchain-trades', 'pimp-war',
+  'breakouts', 'onchain-trades', 'pimp-war', 'wealth-live',
 ];
 const COLD = [
   'coin-detail', 'signal-eval', 'sentiment', 'news', 'hypotheses', 'correlation',
@@ -25,7 +25,7 @@ const COLD = [
   'rr-backtest', 'alltime-stats', 'equity-bridge', 'shadow-ab',
   'eval-independence', 'edge-attribution', 'ledger-recon', 'failover-audit',
   'validator-report', 'strategy-policy', 'autonomous-pnl', 'reject-markout',
-  'libedge', 'markouts', 'onchain-hot',
+  'libedge', 'markouts', 'onchain-hot', 'mc-rank',
 ];
 
 const read = (name) => {

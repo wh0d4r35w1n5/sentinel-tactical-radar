@@ -101,6 +101,16 @@ gross-positive and still printed red. These rules prevent the repeat.
 - Verify: `/opt/sentinel/api/god.json` (PERFECT = 22 pass),
   `live-ledger.json` (errors/actions/positionsAfter/sqnR),
   `market-scanner.json` (signals × strategy), `gate-stats.json` (veto buckets).
+- **BALANCES: quote `api/wealth-live.json` ONLY** (operator order 2026-10-11 —
+  a modeled figure was quoted as "the balance" and was wildly wrong).
+  `live-ledger.equityUsd` is the BOOK MODEL (65 anchor + journaled net −
+  vault carry earmarked-but-unmoved ≈ $11 while real equity was $22.82).
+  `wealth-live.json` is event-driven truth: Bitget private-WS account push
+  (~100-300ms) + Solana lamport subscription + REST fallback 1.5s — it
+  carries `futures.equityUsd`, `solana.totalUsd`, `totalUsd` (BOTH wallets),
+  and a `deltas[]` ring (deposit/withdrawal/margin-add/size events that also
+  kick bitget-watch's SL/TP resync in <1s). Service:
+  `sentinel-wealth-watch.service`.
 - **Production is LIVE on Bitget (since 2026-10-05).** The systemd units set
   `RAPID_MODE=live` / `SENTINEL_EXCHANGE=bitget` / `SENTINEL_EXEC=live`;
   `/opt/sentinel/.env` still says demo/bybit and is overridden (load-env.mjs
