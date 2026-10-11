@@ -1,32 +1,39 @@
 {
- "at": "2026-10-11T06:14:28.495Z",
+ "at": "2026-10-11T06:24:56.214Z",
  "wallets": {
   "futures": {
-   "equityUsd": 22.59,
-   "marginFreeUsd": 0.02,
-   "epochNetUsd": -33.56,
+   "equityUsd": 18.16,
+   "marginFreeUsd": 0.16,
+   "epochNetUsd": -32.71,
    "fills": 400,
    "positions": [
     {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": -0.3,
+     "upl": -0.18,
      "lev": 67,
      "margin": 3.1
     },
     {
      "symbol": "STRKUSDT",
      "side": "long",
-     "upl": 0.35,
+     "upl": -0.11,
      "lev": 37,
-     "margin": 9.45
+     "margin": 1.42
+    },
+    {
+     "symbol": "CPUSDT",
+     "side": "long",
+     "upl": -0.05,
+     "lev": 20,
+     "margin": 1.51
     },
     {
      "symbol": "ERAUSDT",
      "side": "long",
-     "upl": -1.16,
-     "lev": 18,
-     "margin": 11.12
+     "upl": -2.73,
+     "lev": 22,
+     "margin": 15.02
     }
    ]
   },
@@ -34,13 +41,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0107,
    "stableUsd": 1.94,
-   "purseUsd": 6.85,
-   "positions": 10,
+   "purseUsd": 6.8,
+   "positions": 9,
    "laneNet": -0.32,
    "laneTrades": 13,
    "laneWins": 3
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791699282230,
+    "symbol": "QOMPUTE",
+    "sig": null,
+    "text": "ABANDON QOMPUTE"
+   },
    {
     "venue": "solana",
     "ts": 1791689145561,
@@ -103,13 +117,6 @@
     "symbol": "SWOLF",
     "sig": "4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
     "text": "BUY SWOLF $0.40"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791656065047,
-    "symbol": "MOIN",
-    "sig": "3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
-    "text": "BUY MOIN $0.47"
    }
   ]
  },
@@ -198,13 +205,13 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": 1.4723,
+   "net": 2.4342,
    "wins": 3,
    "losses": 10,
    "closes": 17,
    "stolen": 0,
    "gen": 0,
-   "form": 0.3113,
+   "form": 0.3025,
    "mood": "heater",
    "vault": 0,
    "hist": [
@@ -224,13 +231,17 @@
     0.6124,
     0.9888,
     1.267,
-    1.4723
+    1.4723,
+    1.5856,
+    1.7594,
+    2.0256,
+    2.4342
    ],
    "persona": {
-    "swagger": 0.73,
-    "tilt": 0.04,
-    "greed": 0.62,
-    "discipline": 0.53
+    "swagger": 0.99,
+    "tilt": 0.01,
+    "greed": 0.78,
+    "discipline": 0.65
    }
   },
   {
@@ -552,21 +563,6 @@
  "retired": [],
  "intents": [
   {
-   "symbol": "MOIN",
-   "direction": "LONG",
-   "ts": 1791656065047,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:3DyuwEyqyQk8TTTfJaytv77hQXoXqDwFB9RBY3otT8UqDDoeYyNt2vHCxJzbXhRyB48U1ciajeoNTWDGf1HWbPX9",
-   "onchain": true,
-   "filledAt": 1791656065047,
-   "live": true,
-   "closedAt": 1791670338695,
-   "epNet": -0.02347,
-   "epCounted": true,
-   "epVerdict": -1
-  },
-  {
    "symbol": "SWOLF",
    "direction": "LONG",
    "ts": 1791658560661,
@@ -672,8 +668,8 @@
    "filledAt": 1791697623528,
    "orderId": "1493053536957272065",
    "live": true,
-   "closedAt": 1791697729561,
-   "epNet": 1.973724,
+   "closedAt": 1791698287951,
+   "epNet": 2.935537,
    "epCounted": true,
    "epVerdict": 1
   },
@@ -698,9 +694,29 @@
    "filledAt": 1791698264987,
    "orderId": "1493056227427127297",
    "live": true
+  },
+  {
+   "symbol": "XRPUSDT",
+   "direction": "LONG",
+   "ts": 1791699896213,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1791699270985XRPUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791699894224,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.41 on STRKUSDT"
+  },
+  {
+   "ts": 1791699894224,
+   "text": "🔥 Solana Sadie is on a heater — swagger through the roof, pimps are circling"
+  },
+  {
+   "ts": 1791699894224,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.27 on STRKUSDT"
+  },
   {
    "ts": 1791699265529,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.21 on STRKUSDT"
