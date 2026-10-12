@@ -1,50 +1,86 @@
 {
- "ts": "2026-10-12T12:56:22.238Z",
- "ageMs": 0,
+ "ts": "2026-10-12T13:02:18.439Z",
+ "ageMs": 7334,
  "src": "ws",
  "futures": {
-  "equityUsd": 51.044,
-  "availableUsd": 5.5101,
+  "equityUsd": 52.3465,
+  "availableUsd": 0.0339,
   "grantUsd": 20,
-  "equityOwnUsd": 31.044,
-  "marginUsedUsd": 48.7607,
-  "uplUsd": -3.2618,
+  "equityOwnUsd": 32.3465,
+  "marginUsedUsd": 53.8771,
+  "uplUsd": -1.5646,
   "positions": [
-   {
-    "k": "SOLUSDT:long",
-    "size": 0.3,
-    "marginUsd": 0.8986,
-    "uplUsd": -0.1464
-   },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8806,
-    "uplUsd": -1.4014
+    "uplUsd": -1.6358
    },
    {
     "k": "NATGASUSDT:long",
-    "size": 52.5,
-    "marginUsd": 7.9815,
-    "uplUsd": -1.714
+    "size": 124,
+    "marginUsd": 13.9965,
+    "uplUsd": 0.0712
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002881,
-  "solUsd": 0.3173,
+  "solUsd": 0.3176,
   "stableUsd": 1.1965,
-  "bagsUsd": 28.1678,
-  "totalUsd": 29.6816,
+  "bagsUsd": 27.8577,
+  "totalUsd": 29.3718,
   "tokens": {
-   "8PGyHCKv": 28.1657,
+   "8PGyHCKv": 27.8556,
    "BQAeeSow": 0.0021
   },
-  "staleMs": 0
+  "staleMs": 7334
  },
- "totalUsd": 60.7256,
+ "totalUsd": 61.7183,
  "deltas": [
+  {
+   "ts": 1791810099582,
+   "kind": "position-closed",
+   "detail": "SOLUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791810041558,
+   "kind": "size-added",
+   "detail": "NATGASUSDT:long Δ4.299999999999997",
+   "amt": 0
+  },
+  {
+   "ts": 1791810040980,
+   "kind": "size-added",
+   "detail": "NATGASUSDT:long Δ67.2",
+   "amt": 0
+  },
+  {
+   "ts": 1791810040732,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.4404
+  },
+  {
+   "ts": 1791810007862,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.091
+  },
+  {
+   "ts": 1791809987748,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0654
+  },
+  {
+   "ts": 1791809942892,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.4079
+  },
   {
    "ts": 1791809060072,
    "kind": "size-reduced",
@@ -122,48 +158,6 @@
    "kind": "chain-sol-move",
    "detail": "hot wallet",
    "amt": -0.0106
-  },
-  {
-   "ts": 1791807374851,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": -0.0106
-  },
-  {
-   "ts": 1791807338519,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": 0
-  },
-  {
-   "ts": 1791807299238,
-   "kind": "chain-stable-move",
-   "detail": "hot wallet",
-   "amt": -3.8236
-  },
-  {
-   "ts": 1791807287738,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": 0
-  },
-  {
-   "ts": 1791807191589,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2024
-  },
-  {
-   "ts": 1791806976735,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.4553
-  },
-  {
-   "ts": 1791806889987,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2304
   }
  ]
 }
