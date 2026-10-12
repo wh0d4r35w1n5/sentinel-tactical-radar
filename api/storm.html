@@ -50,6 +50,7 @@
   <div class="card stat"><div class="v" id="vB1">—</div><div class="l" id="lB1">Bot 1 futures ownable</div></div>
   <div class="card stat"><div class="v" id="vB2">—</div><div class="l">Bot 2 on-chain wallet</div></div>
   <div class="card stat good"><div class="v" id="vAth">—</div><div class="l">all-time high-water</div></div>
+  <div class="card stat"><div class="v" id="vMission">—</div><div class="l" id="lMission">debt attack</div></div>
 </div>
 
 <div class="card" id="stormCard" style="margin-top:12px">
@@ -151,6 +152,11 @@ async function refresh(){
     $('lB1').textContent=`Bot 1 ownable (+${A$(w.futures.grantUsd||0)} coupon margin — not ours)`;
     $('vB2').textContent=A$(w.solana.totalUsd);
     try{ const a=await j(BASE+'wealth-ath.json'); $('vAth').textContent=a?A$(a.athUsd):'—'; }catch{}
+    if(w.mission){const m=w.mission;
+      $('vMission').textContent=(m.netAfterAud>=0?'+':'−')+'A$'+Math.abs(m.netAfterAud).toFixed(0);
+      $('vMission').style.color=m.netAfterAud>=0?'var(--green)':'var(--red)';
+      $('lMission').textContent=`debt attack — ${m.clearedPct}% of A$${m.debtsAud} covered`;
+    }
     const pos=(w.futures.positions||[]).map(p=>({seat:p.k.replace('USDT:',' '),usd:p.marginUsd,upl:p.uplUsd,tag:''}));
     (w.solana.holdingsUsd||[]).filter(h=>h.usd>0.3).forEach(h=>pos.push({seat:h.sym+' on-chain',usd:h.usd,upl:null,tag:''}));
     $('posTbl').innerHTML='<tr><th>Position</th><th class="r">USD</th><th class="r">uPL</th></tr>'+
