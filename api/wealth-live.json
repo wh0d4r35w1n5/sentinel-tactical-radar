@@ -1,162 +1,56 @@
 {
- "ts": "2026-10-12T02:08:09.005Z",
- "ageMs": 2605,
+ "ts": "2026-10-12T02:15:40.080Z",
+ "ageMs": 7976,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.1069,
+  "equityUsd": 56.2154,
   "availableUsd": 14.7578,
+  "grantUsd": 0,
+  "equityOwnUsd": 56.2154,
   "marginUsedUsd": 40.7688,
-  "uplUsd": 0.5664,
+  "uplUsd": 0.6887,
   "positions": [
-   {
-    "k": "BTCUSDT:long",
-    "size": 0.0023,
-    "marginUsd": 39.8849,
-    "uplUsd": 0.5699
-   },
    {
     "k": "NEARUSDT:long",
     "size": 5,
     "marginUsd": 0.884,
-    "uplUsd": -0.0035
+    "uplUsd": -0.082
+   },
+   {
+    "k": "BTCUSDT:long",
+    "size": 0.0023,
+    "marginUsd": 39.8849,
+    "uplUsd": 0.7707
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002534,
-  "solUsd": 0.2827,
+  "solUsd": 0.2832,
   "stableUsd": 28.9131,
-  "bagsUsd": 33.1919,
-  "totalUsd": 62.3877,
+  "bagsUsd": 33.1795,
+  "totalUsd": 62.3758,
   "tokens": {
-   "9XKzy4Ka": 0.0258,
+   "9XKzy4Ka": 0.0247,
    "BQAeeSow": 0.0033,
-   "HMYd9tos": 4.2766
+   "HMYd9tos": 4.2674
   },
-  "staleMs": 2605
+  "staleMs": 7976
  },
- "totalUsd": 118.4947,
+ "totalUsd": 118.5911,
  "deltas": [
   {
-   "ts": 1791770863398,
+   "ts": 1791771329955,
+   "kind": "position-opened",
+   "detail": "BTCUSDT:long",
+   "amt": 39.8849
+  },
+  {
+   "ts": 1791771329954,
    "kind": "position-opened",
    "detail": "NEARUSDT:long",
    "amt": 0.884
-  },
-  {
-   "ts": 1791770739847,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1808
-  },
-  {
-   "ts": 1791770570455,
-   "kind": "chain-stable-move",
-   "detail": "hot wallet",
-   "amt": -28.9131
-  },
-  {
-   "ts": 1791770375033,
-   "kind": "chain-stable-move",
-   "detail": "hot wallet",
-   "amt": 4.2302
-  },
-  {
-   "ts": 1791770361492,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": -0.0001
-  },
-  {
-   "ts": 1791770345434,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.195
-  },
-  {
-   "ts": 1791770143532,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0501
-  },
-  {
-   "ts": 1791770123592,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.081
-  },
-  {
-   "ts": 1791769973366,
-   "kind": "chain-stable-move",
-   "detail": "hot wallet",
-   "amt": -9.4584
-  },
-  {
-   "ts": 1791769968009,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0775
-  },
-  {
-   "ts": 1791769964690,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": -0.0003
-  },
-  {
-   "ts": 1791769961364,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": 0
-  },
-  {
-   "ts": 1791769910861,
-   "kind": "size-added",
-   "detail": "BTCUSDT:long Δ0.0022",
-   "amt": 0
-  },
-  {
-   "ts": 1791769897429,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": -0.3084
-  },
-  {
-   "ts": 1791769712306,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": 0.3114
-  },
-  {
-   "ts": 1791769027119,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 34.8407
-  },
-  {
-   "ts": 1791768159971,
-   "kind": "position-closed",
-   "detail": "MAGICUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1791767796026,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2113
-  },
-  {
-   "ts": 1791767631626,
-   "kind": "size-added",
-   "detail": "MAGICUSDT:long Δ55.8",
-   "amt": 0
-  },
-  {
-   "ts": 1791767514088,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:long Δ-95.89999999999999",
-   "amt": 0
   }
  ]
 }
