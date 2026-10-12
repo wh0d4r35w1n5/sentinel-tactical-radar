@@ -1,8 +1,8 @@
 {
- "at": "2026-10-12T10:16:13.162Z",
+ "at": "2026-10-12T10:23:02.974Z",
  "wallets": {
   "futures": {
-   "equityUsd": 38.69,
+   "equityUsd": 38.57,
    "marginFreeUsd": 18.69,
    "epochNetUsd": -16.69,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.12,
+     "upl": 0,
      "lev": 5,
      "margin": 39.88
     }
@@ -18,15 +18,22 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0157,
-   "stableUsd": 21.9,
-   "purseUsd": 29.63,
-   "positions": 1,
+   "sol": 0.0155,
+   "stableUsd": 5,
+   "purseUsd": 29.3,
+   "positions": 2,
    "laneNet": -1.36,
    "laneTrades": 27,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791800364421,
+    "symbol": "SEAN",
+    "sig": "4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
+    "text": "BUY SEAN $16.90"
+   },
    {
     "venue": "solana",
     "ts": 1791796956518,
@@ -89,13 +96,6 @@
     "symbol": "CALI",
     "sig": "5f2msXWD89QUbYCj56zfvYo3hNnzFmhCrLm5szpd32vCm1wnNG6YDjktVWV97gTwWMumHzoTWGroUZGV3sCeqtp7",
     "text": "BUY CALI $5.33"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791774506557,
-    "symbol": "GOIF",
-    "sig": "Yn9fKGZfNi2DJY5zGypoLTCMMjoNvS6CesdekJGHNeLUs8uwHRQcffvp5qrPCJCPxwa3RdtMc7QrwTR5pimMYZg",
-    "text": "BUY GOIF $7.10"
    }
   ]
  },
@@ -535,26 +535,15 @@
     -14.5117
    ],
    "persona": {
-    "swagger": 0.97,
-    "tilt": 0.02,
-    "greed": 0.97,
-    "discipline": 0.71
+    "swagger": 0.96,
+    "tilt": 0.03,
+    "greed": 0.96,
+    "discipline": 0.7
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "GOMO",
-   "direction": "LONG",
-   "ts": 1791633177077,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:cVBh1iCPV8eWEy4A8ur65ZvGrkDQWHNaY4y9WZHb32Xj1A2KYipZVyzGCEg4MLU7g3wU1et7fya7GiQenhdPUbH",
-   "onchain": true,
-   "filledAt": 1791633177077,
-   "live": false
-  },
   {
    "symbol": "SI276",
    "direction": "LONG",
@@ -675,6 +664,17 @@
    "onchain": true,
    "filledAt": 1791701215116,
    "live": false
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791800364421,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
+   "onchain": true,
+   "filledAt": 1791800364421,
+   "live": true
   }
  ],
  "drama": [
