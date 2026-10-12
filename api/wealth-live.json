@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-12T01:31:20.127Z",
- "ageMs": 3411,
+ "ts": "2026-10-12T01:45:46.018Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 0.8324,
-  "availableUsd": 0.5864,
+  "equityUsd": 35.6593,
+  "availableUsd": 35.6593,
   "marginUsedUsd": 0.2255,
-  "uplUsd": 0.0206,
+  "uplUsd": 0.0126,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0001,
     "marginUsd": 0.2255,
-    "uplUsd": 0.0206
+    "uplUsd": 0.0126
    }
   ]
  },
@@ -26,10 +26,16 @@
   "tokens": {
    "BQAeeSow": 0.0033
   },
-  "staleMs": 3411
+  "staleMs": 2263
  },
- "totalUsd": 0.8357,
+ "totalUsd": 35.6626,
  "deltas": [
+  {
+   "ts": 1791769027119,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 34.8407
+  },
   {
    "ts": 1791768159971,
    "kind": "position-closed",
@@ -143,12 +149,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.1214
-  },
-  {
-   "ts": 1791765763044,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1126
   }
  ]
 }
