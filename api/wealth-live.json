@@ -1,30 +1,42 @@
 {
- "ts": "2026-10-12T00:49:04.280Z",
- "ageMs": 1730,
+ "ts": "2026-10-12T01:00:37.337Z",
+ "ageMs": 7241,
  "src": "ws",
  "futures": {
-  "equityUsd": 1.6392,
-  "availableUsd": 0.9307,
-  "marginUsedUsd": 0.6949,
-  "uplUsd": 0.0136,
+  "equityUsd": 1.6338,
+  "availableUsd": 0.0555,
+  "marginUsedUsd": 2.5545,
+  "uplUsd": -0.0017,
   "positions": [
    {
     "k": "MAGICUSDT:long",
-    "size": 63.7,
-    "marginUsd": 0.3516,
-    "uplUsd": -0.0624
+    "size": 247,
+    "marginUsd": 1.3801,
+    "uplUsd": -0.0692
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0001,
     "marginUsd": 0.2255,
-    "uplUsd": 0.0412
+    "uplUsd": 0.0418
    },
    {
     "k": "AVAXUSDT:long",
     "size": 0.4,
     "marginUsd": 0.1178,
-    "uplUsd": 0.0348
+    "uplUsd": 0.032
+   },
+   {
+    "k": "USUSDT:long",
+    "size": 491,
+    "marginUsd": 0.5902,
+    "uplUsd": -0.0128
+   },
+   {
+    "k": "CKBUSDT:long",
+    "size": 6356,
+    "marginUsd": 0.2409,
+    "uplUsd": 0.0064
    }
   ]
  },
@@ -38,10 +50,34 @@
   "tokens": {
    "BQAeeSow": 0.0034
   },
-  "staleMs": 1730
+  "staleMs": 576873
  },
- "totalUsd": 1.6426,
+ "totalUsd": 1.6372,
  "deltas": [
+  {
+   "ts": 1791766830036,
+   "kind": "size-added",
+   "detail": "MAGICUSDT:long Δ183.3",
+   "amt": 0
+  },
+  {
+   "ts": 1791766160180,
+   "kind": "position-opened",
+   "detail": "CKBUSDT:long",
+   "amt": 0.2409
+  },
+  {
+   "ts": 1791766159070,
+   "kind": "position-opened",
+   "detail": "USUSDT:long",
+   "amt": 0.5902
+  },
+  {
+   "ts": 1791766159069,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0568
+  },
   {
    "ts": 1791766140163,
    "kind": "balance-move",
@@ -136,30 +172,6 @@
    "ts": 1791758211644,
    "kind": "size-reduced",
    "detail": "AVAXUSDT:long Δ-0.20000000000000007",
-   "amt": 0
-  },
-  {
-   "ts": 1791758083602,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0529
-  },
-  {
-   "ts": 1791757371935,
-   "kind": "size-reduced",
-   "detail": "AVAXUSDT:long Δ-0.30000000000000004",
-   "amt": 0
-  },
-  {
-   "ts": 1791757190173,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0509
-  },
-  {
-   "ts": 1791757164323,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:long Δ-37.5",
    "amt": 0
   }
  ]
