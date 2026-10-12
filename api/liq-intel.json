@@ -1,6 +1,6 @@
 {
- "ts": "2026-10-12T03:41:49.863Z",
- "src": "binance-forceOrder + bitget-trade",
+ "ts": "2026-10-12T03:46:25.884Z",
+ "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
    "long": 0,
@@ -17,7 +17,53 @@
   "cascade": null,
   "cascadeUsd": 0
  },
- "symbols": {},
+ "symbols": {
+  "BTCUSDT": {
+   "liq15m": {
+    "long": 0,
+    "short": 0
+   },
+   "liq60m": {
+    "long": 0,
+    "short": 0
+   },
+   "flow15m": {
+    "buy": 2019568,
+    "sell": 508296,
+    "delta": 1511271
+   }
+  },
+  "ETHUSDT": {
+   "liq15m": {
+    "long": 0,
+    "short": 0
+   },
+   "liq60m": {
+    "long": 0,
+    "short": 0
+   },
+   "flow15m": {
+    "buy": 252210,
+    "sell": 276852,
+    "delta": -24642
+   }
+  },
+  "SOLUSDT": {
+   "liq15m": {
+    "long": 0,
+    "short": 0
+   },
+   "liq60m": {
+    "long": 0,
+    "short": 0
+   },
+   "flow15m": {
+    "buy": 36629,
+    "sell": 54434,
+    "delta": -17805
+   }
+  }
+ },
  "biggestPrints60m": [],
  "liqCount2h": 0
 }
