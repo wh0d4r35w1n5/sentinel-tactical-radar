@@ -1,38 +1,44 @@
 {
- "ts": "2026-10-12T20:28:01.486Z",
- "ageMs": 4839,
+ "ts": "2026-10-12T20:32:46.697Z",
+ "ageMs": 5228,
  "src": "ws",
  "futures": {
-  "equityUsd": 73.2159,
-  "availableUsd": 31.411,
+  "equityUsd": 73.3215,
+  "availableUsd": 31.1614,
   "grantUsd": 20,
-  "equityOwnUsd": 53.2159,
-  "marginUsedUsd": 42.6616,
-  "uplUsd": -0.8475,
+  "equityOwnUsd": 53.3215,
+  "marginUsedUsd": 43.0189,
+  "uplUsd": -0.8715,
   "positions": [
    {
     "k": "NEARUSDT:short",
     "size": 5,
     "marginUsd": 0.7639,
-    "uplUsd": -0.0725
+    "uplUsd": -0.043
    },
    {
     "k": "MAGICUSDT:short",
-    "size": 231.8,
-    "marginUsd": 1.1302,
-    "uplUsd": 0.1113
+    "size": 113.7,
+    "marginUsd": 0.5544,
+    "uplUsd": 0.1285
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.866,
-    "uplUsd": -0.9126
+    "uplUsd": -0.8777
    },
    {
     "k": "OPUSDT:short",
     "size": 264.2,
     "marginUsd": 0.9016,
-    "uplUsd": 0.0264
+    "uplUsd": -0.0793
+   },
+   {
+    "k": "AVAXUSDT:short",
+    "size": 3.8,
+    "marginUsd": 0.9331,
+    "uplUsd": 0
    }
   ]
  },
@@ -47,10 +53,34 @@
    "8PGyHCKv": 0.0696,
    "BQAeeSow": 0.0018
   },
-  "staleMs": 4840
+  "staleMs": 5229
  },
- "totalUsd": 53.5492,
+ "totalUsd": 53.6546,
  "deltas": [
+  {
+   "ts": 1791837140989,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:short Δ-48.60000000000001",
+   "amt": 0
+  },
+  {
+   "ts": 1791837139699,
+   "kind": "size-reduced",
+   "detail": "MAGICUSDT:short Δ-69.5",
+   "amt": 0
+  },
+  {
+   "ts": 1791837089764,
+   "kind": "position-opened",
+   "detail": "AVAXUSDT:short",
+   "amt": 0.9331
+  },
+  {
+   "ts": 1791837089764,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1076
+  },
   {
    "ts": 1791836736467,
    "kind": "size-reduced",
@@ -146,36 +176,12 @@
    "kind": "size-added",
    "detail": "MAGICUSDT:short Δ2939.1",
    "amt": 0
-  },
-  {
-   "ts": 1791836452113,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.4454
-  },
-  {
-   "ts": 1791836451104,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:short Δ-110.80000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1791836451103,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1717
-  },
-  {
-   "ts": 1791836262560,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.4198
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -793.22,
+  "netAfterAud": -793.06,
   "clearedPct": 8.8
  }
 }
