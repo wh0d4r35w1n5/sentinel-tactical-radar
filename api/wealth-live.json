@@ -1,53 +1,59 @@
 {
- "ts": "2026-10-12T02:15:40.080Z",
- "ageMs": 7976,
+ "ts": "2026-10-12T02:18:46.447Z",
+ "ageMs": 400,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.2154,
+  "equityUsd": 56.7472,
   "availableUsd": 14.7578,
   "grantUsd": 0,
-  "equityOwnUsd": 56.2154,
+  "equityOwnUsd": 56.7472,
   "marginUsedUsd": 40.7688,
-  "uplUsd": 0.6887,
+  "uplUsd": 1.2206,
   "positions": [
    {
     "k": "NEARUSDT:long",
     "size": 5,
     "marginUsd": 0.884,
-    "uplUsd": -0.082
+    "uplUsd": -0.009
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.7707
+    "uplUsd": 1.2296
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002534,
-  "solUsd": 0.2832,
+  "solUsd": 0.2839,
   "stableUsd": 28.9131,
-  "bagsUsd": 33.1795,
-  "totalUsd": 62.3758,
+  "bagsUsd": 33.1935,
+  "totalUsd": 62.3905,
   "tokens": {
-   "9XKzy4Ka": 0.0247,
+   "9XKzy4Ka": 0.0226,
    "BQAeeSow": 0.0033,
-   "HMYd9tos": 4.2674
+   "HMYd9tos": 4.2981
   },
-  "staleMs": 7976
+  "staleMs": 9863
  },
- "totalUsd": 118.5911,
+ "totalUsd": 119.1377,
  "deltas": [
   {
-   "ts": 1791771329955,
+   "ts": 1791771526047,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.3176
+  },
+  {
+   "ts": 1791771424944,
    "kind": "position-opened",
    "detail": "BTCUSDT:long",
    "amt": 39.8849
   },
   {
-   "ts": 1791771329954,
+   "ts": 1791771424943,
    "kind": "position-opened",
    "detail": "NEARUSDT:long",
    "amt": 0.884
