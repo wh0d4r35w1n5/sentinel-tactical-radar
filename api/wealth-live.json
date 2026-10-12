@@ -1,51 +1,89 @@
 {
- "ts": "2026-10-12T03:05:32.151Z",
- "ageMs": 2640,
+ "ts": "2026-10-12T03:10:22.223Z",
+ "ageMs": 7621,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.0869,
-  "availableUsd": 14.5684,
+  "equityUsd": 55.804,
+  "availableUsd": 3.0354,
   "grantUsd": 20,
-  "equityOwnUsd": 36.0869,
-  "marginUsedUsd": 40.9513,
-  "uplUsd": 0.5642,
+  "equityOwnUsd": 35.804,
+  "marginUsedUsd": 52.214,
+  "uplUsd": 0.4938,
   "positions": [
    {
     "k": "ARBUSDT:long",
     "size": 62.67,
     "marginUsd": 0.4627,
-    "uplUsd": -0.1416
+    "uplUsd": -0.156
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.6935
+    "uplUsd": 0.5913
    },
    {
     "k": "INJUSDT:long",
-    "size": 3.1,
-    "marginUsd": 0.6037,
-    "uplUsd": 0.0124
+    "size": 60.9,
+    "marginUsd": 11.8664,
+    "uplUsd": 0.0585
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-  "solQty": 0.002534,
-  "solUsd": 0.2834,
-  "stableUsd": 28.9131,
-  "bagsUsd": 33.1084,
-  "totalUsd": 62.3049,
+  "solQty": 0.023421,
+  "solUsd": 2.6165,
+  "stableUsd": 13.6426,
+  "bagsUsd": 30.1646,
+  "totalUsd": 46.4237,
   "tokens": {
-   "9XKzy4Ka": 0.0273,
-   "BQAeeSow": 0.0032,
-   "HMYd9tos": 4.2123
+   "8k4sBtEe": 5.2225,
+   "9Twd5vXA": 7.0914,
+   "9XKzy4Ka": 0.0261,
+   "BQAeeSow": 0.0033,
+   "HMYd9tos": 4.2552
   },
-  "staleMs": 2640
+  "staleMs": 7621
  },
- "totalUsd": 98.3919,
+ "totalUsd": 82.2277,
  "deltas": [
+  {
+   "ts": 1791774513909,
+   "kind": "size-added",
+   "detail": "INJUSDT:long Δ57.8",
+   "amt": 0
+  },
+  {
+   "ts": 1791774513909,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2829
+  },
+  {
+   "ts": 1791774509522,
+   "kind": "chain-stable-move",
+   "detail": "hot wallet",
+   "amt": -15.2705
+  },
+  {
+   "ts": 1791774508474,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.0015
+  },
+  {
+   "ts": 1791774505733,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.003
+  },
+  {
+   "ts": 1791774501426,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": 0.0254
+  },
   {
    "ts": 1791774212920,
    "kind": "position-opened",

@@ -1,8 +1,8 @@
 {
- "at": "2026-10-12T03:03:32.324Z",
+ "at": "2026-10-12T03:08:33.296Z",
  "wallets": {
   "futures": {
-   "equityUsd": 36.31,
+   "equityUsd": 36.07,
    "marginFreeUsd": 15.19,
    "epochNetUsd": -28.8,
    "fills": 400,
@@ -10,14 +10,14 @@
     {
      "symbol": "ARBUSDT",
      "side": "long",
-     "upl": -0.19,
+     "upl": -0.14,
      "lev": 37,
-     "margin": 0.61
+     "margin": 0.46
     },
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.81,
+     "upl": 0.68,
      "lev": 5,
      "margin": 39.88
     }
@@ -25,15 +25,36 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0025,
+   "sol": 0.028,
    "stableUsd": 28.91,
-   "purseUsd": 33.15,
-   "positions": 1,
+   "purseUsd": 45.59,
+   "positions": 3,
    "laneNet": 0.05,
    "laneTrades": 22,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791774509204,
+    "symbol": "CALI",
+    "sig": "5f2msXWD89QUbYCj56zfvYo3hNnzFmhCrLm5szpd32vCm1wnNG6YDjktVWV97gTwWMumHzoTWGroUZGV3sCeqtp7",
+    "text": "BUY CALI $5.33"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791774506557,
+    "symbol": "GOIF",
+    "sig": "Yn9fKGZfNi2DJY5zGypoLTCMMjoNvS6CesdekJGHNeLUs8uwHRQcffvp5qrPCJCPxwa3RdtMc7QrwTR5pimMYZg",
+    "text": "BUY GOIF $7.10"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791774502000,
+    "symbol": null,
+    "sig": "2fExL2rrBUY12SS8Kgad6EfrHHQn5c4GGwn835wiqxhgTwEXat48CYd9pU8irprQNASks8CLcc8WUJCLBzwz637E",
+    "text": "BOOTSTRAP boot"
+   },
    {
     "venue": "solana",
     "ts": 1791770361672,
@@ -82,27 +103,6 @@
     "symbol": null,
     "sig": "5QhwjNz28nveKjshEQKKdJhJ9XxqoGmPfgK9MyAWQaWxbznNx4rECjv5FZsFQ8RHzEsdTSnTBJY1pM9YrU9dADwr",
     "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791718740803,
-    "symbol": "67",
-    "sig": null,
-    "text": "RECONCILE 67"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702862763,
-    "symbol": "GOMO",
-    "sig": null,
-    "text": "RECONCILE GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702862254,
-    "symbol": "QT",
-    "sig": null,
-    "text": "RECONCILE QT"
    }
   ]
  },
@@ -542,7 +542,7 @@
     -17.5234
    ],
    "persona": {
-    "swagger": 0.83,
+    "swagger": 0.82,
     "tilt": 0.18,
     "greed": 0.89,
     "discipline": 0.47
@@ -551,28 +551,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "GOMO",
-   "direction": "LONG",
-   "ts": 1791624698550,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
-   "onchain": true,
-   "filledAt": 1791624698550,
-   "live": false
-  },
-  {
-   "symbol": "QOMPUTE",
-   "direction": "LONG",
-   "ts": 1791631919928,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:Kjgiayu9uBzKTRDyEpwnzcNyfHwG8aMBazw1KLqGLfATJDnkTK7GLwDXBkuzuAJbkMUmwxsaL8cyskxxBDWnCPf",
-   "onchain": true,
-   "filledAt": 1791631919928,
-   "live": false
-  },
   {
    "symbol": "MOIN",
    "direction": "LONG",
@@ -697,6 +675,28 @@
    "coid": "oc:4SRNpz6LgMA5RC5MNZtPGz6Z9uT8CTxVoyJaJyZ5QSkRwdmXW6C15jjMht2xQ4tmiGqBghiCMEdXpxUzBbjXVmXG",
    "onchain": true,
    "filledAt": 1791769964910,
+   "live": true
+  },
+  {
+   "symbol": "GOIF",
+   "direction": "LONG",
+   "ts": 1791774506557,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:Yn9fKGZfNi2DJY5zGypoLTCMMjoNvS6CesdekJGHNeLUs8uwHRQcffvp5qrPCJCPxwa3RdtMc7QrwTR5pimMYZg",
+   "onchain": true,
+   "filledAt": 1791774506557,
+   "live": true
+  },
+  {
+   "symbol": "CALI",
+   "direction": "LONG",
+   "ts": 1791774509204,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5f2msXWD89QUbYCj56zfvYo3hNnzFmhCrLm5szpd32vCm1wnNG6YDjktVWV97gTwWMumHzoTWGroUZGV3sCeqtp7",
+   "onchain": true,
+   "filledAt": 1791774509204,
    "live": true
   }
  ],
