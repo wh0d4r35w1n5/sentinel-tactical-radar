@@ -1,65 +1,65 @@
 {
- "ts": "2026-10-12T05:37:13.625Z",
- "ageMs": 3940,
+ "ts": "2026-10-12T05:42:21.411Z",
+ "ageMs": 7074,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.6187,
+  "equityUsd": 56.9444,
   "availableUsd": 7.629,
   "grantUsd": 20,
-  "equityOwnUsd": 36.6187,
-  "marginUsedUsd": 50.9777,
-  "uplUsd": -1.1872,
+  "equityOwnUsd": 36.9444,
+  "marginUsedUsd": 50.2831,
+  "uplUsd": -0.9677,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 3.4,
     "marginUsd": 10.3982,
-    "uplUsd": -2.1692
-   },
-   {
-    "k": "NEARUSDT:short",
-    "size": 1,
-    "marginUsd": 0.1281,
-    "uplUsd": 0.0197
-   },
-   {
-    "k": "SUIUSDT:short",
-    "size": 4,
-    "marginUsd": 0.1194,
-    "uplUsd": 0.0304
-   },
-   {
-    "k": "AVAXUSDT:short",
-    "size": 1.7,
-    "marginUsd": 0.4471,
-    "uplUsd": 0.0561
+    "uplUsd": -1.9822
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.8758
+    "uplUsd": 1.0145
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.015674,
-  "solUsd": 1.7641,
+  "solUsd": 1.7655,
   "stableUsd": 14.9316,
-  "bagsUsd": 29.4776,
-  "totalUsd": 46.1733,
+  "bagsUsd": 29.4931,
+  "totalUsd": 46.1902,
   "tokens": {
-   "2j5SaS7x": 2.1847,
-   "8k4sBtEe": 5.1041,
-   "9Twd5vXA": 7.3387,
+   "2j5SaS7x": 2.2264,
+   "8k4sBtEe": 5.0435,
+   "9Twd5vXA": 7.3868,
    "9XKzy4Ka": 0.0239,
-   "BQAeeSow": 0.0029
+   "BQAeeSow": 0.003
   },
-  "staleMs": 3940
+  "staleMs": 7074
  },
- "totalUsd": 82.792,
+ "totalUsd": 83.1345,
  "deltas": [
+  {
+   "ts": 1791783663395,
+   "kind": "position-closed",
+   "detail": "AVAXUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791783663395,
+   "kind": "position-closed",
+   "detail": "SUIUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791783663285,
+   "kind": "position-closed",
+   "detail": "NEARUSDT:short",
+   "amt": 0
+  },
   {
    "ts": 1791783176837,
    "kind": "balance-move",
@@ -161,24 +161,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": 0.137
-  },
-  {
-   "ts": 1791782965118,
-   "kind": "size-reduced",
-   "detail": "NEARUSDT:short Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1791782964468,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.053
-  },
-  {
-   "ts": 1791782787317,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1923
   }
  ]
 }
