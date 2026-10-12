@@ -1,41 +1,71 @@
 {
- "ts": "2026-10-12T06:59:19.305Z",
- "ageMs": 2711,
+ "ts": "2026-10-12T07:05:17.450Z",
+ "ageMs": 9376,
  "src": "ws",
  "futures": {
-  "equityUsd": 57.3916,
-  "availableUsd": 16.2404,
+  "equityUsd": 57.5232,
+  "availableUsd": 15.8222,
   "grantUsd": 20,
-  "equityOwnUsd": 37.3916,
-  "marginUsedUsd": 39.8849,
-  "uplUsd": 1.2664,
+  "equityOwnUsd": 37.5232,
+  "marginUsedUsd": 44.9141,
+  "uplUsd": 1.4977,
   "positions": [
+   {
+    "k": "LUMIAUSDT:long",
+    "size": 436,
+    "marginUsd": 5.0293,
+    "uplUsd": -0.3184
+   },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 1.2664
+    "uplUsd": 1.8161
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.015661,
-  "solUsd": 1.7641,
+  "solUsd": 1.7664,
   "stableUsd": 16.8526,
-  "bagsUsd": 29.3457,
-  "totalUsd": 47.9624,
+  "bagsUsd": 29.2983,
+  "totalUsd": 47.9173,
   "tokens": {
-   "2j5SaS7x": 0.019,
-   "8k4sBtEe": 5.0564,
-   "9Twd5vXA": 7.3793,
-   "9XKzy4Ka": 0.0208,
+   "2j5SaS7x": 0.0185,
+   "8k4sBtEe": 5.0215,
+   "9Twd5vXA": 7.3755,
+   "9XKzy4Ka": 0.0209,
    "BQAeeSow": 0.0022
   },
-  "staleMs": 2711
+  "staleMs": 10602
  },
- "totalUsd": 85.354,
+ "totalUsd": 85.4404,
  "deltas": [
+  {
+   "ts": 1791788708074,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2958
+  },
+  {
+   "ts": 1791788554558,
+   "kind": "position-opened",
+   "detail": "LUMIAUSDT:long",
+   "amt": 5.0293
+  },
+  {
+   "ts": 1791788554553,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1229
+  },
+  {
+   "ts": 1791788468466,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": 0.354
+  },
   {
    "ts": 1791787881574,
    "kind": "position-closed",
@@ -131,30 +161,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.0985
-  },
-  {
-   "ts": 1791783058748,
-   "kind": "size-reduced",
-   "detail": "SUIUSDT:short Δ-3.1999999999999993",
-   "amt": 0
-  },
-  {
-   "ts": 1791783057962,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2759
-  },
-  {
-   "ts": 1791783049099,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.4801
-  },
-  {
-   "ts": 1791783036880,
-   "kind": "size-reduced",
-   "detail": "SUIUSDT:short Δ-4.800000000000001",
-   "amt": 0
   }
  ]
 }
