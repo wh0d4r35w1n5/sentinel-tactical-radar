@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SENTINEL // STORM CHASER</title>
+<style>
+  :root { --bg:#0b0d10; --panel:#12161b; --line:#232a33; --txt:#d7dde3; --dim:#8a94a0; --faint:#5a6470; --green:#2fbf71; --red:#e05252; --blue:#4aa8ff; --amber:#f0a040; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font:14px/1.5 "Segoe UI",system-ui,sans-serif; padding:24px 28px; }
+  h1 { font-size:22px; letter-spacing:2px; }
+  .sub { color:var(--dim); font-size:12px; margin:4px 0 20px; }
+  .grid { display:grid; gap:12px; }
+  .g4 { grid-template-columns:repeat(4,1fr); } .g2 { grid-template-columns:1fr 1fr; }
+  @media (max-width:900px){ .g4{grid-template-columns:1fr 1fr} .g2{grid-template-columns:1fr} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .card h3 { font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--faint); margin-bottom:10px; font-weight:600; }
+  .stat .v { font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stat .l { font-size:11px; color:var(--dim); margin-top:2px; }
+  .accent .v { color:var(--blue); } .good .v { color:var(--green); }
+  canvas#storm { width:100%; display:block; background:#0e1216; border-radius:8px; }
+  .note { font-size:12px; color:var(--dim); margin-top:10px; }
+  .note b { color:var(--txt); }
+  table { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--faint); padding:4px 8px 6px; border-bottom:1px solid var(--line); }
+  td { padding:6px 8px; border-bottom:1px solid #1a2028; }
+  tr:nth-child(even) td { background:#141a21; }
+  td.r, th.r { text-align:right; }
+  .pill { display:inline-block; background:#1a222c; border:1px solid var(--line); border-radius:20px; padding:3px 10px; font-size:11px; color:var(--dim); margin:2px 3px 2px 0; }
+  .bar-row { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px; }
+  .bar-row .sym { width:52px; color:var(--dim); }
+  .bar { height:8px; border-radius:4px; }
+  .bar.l { background:var(--red); } .bar.s { background:var(--blue); }
+  .num { width:80px; text-align:right; font-variant-numeric:tabular-nums; }
+  .flow { font-variant-numeric:tabular-nums; }
+  .flow.neg { color:var(--red); } .flow.pos { color:var(--green); }
+  .foot { margin-top:18px; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--blue); border-radius:8px; color:var(--dim); font-size:12px; }
+  .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-left:8px; animation:p 1.6s infinite; }
+  .live-dot.stale { background:var(--amber); } .live-dot.dead { background:var(--red); animation:none; }
+  @keyframes p { 0%,100%{opacity:1} 50%{opacity:.25} }
+  #age { color:var(--faint); font-size:11px; font-variant-numeric:tabular-nums; }
+  .cascade-on { border-left:3px solid var(--red) !important; }
+</style>
+</head>
+<body>
+<h1>SENTINEL // STORM CHASER <span id="age"></span><span id="dot" class="live-dot"></span></h1>
+<div class="sub">4 public exchange streams → one tape-intelligence daemon → every gate on both bots · LIVE via pushbot mirror</div>
+
+<div class="grid g4">
+  <div class="card stat accent"><div class="v" id="vOwn">—</div><div class="l" id="lOwn">combined ownable</div></div>
+  <div class="card stat"><div class="v" id="vB1">—</div><div class="l" id="lB1">Bot 1 futures ownable</div></div>
+  <div class="card stat"><div class="v" id="vB2">—</div><div class="l">Bot 2 on-chain wallet</div></div>
+  <div class="card stat good"><div class="v" id="vAth">—</div><div class="l">all-time high-water</div></div>
+</div>
+
+<div class="card" id="stormCard" style="margin-top:12px">
+  <h3 id="stormTitle">The Storm — aggressor order-flow, 15m window</h3>
+  <canvas id="storm" height="260"></canvas>
+  <div class="note" id="stormNote"></div>
+</div>
+
+<div class="grid g2" style="margin-top:12px">
+  <div class="card">
+    <h3>Liquidations by symbol — 60m ($k) · longs vs shorts rekt</h3>
+    <div id="liqbars"></div>
+    <div class="note" id="liqNote"></div>
+  </div>
+  <div class="card">
+    <h3>Aggressor flow — 15m ($M)</h3>
+    <table id="flowTbl"><tr><th>Sym</th><th class="r">Taker buys</th><th class="r">Taker sells</th><th class="r">Net Δ</th></tr></table>
+    <div class="note" id="cascadeNote"></div>
+  </div>
+</div>
+
+<div class="grid g2" style="margin-top:12px">
+  <div class="card">
+    <h3>Machine vs operator — live forward evidence</h3>
+    <table id="evTbl"><tr><th>Cohort</th><th class="r">Eps</th><th class="r">Net USD</th><th class="r">WR%</th></tr></table>
+    <div class="note" id="evNote"></div>
+  </div>
+  <div class="card">
+    <h3>Open book — who is in the storm</h3>
+    <table id="posTbl"><tr><th>Position</th><th class="r">USD</th><th class="r">uPL</th></tr></table>
+  </div>
+</div>
+
+<div class="foot" id="foot">—</div>
+
+<script>
+const PAGES = 'https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/';
+const BASE = (location.protocol === 'file:') ? PAGES + 'api/' : './';
+const $ = (id) => document.getElementById(id);
+const fmtM = (v) => (Math.abs(v) >= 1e6 ? (v/1e6).toFixed(2)+'M' : Math.abs(v) >= 1e3 ? (v/1e3).toFixed(1)+'k' : v.toFixed(0));
+let aud = 1.4324;
+const A$ = (u) => 'A$' + (u*aud).toFixed(2);
+
+async function j(url){ const r = await fetch(url, {cache:'no-store'}); return r.ok ? r.json() : null; }
+
+// ── storm particles — lanes rebuilt from live deltas each refresh ──
+const cv=$('storm'),ctx=cv.getContext('2d');let lanes=[];
+function size(){cv.width=cv.clientWidth*devicePixelRatio;cv.height=260*devicePixelRatio;}
+size();addEventListener('resize',size);
+function buildLanes(flow){
+  lanes = flow.slice(0,6).map((f,i)=>{
+    const mag=Math.min(1,Math.abs(f.delta)/20e6);
+    const parts=[];const n=16+Math.round(mag*30);
+    for(let k=0;k<n;k++)parts.push({x:Math.random(),y:0.15+Math.random()*0.7,r:1.4+((k*7+i*3)%5)*0.5*(0.4+mag),op:0.2+Math.random()*0.55});
+    return {...f,mag,parts,speed:(0.04+mag*0.22)*(f.delta<0?-1:1)};
+  });
+}
+function tick(){
+  const W=cv.width,H=cv.height,n=Math.max(lanes.length,1),laneH=(H-30*devicePixelRatio)/n;
+  ctx.clearRect(0,0,W,H);
+  lanes.forEach((L,i)=>{
+    const y0=i*laneH+14*devicePixelRatio;
+    L.parts.forEach(p=>{p.x+=L.speed*0.002;if(p.x<0)p.x+=1;if(p.x>1)p.x-=1;
+      ctx.globalAlpha=p.op;ctx.fillStyle=L.delta<0?'#e05252':'#2fbf71';
+      ctx.beginPath();ctx.arc(p.x*W,y0+p.y*(laneH-20*devicePixelRatio),p.r*devicePixelRatio,0,7);ctx.fill();});
+    ctx.globalAlpha=1;ctx.fillStyle='#8a94a0';ctx.font=`${11*devicePixelRatio}px monospace`;ctx.textAlign='right';
+    ctx.fillText(`${L.sym} Δ ${(L.delta/1e6).toFixed(2)}M/15m`,W-8*devicePixelRatio,y0+12*devicePixelRatio);
+    ctx.strokeStyle='#232a33';ctx.beginPath();ctx.moveTo(0,i*laneH+laneH);ctx.lineTo(W,i*laneH+laneH);ctx.stroke();
+  });
+  if(!lanes.length){ctx.fillStyle='#5a6470';ctx.font=`${11*devicePixelRatio}px monospace`;ctx.fillText('waiting for tape…',10,30);}
+  ctx.fillStyle='#5a6470';ctx.font=`${10*devicePixelRatio}px monospace`;ctx.textAlign='left';
+  ctx.fillText('aggressor order-flow, live tape — left drift = sell dominance · density ∝ $|Δ|',4,H-8*devicePixelRatio);
+  requestAnimationFrame(tick);
+}
+tick();
+
+async function refresh(){
+  const [li, w, ev, ab] = await Promise.all([
+    j(BASE+'liq-intel.json'), j(BASE+'wealth-live.json'), j(BASE+'forward-evidence.json'), j(BASE+'liq-ab.json'),
+  ]);
+  // FX — live public rate, graceful fallback
+  try{ const fx=await j('https://api.frankfurter.app/latest?from=USD&to=AUD'); if(fx?.rates?.AUD)aud=fx.rates.AUD; }catch{}
+
+  const dot=$('dot'), ageEl=$('age');
+  const ageSec = li?.ts ? (Date.now()-new Date(li.ts).getTime())/1000 : 1e9;
+  dot.className='live-dot'+(ageSec<420?'':ageSec<900?' stale':' dead');
+  ageEl.textContent = li?.ts ? ' · tape '+Math.max(0,Math.round(ageSec/60))+'m old (mirror ~5m)' : ' · feed unreachable';
+
+  if(w){
+    $('vOwn').textContent=A$(w.totalUsd); $('lOwn').textContent=`combined ownable · US$${w.totalUsd.toFixed(2)}`;
+    $('vB1').textContent=A$(w.futures.equityOwnUsd);
+    $('lB1').textContent=`Bot 1 ownable (+${A$(w.futures.grantUsd||0)} coupon margin — not ours)`;
+    $('vB2').textContent=A$(w.solana.totalUsd);
+    try{ const a=await j(BASE+'wealth-ath.json'); $('vAth').textContent=a?A$(a.athUsd):'—'; }catch{}
+    const pos=(w.futures.positions||[]).map(p=>({seat:p.k.replace('USDT:',' '),usd:p.marginUsd,upl:p.uplUsd,tag:''}));
+    (w.solana.holdingsUsd||[]).filter(h=>h.usd>0.3).forEach(h=>pos.push({seat:h.sym+' on-chain',usd:h.usd,upl:null,tag:''}));
+    $('posTbl').innerHTML='<tr><th>Position</th><th class="r">USD</th><th class="r">uPL</th></tr>'+
+      pos.map(p=>`<tr><td>${p.seat}</td><td class="r">${p.usd.toFixed(2)}</td><td class="r flow ${p.upl==null?'':p.upl>=0?'pos':'neg'}">${p.upl==null?'—':(p.upl>=0?'+':'')+p.upl.toFixed(2)}</td></tr>`).join('')||'<tr><td colspan=3>flat</td></tr>';
+  }
+
+  if(li){
+    const flow=[];
+    for(const [sym,c] of Object.entries(li.symbols||{})){
+      const f=c.flow15m||{buy:0,sell:0,delta:0};
+      if(f.buy||f.sell||Math.abs(f.delta||0)>0) flow.push({sym:sym.replace('USDT',''),buy:f.buy||0,sell:f.sell||0,delta:f.delta||0});
+    }
+    flow.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+    buildLanes(flow);
+    $('stormNote').innerHTML = flow.length
+      ? `Heaviest tape: <b>${flow[0].sym} ${(flow[0].delta/1e6).toFixed(1)}M ${flow[0].delta<0?'sell':'buy'} Δ/15m</b> · left drift = sell dominance · density ∝ $|Δ|`
+      : 'Tape quiet — no aggressor prints in window.';
+    $('flowTbl').innerHTML='<tr><th>Sym</th><th class="r">Taker buys</th><th class="r">Taker sells</th><th class="r">Net Δ</th></tr>'+
+      flow.map(f=>`<tr><td>${f.sym}</td><td class="r">${fmtM(f.buy)}</td><td class="r">${fmtM(f.sell)}</td><td class="r flow ${f.delta<0?'neg':'pos'}">${(f.delta<0?'−':'+')+fmtM(Math.abs(f.delta))}</td></tr>`).join('');
+    const g=li.global||{};const casc=g.cascade;
+    $('cascadeNote').innerHTML=`Global cascade: <b>${casc?casc.toUpperCase()+' $'+fmtM(g.cascadeUsd||0)+'/15m — GATES FIRING':'none — gates armed, not firing'}</b>`;
+    $('stormCard').className = casc ? 'card cascade-on' : 'card';
+    $('stormTitle').textContent = casc ? `THE STORM — ${casc}-side cascade firing` : 'The Storm — aggressor order-flow, 15m window';
+    const lb=Object.entries(li.symbols||{}).map(([sym,c])=>({sym:sym.replace('USDT',''),L:(c.liq60m?.long||0)/1e3,S:(c.liq60m?.short||0)/1e3})).filter(r=>r.L+r.S>0.5).sort((a,b)=>(b.L+b.S)-(a.L+a.S)).slice(0,10);
+    const mx=Math.max(1,...lb.flatMap(r=>[r.L,r.S]));
+    $('liqbars').innerHTML = lb.length ? lb.map(r=>
+      `<div class="bar-row"><span class="sym">${r.sym}</span><div class="bar l" style="width:${(r.L/mx*55).toFixed(1)}%"></div><span class="num" style="color:var(--red)">${r.L.toFixed(1)}</span><div class="bar s" style="width:${(r.S/mx*55).toFixed(1)}%"></div><span class="num" style="color:var(--blue)">${r.S.toFixed(1)}</span></div>`).join('')
+      +'<div class="note">red=longs rekt · blue=shorts rekt · $k, 60m window</div>'
+      : '<div class="note">No prints in the last hour — calm tape.</div>';
+    $('liqNote').textContent='Source: Bybit allLiquidation + OKX liquidation-orders';
+  }
+
+  if(ev){
+    const e=ev.episodes||{};
+    const rows=[['machine · dip',e.dip],['machine · pump',e.pump],['operator manual',e.operator]].filter(r=>r[1]);
+    $('evTbl').innerHTML='<tr><th>Cohort</th><th class="r">Eps</th><th class="r">Net USD</th><th class="r">WR%</th></tr>'+
+      rows.map(([n,c])=>`<tr><td>${n}</td><td class="r">${c.n}</td><td class="r flow ${c.netUsd>=0?'pos':'neg'}">${(c.netUsd>=0?'+':'−')+'$'+Math.abs(c.netUsd).toFixed(2)}</td><td class="r">${c.wrPct}</td></tr>`).join('');
+    $('evNote').innerHTML=`Only <b>${e.independent??'—'} of ${e.total??'—'}</b> episodes independent under non-overlap rules · realized net $${(ev.realized?.netUsd??0).toFixed(2)}`;
+  }
+
+  const abv = ab ? `${ab.graded} shadow fills graded — ${ab.verdict}` : 'A/B grader collecting';
+  $('foot').textContent = `9 daemons active · guards CPU 1000/nice−5 vs scanner 100/nice+10 · ${abv} · data via pushbot GitHub Pages mirror (~5m cadence)`;
+}
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
