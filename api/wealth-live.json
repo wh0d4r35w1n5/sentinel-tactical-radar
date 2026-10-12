@@ -1,47 +1,71 @@
 {
- "ts": "2026-10-12T04:06:18.476Z",
- "ageMs": 12061,
+ "ts": "2026-10-12T04:12:35.549Z",
+ "ageMs": 12771,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.6551,
-  "availableUsd": 4.4804,
+  "equityUsd": 56.4825,
+  "availableUsd": 16.3943,
   "grantUsd": 20,
-  "equityOwnUsd": 36.6551,
+  "equityOwnUsd": 36.4825,
   "marginUsedUsd": 52.2665,
-  "uplUsd": -0.0918,
+  "uplUsd": 0.0301,
   "positions": [
    {
     "k": "ETHUSDT:long",
     "size": 0.18,
     "marginUsd": 12.3817,
-    "uplUsd": -0.328
+    "uplUsd": -0.1732
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.2362
+    "uplUsd": 0.2033
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.023421,
-  "solUsd": 2.6135,
+  "solUsd": 2.6145,
   "stableUsd": 13.6426,
-  "bagsUsd": 30.5043,
-  "totalUsd": 46.7604,
+  "bagsUsd": 30.5134,
+  "totalUsd": 46.7706,
   "tokens": {
-   "8k4sBtEe": 5.1473,
-   "9Twd5vXA": 7.2094,
+   "8k4sBtEe": 5.2051,
+   "9Twd5vXA": 7.162,
    "9XKzy4Ka": 0.0255,
    "BQAeeSow": 0.0028,
-   "HMYd9tos": 4.6167
+   "HMYd9tos": 4.6657
   },
-  "staleMs": 12061
+  "staleMs": 12771
  },
- "totalUsd": 83.4155,
+ "totalUsd": 83.253,
  "deltas": [
+  {
+   "ts": 1791778335891,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3502
+  },
+  {
+   "ts": 1791778298118,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0936
+  },
+  {
+   "ts": 1791778270778,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1667
+  },
+  {
+   "ts": 1791778233447,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1045
+  },
   {
    "ts": 1791777932504,
    "kind": "balance-move",
@@ -137,30 +161,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.1547
-  },
-  {
-   "ts": 1791775708242,
-   "kind": "size-reduced",
-   "detail": "CKBUSDT:short Δ-2717",
-   "amt": 0
-  },
-  {
-   "ts": 1791775699789,
-   "kind": "size-reduced",
-   "detail": "CKBUSDT:short Δ-2727",
-   "amt": 0
-  },
-  {
-   "ts": 1791775697590,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.4831
-  },
-  {
-   "ts": 1791775697542,
-   "kind": "position-opened",
-   "detail": "CKBUSDT:short",
-   "amt": 0.6623
   }
  ]
 }
