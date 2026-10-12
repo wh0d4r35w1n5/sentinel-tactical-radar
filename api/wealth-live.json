@@ -1,38 +1,44 @@
 {
- "ts": "2026-10-12T22:15:48.428Z",
- "ageMs": 6533,
+ "ts": "2026-10-12T22:19:07.549Z",
+ "ageMs": 8809,
  "src": "ws",
  "futures": {
-  "equityUsd": 70.7889,
+  "equityUsd": 70.5752,
   "availableUsd": 32.6638,
   "grantUsd": 20,
-  "equityOwnUsd": 50.7889,
+  "equityOwnUsd": 50.5752,
   "marginUsedUsd": 39.866,
-  "uplUsd": -1.7409,
+  "uplUsd": -1.9545,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.866,
-    "uplUsd": -1.7409
+    "uplUsd": -1.9545
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2587,
+  "solUsd": 0.2582,
   "stableUsd": 0,
-  "bagsUsd": 0.0711,
-  "totalUsd": 0.3298,
+  "bagsUsd": 0.0724,
+  "totalUsd": 0.3306,
   "tokens": {
-   "8PGyHCKv": 0.0696,
-   "BQAeeSow": 0.0015
+   "8PGyHCKv": 0.071,
+   "BQAeeSow": 0.0014
   },
-  "staleMs": 6533
+  "staleMs": 8809
  },
- "totalUsd": 51.1186,
+ "totalUsd": 50.9058,
  "deltas": [
+  {
+   "ts": 1791843482770,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": -0.2137
+  },
   {
    "ts": 1791843050109,
    "kind": "balance-move",
@@ -146,18 +152,12 @@
    "kind": "size-reduced",
    "detail": "AVAXUSDT:short Δ-1.2999999999999998",
    "amt": 0
-  },
-  {
-   "ts": 1791838719445,
-   "kind": "size-reduced",
-   "detail": "NEARUSDT:short Δ-1",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -796.7,
+  "netAfterAud": -797.01,
   "clearedPct": 8.4
  }
 }
