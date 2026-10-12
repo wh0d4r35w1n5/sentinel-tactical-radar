@@ -1,68 +1,110 @@
 {
- "ts": "2026-10-12T20:58:16.755Z",
- "ageMs": 4103,
+ "ts": "2026-10-12T21:04:22.422Z",
+ "ageMs": 1015,
  "src": "ws",
  "futures": {
-  "equityUsd": 73.3573,
-  "availableUsd": 14.8089,
+  "equityUsd": 71.8115,
+  "availableUsd": 16.8817,
   "grantUsd": 20,
-  "equityOwnUsd": 53.3573,
-  "marginUsedUsd": 59.5202,
-  "uplUsd": -1.064,
+  "equityOwnUsd": 51.8115,
+  "marginUsedUsd": 58.6661,
+  "uplUsd": -2.7809,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 4.9,
     "marginUsd": 14.377,
-    "uplUsd": -0.3871
-   },
-   {
-    "k": "NEARUSDT:short",
-    "size": 2,
-    "marginUsd": 0.3056,
-    "uplUsd": 0.09
+    "uplUsd": -1.7395
    },
    {
     "k": "AVAXUSDT:short",
-    "size": 3.8,
-    "marginUsd": 0.9331,
-    "uplUsd": 0.0988
-   },
-   {
-    "k": "BTCUSDT:long",
-    "size": 0.0023,
-    "marginUsd": 39.866,
-    "uplUsd": -0.9317
-   },
-   {
-    "k": "OPUSDT:short",
-    "size": 111.7,
-    "marginUsd": 0.3812,
-    "uplUsd": 0.0894
+    "size": 2.5,
+    "marginUsd": 0.6139,
+    "uplUsd": 0.145
    },
    {
     "k": "LUMIAUSDT:short",
     "size": 333,
     "marginUsd": 3.6573,
-    "uplUsd": -0.0233
+    "uplUsd": -0.1732
+   },
+   {
+    "k": "BTCUSDT:long",
+    "size": 0.0023,
+    "marginUsd": 39.866,
+    "uplUsd": -1.0578
+   },
+   {
+    "k": "OPUSDT:short",
+    "size": 44.5,
+    "marginUsd": 0.1519,
+    "uplUsd": 0.0445
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2617,
+  "solUsd": 0.2611,
   "stableUsd": 0,
-  "bagsUsd": 0.0726,
-  "totalUsd": 0.3343,
+  "bagsUsd": 0.0725,
+  "totalUsd": 0.3336,
   "tokens": {
    "8PGyHCKv": 0.0709,
-   "BQAeeSow": 0.0017
+   "BQAeeSow": 0.0016
   },
-  "staleMs": 4103
+  "staleMs": 1015
  },
- "totalUsd": 53.6916,
+ "totalUsd": 52.1451,
  "deltas": [
+  {
+   "ts": 1791839013541,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -1.021
+  },
+  {
+   "ts": 1791838851697,
+   "kind": "position-closed",
+   "detail": "NEARUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791838754128,
+   "kind": "size-reduced",
+   "detail": "OPUSDT:short Δ-33.599999999999994",
+   "amt": 0
+  },
+  {
+   "ts": 1791838752975,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0655
+  },
+  {
+   "ts": 1791838752974,
+   "kind": "size-reduced",
+   "detail": "OPUSDT:short Δ-33.60000000000001",
+   "amt": 0
+  },
+  {
+   "ts": 1791838737414,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2298
+  },
+  {
+   "ts": 1791838721612,
+   "kind": "size-reduced",
+   "detail": "AVAXUSDT:short Δ-1.2999999999999998",
+   "amt": 0
+  },
+  {
+   "ts": 1791838719445,
+   "kind": "size-reduced",
+   "detail": "NEARUSDT:short Δ-1",
+   "amt": 0
+  },
   {
    "ts": 1791838680501,
    "kind": "size-reduced",
@@ -134,60 +176,12 @@
    "kind": "position-opened",
    "detail": "SOLUSDT:long",
    "amt": 14.377
-  },
-  {
-   "ts": 1791837140989,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:short Δ-48.60000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1791837139699,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:short Δ-69.5",
-   "amt": 0
-  },
-  {
-   "ts": 1791837089764,
-   "kind": "position-opened",
-   "detail": "AVAXUSDT:short",
-   "amt": 0.9331
-  },
-  {
-   "ts": 1791837089764,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1076
-  },
-  {
-   "ts": 1791836736467,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:short Δ-124.80000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1791836733115,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0603
-  },
-  {
-   "ts": 1791836733114,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:short Δ-192",
-   "amt": 0
-  },
-  {
-   "ts": 1791836731465,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1179
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -793.01,
-  "clearedPct": 8.8
+  "netAfterAud": -795.23,
+  "clearedPct": 8.6
  }
 }
