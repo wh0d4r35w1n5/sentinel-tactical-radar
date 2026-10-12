@@ -83,6 +83,13 @@
   </div>
 </div>
 
+<div class="card" id="pimpCard" style="margin-top:12px">
+  <h3>🌆 Pimp City — the crackwhore economy <a href="pimpcity.html" style="float:right;font-size:10px;letter-spacing:.12em;text-decoration:none">open the corner →</a></h3>
+  <div id="pimpRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px"></div>
+  <table id="pimpTbl"><tr><th>Persona</th><th class="r">Net</th><th class="r">W-L</th><th class="r">Tricks</th><th>Owner</th></tr></table>
+  <div class="note" id="pimpNote"></div>
+</div>
+
 <div class="foot" id="foot">—</div>
 
 <script>
@@ -127,8 +134,8 @@ function tick(){
 tick();
 
 async function refresh(){
-  const [li, w, ev, ab] = await Promise.all([
-    j(BASE+'liq-intel.json'), j(BASE+'wealth-live.json'), j(BASE+'forward-evidence.json'), j(BASE+'liq-ab.json'),
+  const [li, w, ev, ab, pw] = await Promise.all([
+    j(BASE+'liq-intel.json'), j(BASE+'wealth-live.json'), j(BASE+'forward-evidence.json'), j(BASE+'liq-ab.json'), j(BASE+'pimp-war.json'),
   ]);
   // FX — live public rate, graceful fallback
   try{ const fx=await j('https://api.frankfurter.app/latest?from=USD&to=AUD'); if(fx?.rates?.AUD)aud=fx.rates.AUD; }catch{}
@@ -182,6 +189,22 @@ async function refresh(){
     $('evTbl').innerHTML='<tr><th>Cohort</th><th class="r">Eps</th><th class="r">Net USD</th><th class="r">WR%</th></tr>'+
       rows.map(([n,c])=>`<tr><td>${n}</td><td class="r">${c.n}</td><td class="r flow ${c.netUsd>=0?'pos':'neg'}">${(c.netUsd>=0?'+':'−')+'$'+Math.abs(c.netUsd).toFixed(2)}</td><td class="r">${c.wrPct}</td></tr>`).join('');
     $('evNote').innerHTML=`Only <b>${e.independent??'—'} of ${e.total??'—'}</b> episodes independent under non-overlap rules · realized net $${(ev.realized?.netUsd??0).toFixed(2)}`;
+  }
+
+  if(pw){
+    const street=(pw.pimps||[]).reduce((s,p)=>s+(+p.net||0),0)+(pw.cracks||[]).filter(c=>!c.pimp).reduce((s,c)=>s+(+c.net||0),0);
+    const live=(pw.intents||[]).filter(i=>i.live).length;
+    const top=(pw.cracks||[])[0];
+    const crown=(pw.pimps||[]).find(p=>p.crown);
+    $('pimpRow').innerHTML=
+      `<div><div style="font-size:9px;letter-spacing:.15em;color:var(--dim)">STREET NET</div><div class="flow ${street>=0?'pos':'neg'}" style="font-size:20px;font-weight:800">${street>=0?'+':''}$${street.toFixed(2)}</div></div>`+
+      `<div><div style="font-size:9px;letter-spacing:.15em;color:var(--dim)">HOUSE POT</div><div style="font-size:20px;font-weight:800;color:#ffd166">$${(+(pw.vault?.house||0)).toFixed(2)}</div></div>`+
+      `<div><div style="font-size:9px;letter-spacing:.15em;color:var(--dim)">ON SHIFT</div><div style="font-size:20px;font-weight:800">${live}</div></div>`+
+      `<div><div style="font-size:9px;letter-spacing:.15em;color:var(--dim)">KINGPIN</div><div style="font-size:14px;font-weight:800">${crown?('👑 '+crown.name):'— unclaimed'}</div></div>`;
+    $('pimpTbl').innerHTML='<tr><th>Persona</th><th class="r">Net</th><th class="r">W-L</th><th class="r">Tricks</th><th>Owner</th></tr>'+
+      (pw.cracks||[]).filter(c=>c.closes>0||c.net!==0).slice(0,8).map(c=>
+        `<tr><td>${c.name} <span style="color:var(--dim);font-size:9px">${c.mood||''}</span></td><td class="r flow ${c.net>=0?'pos':'neg'}">${c.net>=0?'+':''}$${(+c.net).toFixed(2)}</td><td class="r">${c.wins}-${c.losses}</td><td class="r">${c.closes}</td><td>${c.pimp||'freelance'}</td></tr>`).join('')||'<tr><td colspan=5>no tricks booked yet</td></tr>';
+    $('pimpNote').innerHTML = (pw.drama||[])[0] ? `latest wire: ${(pw.drama||[])[0].text}` : 'the wire is quiet';
   }
 
   const abv = ab ? `${ab.graded} shadow fills graded — ${ab.verdict}` : 'A/B grader collecting';
