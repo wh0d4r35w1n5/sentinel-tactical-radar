@@ -1,24 +1,39 @@
 {
- "at": "2026-10-12T01:56:41.853Z",
+ "at": "2026-10-12T02:07:42.809Z",
  "wallets": {
   "futures": {
-   "equityUsd": 35.66,
-   "marginFreeUsd": 35.66,
-   "epochNetUsd": -32.54,
+   "equityUsd": 55.78,
+   "marginFreeUsd": 15.66,
+   "epochNetUsd": -32.18,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "BTCUSDT",
+     "side": "long",
+     "upl": 0.24,
+     "lev": 5,
+     "margin": 39.88
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0027,
-   "stableUsd": 24.68,
-   "purseUsd": 33.83,
-   "positions": 2,
+   "sol": 0.0025,
+   "stableUsd": 28.91,
+   "purseUsd": 33.19,
+   "positions": 1,
    "laneNet": 0.93,
    "laneTrades": 21,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791770361672,
+    "symbol": "GOMO",
+    "sig": "5HqmJtuc6bRidKCxQ5WEZ35uRvXfyt3S4ojdpWDhht6p5DDXZPb2ebGqaXcGVzLaptb6g4HX3gZqDuaBZUbKqAYS",
+    "text": "SELL GOMO"
+   },
    {
     "venue": "solana",
     "ts": 1791769964910,
@@ -81,13 +96,6 @@
     "symbol": "QT",
     "sig": null,
     "text": "RECONCILE QT"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702861864,
-    "symbol": "SI276",
-    "sig": null,
-    "text": "RECONCILE SI276"
    }
   ]
  },
@@ -491,17 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -16.7982,
+   "net": -17.6764,
    "wins": 6,
-   "losses": 20,
-   "closes": 36,
+   "losses": 21,
+   "closes": 37,
    "stolen": 0,
    "gen": 0,
-   "form": -0.2332,
-   "mood": "cocky",
+   "form": -0.4912,
+   "mood": "tilt",
    "vault": 0,
    "hist": [
-    -15.1837,
     -15.5282,
     -15.7367,
     -16.0332,
@@ -524,13 +531,14 @@
     -15.9282,
     -16.0352,
     -16.5446,
-    -16.7982
+    -16.7982,
+    -17.6764
    ],
    "persona": {
-    "swagger": 0.76,
-    "tilt": 0.52,
-    "greed": 0.9,
-    "discipline": 0.45
+    "swagger": 0.69,
+    "tilt": 0.69,
+    "greed": 0.87,
+    "discipline": 0.4
    }
   }
  ],
@@ -545,7 +553,7 @@
    "coid": "oc:3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
    "onchain": true,
    "filledAt": 1791624698550,
-   "live": true
+   "live": false
   },
   {
    "symbol": "QOMPUTE",
@@ -667,7 +675,11 @@
    "coid": "oc:2XjgjczSGtNkYBTBzVh6w2wvArNHTKHyCZnu8KoqcwYtVvspEvuJkkEZ364ffYzsvtMV9akno4ae7Wo1nTHK6qnt",
    "onchain": true,
    "filledAt": 1791769961779,
-   "live": true
+   "live": false,
+   "closedAt": 1791770361672,
+   "epNet": -0.878173,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "SI276",
@@ -682,6 +694,14 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1791770861113,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.88 on GOMO — docked her pay"
+  },
+  {
+   "ts": 1791770861113,
+   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
+  },
   {
    "ts": 1791768907611,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.25 on MAGICUSDT incl $0.005 entry fees — docked her pay"
@@ -793,14 +813,6 @@
   {
    "ts": 1791740453039,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.07 on WLDUSDT incl $0.015 entry fees — docked her pay"
-  },
-  {
-   "ts": 1791739152112,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on STRKUSDT"
-  },
-  {
-   "ts": 1791738470856,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.11 on STRKUSDT"
   }
  ]
 }
