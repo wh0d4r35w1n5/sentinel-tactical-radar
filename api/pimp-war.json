@@ -1,32 +1,45 @@
 {
- "at": "2026-10-12T01:45:39.418Z",
+ "at": "2026-10-12T01:56:41.853Z",
  "wallets": {
   "futures": {
-   "equityUsd": 0.83,
-   "marginFreeUsd": 0.59,
+   "equityUsd": 35.66,
+   "marginFreeUsd": 35.66,
    "epochNetUsd": -32.54,
    "fills": 400,
-   "positions": [
-    {
-     "symbol": "BTCUSDT",
-     "side": "long",
-     "upl": 0.02,
-     "lev": 37,
-     "margin": 0.23
-    }
-   ]
+   "positions": []
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0,
-   "stableUsd": 0,
-   "purseUsd": 0,
-   "positions": 0,
+   "sol": 0.0027,
+   "stableUsd": 24.68,
+   "purseUsd": 33.83,
+   "positions": 2,
    "laneNet": 0.93,
    "laneTrades": 21,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791769964910,
+    "symbol": "SI276",
+    "sig": "4SRNpz6LgMA5RC5MNZtPGz6Z9uT8CTxVoyJaJyZ5QSkRwdmXW6C15jjMht2xQ4tmiGqBghiCMEdXpxUzBbjXVmXG",
+    "text": "BUY SI276 $4.35"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791769961779,
+    "symbol": "GOMO",
+    "sig": "2XjgjczSGtNkYBTBzVh6w2wvArNHTKHyCZnu8KoqcwYtVvspEvuJkkEZ364ffYzsvtMV9akno4ae7Wo1nTHK6qnt",
+    "text": "BUY GOMO $5.11"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791769879368,
+    "symbol": null,
+    "sig": "5m8BhLKBtaNjaJZScUvELMMETf9SoftZjTjVFnF3D7aPbdCgSaiyBtQLRmwkzqdyFFsFZb2btwe54eZF9vSi411d",
+    "text": "BOOTSTRAP boot"
+   },
    {
     "venue": "solana",
     "ts": 1791735319618,
@@ -75,27 +88,6 @@
     "symbol": "SI276",
     "sig": null,
     "text": "RECONCILE SI276"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702858293,
-    "symbol": "MOIN",
-    "sig": null,
-    "text": "RECONCILE MOIN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702857703,
-    "symbol": "SUPMKT",
-    "sig": null,
-    "text": "RECONCILE SUPMKT"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791702468072,
-    "symbol": "SWOLF",
-    "sig": "5yEbRRUo87VHCjsFhazJFh9oNZc2F2A4W84XEtnNgDyc5wrS9Zexhxq8obmTpFCVRzHcpSxmovBeBkMjsb4xiJG9",
-    "text": "SELL SWOLF"
    }
   ]
  },
@@ -537,35 +529,13 @@
    "persona": {
     "swagger": 0.76,
     "tilt": 0.52,
-    "greed": 0.91,
+    "greed": 0.9,
     "discipline": 0.45
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "MOIN",
-   "direction": "LONG",
-   "ts": 1791624701231,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:5t57oiUfVUUdHATkkw8ScPjAcxKNMHJQsQhiiRYhRawjzQtn3dEvdtY3s9aQQM5mRxoDoBvdcioZGrEf8nNnVKVU",
-   "onchain": true,
-   "filledAt": 1791624701231,
-   "live": false
-  },
-  {
-   "symbol": "QOMPUTE",
-   "direction": "LONG",
-   "ts": 1791630586077,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:666GYt66X3hZNeVuw6Rg16iVpLwX8GiNVQ2p4bq3uZYL6MBpAZnor4UMvYcx8ryXd4ntFWyFVVTLP8KnGUp1hzAU",
-   "onchain": true,
-   "filledAt": 1791630586077,
-   "live": false
-  },
   {
    "symbol": "GOMO",
    "direction": "LONG",
@@ -575,7 +545,7 @@
    "coid": "oc:3Lof3PZTt89pFYGD9GcvN8moAFhSDuRdm4hUbdP6QCzyMMJyMRh943vPCW8etfXwMw7XWMFDyvcGRj2Je2Gx5onj",
    "onchain": true,
    "filledAt": 1791624698550,
-   "live": false
+   "live": true
   },
   {
    "symbol": "QOMPUTE",
@@ -687,6 +657,28 @@
    "onchain": true,
    "filledAt": 1791656065047,
    "live": false
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791769961779,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2XjgjczSGtNkYBTBzVh6w2wvArNHTKHyCZnu8KoqcwYtVvspEvuJkkEZ364ffYzsvtMV9akno4ae7Wo1nTHK6qnt",
+   "onchain": true,
+   "filledAt": 1791769961779,
+   "live": true
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791769964910,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4SRNpz6LgMA5RC5MNZtPGz6Z9uT8CTxVoyJaJyZ5QSkRwdmXW6C15jjMht2xQ4tmiGqBghiCMEdXpxUzBbjXVmXG",
+   "onchain": true,
+   "filledAt": 1791769964910,
+   "live": true
   }
  ],
  "drama": [
