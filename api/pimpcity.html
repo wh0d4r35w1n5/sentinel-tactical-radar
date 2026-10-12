@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PIMP CITY — the crackwhore economy</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --neon:#ff2ec4;--neon2:#00e5ff;--gold:#ffd166;--grn:#4dffa6;--red:#ff4d7d;
+  --bg0:#07030f;--bg1:#0d0620;--card:rgba(13,6,32,.86);--line:rgba(255,46,196,.25);
+  --txt:#efe6ff;--dim:#9d8fc7;
+}
+html{background:var(--bg0)}
+body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--txt);background:var(--bg0);min-height:100vh;overflow-x:hidden}
+/* ---- night sky + skyline ---- */
+.sky{position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(ellipse 120% 60% at 50% 108%,rgba(255,46,196,.16),transparent 60%),
+  radial-gradient(ellipse 80% 45% at 80% 105%,rgba(0,229,255,.10),transparent 60%),
+  linear-gradient(#07030f 0%,#0d0620 55%,#160a2e 100%)}
+.stars{position:fixed;inset:0 0 40% 0;z-index:-1;pointer-events:none}
+.stars i{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;animation:tw 3s infinite}
+@keyframes tw{0%,100%{opacity:.15}50%{opacity:.9}}
+.sun{position:fixed;left:50%;top:8vh;transform:translateX(-50%);width:340px;height:170px;z-index:-1;
+  background:linear-gradient(#ffd166 0%,#ff2ec4 60%,#7b2ff7 100%);border-radius:170px 170px 0 0;opacity:.34;
+  -webkit-mask:repeating-linear-gradient(#000 0 6px,transparent 6px 13px);mask:repeating-linear-gradient(#000 0 6px,transparent 6px 13px)}
+.skyline{position:fixed;left:0;right:0;top:22vh;height:110px;z-index:-1;opacity:.75}
+.skyline svg{width:100%;height:100%}
+.grid{position:fixed;left:0;right:0;bottom:0;height:34vh;z-index:-1;
+  background:linear-gradient(transparent,rgba(255,46,196,.06)),
+  repeating-linear-gradient(90deg,rgba(255,46,196,.14) 0 1px,transparent 1px 60px),
+  repeating-linear-gradient(0deg,rgba(255,46,196,.14) 0 1px,transparent 1px 40px);
+  transform:perspective(340px) rotateX(62deg);transform-origin:top;animation:gridmove 6s linear infinite}
+@keyframes gridmove{from{background-position:0 0,0 0,0 0}to{background-position:0 0,0 0,0 40px}}
+.scan{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.05;
+  background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px)}
+/* ---- layout ---- */
+.wrap{max-width:1180px;margin:0 auto;padding:26px 18px 80px}
+.hero{text-align:center;padding:18px 0 8px}
+.neon{font-size:clamp(38px,7vw,74px);font-weight:900;letter-spacing:.06em;color:#fff;
+  text-shadow:0 0 6px #fff,0 0 18px var(--neon),0 0 42px var(--neon),0 0 90px var(--neon);animation:flick 7s infinite}
+.neon b{color:var(--neon2);text-shadow:0 0 6px #fff,0 0 18px var(--neon2),0 0 42px var(--neon2),0 0 90px var(--neon2)}
+@keyframes flick{0%,86%,92%,100%{opacity:1}88%,90%{opacity:.55}}
+.sub{color:var(--dim);font-size:11px;letter-spacing:.4em;margin-top:8px;text-transform:uppercase}
+.status{display:inline-flex;gap:8px;align-items:center;margin-top:12px;font-size:10.5px;letter-spacing:.2em;color:var(--dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 10px var(--grn);animation:pl 1.6s infinite}
+.dot.stale{background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.dot.dead{background:var(--red);box-shadow:0 0 10px var(--red)}
+@keyframes pl{50%{opacity:.4}}
+/* ---- street strip ---- */
+.street{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:26px 0 6px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;backdrop-filter:blur(8px)}
+.stat .k{font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase}
+.stat .v{font-size:24px;font-weight:800;margin-top:4px}
+.v.pos{color:var(--grn)}.v.neg{color:var(--red)}.v.gold{color:var(--gold)}.v.cy{color:var(--neon2)}
+.stat .s{font-size:10px;color:var(--dim);margin-top:3px}
+/* ---- tickers ---- */
+.tick{overflow:hidden;white-space:nowrap;border:1px solid var(--line);border-radius:10px;background:rgba(9,4,18,.7);
+  margin:10px 0 0;padding:7px 0;font-size:11.5px;color:var(--dim)}
+.tick div{display:inline-block;padding-left:100%;animation:tick 38s linear infinite}
+@keyframes tick{to{transform:translateX(-100%)}}
+.tick b{color:var(--txt)} .tick .up{color:var(--grn)} .tick .dn{color:var(--red)}
+/* ---- section titles ---- */
+.pt{font-size:13px;letter-spacing:.3em;color:var(--txt);margin:30px 0 12px;text-transform:uppercase;display:flex;align-items:center;gap:12px}
+.pt::before,.pt::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent)}
+.pt .s{font-size:9.5px;color:var(--dim);letter-spacing:.12em;text-transform:none}
+/* ---- pimps ---- */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}
+.pimp{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;backdrop-filter:blur(8px);transition:transform .2s}
+.pimp:hover{transform:translateY(-3px)}
+.pimp.crown{border-color:var(--gold);box-shadow:0 0 30px rgba(255,209,102,.18),inset 0 0 30px rgba(255,209,102,.05)}
+.pimp.crippled{border-color:rgba(255,77,125,.5);filter:saturate(.6) brightness(.85)}
+.badge{position:absolute;top:-10px;right:12px;font-size:15px}
+.pname{font-size:15px;font-weight:800;letter-spacing:.05em}
+.pnet{font-size:30px;font-weight:900;margin:8px 0 2px}
+.pwl{font-size:10.5px;color:var(--dim);letter-spacing:.08em}
+.pwl b{color:var(--txt)}
+.roster{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+.girl{font-size:10px;padding:3px 8px;border-radius:20px;border:1px solid var(--line);background:rgba(255,46,196,.08);color:var(--txt)}
+.girl small{opacity:.7}
+.pvault{margin-top:9px;font-size:10px;color:var(--gold);letter-spacing:.06em}
+/* ---- shift ---- */
+.shift{display:grid;gap:8px}
+.srow{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12.5px}
+.srow .live{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pl 1.2s infinite}
+.srow .dead2{background:var(--dim);box-shadow:none;animation:none}
+.srow .who{min-width:130px;font-weight:700}
+.srow .sym{color:var(--neon2);font-weight:700}
+.srow .pn{margin-left:auto;font-weight:800}
+.srow .meta{color:var(--dim);font-size:10px}
+/* ---- girls ---- */
+.girls{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px}
+.g{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 14px;backdrop-filter:blur(8px)}
+.g .top{display:flex;align-items:baseline;gap:8px}
+.g .nm{font-weight:800;font-size:14px}
+.g .tag{font-size:9.5px;color:var(--dim);letter-spacing:.05em;flex:1}
+.mood{font-size:8.5px;letter-spacing:.14em;padding:2px 7px;border-radius:12px;border:1px solid var(--line);text-transform:uppercase}
+.mood.heater{color:var(--red);border-color:rgba(255,77,125,.5);box-shadow:0 0 8px rgba(255,77,125,.25)}
+.mood.tilt{color:#ff9a4d;border-color:rgba(255,154,77,.5)}
+.mood.cold{color:var(--neon2);border-color:rgba(0,229,255,.4)}
+.mood.cocky{color:var(--gold);border-color:rgba(255,209,102,.5)}
+.g .net{font-size:22px;font-weight:900;margin:7px 0 2px}
+.g .wl{font-size:10px;color:var(--dim)}
+.spark{margin:8px 0 4px;display:block;width:100%;height:34px}
+.bars{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px}
+.bar{font-size:8px;color:var(--dim);letter-spacing:.1em}
+.bar i{display:block;height:4px;border-radius:3px;background:rgba(255,255,255,.08);margin-top:2px;overflow:hidden}
+.bar i b{display:block;height:100%;border-radius:3px}
+.b-sw b{background:var(--gold)} .b-ti b{background:var(--red)} .b-gr b{background:var(--neon)} .b-di b{background:var(--neon2)}
+.g .own{margin-top:8px;font-size:9.5px;color:var(--dim)}
+/* ---- wire ---- */
+.wire{max-height:270px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.drow{font-size:12px;padding:8px 12px;border-left:2px solid var(--line);background:rgba(255,46,196,.05);border-radius:0 8px 8px 0;animation:rise .4s backwards}
+.drow .t{color:var(--dim);font-size:9.5px;letter-spacing:.08em;margin-right:8px}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+/* ---- graveyard ---- */
+.grave{display:flex;flex-wrap:wrap;gap:8px}
+.tomb{font-size:10.5px;color:var(--dim);border:1px dashed rgba(255,255,255,.15);border-radius:8px;padding:6px 10px}
+.tomb b{color:var(--txt)}
+.foot{margin-top:44px;text-align:center;color:var(--dim);font-size:9.5px;letter-spacing:.2em}
+a{color:inherit}
+@media(max-width:640px){.girls{grid-template-columns:1fr 1fr}.board{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="sky"></div><div class="stars" id="stars"></div><div class="sun"></div>
+<div class="skyline"><svg viewBox="0 0 1200 110" preserveAspectRatio="none"><path fill="#0a0418" d="M0 110V70h30v-25h15v25h25V40h20v30h18V55h22v55h30V48h15v-14h12v14h15v62h26V60h20v50h28V35h18v75h24V52h20v58h30V66h16V44h14v22h16v44h28V50h22v60h26V42h16v68h24V58h20v52h30V38h18v72h24V54h22v56h28V62h16V40h14v22h16v48h26V52h22v58h24V45h20v65h40V110z"/>
+<g fill="#ffd166" opacity=".5"><rect x="95" y="48" width="4" height="4"/><rect x="115" y="58" width="4" height="4"/><rect x="335" y="42" width="4" height="4"/><rect x="355" y="55" width="4" height="4"/><rect x="560" y="48" width="4" height="4"/><rect x="655" y="45" width="4" height="4"/><rect x="820" y="45" width="4" height="4"/><rect x="845" y="60" width="4" height="4"/><rect x="1035" y="50" width="4" height="4"/></g></svg></div>
+<div class="grid"></div><div class="scan"></div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="neon">PIMP <b>CITY</b></div>
+    <div class="sub">the crackwhore economy · realized net-after-fees is the only currency</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusTxt">connecting…</span></div>
+  </div>
+
+  <div class="street" id="street"></div>
+  <div class="tick"><div id="tickTape">loading the wire…</div></div>
+
+  <div class="pt">👑 Kingpins <span class="s">— every pimp runs a stable · crown boosts his girls' slots, crippled gets docked</span></div>
+  <div class="board" id="board"></div>
+
+  <div class="pt">💼 On shift <span class="s" id="shiftSub"></span></div>
+  <div class="shift" id="shift"></div>
+
+  <div class="pt">🌴 The stable <span class="s">— form rides the nomination; swagger, tilt, greed &amp; discipline evolve on every booked trick</span></div>
+  <div class="girls" id="girls"></div>
+
+  <div class="pt" id="gravePt" style="display:none">🪦 Graveyard <span class="s">— retired, not erased — the corner remembers</span></div>
+  <div class="grave" id="grave"></div>
+
+  <div class="pt">📡 The wire <span class="s">— turf wars, thefts, banked tricks, mood flips</span></div>
+  <div class="wire" id="wire"></div>
+
+  <div class="foot">SENTINEL · the corner never sleeps · <span id="upd"></span></div>
+</div>
+
+<script>
+const API_LOCAL='pimp-war.json';
+const API_PAGES='https://wh0d4r35w1n5.github.io/sentinel-tactical-radar/api/pimp-war.json';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=v=>{const n=+v||0;return `<span class="${n>=0?'up':'dn'}">${n>=0?'+':''}$${n.toFixed(2)}</span>`};
+const ago=ts=>{const d=(Date.now()-ts)/1e3;if(d<60)return Math.floor(d)+'s';if(d<3600)return Math.floor(d/60)+'m';if(d<86400)return Math.floor(d/3600)+'h';return Math.floor(d/86400)+'d'};
+// stars
+{const s=$('stars');let h='';for(let i=0;i<90;i++)h+=`<i style="left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${(Math.random()*3).toFixed(1)}s;transform:scale(${(.4+Math.random()).toFixed(1)})"></i>`;s.innerHTML=h;}
+function spark(hist,net){if(!hist||hist.length<2)return '<svg class="spark"></svg>';
+  const w=230,h=34,mn=Math.min(...hist,0),mx=Math.max(...hist,0.001),r=mx-mn||1;
+  const pts=hist.map((v,i)=>`${(i/(hist.length-1)*w).toFixed(1)},${(h-3-(v-mn)/r*(h-6)).toFixed(1)}`).join(' ');
+  const c=net>=0?'#4dffa6':'#ff4d7d';
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.6" opacity=".9"/></svg>`;}
+const MOOD_ICON={tilt:'🌋',heater:'🔥',cold:'🧊',cocky:'💅',working:'💼'};
+async function load(){
+  let d=null;
+  for(const u of [API_LOCAL,API_PAGES]){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(r.ok){d=await r.json();break}}catch{}}
+  if(!d){$('dot').className='dot dead';$('statusTxt').textContent='feed unreachable';return}
+  const age=Date.now()-Date.parse(d.at);
+  $('dot').className='dot'+(age>4*60e3?' stale':'');
+  $('statusTxt').textContent=`LIVE · corner report ${ago(Date.parse(d.at))} old · refresh 30s`;
+  $('upd').textContent='updated '+new Date(d.at).toLocaleTimeString();
+  const w=d.wallets||{},F=w.futures||{},O=w.onchain||{};
+  const streetNet=(d.pimps||[]).reduce((s,p)=>s+(+p.net||0),0)+(d.cracks||[]).filter(c=>!c.pimp).reduce((s,c)=>s+(+c.net||0),0);
+  $('street').innerHTML=`
+    <div class="stat"><div class="k">🏦 House pot</div><div class="v gold">$${(+(d.vault?.house||0)).toFixed(2)}</div><div class="s">unclaimed carry</div></div>
+    <div class="stat"><div class="k">🌆 Street net</div><div class="v ${streetNet>=0?'pos':'neg'}">${streetNet>=0?'+':''}$${streetNet.toFixed(2)}</div><div class="s">all booked tricks</div></div>
+    <div class="stat"><div class="k">⚡ Futures book</div><div class="v cy">$${(+F.equityUsd||0).toFixed(2)}</div><div class="s">${F.fills||0} fills · ${(F.positions||[]).length} open</div></div>
+    <div class="stat"><div class="k">⛓ On-chain purse</div><div class="v cy">$${(+O.purseUsd||0).toFixed(2)}</div><div class="s">${O.positions||0} bags · lane ${(+O.laneNet||0)>=0?'+':''}$${(+O.laneNet||0).toFixed(2)} (${O.laneWins||0}/${O.laneTrades||0}W)</div></div>
+    <div class="stat"><div class="k">🚧 Open positions</div><div class="v">${((F.positions||[]).length)+(O.positions||0)}</div><div class="s">${(F.positions||[]).map(p=>`${p.symbol} ${(+p.upl)>=0?'+':''}$${(+p.upl||0).toFixed(2)}`).join(' · ')||'flat'}</div></div>`;
+  // tick tape: latest activity + drama headline
+  const tape=(w.activity||[]).slice(0,8).map(a=>`<b>[${a.venue==='solana'?'⛓':'⚡'}]</b> ${esc(a.text)} <span style="opacity:.55">· ${ago(a.ts)}</span>`).join(' &nbsp;│&nbsp; ');
+  $('tickTape').innerHTML=tape||'the street is quiet';
+  // kingpins
+  $('board').innerHTML=(d.pimps||[]).map(p=>`
+    <div class="pimp ${p.crown?'crown':''} ${p.crippled?'crippled':''}">
+      ${p.crown?'<div class="badge">👑</div>':''}${p.crippled?'<div class="badge">🩹</div>':''}
+      <div class="pname">${esc(p.name)}</div>
+      <div class="pnet ${+p.net>=0?'up':'dn'}" style="color:${+p.net>=0?'var(--grn)':'var(--red)'}">${+p.net>=0?'+':''}$${(+p.net||0).toFixed(2)}</div>
+      <div class="pwl"><b>${p.wins||0}W</b> · <b>${p.losses||0}L</b> · stable ${(p.roster||[]).length}</div>
+      <div class="roster">${(p.roster||[]).map(g=>{const c=(d.cracks||[]).find(x=>x.name===g);return `<span class="girl">${MOOD_ICON[c?.mood]||''} ${esc(g)} <small>${c?(+c.net>=0?'+':'')+'$'+(+c.net||0).toFixed(2):''}</small></span>`}).join('')}</div>
+      ${+p.vault?`<div class="pvault">🏦 kicked upstairs $${(+p.vault).toFixed(2)} · ${p.vaultSweeps||0} sweeps</div>`:''}
+    </div>`).join('');
+  // on shift
+  const ints=d.intents||[];const live=ints.filter(i=>i.live);
+  $('shiftSub').textContent=`— ${live.length} position${live.length===1?'':'s'} open · ${ints.length} on the board`;
+  $('shift').innerHTML=ints.length?ints.slice(-10).reverse().map(i=>`
+    <div class="srow"><span class="live ${i.live?'':'dead2'}"></span>
+      <span class="who">${esc(i.crack)}</span>
+      <span class="sym">${esc(i.symbol)}</span>
+      <span class="meta">${i.direction||''} ${i.onchain?'· ⛓ DEX':''} ${i.pimp?'· '+esc(i.pimp):'· freelance'}</span>
+      ${i.live?'<span class="meta">ON SHIFT</span>':i.closedAt?`<span class="meta">clocked out ${ago(i.closedAt)}</span>`:'<span class="meta">awaiting fill</span>'}
+      ${+i.epNet?`<span class="pn ${+i.epNet>=0?'up':'dn'}">${+i.epNet>=0?'+':''}$${(+i.epNet).toFixed(2)}</span>`:''}
+    </div>`).join(''):'<div class="srow"><span class="meta">nobody on the corner right now</span></div>';
+  // the stable
+  $('girls').innerHTML=(d.cracks||[]).map(c=>{const p=c.persona||{};return `
+    <div class="g">
+      <div class="top"><span class="nm">${esc(c.name)}</span><span class="tag">${esc(c.tag)}</span><span class="mood ${esc(c.mood)}">${MOOD_ICON[c.mood]||''} ${esc(c.mood)}</span></div>
+      <div class="net" style="color:${+c.net>=0?'var(--grn)':'var(--red)'}">${+c.net>=0?'+':''}$${(+c.net||0).toFixed(2)}</div>
+      <div class="wl">${c.wins||0}W · ${c.losses||0}L · ${c.closes||0} tricks · stolen ${c.stolen||0}${c.gen?` · gen ${c.gen}`:''}</div>
+      ${spark(c.hist,+c.net)}
+      <div class="bars">
+        <div class="bar b-sw">swagger<i><b style="width:${Math.round((p.swagger??.5)*100)}%"></b></i></div>
+        <div class="bar b-ti">tilt<i><b style="width:${Math.round((p.tilt??.1)*100)}%"></b></i></div>
+        <div class="bar b-gr">greed<i><b style="width:${Math.round((p.greed??.5)*100)}%"></b></i></div>
+        <div class="bar b-di">discipline<i><b style="width:${Math.round((p.discipline??.5)*100)}%"></b></i></div>
+      </div>
+      <div class="own">${c.pimp?'working for <b>'+esc(c.pimp)+'</b>':'freelance — no pimp takes a cut'}${+c.vault?` · 🏦 $${(+c.vault).toFixed(2)}`:''}</div>
+    </div>`}).join('');
+  // graveyard
+  const ret=d.retired||[];$('gravePt').style.display=ret.length?'flex':'none';
+  $('grave').innerHTML=ret.map(c=>`<span class="tomb">🪦 <b>${esc(c.name)}</b> — ${(+c.net||0).toFixed(2)}$ · ${c.closes||0} tricks · ${esc(c.tag||'')}</span>`).join('');
+  // wire
+  $('wire').innerHTML=(d.drama||[]).map((x,i)=>`<div class="drow" style="animation-delay:${Math.min(i*40,400)}ms"><span class="t">${ago(x.ts)}</span>${esc(x.text)}</div>`).join('')||'<div class="drow">the wire is quiet</div>';
+}
+load();setInterval(load,30000);
+</script>
+</body>
+</html>
