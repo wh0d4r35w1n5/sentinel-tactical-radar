@@ -1,44 +1,74 @@
 {
- "ts": "2026-10-12T15:34:23.718Z",
- "ageMs": 8111,
+ "ts": "2026-10-12T15:39:27.654Z",
+ "ageMs": 9813,
  "src": "ws",
  "futures": {
-  "equityUsd": 58.2564,
-  "availableUsd": 0.0595,
+  "equityUsd": 58.6765,
+  "availableUsd": 0,
   "grantUsd": 20,
-  "equityOwnUsd": 38.2564,
-  "marginUsedUsd": 59.2274,
-  "uplUsd": -1.0305,
+  "equityOwnUsd": 38.6765,
+  "marginUsedUsd": 59.2869,
+  "uplUsd": -0.6104,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8806,
-    "uplUsd": -1.7427
+    "uplUsd": -1.6615
    },
    {
     "k": "NATGASUSDT:long",
     "size": 338.9,
-    "marginUsd": 19.3468,
-    "uplUsd": 0.7122
+    "marginUsd": 19.4063,
+    "uplUsd": 1.0511
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.263,
+  "solUsd": 0.2629,
   "stableUsd": 0,
-  "bagsUsd": 23.7776,
-  "totalUsd": 24.0406,
+  "bagsUsd": 24.514,
+  "totalUsd": 24.7769,
   "tokens": {
-   "8PGyHCKv": 23.7756,
+   "8PGyHCKv": 24.512,
    "BQAeeSow": 0.002
   },
-  "staleMs": 8111
+  "staleMs": 9813
  },
- "totalUsd": 62.2971,
+ "totalUsd": 63.4534,
  "deltas": [
+  {
+   "ts": 1791819486880,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3272
+  },
+  {
+   "ts": 1791819424075,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 2.3891
+  },
+  {
+   "ts": 1791819290068,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.6649
+  },
+  {
+   "ts": 1791819290018,
+   "kind": "margin-added",
+   "detail": "NATGASUSDT:long",
+   "amt": 0.0595
+  },
+  {
+   "ts": 1791819272737,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.9769
+  },
   {
    "ts": 1791818873311,
    "kind": "balance-move",
@@ -128,36 +158,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.747
-  },
-  {
-   "ts": 1791818360176,
-   "kind": "size-reduced",
-   "detail": "NATGASUSDT:long Δ-108.89999999999998",
-   "amt": 0
-  },
-  {
-   "ts": 1791818330570,
-   "kind": "size-added",
-   "detail": "NATGASUSDT:long Δ1.599999999999966",
-   "amt": 0
-  },
-  {
-   "ts": 1791818324630,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.5387
-  },
-  {
-   "ts": 1791818324630,
-   "kind": "size-added",
-   "detail": "NATGASUSDT:long Δ13.400000000000034",
-   "amt": 0
-  },
-  {
-   "ts": 1791818315100,
-   "kind": "size-added",
-   "detail": "NATGASUSDT:long Δ102.89999999999998",
-   "amt": 0
   }
  ]
 }
