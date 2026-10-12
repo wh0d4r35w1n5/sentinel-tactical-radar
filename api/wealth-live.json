@@ -1,42 +1,59 @@
 {
- "ts": "2026-10-12T10:23:18.167Z",
- "ageMs": 8467,
+ "ts": "2026-10-12T10:29:48.998Z",
+ "ageMs": 4966,
  "src": "ws",
  "futures": {
-  "equityUsd": 58.5853,
+  "equityUsd": 58.6628,
   "availableUsd": 18.6851,
   "grantUsd": 20,
-  "equityOwnUsd": 38.5853,
+  "equityOwnUsd": 38.6628,
   "marginUsedUsd": 39.8806,
-  "uplUsd": 0.0196,
+  "uplUsd": 0.0971,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8806,
-    "uplUsd": 0.0196
+    "uplUsd": 0.0971
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-  "solQty": 0.01555,
-  "solUsd": 1.7337,
-  "stableUsd": 5,
-  "bagsUsd": 25.1291,
-  "totalUsd": 31.8628,
+  "solQty": 0.015445,
+  "solUsd": 1.7219,
+  "stableUsd": 21.4168,
+  "bagsUsd": 7.8412,
+  "totalUsd": 30.9798,
   "tokens": {
-   "2j5SaS7x": 0.0192,
-   "8PGyHCKv": 17.3032,
-   "8k4sBtEe": 0.0095,
-   "9Twd5vXA": 7.7732,
-   "9XKzy4Ka": 0.0219,
+   "2j5SaS7x": 0.0196,
+   "8k4sBtEe": 0.0094,
+   "9Twd5vXA": 7.7883,
+   "9XKzy4Ka": 0.0218,
    "BQAeeSow": 0.0021
   },
-  "staleMs": 8467
+  "staleMs": 4966
  },
- "totalUsd": 70.4481,
+ "totalUsd": 69.6426,
  "deltas": [
+  {
+   "ts": 1791800724479,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": 0.1014
+  },
+  {
+   "ts": 1791800699659,
+   "kind": "chain-stable-move",
+   "detail": "hot wallet",
+   "amt": 16.4168
+  },
+  {
+   "ts": 1791800687253,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.0001
+  },
   {
    "ts": 1791800364572,
    "kind": "chain-stable-move",
@@ -138,24 +155,6 @@
    "kind": "chain-stable-move",
    "detail": "hot wallet",
    "amt": 5.0477
-  },
-  {
-   "ts": 1791796955825,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": 0
-  },
-  {
-   "ts": 1791796697931,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2442
-  },
-  {
-   "ts": 1791796697929,
-   "kind": "position-opened",
-   "detail": "NEARUSDT:long",
-   "amt": 10.0477
   }
  ]
 }
