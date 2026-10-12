@@ -1,5 +1,111 @@
 {
- "at": "2026-10-12T14:39:24.778Z",
+ "at": "2026-10-12T14:41:32.505Z",
+ "wallets": {
+  "futures": {
+   "equityUsd": 31.52,
+   "marginFreeUsd": 0,
+   "epochNetUsd": -20.07,
+   "fills": 400,
+   "positions": [
+    {
+     "symbol": "BTCUSDT",
+     "side": "long",
+     "upl": -1.94,
+     "lev": 5,
+     "margin": 39.88
+    },
+    {
+     "symbol": "NATGASUSDT",
+     "side": "long",
+     "upl": -0.85,
+     "lev": 60,
+     "margin": 14.43
+    }
+   ]
+  },
+  "onchain": {
+   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
+   "sol": 0.0024,
+   "stableUsd": 0,
+   "purseUsd": 0,
+   "positions": 0,
+   "laneNet": -3.23,
+   "laneTrades": 30,
+   "laneWins": 6
+  },
+  "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791814086162,
+    "symbol": "SEAN",
+    "sig": "2godFCZd8hsZhf9KKi3x9N9KscBDV8Cw5jX6zbceYNFCrY6em6yj8Kx4Xd3S6rm3vq7waYoqdC39mmQuNMAa9Fab",
+    "text": "SELL SEAN"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807382981,
+    "symbol": "GOMO",
+    "sig": null,
+    "text": "RECONCILE GOMO"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807382801,
+    "symbol": null,
+    "sig": "2jXuW8G61zZFwMSH8zWyVW1uE8DkZvS7feqxWq46jZ3yRts14ar3MhPP2JD2nGqJL5Ntk13TEde54S6GVbegeSaz",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807377514,
+    "symbol": null,
+    "sig": "2Fi6qNWoboKv37GCeA9cCWtVdioj3KuSgGXyXMme6rw8WHuzayisERZaZbwHZN7EpJhwyozDzdWJ9494nwwceaMf",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807375080,
+    "symbol": null,
+    "sig": "4XcsrjEgjjAPoCX9taf638toCkJA3pWAudRMbLsnoR1FpeqaEEQRmifw8T1J3NJ3fUHaBzbbcM4ZnGMFeoMH9QA4",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791806859625,
+    "symbol": "GOMO",
+    "sig": "2QUNjN76xtCCeNKkD2gFX1SHZHJ4ZHy73Zbg4BLN78rvES3HGdL8poaMhgDSNbWDmMD3chHcS9MpUyrR2fsPDXdg",
+    "text": "BUY GOMO $1.11"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791806613263,
+    "symbol": "SI276",
+    "sig": "4ALWGSN8hxjPc4k5zmwb4uMMFrwzWi6YWQ7fp7tGpXg1qVs4vjCU2t6XfxbrSxzLwhwkkD4Md7mhy9whB95h87ci",
+    "text": "SELL SI276"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791803856624,
+    "symbol": "SI276",
+    "sig": "2R5RCUBZR3CPte4YiC8rhpMc9DBB9W8Ho6Pq3cUkWtW67mASS2r6ZjBQvvKSjSubQE6FLmmLNKLAxygLUWnkPoaT",
+    "text": "BUY SI276 $1.12"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791803853906,
+    "symbol": "GOIF",
+    "sig": null,
+    "text": "RECONCILE GOIF"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791801304429,
+    "symbol": "SEAN",
+    "sig": "rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
+    "text": "BUY SEAN $16.42"
+   }
+  ]
+ },
  "pimps": [
   {
    "name": "Silky Slim",
@@ -12,6 +118,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -25,6 +133,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -38,6 +148,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -51,6 +163,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -64,9 +178,14 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   }
  ],
+ "vault": {
+  "house": 0.5029
+ },
  "cracks": [
   {
    "name": "Diamond Dust",
@@ -80,6 +199,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -100,6 +220,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -120,6 +241,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -140,6 +262,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -160,6 +283,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -180,6 +304,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -200,6 +325,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -220,6 +346,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -240,6 +367,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -260,6 +388,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -280,6 +409,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -300,6 +430,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -320,6 +451,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -340,6 +472,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -360,6 +493,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -367,14 +501,322 @@
     "greed": 0.5,
     "discipline": 0.5
    }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": -16.3844,
+   "wins": 8,
+   "losses": 27,
+   "closes": 47,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.5873,
+   "mood": "cold",
+   "vault": 0.5029,
+   "hist": [
+    -16.9055,
+    -16.8883,
+    -16.8703,
+    -16.8523,
+    -16.8342,
+    -16.8482,
+    -17.2434,
+    -17.2256,
+    -17.1156,
+    -16.8118,
+    -16.5147,
+    -15.6541,
+    -15.4052,
+    -15.2374,
+    -15.5168,
+    -15.5299,
+    -15.2046,
+    -14.6935,
+    -14.6839,
+    -14.6517,
+    -14.5117,
+    -14.9916,
+    -15.0609,
+    -16.3844
+   ],
+   "persona": {
+    "swagger": 0.61,
+    "tilt": 0.46,
+    "greed": 0.72,
+    "discipline": 0.5
+   }
   }
  ],
  "retired": [],
- "intents": [],
+ "intents": [
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791700534671,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5tAckd2PfUxVAJRgyb4nu9u4fy9xPicaVnYkVdGqAgDcoeP4YsK7ewveEj4AGArogS6uJgzxET5nGAxAjRGX5zva",
+   "onchain": true,
+   "filledAt": 1791700534671,
+   "live": false
+  },
+  {
+   "symbol": "SWOLF",
+   "direction": "LONG",
+   "ts": 1791658560661,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4KQdVptH2DbYioUcLJ749UPCwtxtNZwpLy7QZ4u1ssWUW5zUQL75Krs1wSDX6CjKEzmC6SH9BPEiswiLSsA8DojV",
+   "onchain": true,
+   "filledAt": 1791658560661,
+   "live": false
+  },
+  {
+   "symbol": "SUPMKT",
+   "direction": "LONG",
+   "ts": 1791682726617,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:3WPQgqu9C9jDgrcbkQPyToL2VefrSrrKqWsx45B1R5jZiFkeXjDxEhGLpRmtypPuGNmg1ZiGdG5K5i3DpFcDed7v",
+   "onchain": true,
+   "filledAt": 1791682726617,
+   "live": false
+  },
+  {
+   "symbol": "MOIN",
+   "direction": "LONG",
+   "ts": 1791689145561,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:419xsUWsociuwbw3auPGUPhHzDMfzEij29sTt7fHDsSFDsi86KdMxkCkKra4GCeNZVy26idgxi56nZXLTdTSqf74",
+   "onchain": true,
+   "filledAt": 1791689145561,
+   "live": false
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791700107659,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2oZpkaivQf4xt78QrPBB6nPQbw7kvch4RiZuMMoXUGDRn6V4s7AER9HbKuH1fdTsqvPMrhN4p3q5gURJaJYbL6qw",
+   "onchain": true,
+   "filledAt": 1791700107659,
+   "live": false
+  },
+  {
+   "symbol": "QT",
+   "direction": "LONG",
+   "ts": 1791700606509,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4iTsxxnkL3VHRvPWwg1NMx6N4Zh5hJDe2x5LNiQM3eYngEoNXUnfHt5gxryQ6u4oxKf2Dox9Hv8RSZVGgaWU3Dii",
+   "onchain": true,
+   "filledAt": 1791700606509,
+   "live": false
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791701215116,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4BNSd3MntChRqoZRXEUXTYHJkuP1ANdXmeVw9Z5xJdwubq8WDidKCa88feySARB1Hr9Pzx8JPpoi6XMqMBuA7KTc",
+   "onchain": true,
+   "filledAt": 1791701215116,
+   "live": false
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791800364421,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
+   "onchain": true,
+   "filledAt": 1791800364421,
+   "live": false,
+   "closedAt": 1791800688021,
+   "epNet": -0.479851,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791801304429,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
+   "onchain": true,
+   "filledAt": 1791801304429,
+   "live": false,
+   "closedAt": 1791814086162,
+   "epNet": -1.323435,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791803856624,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2R5RCUBZR3CPte4YiC8rhpMc9DBB9W8Ho6Pq3cUkWtW67mASS2r6ZjBQvvKSjSubQE6FLmmLNKLAxygLUWnkPoaT",
+   "onchain": true,
+   "filledAt": 1791803856624,
+   "live": false,
+   "closedAt": 1791806613263,
+   "epNet": -0.06932,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "67",
+   "direction": "LONG",
+   "ts": 1791700105516,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4BL1xPA2vQhWRopFLNkuQstuymiFrMDXtncryXKcZnhxaGVwrcn8Gh93JVJwiNBy9APVZd7yp5hcy3saGT2aLJmC",
+   "onchain": true,
+   "filledAt": 1791700105516,
+   "live": false
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791806859625,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2QUNjN76xtCCeNKkD2gFX1SHZHJ4ZHy73Zbg4BLN78rvES3HGdL8poaMhgDSNbWDmMD3chHcS9MpUyrR2fsPDXdg",
+   "onchain": true,
+   "closedAt": 1791807382981,
+   "filledAt": 1791806859625,
+   "live": false
+  }
+ ],
  "drama": [
   {
-   "ts": 1791815964778,
-   "text": "🌆 Pimpcity founded — 5 pimps, 10 girls, one $4 corner"
+   "ts": 1791814120979,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-1.32 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1791814120979,
+   "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
+  },
+  {
+   "ts": 1791807602008,
+   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1791806835855,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.07 on SI276 — docked her pay"
+  },
+  {
+   "ts": 1791804456813,
+   "text": "🌫 Solana Sadie let GOIF go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1791801254185,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.48 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1791798566527,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.14 on NEARUSDT"
+  },
+  {
+   "ts": 1791798566527,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
+  },
+  {
+   "ts": 1791798566527,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.01 on NEARUSDT"
+  },
+  {
+   "ts": 1791797921060,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.51 on NEARUSDT"
+  },
+  {
+   "ts": 1791797921060,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.33 on NEARUSDT"
+  },
+  {
+   "ts": 1791797921060,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on NEARUSDT incl $0.223 entry fees — docked her pay"
+  },
+  {
+   "ts": 1791797256087,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.28 on CALI — docked her pay"
+  },
+  {
+   "ts": 1791797256087,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on MAGICUSDT"
+  },
+  {
+   "ts": 1791797256086,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
+  },
+  {
+   "ts": 1791787720804,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.40 on CLAUDIA — docked her pay"
+  },
+  {
+   "ts": 1791783685247,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on NEARUSDT — docked her pay"
+  },
+  {
+   "ts": 1791783685247,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on NEARUSDT"
+  },
+  {
+   "ts": 1791783685247,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on NEARUSDT"
+  },
+  {
+   "ts": 1791781568258,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.13 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1791780206460,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on SI276 — docked her pay"
+  },
+  {
+   "ts": 1791780206460,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
+  },
+  {
+   "ts": 1791779803966,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.49 on NEARUSDT"
+  },
+  {
+   "ts": 1791779803966,
+   "text": "🔥 Solana Sadie is on a heater — swagger through the roof, pimps are circling"
+  },
+  {
+   "ts": 1791779803966,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.33 on NEARUSDT"
+  },
+  {
+   "ts": 1791778940207,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.57 on GOMODOGE — docked her pay"
+  },
+  {
+   "ts": 1791778940207,
+   "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
+  },
+  {
+   "ts": 1791773497318,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
+  },
+  {
+   "ts": 1791773497318,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.13 on NEARUSDT incl $0.018 entry fees"
+  },
+  {
+   "ts": 1791773497318,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
   }
  ]
 }
