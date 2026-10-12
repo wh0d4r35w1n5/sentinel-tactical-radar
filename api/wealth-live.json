@@ -1,14 +1,14 @@
 {
- "ts": "2026-10-12T03:25:29.879Z",
+ "ts": "2026-10-12T03:32:17.216Z",
  "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 55.6233,
-  "availableUsd": 0.5249,
+  "equityUsd": 57.4494,
+  "availableUsd": 5.1334,
   "grantUsd": 20,
-  "equityOwnUsd": 35.6233,
-  "marginUsedUsd": 54.9639,
-  "uplUsd": 0.4385,
+  "equityOwnUsd": 37.4494,
+  "marginUsedUsd": 50.9579,
+  "uplUsd": 1.822,
   "positions": [
    {
     "k": "ARBUSDT:long",
@@ -18,42 +18,132 @@
    },
    {
     "k": "INJUSDT:long",
-    "size": 60.9,
-    "marginUsd": 11.8664,
-    "uplUsd": 0.1803
+    "size": 39.6,
+    "marginUsd": 7.7306,
+    "uplUsd": 1.4636
    },
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.446
+    "uplUsd": 0.4625
    },
    {
     "k": "ETHUSDT:long",
     "size": 0.04,
     "marginUsd": 2.75,
-    "uplUsd": -0.0292
+    "uplUsd": 0.0244
+   },
+   {
+    "k": "CKBUSDT:short",
+    "size": 2305,
+    "marginUsd": 0.1298,
+    "uplUsd": 0.03
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.023421,
-  "solUsd": 2.617,
+  "solUsd": 2.6181,
   "stableUsd": 13.6426,
-  "bagsUsd": 29.8977,
-  "totalUsd": 46.1573,
+  "bagsUsd": 30.0754,
+  "totalUsd": 46.3361,
   "tokens": {
-   "8k4sBtEe": 4.9931,
+   "8k4sBtEe": 5.0123,
    "9Twd5vXA": 7.0568,
-   "9XKzy4Ka": 0.0247,
-   "BQAeeSow": 0.0033,
-   "HMYd9tos": 4.2889
+   "9XKzy4Ka": 0.0255,
+   "BQAeeSow": 0.0032,
+   "HMYd9tos": 4.4696
   },
   "staleMs": 0
  },
- "totalUsd": 81.7806,
+ "totalUsd": 83.7855,
  "deltas": [
+  {
+   "ts": 1791775897585,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0503
+  },
+  {
+   "ts": 1791775873803,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-1240",
+   "amt": 0
+  },
+  {
+   "ts": 1791775863053,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-1908",
+   "amt": 0
+  },
+  {
+   "ts": 1791775861122,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.2955
+  },
+  {
+   "ts": 1791775794423,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1364
+  },
+  {
+   "ts": 1791775731235,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-2708",
+   "amt": 0
+  },
+  {
+   "ts": 1791775717873,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-2712",
+   "amt": 0
+  },
+  {
+   "ts": 1791775709331,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1547
+  },
+  {
+   "ts": 1791775708242,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-2717",
+   "amt": 0
+  },
+  {
+   "ts": 1791775699789,
+   "kind": "size-reduced",
+   "detail": "CKBUSDT:short Δ-2727",
+   "amt": 0
+  },
+  {
+   "ts": 1791775697590,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.4831
+  },
+  {
+   "ts": 1791775697542,
+   "kind": "position-opened",
+   "detail": "CKBUSDT:short",
+   "amt": 0.6623
+  },
+  {
+   "ts": 1791775651430,
+   "kind": "size-reduced",
+   "detail": "INJUSDT:long Δ-21.299999999999997",
+   "amt": 0
+  },
+  {
+   "ts": 1791775651270,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 1.3078
+  },
   {
    "ts": 1791775509616,
    "kind": "balance-move",
@@ -89,54 +179,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.176
-  },
-  {
-   "ts": 1791774931223,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.133
-  },
-  {
-   "ts": 1791774908636,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1761
-  },
-  {
-   "ts": 1791774821005,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0621
-  },
-  {
-   "ts": 1791774799321,
-   "kind": "position-opened",
-   "detail": "ETHUSDT:long",
-   "amt": 2.75
-  },
-  {
-   "ts": 1791774799321,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2895
-  },
-  {
-   "ts": 1791774789145,
-   "kind": "position-opened",
-   "detail": "BTCUSDT:long",
-   "amt": 39.8849
-  },
-  {
-   "ts": 1791774789145,
-   "kind": "position-opened",
-   "detail": "INJUSDT:long",
-   "amt": 11.8664
-  },
-  {
-   "ts": 1791774789145,
-   "kind": "position-opened",
-   "detail": "ARBUSDT:long",
-   "amt": 0.4627
   }
  ]
 }
