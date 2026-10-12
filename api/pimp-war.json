@@ -1,32 +1,74 @@
 {
- "at": "2026-10-12T12:07:17.765Z",
+ "at": "2026-10-12T12:20:04.632Z",
  "wallets": {
   "futures": {
-   "equityUsd": 37.13,
-   "marginFreeUsd": 17.48,
-   "epochNetUsd": -16.35,
+   "equityUsd": 36.04,
+   "marginFreeUsd": 1.11,
+   "epochNetUsd": -15.87,
    "fills": 400,
    "positions": [
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": -0.24,
+     "upl": -0.3,
      "lev": 5,
      "margin": 39.88
+    },
+    {
+     "symbol": "NATGASUSDT",
+     "side": "long",
+     "upl": -0.76,
+     "lev": 28,
+     "margin": 16.11
     }
    ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0137,
-   "stableUsd": 4.93,
-   "purseUsd": 23.94,
+   "sol": 0.0029,
+   "stableUsd": 1.2,
+   "purseUsd": 20.84,
    "positions": 1,
    "laneNet": -1.91,
    "laneTrades": 29,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791807382981,
+    "symbol": "GOMO",
+    "sig": null,
+    "text": "RECONCILE GOMO"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807382801,
+    "symbol": null,
+    "sig": "2jXuW8G61zZFwMSH8zWyVW1uE8DkZvS7feqxWq46jZ3yRts14ar3MhPP2JD2nGqJL5Ntk13TEde54S6GVbegeSaz",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807377514,
+    "symbol": null,
+    "sig": "2Fi6qNWoboKv37GCeA9cCWtVdioj3KuSgGXyXMme6rw8WHuzayisERZaZbwHZN7EpJhwyozDzdWJ9494nwwceaMf",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807375080,
+    "symbol": null,
+    "sig": "4XcsrjEgjjAPoCX9taf638toCkJA3pWAudRMbLsnoR1FpeqaEEQRmifw8T1J3NJ3fUHaBzbbcM4ZnGMFeoMH9QA4",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791806859625,
+    "symbol": "GOMO",
+    "sig": "2QUNjN76xtCCeNKkD2gFX1SHZHJ4ZHy73Zbg4BLN78rvES3HGdL8poaMhgDSNbWDmMD3chHcS9MpUyrR2fsPDXdg",
+    "text": "BUY GOMO $1.11"
+   },
    {
     "venue": "solana",
     "ts": 1791806613263,
@@ -61,41 +103,6 @@
     "symbol": "SEAN",
     "sig": "3mRuBztxKmVgRWFss7GpyFHZYp6KZaPh47TXAhVVgY9Kv2CPH82hwMayp3riFFkcS77UdMnek4vxixptpy84vjpe",
     "text": "SELL SEAN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791800364421,
-    "symbol": "SEAN",
-    "sig": "4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
-    "text": "BUY SEAN $16.90"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791796956518,
-    "symbol": "CALI",
-    "sig": "fjQs1BTAwUXaU2RwF7PJ5DKJFcx8ExVjYBhZioxDD6GppE267jp5yDWLxLdM5e2mc4J3uF96h2ZVYcDs5uwQozo",
-    "text": "SELL CALI"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791787674938,
-    "symbol": "CLAUDIA",
-    "sig": "3ZuhtwAvrzZxZ3qWX3TCUVAwZDHsWsf4jHf2MDwpCnXCoe9fwXmtR3yCfxZPDLrE1pxC8wJC8YCLeHrLkf7gPNsg",
-    "text": "SELL CLAUDIA"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791780989711,
-    "symbol": "SEAN",
-    "sig": "49VqbkYPGdob26iFNpVxrQJ9tdcJTGDviYvtdHJDDzxkFtPM7m9YmLexDTJ61rdityWi59Goez1McXQwKGwWnP3X",
-    "text": "SELL SEAN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791780036300,
-    "symbol": "SI276",
-    "sig": "42k5v2QJ71pMtrHK3UbyiX1HvQhUS1v38unqraHzVLV68RGtjRxyg6Mr7hCx4cyP2BhLj8a6PVbQdUG59L7e4xJh",
-    "text": "SELL SI276"
    }
   ]
  },
@@ -502,7 +509,7 @@
    "net": -15.0609,
    "wins": 8,
    "losses": 26,
-   "closes": 45,
+   "closes": 46,
    "stolen": 0,
    "gen": 0,
    "form": -0.0965,
@@ -535,8 +542,8 @@
     -15.0609
    ],
    "persona": {
-    "swagger": 0.73,
-    "tilt": 0.36,
+    "swagger": 0.72,
+    "tilt": 0.35,
     "greed": 0.81,
     "discipline": 0.56
    }
@@ -544,17 +551,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "QT",
-   "direction": "LONG",
-   "ts": 1791663794297,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:525z35kaKrpBvnJmfWtjDZjwqqyKCrgMPBf92BmsyPMoyNNyghLD87u3soGBR3cqC67vHYU1aAogimWMpoVJQWDN",
-   "onchain": true,
-   "filledAt": 1791663794297,
-   "live": false
-  },
   {
    "symbol": "GOMO",
    "direction": "LONG",
@@ -683,9 +679,25 @@
    "onchain": true,
    "filledAt": 1791700105516,
    "live": false
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791806859625,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2QUNjN76xtCCeNKkD2gFX1SHZHJ4ZHy73Zbg4BLN78rvES3HGdL8poaMhgDSNbWDmMD3chHcS9MpUyrR2fsPDXdg",
+   "onchain": true,
+   "closedAt": 1791807382981,
+   "filledAt": 1791806859625,
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1791807602008,
+   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
+  },
   {
    "ts": 1791806835855,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.07 on SI276 — docked her pay"
@@ -801,10 +813,6 @@
   {
    "ts": 1791770861113,
    "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
-  },
-  {
-   "ts": 1791768907611,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.25 on MAGICUSDT incl $0.005 entry fees — docked her pay"
   }
  ]
 }
