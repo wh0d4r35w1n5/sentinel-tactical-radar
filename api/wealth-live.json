@@ -1,41 +1,71 @@
 {
- "ts": "2026-10-12T05:01:51.407Z",
- "ageMs": 6968,
+ "ts": "2026-10-12T05:06:57.611Z",
+ "ageMs": 12741,
  "src": "ws",
  "futures": {
-  "equityUsd": 59.4241,
-  "availableUsd": 18.0138,
+  "equityUsd": 59.2431,
+  "availableUsd": 6.6628,
   "grantUsd": 20,
-  "equityOwnUsd": 39.4241,
-  "marginUsedUsd": 39.8849,
-  "uplUsd": 1.5286,
+  "equityOwnUsd": 39.2431,
+  "marginUsedUsd": 50.9869,
+  "uplUsd": 1.5737,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 1.5286
+    "uplUsd": 1.5635
+   },
+   {
+    "k": "OPUSDT:short",
+    "size": 210.9,
+    "marginUsd": 0.7038,
+    "uplUsd": 0
+   },
+   {
+    "k": "SOLUSDT:long",
+    "size": 3.4,
+    "marginUsd": 10.3982,
+    "uplUsd": 0.0102
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.015674,
-  "solUsd": 1.7747,
+  "solUsd": 1.773,
   "stableUsd": 14.9316,
-  "bagsUsd": 29.5275,
-  "totalUsd": 46.2338,
+  "bagsUsd": 29.4314,
+  "totalUsd": 46.136,
   "tokens": {
-   "2j5SaS7x": 2.2352,
-   "8k4sBtEe": 5.0931,
-   "9Twd5vXA": 7.265,
+   "2j5SaS7x": 2.2071,
+   "8k4sBtEe": 5.0683,
+   "9Twd5vXA": 7.2688,
    "9XKzy4Ka": 0.0257,
    "BQAeeSow": 0.0029
   },
-  "staleMs": 6968
+  "staleMs": 12741
  },
- "totalUsd": 85.6579,
+ "totalUsd": 85.379,
  "deltas": [
+  {
+   "ts": 1791781576058,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1933
+  },
+  {
+   "ts": 1791781576058,
+   "kind": "position-opened",
+   "detail": "SOLUSDT:long",
+   "amt": 10.3982
+  },
+  {
+   "ts": 1791781571923,
+   "kind": "position-opened",
+   "detail": "OPUSDT:short",
+   "amt": 0.7038
+  },
   {
    "ts": 1791781175907,
    "kind": "position-closed",
@@ -136,24 +166,6 @@
    "ts": 1791779470194,
    "kind": "size-reduced",
    "detail": "NEARUSDT:long Δ-9",
-   "amt": 0
-  },
-  {
-   "ts": 1791779470193,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0983
-  },
-  {
-   "ts": 1791779448880,
-   "kind": "size-reduced",
-   "detail": "NEARUSDT:long Δ-14",
-   "amt": 0
-  },
-  {
-   "ts": 1791779435601,
-   "kind": "size-reduced",
-   "detail": "NEARUSDT:long Δ-21",
    "amt": 0
   }
  ]

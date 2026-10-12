@@ -1,16 +1,23 @@
 {
- "at": "2026-10-12T04:56:27.006Z",
+ "at": "2026-10-12T05:06:11.302Z",
  "wallets": {
   "futures": {
-   "equityUsd": 39.04,
-   "marginFreeUsd": 17.75,
-   "epochNetUsd": -25.41,
+   "equityUsd": 39.53,
+   "marginFreeUsd": 7.16,
+   "epochNetUsd": -25.52,
    "fills": 400,
    "positions": [
     {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0.67,
+     "lev": 37,
+     "margin": 10.37
+    },
+    {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 1.4,
+     "upl": 1.45,
      "lev": 5,
      "margin": 39.88
     }
@@ -19,14 +26,21 @@
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0157,
-   "stableUsd": 11.78,
-   "purseUsd": 29.85,
-   "positions": 4,
+   "stableUsd": 14.93,
+   "purseUsd": 29.43,
+   "positions": 3,
    "laneNet": -0.52,
    "laneTrades": 23,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791780989711,
+    "symbol": "SEAN",
+    "sig": "49VqbkYPGdob26iFNpVxrQJ9tdcJTGDviYvtdHJDDzxkFtPM7m9YmLexDTJ61rdityWi59Goez1McXQwKGwWnP3X",
+    "text": "SELL SEAN"
+   },
    {
     "venue": "solana",
     "ts": 1791780036300,
@@ -89,13 +103,6 @@
     "symbol": "GOMO",
     "sig": "5HqmJtuc6bRidKCxQ5WEZ35uRvXfyt3S4ojdpWDhht6p5DDXZPb2ebGqaXcGVzLaptb6g4HX3gZqDuaBZUbKqAYS",
     "text": "SELL GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791769964910,
-    "symbol": "SI276",
-    "sig": "4SRNpz6LgMA5RC5MNZtPGz6Z9uT8CTxVoyJaJyZ5QSkRwdmXW6C15jjMht2xQ4tmiGqBghiCMEdXpxUzBbjXVmXG",
-    "text": "BUY SI276 $4.35"
    }
   ]
  },
@@ -499,17 +506,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -16.7668,
+   "net": -16.8987,
    "wins": 7,
-   "losses": 22,
-   "closes": 39,
+   "losses": 23,
+   "closes": 40,
    "stolen": 0,
    "gen": 0,
-   "form": 0.1693,
+   "form": 0.0488,
    "mood": "cocky",
    "vault": 0,
    "hist": [
-    -16.253,
     -16.2365,
     -16.171,
     -16.1451,
@@ -532,13 +538,14 @@
     -17.5481,
     -17.2217,
     -16.7342,
-    -16.7668
+    -16.7668,
+    -16.8987
    ],
    "persona": {
-    "swagger": 0.9,
-    "tilt": 0.2,
-    "greed": 0.93,
-    "discipline": 0.53
+    "swagger": 0.82,
+    "tilt": 0.37,
+    "greed": 0.91,
+    "discipline": 0.48
    }
   }
  ],
@@ -664,7 +671,11 @@
    "coid": "oc:2t84dA8kKraUnWF18bqEjFyyffGmiP2RCHsnbLTL3K18dva2o8R94qQXoeuFPbMcTtcLGqi4ETbQNJssq3HjFEXP",
    "onchain": true,
    "filledAt": 1791778406907,
-   "live": true
+   "live": false,
+   "closedAt": 1791780989711,
+   "epNet": -0.131859,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "GOMODOGE",
@@ -694,6 +705,10 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1791781568258,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.13 on SEAN — docked her pay"
+  },
   {
    "ts": 1791780206460,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on SI276 — docked her pay"
@@ -809,10 +824,6 @@
   {
    "ts": 1791753905994,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.13 on STRKUSDT — docked her pay"
-  },
-  {
-   "ts": 1791752606770,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.25 on MAGICUSDT incl $0.003 entry fees — docked her pay"
   }
  ]
 }
