@@ -1,8 +1,8 @@
 {
- "at": "2026-10-12T10:23:02.974Z",
+ "at": "2026-10-12T10:38:20.909Z",
  "wallets": {
   "futures": {
-   "equityUsd": 38.57,
+   "equityUsd": 38.63,
    "marginFreeUsd": 18.69,
    "epochNetUsd": -16.69,
    "fills": 400,
@@ -10,7 +10,7 @@
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": 0.07,
      "lev": 5,
      "margin": 39.88
     }
@@ -18,15 +18,29 @@
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-   "sol": 0.0155,
+   "sol": 0.0139,
    "stableUsd": 5,
-   "purseUsd": 29.3,
+   "purseUsd": 29.34,
    "positions": 2,
-   "laneNet": -1.36,
-   "laneTrades": 27,
+   "laneNet": -1.84,
+   "laneTrades": 28,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791801304429,
+    "symbol": "SEAN",
+    "sig": "rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
+    "text": "BUY SEAN $16.42"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791800688021,
+    "symbol": "SEAN",
+    "sig": "3mRuBztxKmVgRWFss7GpyFHZYp6KZaPh47TXAhVVgY9Kv2CPH82hwMayp3riFFkcS77UdMnek4vxixptpy84vjpe",
+    "text": "SELL SEAN"
+   },
    {
     "venue": "solana",
     "ts": 1791800364421,
@@ -82,20 +96,6 @@
     "symbol": "GOMODOGE",
     "sig": "9fQegwczSjNhjw9jReeGmoc1KSQ9EmG1qP63w3ypb3raLs92mWNVw85mFLsHi9H6bdCtv6tyNMqpYi5E5ngHRAB",
     "text": "BUY GOMODOGE $2.46"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791778406907,
-    "symbol": "SEAN",
-    "sig": "2t84dA8kKraUnWF18bqEjFyyffGmiP2RCHsnbLTL3K18dva2o8R94qQXoeuFPbMcTtcLGqi4ETbQNJssq3HjFEXP",
-    "text": "BUY SEAN $3.28"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791774509204,
-    "symbol": "CALI",
-    "sig": "5f2msXWD89QUbYCj56zfvYo3hNnzFmhCrLm5szpd32vCm1wnNG6YDjktVWV97gTwWMumHzoTWGroUZGV3sCeqtp7",
-    "text": "BUY CALI $5.33"
    }
   ]
  },
@@ -499,17 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -14.5117,
+   "net": -14.9916,
    "wins": 8,
-   "losses": 24,
-   "closes": 42,
+   "losses": 25,
+   "closes": 43,
    "stolen": 0,
    "gen": 0,
-   "form": 0.1287,
+   "form": -0.1147,
    "mood": "cocky",
    "vault": 0,
    "hist": [
-    -16.7342,
     -16.7668,
     -16.8987,
     -16.9055,
@@ -532,29 +531,19 @@
     -14.6935,
     -14.6839,
     -14.6517,
-    -14.5117
+    -14.5117,
+    -14.9916
    ],
    "persona": {
-    "swagger": 0.96,
-    "tilt": 0.03,
-    "greed": 0.96,
-    "discipline": 0.7
+    "swagger": 0.88,
+    "tilt": 0.2,
+    "greed": 0.92,
+    "discipline": 0.65
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "SI276",
-   "direction": "LONG",
-   "ts": 1791633179451,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "oc:eoaAffjUJfmnEfHMEjQLsd74TG3mU1VkGRpDLJevfa1SDbCYian8BcMSP11zvPUKMjKT6qafeGUG1Vp7WJiYmVs",
-   "onchain": true,
-   "filledAt": 1791633179451,
-   "live": false
-  },
   {
    "symbol": "ABU",
    "direction": "LONG",
@@ -674,10 +663,29 @@
    "coid": "oc:4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
    "onchain": true,
    "filledAt": 1791800364421,
+   "live": true,
+   "closedAt": 1791800688021,
+   "epNet": -0.479851,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791801304429,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
+   "onchain": true,
+   "filledAt": 1791801304429,
    "live": true
   }
  ],
  "drama": [
+  {
+   "ts": 1791801254185,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.48 on SEAN — docked her pay"
+  },
   {
    "ts": 1791798566527,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.14 on NEARUSDT"
@@ -793,10 +801,6 @@
   {
    "ts": 1791767578863,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.11 on MAGICUSDT incl $0.034 entry fees — docked her pay"
-  },
-  {
-   "ts": 1791767511875,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.01 on MAGICUSDT"
   }
  ]
 }
