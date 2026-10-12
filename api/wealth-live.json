@@ -1,48 +1,84 @@
 {
- "ts": "2026-10-12T11:14:02.429Z",
- "ageMs": 0,
+ "ts": "2026-10-12T11:19:39.741Z",
+ "ageMs": 6928,
  "src": "ws",
  "futures": {
-  "equityUsd": 58.0535,
+  "equityUsd": 57.3807,
   "availableUsd": 18.5765,
   "grantUsd": 20,
-  "equityOwnUsd": 38.0535,
-  "marginUsedUsd": 57.9453,
-  "uplUsd": -0.4036,
+  "equityOwnUsd": 37.3807,
+  "marginUsedUsd": 57.8755,
+  "uplUsd": -1.0764,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8806,
-    "uplUsd": -0.0814
+    "uplUsd": -0.0561
    },
    {
     "k": "NATGASUSDT:long",
     "size": 53.7,
-    "marginUsd": 18.0647,
-    "uplUsd": -0.3222
+    "marginUsd": 17.9949,
+    "uplUsd": -1.0203
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-  "solQty": 0.013924,
-  "solUsd": 1.5503,
-  "stableUsd": 5,
-  "bagsUsd": 28.3586,
-  "totalUsd": 34.9089,
+  "solQty": 0.013788,
+  "solUsd": 1.5345,
+  "stableUsd": 3.8757,
+  "bagsUsd": 32.9579,
+  "totalUsd": 38.3681,
   "tokens": {
-   "2j5SaS7x": 0.0199,
-   "8PGyHCKv": 20.5242,
+   "2j5SaS7x": 0.0206,
+   "8PGyHCKv": 31.7893,
    "8k4sBtEe": 0.0095,
-   "9Twd5vXA": 7.7807,
    "9XKzy4Ka": 0.0223,
-   "BQAeeSow": 0.002
+   "BQAeeSow": 0.002,
+   "HMYd9tos": 1.1142
   },
-  "staleMs": 0
+  "staleMs": 6928
  },
- "totalUsd": 72.9624,
+ "totalUsd": 75.7488,
  "deltas": [
+  {
+   "ts": 1791803904444,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.093
+  },
+  {
+   "ts": 1791803872838,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.5874
+  },
+  {
+   "ts": 1791803872828,
+   "kind": "margin-removed",
+   "detail": "NATGASUSDT:long",
+   "amt": -0.0537
+  },
+  {
+   "ts": 1791803867481,
+   "kind": "chain-stable-move",
+   "detail": "hot wallet",
+   "amt": -1.1243
+  },
+  {
+   "ts": 1791803855912,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": -0.0001
+  },
+  {
+   "ts": 1791803817153,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": 0
+  },
   {
    "ts": 1791803631280,
    "kind": "balance-move",
