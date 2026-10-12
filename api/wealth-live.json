@@ -1,6 +1,6 @@
 {
- "ts": "2026-10-12T06:44:11.412Z",
- "ageMs": 6180,
+ "ts": "2026-10-12T06:49:06.271Z",
+ "ageMs": 10033,
  "src": "ws",
  "futures": {
   "equityUsd": 57.3408,
@@ -26,22 +26,34 @@
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
-  "solQty": 0.015674,
-  "solUsd": 1.7618,
-  "stableUsd": 14.9316,
-  "bagsUsd": 29.4258,
-  "totalUsd": 46.1192,
+  "solQty": 0.015661,
+  "solUsd": 1.7596,
+  "stableUsd": 16.8526,
+  "bagsUsd": 27.4337,
+  "totalUsd": 46.0459,
   "tokens": {
-   "2j5SaS7x": 2.0301,
-   "8k4sBtEe": 5.15,
-   "9Twd5vXA": 7.3583,
+   "2j5SaS7x": 0.0182,
+   "8k4sBtEe": 5.1142,
+   "9Twd5vXA": 7.4004,
    "9XKzy4Ka": 0.0215,
-   "BQAeeSow": 0.0026
+   "BQAeeSow": 0.0022
   },
-  "staleMs": 6180
+  "staleMs": 10033
  },
- "totalUsd": 83.46,
+ "totalUsd": 83.3867,
  "deltas": [
+  {
+   "ts": 1791787674659,
+   "kind": "chain-stable-move",
+   "detail": "hot wallet",
+   "amt": 1.921
+  },
+  {
+   "ts": 1791787673120,
+   "kind": "chain-sol-move",
+   "detail": "hot wallet",
+   "amt": 0
+  },
   {
    "ts": 1791787398103,
    "kind": "balance-move",
@@ -149,18 +161,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.1133
-  },
-  {
-   "ts": 1791783029482,
-   "kind": "size-reduced",
-   "detail": "SUIUSDT:short Δ-7.5",
-   "amt": 0
-  },
-  {
-   "ts": 1791783029351,
-   "kind": "size-reduced",
-   "detail": "AVAXUSDT:short Δ-0.8",
-   "amt": 0
   }
  ]
 }

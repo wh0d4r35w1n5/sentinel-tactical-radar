@@ -1,5 +1,5 @@
 {
- "at": "2026-10-12T06:43:16.863Z",
+ "at": "2026-10-12T06:48:42.589Z",
  "wallets": {
   "futures": {
    "equityUsd": 37.66,
@@ -10,7 +10,7 @@
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 1.21,
+     "upl": 1.22,
      "lev": 5,
      "margin": 39.88
     }
@@ -20,13 +20,20 @@
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0157,
    "stableUsd": 14.93,
-   "purseUsd": 29.43,
-   "positions": 3,
+   "purseUsd": 27.43,
+   "positions": 2,
    "laneNet": -0.52,
    "laneTrades": 23,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791787674938,
+    "symbol": "CLAUDIA",
+    "sig": "3ZuhtwAvrzZxZ3qWX3TCUVAwZDHsWsf4jHf2MDwpCnXCoe9fwXmtR3yCfxZPDLrE1pxC8wJC8YCLeHrLkf7gPNsg",
+    "text": "SELL CLAUDIA"
+   },
    {
     "venue": "solana",
     "ts": 1791780989711,
@@ -89,13 +96,6 @@
     "symbol": null,
     "sig": "2fExL2rrBUY12SS8Kgad6EfrHHQn5c4GGwn835wiqxhgTwEXat48CYd9pU8irprQNASks8CLcc8WUJCLBzwz637E",
     "text": "BOOTSTRAP boot"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791770361672,
-    "symbol": "GOMO",
-    "sig": "5HqmJtuc6bRidKCxQ5WEZ35uRvXfyt3S4ojdpWDhht6p5DDXZPb2ebGqaXcGVzLaptb6g4HX3gZqDuaBZUbKqAYS",
-    "text": "SELL GOMO"
    }
   ]
  },
@@ -499,17 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -16.8482,
+   "net": -17.2434,
    "wins": 7,
-   "losses": 23,
-   "closes": 40,
+   "losses": 24,
+   "closes": 41,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0058,
+   "form": -0.1546,
    "mood": "cocky",
    "vault": 0,
    "hist": [
-    -16.0244,
     -15.9659,
     -15.9405,
     -15.9282,
@@ -532,13 +531,14 @@
     -16.8703,
     -16.8523,
     -16.8342,
-    -16.8482
+    -16.8482,
+    -17.2434
    ],
    "persona": {
-    "swagger": 0.88,
-    "tilt": 0.21,
-    "greed": 0.92,
-    "discipline": 0.5
+    "swagger": 0.8,
+    "tilt": 0.39,
+    "greed": 0.89,
+    "discipline": 0.45
    }
   }
  ],
@@ -616,7 +616,11 @@
    "coid": "oc:5iuwYrrpsS6bfF6MCJktWyXaboUEiVXCEc3yQgUGXhEsbi4sfz5GxDxYvjWErmE2bKQoyXGPj8MoSkSeDVnUYZgD",
    "onchain": true,
    "filledAt": 1791778999342,
-   "live": true
+   "live": false,
+   "closedAt": 1791787674938,
+   "epNet": -0.395163,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "QI",
@@ -686,6 +690,10 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1791787720804,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.40 on CLAUDIA — docked her pay"
+  },
   {
    "ts": 1791783685247,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on NEARUSDT — docked her pay"
@@ -801,10 +809,6 @@
   {
    "ts": 1791758334597,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on MAGICUSDT incl $0.003 entry fees"
-  },
-  {
-   "ts": 1791757075218,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.09 on MAGICUSDT"
   }
  ]
 }
