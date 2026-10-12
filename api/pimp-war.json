@@ -1,23 +1,16 @@
 {
- "at": "2026-10-12T09:18:14.062Z",
+ "at": "2026-10-12T09:27:38.159Z",
  "wallets": {
   "futures": {
-   "equityUsd": 35.83,
-   "marginFreeUsd": 14.82,
-   "epochNetUsd": -36.79,
+   "equityUsd": 37.71,
+   "marginFreeUsd": 17.68,
+   "epochNetUsd": -29.74,
    "fills": 400,
    "positions": [
     {
-     "symbol": "MAGICUSDT",
-     "side": "long",
-     "upl": 0.02,
-     "lev": 25,
-     "margin": 12.1
-    },
-    {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.27,
+     "upl": 0.15,
      "lev": 5,
      "margin": 39.88
     }
@@ -26,14 +19,21 @@
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
    "sol": 0.0157,
-   "stableUsd": 16.85,
-   "purseUsd": 29.68,
-   "positions": 2,
+   "stableUsd": 21.9,
+   "purseUsd": 29.55,
+   "positions": 1,
    "laneNet": -1.08,
    "laneTrades": 26,
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791796956518,
+    "symbol": "CALI",
+    "sig": "fjQs1BTAwUXaU2RwF7PJ5DKJFcx8ExVjYBhZioxDD6GppE267jp5yDWLxLdM5e2mc4J3uF96h2ZVYcDs5uwQozo",
+    "text": "SELL CALI"
+   },
    {
     "venue": "solana",
     "ts": 1791787674938,
@@ -96,13 +96,6 @@
     "symbol": "GOIF",
     "sig": "Yn9fKGZfNi2DJY5zGypoLTCMMjoNvS6CesdekJGHNeLUs8uwHRQcffvp5qrPCJCPxwa3RdtMc7QrwTR5pimMYZg",
     "text": "BUY GOIF $7.10"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791774502000,
-    "symbol": null,
-    "sig": "2fExL2rrBUY12SS8Kgad6EfrHHQn5c4GGwn835wiqxhgTwEXat48CYd9pU8irprQNASks8CLcc8WUJCLBzwz637E",
-    "text": "BOOTSTRAP boot"
    }
   ]
  },
@@ -506,24 +499,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -17.2434,
-   "wins": 7,
+   "net": -15.5168,
+   "wins": 8,
    "losses": 24,
-   "closes": 41,
+   "closes": 42,
    "stolen": 0,
    "gen": 0,
-   "form": -0.1546,
+   "form": 0.0632,
    "mood": "cocky",
    "vault": 0,
    "hist": [
-    -15.9659,
-    -15.9405,
-    -15.9282,
-    -16.0352,
-    -16.5446,
-    -16.7982,
-    -17.6764,
-    -17.5508,
     -17.5234,
     -18.0948,
     -17.9566,
@@ -539,13 +524,21 @@
     -16.8523,
     -16.8342,
     -16.8482,
-    -17.2434
+    -17.2434,
+    -17.2256,
+    -17.1156,
+    -16.8118,
+    -16.5147,
+    -15.6541,
+    -15.4052,
+    -15.2374,
+    -15.5168
    ],
    "persona": {
-    "swagger": 0.73,
-    "tilt": 0.32,
-    "greed": 0.8,
-    "discipline": 0.46
+    "swagger": 0.92,
+    "tilt": 0.18,
+    "greed": 0.97,
+    "discipline": 0.62
    }
   }
  ],
@@ -686,6 +679,18 @@
  ],
  "drama": [
   {
+   "ts": 1791797256087,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.28 on CALI — docked her pay"
+  },
+  {
+   "ts": 1791797256087,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on MAGICUSDT"
+  },
+  {
+   "ts": 1791797256086,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
+  },
+  {
    "ts": 1791787720804,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.40 on CLAUDIA — docked her pay"
   },
@@ -792,18 +797,6 @@
   {
    "ts": 1791760899844,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.01 on MAGICUSDT"
-  },
-  {
-   "ts": 1791760899844,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on MAGICUSDT"
-  },
-  {
-   "ts": 1791760899844,
-   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
-  },
-  {
-   "ts": 1791758334597,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on MAGICUSDT incl $0.003 entry fees"
   }
  ]
 }
