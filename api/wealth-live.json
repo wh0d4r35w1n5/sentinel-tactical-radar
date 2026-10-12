@@ -1,48 +1,66 @@
 {
- "ts": "2026-10-12T04:41:16.969Z",
- "ageMs": 5968,
+ "ts": "2026-10-12T04:46:22.624Z",
+ "ageMs": 4397,
  "src": "ws",
  "futures": {
-  "equityUsd": 58.2715,
-  "availableUsd": 17.7548,
+  "equityUsd": 58.8087,
+  "availableUsd": 7.1575,
   "grantUsd": 20,
-  "equityOwnUsd": 38.2715,
-  "marginUsedUsd": 41.7931,
-  "uplUsd": 1.078,
+  "equityOwnUsd": 38.8087,
+  "marginUsedUsd": 52.1603,
+  "uplUsd": 1.7511,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8849,
-    "uplUsd": 0.6318
+    "uplUsd": 1.3933
    },
    {
     "k": "NEARUSDT:long",
     "size": 12,
     "marginUsd": 1.9083,
     "uplUsd": 0.4462
+   },
+   {
+    "k": "SOLUSDT:long",
+    "size": 3.4,
+    "marginUsd": 10.3672,
+    "uplUsd": -0.0884
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.0157,
-  "solUsd": 1.7676,
+  "solUsd": 1.7718,
   "stableUsd": 11.7782,
-  "bagsUsd": 25.7194,
-  "totalUsd": 39.2652,
+  "bagsUsd": 30.1594,
+  "totalUsd": 43.7094,
   "tokens": {
-   "2j5SaS7x": 2.3483,
-   "8PGyHCKv": 3.6419,
-   "8k4sBtEe": 5.0867,
-   "9Twd5vXA": 7.2575,
-   "9XKzy4Ka": 0.0263,
+   "2j5SaS7x": 2.309,
+   "8PGyHCKv": 3.4854,
+   "8k4sBtEe": 5.0417,
+   "9Twd5vXA": 7.2688,
+   "9XKzy4Ka": 0.026,
    "BQAeeSow": 0.0029
   },
-  "staleMs": 5968
+  "staleMs": 10117
  },
- "totalUsd": 77.5367,
+ "totalUsd": 82.5181,
  "deltas": [
+  {
+   "ts": 1791780376382,
+   "kind": "position-opened",
+   "detail": "SOLUSDT:long",
+   "amt": 10.3672
+  },
+  {
+   "ts": 1791780376382,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.5372
+  },
   {
    "ts": 1791780040970,
    "kind": "chain-stable-move",
@@ -150,18 +168,6 @@
    "kind": "chain-sol-move",
    "detail": "hot wallet",
    "amt": 0
-  },
-  {
-   "ts": 1791778418630,
-   "kind": "chain-stable-move",
-   "detail": "hot wallet",
-   "amt": -5.7486
-  },
-  {
-   "ts": 1791778408747,
-   "kind": "chain-sol-move",
-   "detail": "hot wallet",
-   "amt": -0.003
   }
  ]
 }
