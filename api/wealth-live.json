@@ -1,80 +1,92 @@
 {
- "ts": "2026-10-13T02:38:13.713Z",
- "ageMs": 399,
+ "ts": "2026-10-13T02:44:04.563Z",
+ "ageMs": 5312,
  "src": "ws",
  "futures": {
-  "equityUsd": 42.5405,
-  "availableUsd": 24.599,
+  "equityUsd": 44.5272,
+  "availableUsd": 10.2537,
   "grantUsd": 0,
-  "equityOwnUsd": 42.5405,
-  "marginUsedUsd": 25.2131,
-  "uplUsd": -7.1221,
+  "equityOwnUsd": 44.5272,
+  "marginUsedUsd": 39.1767,
+  "uplUsd": -5.1529,
   "positions": [
-   {
-    "k": "NEARUSDT:short",
-    "size": 1,
-    "marginUsd": 0.1116,
-    "uplUsd": 0.038
-   },
-   {
-    "k": "INJUSDT:short",
-    "size": 101.3,
-    "marginUsd": 17.2391,
-    "uplUsd": -5.9061
-   },
-   {
-    "k": "OPUSDT:short",
-    "size": 1373.9,
-    "marginUsd": 3.7996,
-    "uplUsd": -0.8243
-   },
-   {
-    "k": "SUIUSDT:short",
-    "size": 25.7,
-    "marginUsd": 0.8327,
-    "uplUsd": -0.0643
-   },
    {
     "k": "DOGEUSDT:short",
     "size": 366,
     "marginUsd": 0.8687,
-    "uplUsd": -0.1098
+    "uplUsd": -0.0732
    },
    {
-    "k": "XRPUSDT:short",
-    "size": 24,
-    "marginUsd": 0.8574,
-    "uplUsd": -0.0672
-   },
-   {
-    "k": "AVAXUSDT:short",
-    "size": 4.2,
-    "marginUsd": 0.9403,
-    "uplUsd": -0.1344
+    "k": "SUIUSDT:short",
+    "size": 460.5,
+    "marginUsd": 14.9078,
+    "uplUsd": -0.6285
    },
    {
     "k": "ETHUSDT:short",
     "size": 0.01,
     "marginUsd": 0.5637,
-    "uplUsd": -0.054
+    "uplUsd": -0.0263
+   },
+   {
+    "k": "XRPUSDT:short",
+    "size": 24,
+    "marginUsd": 0.8574,
+    "uplUsd": -0.0336
+   },
+   {
+    "k": "AVAXUSDT:short",
+    "size": 4.2,
+    "marginUsd": 0.9403,
+    "uplUsd": -0.063
+   },
+   {
+    "k": "INJUSDT:short",
+    "size": 101.3,
+    "marginUsd": 17.2391,
+    "uplUsd": -3.7788
+   },
+   {
+    "k": "OPUSDT:short",
+    "size": 1373.9,
+    "marginUsd": 3.7996,
+    "uplUsd": -0.5496
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2565,
+  "solUsd": 0.2568,
   "stableUsd": 0,
   "bagsUsd": 0.084,
-  "totalUsd": 0.3405,
+  "totalUsd": 0.3408,
   "tokens": {
    "8PGyHCKv": 0.0825,
    "BQAeeSow": 0.0015
   },
-  "staleMs": 8425
+  "staleMs": 5312
  },
- "totalUsd": 42.881,
+ "totalUsd": 44.868,
  "deltas": [
+  {
+   "ts": 1791859259765,
+   "kind": "position-closed",
+   "detail": "NEARUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791859125454,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 2.1636
+  },
+  {
+   "ts": 1791859125434,
+   "kind": "size-added",
+   "detail": "SUIUSDT:short Δ434.8",
+   "amt": 0
+  },
   {
    "ts": 1791859093314,
    "kind": "size-reduced",
@@ -176,30 +188,12 @@
    "kind": "size-added",
    "detail": "OPUSDT:short Δ7494",
    "amt": 0
-  },
-  {
-   "ts": 1791858889912,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.6035
-  },
-  {
-   "ts": 1791858887487,
-   "kind": "position-opened",
-   "detail": "ETHUSDT:short",
-   "amt": 0.5637
-  },
-  {
-   "ts": 1791858886231,
-   "kind": "position-opened",
-   "detail": "AVAXUSDT:short",
-   "amt": 0.9403
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -808.51,
-  "clearedPct": 7.1
+  "netAfterAud": -805.66,
+  "clearedPct": 7.4
  }
 }
