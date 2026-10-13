@@ -1,50 +1,103 @@
 {
- "ts": "2026-10-13T09:09:34.416Z",
- "ageMs": 7891,
+ "ts": "2026-10-13T09:15:30.321Z",
+ "ageMs": 8510,
  "src": "ws",
  "futures": {
-  "equityUsd": 30.2725,
-  "availableUsd": 17.9879,
+  "equityUsd": 29.7771,
+  "availableUsd": 29.7771,
   "grantUsd": 0,
-  "equityOwnUsd": 30.2725,
-  "marginUsedUsd": 12.6957,
-  "uplUsd": -0.6465,
-  "positions": [
-   {
-    "k": "CLUSDT:long",
-    "size": 3.52,
-    "marginUsd": 8.7091,
-    "uplUsd": -0.7216
-   },
-   {
-    "k": "DXYZUSDT:long",
-    "size": 1.32,
-    "marginUsd": 1.9974,
-    "uplUsd": -0.1769
-   },
-   {
-    "k": "DOTUSDT:long",
-    "size": 42,
-    "marginUsd": 1.9891,
-    "uplUsd": 0.252
-   }
-  ]
+  "equityOwnUsd": 29.7771,
+  "marginUsedUsd": 0,
+  "uplUsd": 0,
+  "positions": []
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2596,
+  "solUsd": 0.2591,
   "stableUsd": 0,
   "bagsUsd": 0.073,
-  "totalUsd": 0.3326,
+  "totalUsd": 0.3321,
   "tokens": {
    "8PGyHCKv": 0.0716,
    "BQAeeSow": 0.0014
   },
-  "staleMs": 7891
+  "staleMs": 8510
  },
- "totalUsd": 30.6051,
+ "totalUsd": 30.1091,
  "deltas": [
+  {
+   "ts": 1791882914730,
+   "kind": "position-closed",
+   "detail": "DXYZUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791882900095,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3101
+  },
+  {
+   "ts": 1791882686778,
+   "kind": "position-closed",
+   "detail": "CTKUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791882677497,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0707
+  },
+  {
+   "ts": 1791882667706,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.3212
+  },
+  {
+   "ts": 1791882663845,
+   "kind": "size-reduced",
+   "detail": "CTKUSDT:long Δ-136",
+   "amt": 0
+  },
+  {
+   "ts": 1791882654086,
+   "kind": "position-closed",
+   "detail": "DOTUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791882654086,
+   "kind": "position-closed",
+   "detail": "CLUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791882651416,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1082
+  },
+  {
+   "ts": 1791882651325,
+   "kind": "position-opened",
+   "detail": "CTKUSDT:long",
+   "amt": 2.0019
+  },
+  {
+   "ts": 1791882645936,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1139
+  },
+  {
+   "ts": 1791882643086,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2137
+  },
   {
    "ts": 1791882198821,
    "kind": "balance-move",
@@ -92,84 +145,12 @@
    "kind": "position-opened",
    "detail": "DXYZUSDT:long",
    "amt": 1.9974
-  },
-  {
-   "ts": 1791882071046,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1624
-  },
-  {
-   "ts": 1791881908790,
-   "kind": "position-closed",
-   "detail": "MAGICUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1791881905954,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1357
-  },
-  {
-   "ts": 1791881904591,
-   "kind": "size-reduced",
-   "detail": "MAGICUSDT:long Δ-137.3",
-   "amt": 0
-  },
-  {
-   "ts": 1791881904589,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2889
-  },
-  {
-   "ts": 1791881656395,
-   "kind": "position-closed",
-   "detail": "SUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1791881655313,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0957
-  },
-  {
-   "ts": 1791881655312,
-   "kind": "position-opened",
-   "detail": "ARCUSDT:long",
-   "amt": 1.9954
-  },
-  {
-   "ts": 1791881651037,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2677
-  },
-  {
-   "ts": 1791881569844,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0897
-  },
-  {
-   "ts": 1791881568044,
-   "kind": "position-opened",
-   "detail": "MAGICUSDT:long",
-   "amt": 1.9998
-  },
-  {
-   "ts": 1791881535950,
-   "kind": "position-closed",
-   "detail": "APRUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -826.12,
+  "netAfterAud": -826.83,
   "clearedPct": 5
  }
 }

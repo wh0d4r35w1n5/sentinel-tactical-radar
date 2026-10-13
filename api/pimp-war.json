@@ -1,32 +1,32 @@
 {
- "at": "2026-10-13T08:58:40.659Z",
+ "at": "2026-10-13T09:15:02.335Z",
  "wallets": {
   "futures": {
-   "equityUsd": 30.74,
-   "marginFreeUsd": 18.45,
-   "epochNetUsd": -31.64,
+   "equityUsd": 30.25,
+   "marginFreeUsd": 17.99,
+   "epochNetUsd": -32.56,
    "fills": 400,
    "positions": [
     {
      "symbol": "CLUSDT",
      "side": "long",
-     "upl": -0.18,
+     "upl": -0.51,
      "lev": 37,
      "margin": 8.71
     },
     {
-     "symbol": "MAGICUSDT",
+     "symbol": "DXYZUSDT",
      "side": "long",
-     "upl": -0.17,
-     "lev": 25,
+     "upl": -0.18,
+     "lev": 20,
      "margin": 2
     },
     {
-     "symbol": "ARCUSDT",
+     "symbol": "DOTUSDT",
      "side": "long",
-     "upl": -0.06,
-     "lev": 10,
-     "margin": 2
+     "upl": 0.25,
+     "lev": 25,
+     "margin": 1.99
     }
    ]
   },
@@ -513,19 +513,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -14.5515,
+   "net": -14.4127,
    "wins": 8,
    "losses": 27,
    "closes": 47,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0332,
+   "form": 0.05,
    "mood": "cocky",
    "vault": 0.5029,
    "hist": [
-    -16.3541,
-    -16.3066,
-    -16.2783,
     -16.4351,
     -16.3511,
     -16.225,
@@ -546,18 +543,36 @@
     -14.6573,
     -14.6264,
     -14.5889,
-    -14.5515
+    -14.5515,
+    -14.5361,
+    -14.4817,
+    -14.4127
    ],
    "persona": {
-    "swagger": 0.72,
-    "tilt": 0.06,
-    "greed": 0.71,
-    "discipline": 0.64
+    "swagger": 0.98,
+    "tilt": 0.01,
+    "greed": 0.82,
+    "discipline": 0.72
    }
   }
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "NEARUSDT",
+   "direction": "LONG",
+   "ts": 1791742382309,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791741755345NEARUSDT",
+   "filledAt": 1791742388153,
+   "orderId": "1493241285744168961",
+   "live": false,
+   "closedAt": 1791858835775,
+   "epNet": 2.694797,
+   "epCounted": true,
+   "epVerdict": 1
+  },
   {
    "symbol": "GOIF",
    "direction": "LONG",
@@ -696,17 +711,21 @@
    "onchain": true,
    "filledAt": 1791778999342,
    "live": false
-  },
-  {
-   "symbol": "ARUSDT",
-   "direction": "LONG",
-   "ts": 1791881920658,
-   "pimp": null,
-   "crack": "Bolt Betsy",
-   "coid": "s1791881183637ARUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.07 on MAGICUSDT"
+  },
+  {
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on MAGICUSDT"
+  },
+  {
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on MAGICUSDT incl $0.030 entry fees"
+  },
   {
    "ts": 1791859051368,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.04 on NEARUSDT"
@@ -814,49 +833,9 @@
   {
    "ts": 1791798566527,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
-  },
-  {
-   "ts": 1791798566527,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.01 on NEARUSDT"
-  },
-  {
-   "ts": 1791797921060,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.51 on NEARUSDT"
-  },
-  {
-   "ts": 1791797921060,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.33 on NEARUSDT"
   }
  ],
  "attrib": {
-  "1493635030993080320": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493635030993080322": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493635030993080324": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493635030993080326": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493635030993080328": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493635821854261249": {
-   "pimp": null,
-   "crack": "Solana Sadie"
-  },
-  "1493637018795376641": {
-   "pimp": null,
-   "crack": "Solana Sadie"
-  },
   "1493637004681543680": {
    "pimp": null,
    "crack": "Solana Sadie"
@@ -1426,6 +1405,34 @@
    "crack": null
   },
   "1493824556579422211": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493826473246326784": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493826473246326786": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493826467588210689": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493829564347703296": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493829564347703298": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493827576755118080": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493827139477966848": {
    "pimp": null,
    "crack": null
   }
