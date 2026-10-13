@@ -1,5 +1,121 @@
 {
- "at": "2026-10-13T11:47:44.457Z",
+ "at": "2026-10-13T12:21:03.186Z",
+ "wallets": {
+  "futures": {
+   "equityUsd": 16.89,
+   "marginFreeUsd": 2.65,
+   "epochNetUsd": -43.99,
+   "fills": 400,
+   "positions": [
+    {
+     "symbol": "CLUSDT",
+     "side": "long",
+     "upl": 0.11,
+     "lev": 10,
+     "margin": 5.97
+    },
+    {
+     "symbol": "HYPEUSDT",
+     "side": "long",
+     "upl": -1.11,
+     "lev": 37,
+     "margin": 4.74
+    },
+    {
+     "symbol": "NEARUSDT",
+     "side": "long",
+     "upl": -1.91,
+     "lev": 37,
+     "margin": 5.74
+    },
+    {
+     "symbol": "KORUUSDT",
+     "side": "long",
+     "upl": -0.79,
+     "lev": 20,
+     "margin": 7.46
+    }
+   ]
+  },
+  "onchain": {
+   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
+   "sol": 0.0024,
+   "stableUsd": 0,
+   "purseUsd": 0,
+   "positions": 0,
+   "laneNet": -3.23,
+   "laneTrades": 30,
+   "laneWins": 6
+  },
+  "activity": [
+   {
+    "venue": "solana",
+    "ts": 1791814086162,
+    "symbol": "SEAN",
+    "sig": "2godFCZd8hsZhf9KKi3x9N9KscBDV8Cw5jX6zbceYNFCrY6em6yj8Kx4Xd3S6rm3vq7waYoqdC39mmQuNMAa9Fab",
+    "text": "SELL SEAN"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807382981,
+    "symbol": "GOMO",
+    "sig": null,
+    "text": "RECONCILE GOMO"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807382801,
+    "symbol": null,
+    "sig": "2jXuW8G61zZFwMSH8zWyVW1uE8DkZvS7feqxWq46jZ3yRts14ar3MhPP2JD2nGqJL5Ntk13TEde54S6GVbegeSaz",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807377514,
+    "symbol": null,
+    "sig": "2Fi6qNWoboKv37GCeA9cCWtVdioj3KuSgGXyXMme6rw8WHuzayisERZaZbwHZN7EpJhwyozDzdWJ9494nwwceaMf",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791807375080,
+    "symbol": null,
+    "sig": "4XcsrjEgjjAPoCX9taf638toCkJA3pWAudRMbLsnoR1FpeqaEEQRmifw8T1J3NJ3fUHaBzbbcM4ZnGMFeoMH9QA4",
+    "text": "BOOTSTRAP boot"
+   },
+   {
+    "venue": "solana",
+    "ts": 1791806859625,
+    "symbol": "GOMO",
+    "sig": "2QUNjN76xtCCeNKkD2gFX1SHZHJ4ZHy73Zbg4BLN78rvES3HGdL8poaMhgDSNbWDmMD3chHcS9MpUyrR2fsPDXdg",
+    "text": "BUY GOMO $1.11"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791806847864,
+    "symbol": "SOLUSDT",
+    "text": "OPEN SOLUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791806634142,
+    "symbol": "NATGASUSDT",
+    "text": "OPEN NATGASUSDT $-0.06"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791806634142,
+    "symbol": "NATGASUSDT",
+    "text": "OPEN NATGASUSDT $-0.03"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791806634142,
+    "symbol": "NATGASUSDT",
+    "text": "OPEN NATGASUSDT $-0.08"
+   }
+  ]
+ },
  "pimps": [
   {
    "name": "Silky Slim",
@@ -12,6 +128,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -25,6 +143,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -38,6 +158,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -51,6 +173,8 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   },
   {
@@ -64,9 +188,14 @@
    "losses": 0,
    "crown": false,
    "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
    "mood": "working"
   }
  ],
+ "vault": {
+  "house": 0.5029
+ },
  "cracks": [
   {
    "name": "Diamond Dust",
@@ -80,6 +209,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -100,6 +230,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -120,6 +251,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -140,6 +272,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -160,6 +293,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -180,6 +314,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -200,6 +335,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -220,6 +356,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -240,6 +377,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -260,6 +398,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -280,6 +419,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -300,6 +440,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -320,6 +461,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -340,6 +482,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -360,6 +503,7 @@
    "gen": 0,
    "form": 0,
    "mood": "working",
+   "vault": 0,
    "hist": [],
    "persona": {
     "swagger": 0.5,
@@ -367,14 +511,919 @@
     "greed": 0.5,
     "discipline": 0.5
    }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": null,
+   "net": -14.4127,
+   "wins": 8,
+   "losses": 27,
+   "closes": 47,
+   "stolen": 0,
+   "gen": 0,
+   "form": 0.05,
+   "mood": "cocky",
+   "vault": 0.5029,
+   "hist": [
+    -16.4351,
+    -16.3511,
+    -16.225,
+    -16.0134,
+    -15.6809,
+    -15.1693,
+    -15.1767,
+    -15.1225,
+    -15.0449,
+    -14.944,
+    -14.8515,
+    -14.7975,
+    -14.7435,
+    -14.7127,
+    -14.6902,
+    -14.6999,
+    -14.6844,
+    -14.6573,
+    -14.6264,
+    -14.5889,
+    -14.5515,
+    -14.5361,
+    -14.4817,
+    -14.4127
+   ],
+   "persona": {
+    "swagger": 0.84,
+    "tilt": 0.04,
+    "greed": 0.73,
+    "discipline": 0.66
+   }
   }
  ],
  "retired": [],
- "intents": [],
+ "intents": [
+  {
+   "symbol": "67",
+   "direction": "LONG",
+   "ts": 1791727784670,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2gsre2PfhpZVPzr9ag5CsHpsiW4mrw489cwAJ6m85DehutzsUT4HPPEmvjFYEopfQ2ejq8ekrHHJLJ1uH5WDELo7",
+   "onchain": true,
+   "filledAt": 1791727784670,
+   "live": false
+  },
+  {
+   "symbol": "NEARUSDT",
+   "direction": "LONG",
+   "ts": 1791742382309,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791741755345NEARUSDT",
+   "filledAt": 1791742388153,
+   "orderId": "1493241285744168961",
+   "live": true,
+   "closedAt": 1791858835775,
+   "epNet": 2.694797,
+   "epCounted": true,
+   "epVerdict": 1
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791801304429,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
+   "onchain": true,
+   "filledAt": 1791801304429,
+   "live": false,
+   "closedAt": 1791814086162,
+   "epNet": -1.323435,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "GOMO",
+   "direction": "LONG",
+   "ts": 1791769961779,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2XjgjczSGtNkYBTBzVh6w2wvArNHTKHyCZnu8KoqcwYtVvspEvuJkkEZ364ffYzsvtMV9akno4ae7Wo1nTHK6qnt",
+   "onchain": true,
+   "filledAt": 1791769961779,
+   "live": false
+  },
+  {
+   "symbol": "GOMODOGE",
+   "direction": "LONG",
+   "ts": 1791778409211,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:9fQegwczSjNhjw9jReeGmoc1KSQ9EmG1qP63w3ypb3raLs92mWNVw85mFLsHi9H6bdCtv6tyNMqpYi5E5ngHRAB",
+   "onchain": true,
+   "filledAt": 1791778409211,
+   "live": false
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791769964910,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4SRNpz6LgMA5RC5MNZtPGz6Z9uT8CTxVoyJaJyZ5QSkRwdmXW6C15jjMht2xQ4tmiGqBghiCMEdXpxUzBbjXVmXG",
+   "onchain": true,
+   "filledAt": 1791769964910,
+   "live": false
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791778406907,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2t84dA8kKraUnWF18bqEjFyyffGmiP2RCHsnbLTL3K18dva2o8R94qQXoeuFPbMcTtcLGqi4ETbQNJssq3HjFEXP",
+   "onchain": true,
+   "filledAt": 1791778406907,
+   "live": false
+  },
+  {
+   "symbol": "CLAUDIA",
+   "direction": "LONG",
+   "ts": 1791778999342,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5iuwYrrpsS6bfF6MCJktWyXaboUEiVXCEc3yQgUGXhEsbi4sfz5GxDxYvjWErmE2bKQoyXGPj8MoSkSeDVnUYZgD",
+   "onchain": true,
+   "filledAt": 1791778999342,
+   "live": false
+  },
+  {
+   "symbol": "CALI",
+   "direction": "LONG",
+   "ts": 1791774509204,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:5f2msXWD89QUbYCj56zfvYo3hNnzFmhCrLm5szpd32vCm1wnNG6YDjktVWV97gTwWMumHzoTWGroUZGV3sCeqtp7",
+   "onchain": true,
+   "filledAt": 1791774509204,
+   "live": false
+  },
+  {
+   "symbol": "SEAN",
+   "direction": "LONG",
+   "ts": 1791800364421,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:4pBpJ4i4ubGYEnQCj24vJQJxtu6zMRNWvY79RbzpSYtGAXDfg8gT2H8sHh69HttZWfyBjejZ6Emqsg9XWd5pTaFr",
+   "onchain": true,
+   "filledAt": 1791800364421,
+   "live": false
+  },
+  {
+   "symbol": "GOIF",
+   "direction": "LONG",
+   "ts": 1791774506557,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:Yn9fKGZfNi2DJY5zGypoLTCMMjoNvS6CesdekJGHNeLUs8uwHRQcffvp5qrPCJCPxwa3RdtMc7QrwTR5pimMYZg",
+   "onchain": true,
+   "filledAt": 1791774506557,
+   "live": false
+  },
+  {
+   "symbol": "SI276",
+   "direction": "LONG",
+   "ts": 1791803856624,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "oc:2R5RCUBZR3CPte4YiC8rhpMc9DBB9W8Ho6Pq3cUkWtW67mASS2r6ZjBQvvKSjSubQE6FLmmLNKLAxygLUWnkPoaT",
+   "onchain": true,
+   "filledAt": 1791803856624,
+   "live": false
+  }
+ ],
  "drama": [
   {
-   "ts": 1791892064456,
-   "text": "🌆 Pimpcity founded — 5 pimps, 10 girls, one $4 corner"
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.07 on MAGICUSDT"
+  },
+  {
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on MAGICUSDT"
+  },
+  {
+   "ts": 1791882642147,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on MAGICUSDT incl $0.030 entry fees"
+  },
+  {
+   "ts": 1791859051368,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.04 on NEARUSDT"
+  },
+  {
+   "ts": 1791859051368,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.04 on NEARUSDT"
+  },
+  {
+   "ts": 1791858874373,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
+  },
+  {
+   "ts": 1791858874373,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
+  },
+  {
+   "ts": 1791858874373,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on NEARUSDT"
+  },
+  {
+   "ts": 1791839671017,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.02 on NEARUSDT"
+  },
+  {
+   "ts": 1791839671017,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
+  },
+  {
+   "ts": 1791839671017,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on NEARUSDT"
+  },
+  {
+   "ts": 1791838008919,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.10 on MAGICUSDT"
+  },
+  {
+   "ts": 1791837362127,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.08 on MAGICUSDT"
+  },
+  {
+   "ts": 1791837362127,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on MAGICUSDT"
+  },
+  {
+   "ts": 1791837182021,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on MAGICUSDT — docked her pay"
+  },
+  {
+   "ts": 1791837182021,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
+  },
+  {
+   "ts": 1791837182021,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.51 on MAGICUSDT"
+  },
+  {
+   "ts": 1791837086954,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on MAGICUSDT incl $0.023 entry fees"
+  },
+  {
+   "ts": 1791825906753,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.05 on NEARUSDT"
+  },
+  {
+   "ts": 1791825515683,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.00 on NEARUSDT — docked her pay"
+  },
+  {
+   "ts": 1791825515683,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.00 on NEARUSDT"
+  },
+  {
+   "ts": 1791825515683,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.00 on NEARUSDT"
+  },
+  {
+   "ts": 1791814120979,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-1.32 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1791814120979,
+   "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
+  },
+  {
+   "ts": 1791807602008,
+   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1791806835855,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.07 on SI276 — docked her pay"
+  },
+  {
+   "ts": 1791804456813,
+   "text": "🌫 Solana Sadie let GOIF go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1791801254185,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.48 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1791798566527,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.14 on NEARUSDT"
+  },
+  {
+   "ts": 1791798566527,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.03 on NEARUSDT"
   }
- ]
+ ],
+ "attrib": {
+  "1493645160119799813": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493652109045538816": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493652109045538818": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493652109045538820": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493652109045538822": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493652109045538824": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493649485890064384": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493710739841224704": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493710739841224706": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493710359287828487": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493719033116901376": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493725083421380609": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493724945223258113": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493724779900571648": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493724775995674625": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493729892694233088": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729892694233090": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729849383849985": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729739350478851": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729730219479043": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493729710330089537": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493729288659931141": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727449809948672": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727449809948674": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727414103838720": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727346252582912": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727346252582914": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727260760084480": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493727026311073792": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730326024556544": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730326024556546": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730095425916928": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730095425916930": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730052748873728": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730017759989760": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730017759989762": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729975443656704": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729975443656706": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493729975443656708": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730788949889024": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493730692443148288": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493736414765649920": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493736414765649922": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493736414765649924": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003136": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003138": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003140": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003142": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003144": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003146": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003148": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003150": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003152": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003154": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003156": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735826007003158": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735630581796864": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493735617562677248": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493734644463177728": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738607774273536": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738581698285568": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738581698285570": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738581698285572": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738581698285574": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738572193992704": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738542762561536": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738542762561538": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738542762561540": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738507316498432": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738507316498434": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738502086201344": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738456145989632": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738451779719168": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738113836257280": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738047130046464": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493738047130046466": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743926290157568": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743925631655936": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743925023457280": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743924457246720": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743839384178688": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743729522774016": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743610916245504": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493743575327576064": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742625590349824": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742589301231616": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742553427349504": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742553427349506": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742429594718208": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742394157043712": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742387492294656": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742387492294658": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742387492294660": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742350662111232": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742350662111234": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742312753991680": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742277509255168": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493742241341771776": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493759301505523715": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493762619527143431": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493762411804237825": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493765825997053952": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493784629166743552": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493784629166743554": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493784629166743556": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493810403135447040": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493810403135447042": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493815068648538115": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493814477218119680": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493814391083892737": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493823432803753984": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493821584155869184": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493821438307336193": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493821166680014849": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493825404080488448": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824918149390338": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824918149390340": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824778521018368": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824566268264448": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824561792942083": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493824556579422211": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493826473246326784": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493826473246326786": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493826467588210689": {
+   "pimp": null,
+   "crack": "Solana Sadie"
+  },
+  "1493829564347703296": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493829564347703298": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493827576755118080": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493827139477966848": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493830643038806016": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493829691665809408": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493829627174191105": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493829577022902272": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493839997435633664": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493838609154564096": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493838609154564098": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493838609154564100": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850915901005824": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850915901005826": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850915901005828": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850915456409600": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850915456409602": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493850914772738048": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493848891314659328": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493858376108204032": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493858375521001472": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493865169345568768": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493865169345568770": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493865169345568772": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493868220626231296": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493872425634095104": {
+   "pimp": null,
+   "crack": null
+  }
+ }
 }
