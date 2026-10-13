@@ -1,38 +1,62 @@
 {
- "ts": "2026-10-13T08:01:14.061Z",
- "ageMs": 5720,
+ "ts": "2026-10-13T08:06:28.820Z",
+ "ageMs": 11722,
  "src": "ws",
  "futures": {
-  "equityUsd": 31.8045,
-  "availableUsd": 29.9268,
+  "equityUsd": 31.6462,
+  "availableUsd": 27.7361,
   "grantUsd": 0,
-  "equityOwnUsd": 31.8045,
-  "marginUsedUsd": 1.8912,
-  "uplUsd": -0.1804,
+  "equityOwnUsd": 31.6462,
+  "marginUsedUsd": 4.0318,
+  "uplUsd": -0.2459,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 1.1,
     "marginUsd": 1.8912,
-    "uplUsd": -0.1804
+    "uplUsd": -0.066
+   },
+   {
+    "k": "RENDERUSDT:long",
+    "size": 39.1,
+    "marginUsd": 2.1407,
+    "uplUsd": -0.1799
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2617,
+  "solUsd": 0.2618,
   "stableUsd": 0,
   "bagsUsd": 0.0778,
-  "totalUsd": 0.3395,
+  "totalUsd": 0.3396,
   "tokens": {
    "8PGyHCKv": 0.0764,
    "BQAeeSow": 0.0014
   },
-  "staleMs": 5720
+  "staleMs": 11722
  },
- "totalUsd": 32.144,
+ "totalUsd": 31.9858,
  "deltas": [
+  {
+   "ts": 1791878674670,
+   "kind": "position-opened",
+   "detail": "RENDERUSDT:long",
+   "amt": 2.1407
+  },
+  {
+   "ts": 1791878674670,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0618
+  },
+  {
+   "ts": 1791878674513,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0561
+  },
   {
    "ts": 1791878235328,
    "kind": "position-opened",
@@ -134,30 +158,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.496
-  },
-  {
-   "ts": 1791870162510,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.1284
-  },
-  {
-   "ts": 1791869066520,
-   "kind": "position-opened",
-   "detail": "SOLUSDT:long",
-   "amt": 9.0941
-  },
-  {
-   "ts": 1791867470453,
-   "kind": "position-closed",
-   "detail": "SOLUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -823.91,
+  "netAfterAud": -824.14,
   "clearedPct": 5.3
  }
 }
