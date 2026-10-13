@@ -1,15 +1,15 @@
 {
- "ts": "2026-10-13T20:30:14.404Z",
+ "ts": "2026-10-13T20:35:42.589Z",
  "windowStart": "2026-10-13T12:45:46.537Z",
  "episodes": {
-  "total": 35,
+  "total": 38,
   "independent": 1,
-  "clustered": 34,
+  "clustered": 37,
   "dip": {
-   "n": 35,
-   "netUsd": -1.545,
-   "wrPct": 42.9,
-   "meanPct": -0.111
+   "n": 38,
+   "netUsd": -0.9394,
+   "wrPct": 47.4,
+   "meanPct": -0.05
   },
   "pump": {
    "n": 0
@@ -19,7 +19,7 @@
   }
  },
  "realized": {
-  "netUsd": -1.545,
+  "netUsd": -0.9394,
   "equityCurve": [
    {
     "t": 1791895798918,
@@ -160,6 +160,18 @@
    {
     "t": 1791923001564,
     "eq": -1.545
+   },
+   {
+    "t": 1791923195264,
+    "eq": -1.5073
+   },
+   {
+    "t": 1791923195264,
+    "eq": -1.4697
+   },
+   {
+    "t": 1791923195264,
+    "eq": -0.9394
    }
   ],
   "maxDrawdownUsd": 2.8288
@@ -172,10 +184,10 @@
     "note": "dip>=2%/2h -> 1.2% stop +2% TP, held-out"
    },
    "live": {
-    "n": 35,
-    "netUsd": -1.545,
-    "wrPct": 42.9,
-    "meanPct": -0.111
+    "n": 38,
+    "netUsd": -0.9394,
+    "wrPct": 47.4,
+    "meanPct": -0.05
    }
   },
   "pump": {
@@ -189,5 +201,5 @@
    }
   }
  },
- "verdict": "live net NEGATIVE over 35 episodes ($-1.54) — backtest edge not confirmed"
+ "verdict": "live net NEGATIVE over 38 episodes ($-0.94) — backtest edge not confirmed"
 }
