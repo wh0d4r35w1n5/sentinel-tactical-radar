@@ -1,38 +1,68 @@
 {
- "ts": "2026-10-13T01:12:13.236Z",
- "ageMs": 1950,
+ "ts": "2026-10-13T01:18:25.547Z",
+ "ageMs": 8831,
  "src": "ws",
  "futures": {
-  "equityUsd": 67.8425,
-  "availableUsd": 32.6638,
+  "equityUsd": 70.8984,
+  "availableUsd": 24.6562,
   "grantUsd": 20,
-  "equityOwnUsd": 47.8425,
-  "marginUsedUsd": 39.8581,
-  "uplUsd": -4.6794,
+  "equityOwnUsd": 50.8984,
+  "marginUsedUsd": 48.4518,
+  "uplUsd": -1.796,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0023,
     "marginUsd": 39.8581,
-    "uplUsd": -4.6794
+    "uplUsd": -3.1919
+   },
+   {
+    "k": "SUIUSDT:long",
+    "size": 310.2,
+    "marginUsd": 8.5937,
+    "uplUsd": 1.3959
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2506,
+  "solUsd": 0.252,
   "stableUsd": 0,
   "bagsUsd": 0.0633,
-  "totalUsd": 0.3139,
+  "totalUsd": 0.3153,
   "tokens": {
    "8PGyHCKv": 0.062,
    "BQAeeSow": 0.0013
   },
-  "staleMs": 1950
+  "staleMs": 8831
  },
- "totalUsd": 48.1563,
+ "totalUsd": 51.2138,
  "deltas": [
+  {
+   "ts": 1791854236312,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 2.1065
+  },
+  {
+   "ts": 1791854235514,
+   "kind": "size-reduced",
+   "detail": "SUIUSDT:long Δ-167",
+   "amt": 0
+  },
+  {
+   "ts": 1791854107490,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.9495
+  },
+  {
+   "ts": 1791854107487,
+   "kind": "position-opened",
+   "detail": "SUIUSDT:long",
+   "amt": 13.1901
+  },
   {
    "ts": 1791852100352,
    "kind": "balance-move",
@@ -128,36 +158,12 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": -0.7737
-  },
-  {
-   "ts": 1791840906261,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.0529
-  },
-  {
-   "ts": 1791840906261,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.052
-  },
-  {
-   "ts": 1791840905879,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0741
-  },
-  {
-   "ts": 1791840901739,
-   "kind": "position-closed",
-   "detail": "SOLUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -800.95,
-  "clearedPct": 7.9
+  "netAfterAud": -796.56,
+  "clearedPct": 8.4
  }
 }
