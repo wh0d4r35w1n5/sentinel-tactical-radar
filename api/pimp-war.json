@@ -1,12 +1,27 @@
 {
- "at": "2026-10-13T11:05:14.744Z",
+ "at": "2026-10-13T11:07:50.380Z",
  "wallets": {
   "futures": {
-   "equityUsd": 23.97,
-   "marginFreeUsd": 23.97,
-   "epochNetUsd": -38.83,
+   "equityUsd": 20.95,
+   "marginFreeUsd": 0.25,
+   "epochNetUsd": -39.68,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "SKHYNIXUSDT",
+     "side": "long",
+     "upl": -1.28,
+     "lev": 20,
+     "margin": 11.97
+    },
+    {
+     "symbol": "SKHYUSDT",
+     "side": "long",
+     "upl": -1.6,
+     "lev": 20,
+     "margin": 11.61
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -72,21 +87,19 @@
     "venue": "bitget",
     "ts": 1791804465756,
     "symbol": "NATGASUSDT",
+    "text": "OPEN NATGASUSDT $-0.06"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791804465756,
+    "symbol": "NATGASUSDT",
+    "text": "OPEN NATGASUSDT $-0.15"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791804465756,
+    "symbol": "NATGASUSDT",
     "text": "OPEN NATGASUSDT $-0.08"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791803856624,
-    "symbol": "SI276",
-    "sig": "2R5RCUBZR3CPte4YiC8rhpMc9DBB9W8Ho6Pq3cUkWtW67mASS2r6ZjBQvvKSjSubQE6FLmmLNKLAxygLUWnkPoaT",
-    "text": "BUY SI276 $1.12"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791803853906,
-    "symbol": "GOIF",
-    "sig": null,
-    "text": "RECONCILE GOIF"
    }
   ]
  },
@@ -526,7 +539,7 @@
     -14.4127
    ],
    "persona": {
-    "swagger": 0.89,
+    "swagger": 0.88,
     "tilt": 0.03,
     "greed": 0.76,
     "discipline": 0.68
@@ -805,14 +818,6 @@
   }
  ],
  "attrib": {
-  "1493645481487372288": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493645476621979653": {
-   "pimp": null,
-   "crack": null
-  },
   "1493645411383775233": {
    "pimp": null,
    "crack": "Solana Sadie"
@@ -1402,6 +1407,14 @@
    "crack": null
   },
   "1493848891314659328": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493858376108204032": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493858375521001472": {
    "pimp": null,
    "crack": null
   }
