@@ -1,23 +1,30 @@
 {
- "at": "2026-10-13T18:56:13.181Z",
+ "at": "2026-10-13T19:06:47.505Z",
  "wallets": {
   "futures": {
-   "equityUsd": 19.52,
-   "marginFreeUsd": 5.49,
-   "epochNetUsd": -0.32,
+   "equityUsd": 19.4,
+   "marginFreeUsd": 0.15,
+   "epochNetUsd": -0.38,
    "fills": 41,
    "positions": [
     {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": 0.38,
+     "upl": 0.56,
      "lev": 20,
      "margin": 6.99
     },
     {
+     "symbol": "CLUSDT",
+     "side": "long",
+     "upl": -0.06,
+     "lev": 20,
+     "margin": 5.27
+    },
+    {
      "symbol": "MUUSDT",
      "side": "long",
-     "upl": -0.54,
+     "upl": -0.71,
      "lev": 20,
      "margin": 7.2
     }
@@ -532,7 +539,7 @@
     -15.4506
    ],
    "persona": {
-    "swagger": 0.72,
+    "swagger": 0.71,
     "tilt": 0.09,
     "greed": 0.64,
     "discipline": 0.58
@@ -541,21 +548,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "NEARUSDT",
-   "direction": "LONG",
-   "ts": 1791742382309,
-   "pimp": null,
-   "crack": "Solana Sadie",
-   "coid": "s1791741755345NEARUSDT",
-   "filledAt": 1791742388153,
-   "orderId": "1493241285744168961",
-   "live": false,
-   "closedAt": 1791908567560,
-   "epNet": 1.656846,
-   "epCounted": true,
-   "epVerdict": 1
-  },
   {
    "symbol": "GOMO",
    "direction": "LONG",
@@ -676,6 +668,14 @@
    "onchain": true,
    "filledAt": 1791801304429,
    "live": false
+  },
+  {
+   "symbol": "APTUSDT",
+   "direction": "LONG",
+   "ts": 1791918406739,
+   "pimp": null,
+   "crack": "Bolt Betsy",
+   "coid": "s1791917774109APTUSDT"
   }
  ],
  "drama": [
