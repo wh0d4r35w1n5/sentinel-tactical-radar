@@ -1,32 +1,32 @@
 {
- "at": "2026-10-13T21:07:06.573Z",
+ "at": "2026-10-13T21:18:10.581Z",
  "wallets": {
   "futures": {
-   "equityUsd": 17.82,
-   "marginFreeUsd": 2.51,
-   "epochNetUsd": -2.03,
-   "fills": 63,
+   "equityUsd": 17.13,
+   "marginFreeUsd": 2.65,
+   "epochNetUsd": -2.06,
+   "fills": 66,
    "positions": [
     {
      "symbol": "SOXLUSDT",
      "side": "long",
-     "upl": -0.16,
+     "upl": -0.5,
      "lev": 20,
      "margin": 6.56
     },
     {
-     "symbol": "SNDKUSDT",
+     "symbol": "CLUSDT",
      "side": "long",
-     "upl": -0.21,
+     "upl": -0.05,
      "lev": 20,
-     "margin": 6.44
+     "margin": 2.39
     },
     {
-     "symbol": "NEARUSDT",
+     "symbol": "SNDKUSDT",
      "side": "long",
-     "upl": 0.16,
+     "upl": -0.36,
      "lev": 20,
-     "margin": 2.53
+     "margin": 6.44
     }
    ]
   },
@@ -395,27 +395,6 @@
    }
   },
   {
-   "name": "Miss Behave",
-   "tag": "contrarian",
-   "pimp": null,
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
    "name": "Gold Teeth",
    "tag": "carry queen",
    "pimp": null,
@@ -500,20 +479,42 @@
    }
   },
   {
+   "name": "Miss Behave",
+   "tag": "contrarian",
+   "pimp": null,
+   "net": -0.6466,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.2587,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.6466
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -15.4506,
+   "net": -15.4483,
    "wins": 8,
    "losses": 27,
    "closes": 47,
    "stolen": 0,
    "gen": 0,
-   "form": -0.1685,
-   "mood": "working",
+   "form": -0.1002,
+   "mood": "cocky",
    "vault": 0.5029,
    "hist": [
-    -16.225,
     -16.0134,
     -15.6809,
     -15.1693,
@@ -536,13 +537,14 @@
     -14.4817,
     -14.4127,
     -15.8419,
-    -15.4506
+    -15.4506,
+    -15.4483
    ],
    "persona": {
-    "swagger": 0.68,
-    "tilt": 0.09,
-    "greed": 0.62,
-    "discipline": 0.57
+    "swagger": 0.77,
+    "tilt": 0.05,
+    "greed": 0.65,
+    "discipline": 0.6
    }
   }
  ],
@@ -678,10 +680,26 @@
    "coid": "s1791921689122SOXLUSDT",
    "filledAt": 1791922353814,
    "orderId": "1493996124090568705",
-   "live": true
+   "live": false,
+   "closedAt": 1791925624733,
+   "epNet": -0.646639,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1791926288133,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.00 on NEARUSDT incl $0.030 entry fees"
+  },
+  {
+   "ts": 1791926288133,
+   "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
+  },
+  {
+   "ts": 1791926288133,
+   "text": "💰 Miss Behave (freelance — no pimp took a cut) banked $-0.65 on SOXLUSDT incl $0.079 entry fees — docked her pay"
+  },
   {
    "ts": 1791916514390,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.39 on NEARUSDT incl $0.012 entry fees"
@@ -789,29 +807,9 @@
   {
    "ts": 1791814120979,
    "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
-  },
-  {
-   "ts": 1791807602008,
-   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
-  },
-  {
-   "ts": 1791806835855,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.07 on SI276 — docked her pay"
-  },
-  {
-   "ts": 1791804456813,
-   "text": "🌫 Solana Sadie let GOIF go — left the wallet off-book, proceeds unverifiable"
   }
  ],
  "attrib": {
-  "1493735826007003142": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493735826007003144": {
-   "pimp": null,
-   "crack": null
-  },
   "1493735826007003146": {
    "pimp": null,
    "crack": null
@@ -1403,6 +1401,14 @@
   "1494004330547372034": {
    "pimp": null,
    "crack": null
+  },
+  "1494009843523772416": {
+   "pimp": null,
+   "crack": "Miss Behave"
+  },
+  "1494007158393278464": {
+   "pimp": null,
+   "crack": "Solana Sadie"
   }
  }
 }
