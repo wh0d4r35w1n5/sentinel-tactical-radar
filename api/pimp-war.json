@@ -1,23 +1,30 @@
 {
- "at": "2026-10-13T19:17:45.901Z",
+ "at": "2026-10-13T19:28:18.783Z",
  "wallets": {
   "futures": {
-   "equityUsd": 19.73,
-   "marginFreeUsd": 7.82,
-   "epochNetUsd": -0.38,
-   "fills": 44,
+   "equityUsd": 18.93,
+   "marginFreeUsd": 0.19,
+   "epochNetUsd": 0.21,
+   "fills": 48,
    "positions": [
     {
      "symbol": "CLUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0.2,
      "lev": 20,
      "margin": 5.27
     },
     {
+     "symbol": "ZECUSDT",
+     "side": "long",
+     "upl": -1.03,
+     "lev": 20,
+     "margin": 7.55
+    },
+    {
      "symbol": "MUUSDT",
      "side": "long",
-     "upl": -0.57,
+     "upl": -0.43,
      "lev": 20,
      "margin": 7.2
     }
@@ -534,13 +541,28 @@
    "persona": {
     "swagger": 0.71,
     "tilt": 0.09,
-    "greed": 0.64,
+    "greed": 0.63,
     "discipline": 0.58
    }
   }
  ],
  "retired": [],
  "intents": [
+  {
+   "symbol": "NEARUSDT",
+   "direction": "LONG",
+   "ts": 1791742382309,
+   "pimp": null,
+   "crack": "Solana Sadie",
+   "coid": "s1791741755345NEARUSDT",
+   "filledAt": 1791742388153,
+   "orderId": "1493241285744168961",
+   "live": false,
+   "closedAt": 1791908567560,
+   "epNet": 1.656846,
+   "epCounted": true,
+   "epVerdict": 1
+  },
   {
    "symbol": "GOMO",
    "direction": "LONG",
@@ -660,15 +682,6 @@
    "coid": "oc:rMPvaRmu3TH1ocFDH3yhGqXwpr9Yne3jLV7PoeicbZBVE3fjnt1VyS6ZQc8U2nFHseDRzQKfUDyknxvgViU5ZTv",
    "onchain": true,
    "filledAt": 1791801304429,
-   "live": false
-  },
-  {
-   "symbol": "APTUSDT",
-   "direction": "LONG",
-   "ts": 1791918406739,
-   "pimp": null,
-   "crack": "Bolt Betsy",
-   "coid": "s1791917774109APTUSDT",
    "live": false
   }
  ],
@@ -795,22 +808,6 @@
   }
  ],
  "attrib": {
-  "1493730017759989760": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493730017759989762": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493729975443656704": {
-   "pimp": null,
-   "crack": null
-  },
-  "1493729975443656706": {
-   "pimp": null,
-   "crack": null
-  },
   "1493729975443656708": {
    "pimp": null,
    "crack": null
@@ -1392,6 +1389,22 @@
    "crack": null
   },
   "1493978810283728898": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493982329577398272": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493982329577398274": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493982329577398276": {
+   "pimp": null,
+   "crack": null
+  },
+  "1493982329577398278": {
    "pimp": null,
    "crack": null
   }
