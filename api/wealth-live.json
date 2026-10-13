@@ -1,68 +1,67 @@
 {
- "ts": "2026-10-13T03:30:44.889Z",
- "ageMs": 12901,
+ "ts": "2026-10-13T03:39:57.097Z",
+ "ageMs": 11584,
  "src": "ws",
  "futures": {
   "equityUsd": 32.0858,
   "availableUsd": 32.0858,
   "grantUsd": 0,
   "equityOwnUsd": 32.0858,
-  "marginUsedUsd": 17.0068,
-  "uplUsd": -5.3032,
-  "positions": [
-   {
-    "k": "DOGEUSDT:short",
-    "size": 183,
-    "marginUsd": 0.5643,
-    "uplUsd": -0.1409
-   },
-   {
-    "k": "SUIUSDT:short",
-    "size": 361.5,
-    "marginUsd": 14.093,
-    "uplUsd": -4.3975
-   },
-   {
-    "k": "ETHUSDT:short",
-    "size": 0.01,
-    "marginUsd": 0.5637,
-    "uplUsd": -0.1447
-   },
-   {
-    "k": "XRPUSDT:short",
-    "size": 24,
-    "marginUsd": 0.8574,
-    "uplUsd": -0.192
-   },
-   {
-    "k": "AVAXUSDT:short",
-    "size": 1.5,
-    "marginUsd": 0.4693,
-    "uplUsd": -0.171
-   },
-   {
-    "k": "OPUSDT:short",
-    "size": 102.8,
-    "marginUsd": 0.4591,
-    "uplUsd": -0.257
-   }
-  ]
+  "marginUsedUsd": 0,
+  "uplUsd": 0,
+  "positions": []
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2579,
+  "solUsd": 0.2588,
   "stableUsd": 0,
   "bagsUsd": 0.095,
-  "totalUsd": 0.3529,
+  "totalUsd": 0.3538,
   "tokens": {
    "8PGyHCKv": 0.0936,
    "BQAeeSow": 0.0014
   },
-  "staleMs": 12901
+  "staleMs": 11584
  },
- "totalUsd": 32.4386,
+ "totalUsd": 32.4396,
  "deltas": [
+  {
+   "ts": 1791862447570,
+   "kind": "position-closed",
+   "detail": "OPUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791862447570,
+   "kind": "position-closed",
+   "detail": "AVAXUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791862447570,
+   "kind": "position-closed",
+   "detail": "XRPUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791862447570,
+   "kind": "position-closed",
+   "detail": "ETHUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791862447570,
+   "kind": "position-closed",
+   "detail": "SUIUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1791862447475,
+   "kind": "position-closed",
+   "detail": "DOGEUSDT:short",
+   "amt": 0
+  },
   {
    "ts": 1791862178317,
    "kind": "balance-move",
@@ -146,48 +145,12 @@
    "kind": "size-reduced",
    "detail": "OPUSDT:short Δ-65.69999999999993",
    "amt": 0
-  },
-  {
-   "ts": 1791861840563,
-   "kind": "size-reduced",
-   "detail": "OPUSDT:short Δ-73",
-   "amt": 0
-  },
-  {
-   "ts": 1791861840563,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0968
-  },
-  {
-   "ts": 1791861832099,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1098
-  },
-  {
-   "ts": 1791861832099,
-   "kind": "size-reduced",
-   "detail": "OPUSDT:short Δ-81.10000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1791861823684,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.8171
-  },
-  {
-   "ts": 1791861823475,
-   "kind": "size-reduced",
-   "detail": "OPUSDT:short Δ-90.10000000000002",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -823.49,
+  "netAfterAud": -823.48,
   "clearedPct": 5.3
  }
 }
