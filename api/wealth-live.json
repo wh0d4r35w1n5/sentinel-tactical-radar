@@ -1,50 +1,74 @@
 {
- "ts": "2026-10-14T22:33:49.484Z",
- "ageMs": 0,
+ "ts": "2026-10-14T22:39:38.059Z",
+ "ageMs": 8946,
  "src": "ws",
  "futures": {
-  "equityUsd": 7.4252,
-  "availableUsd": 1.038,
+  "equityUsd": 7.4696,
+  "availableUsd": 0.2211,
   "grantUsd": 0,
-  "equityOwnUsd": 7.4252,
-  "marginUsedUsd": 7.208,
-  "uplUsd": -0.4492,
+  "equityOwnUsd": 7.4696,
+  "marginUsedUsd": 8.019,
+  "uplUsd": -0.7782,
   "positions": [
    {
     "k": "USUSDT:short",
     "size": 818,
     "marginUsd": 0.626,
-    "uplUsd": -0.0245
+    "uplUsd": -0.0082
    },
    {
     "k": "NEARUSDT:long",
     "size": 13,
     "marginUsd": 3.1835,
-    "uplUsd": -0.3224
+    "uplUsd": -0.4186
    },
    {
     "k": "QUSDT:long",
     "size": 330,
     "marginUsd": 3.3985,
-    "uplUsd": -0.1023
+    "uplUsd": -0.392
+   },
+   {
+    "k": "IOUSDT:long",
+    "size": 58,
+    "marginUsd": 0.811,
+    "uplUsd": 0.0406
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2522,
+  "solUsd": 0.252,
   "stableUsd": 0,
-  "bagsUsd": 0.0971,
+  "bagsUsd": 0.0973,
   "totalUsd": 0.3493,
   "tokens": {
    "BQAeeSow": 0.0014,
-   "8PGyHCKv": 0.0957
+   "8PGyHCKv": 0.0959
   },
-  "staleMs": 0
+  "staleMs": 8946
  },
- "totalUsd": 7.7745,
+ "totalUsd": 7.819,
  "deltas": [
+  {
+   "ts": 1792017558327,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1257
+  },
+  {
+   "ts": 1792017369569,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1102
+  },
+  {
+   "ts": 1792017359237,
+   "kind": "position-opened",
+   "detail": "IOUSDT:long",
+   "amt": 0.811
+  },
   {
    "ts": 1792016856485,
    "kind": "position-closed",
@@ -146,30 +170,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.5057
-  },
-  {
-   "ts": 1792011818844,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.0702
-  },
-  {
-   "ts": 1792011817769,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0702
-  },
-  {
-   "ts": 1792011814120,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.1673
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -858.91,
+  "netAfterAud": -858.85,
   "clearedPct": 1.3
  }
 }
