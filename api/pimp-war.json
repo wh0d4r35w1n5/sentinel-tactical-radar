@@ -1,18 +1,25 @@
 {
- "at": "2026-10-14T17:12:32.336Z",
+ "at": "2026-10-14T17:23:43.746Z",
  "wallets": {
   "futures": {
-   "equityUsd": 9.79,
-   "marginFreeUsd": 8.47,
-   "epochNetUsd": -11.15,
-   "fills": 217,
+   "equityUsd": 9.36,
+   "marginFreeUsd": 5.07,
+   "epochNetUsd": -10.21,
+   "fills": 218,
    "positions": [
     {
      "symbol": "STRKUSDT",
      "side": "long",
-     "upl": -0.36,
+     "upl": -0.57,
      "lev": 20,
      "margin": 1.68
+    },
+    {
+     "symbol": "QUSDT",
+     "side": "long",
+     "upl": -0.21,
+     "lev": 5,
+     "margin": 3.4
     }
    ]
   },
@@ -494,7 +501,7 @@
    ],
    "persona": {
     "swagger": 0.33,
-    "tilt": 0.41,
+    "tilt": 0.4,
     "greed": 0.42,
     "discipline": 0.33
    }
@@ -542,7 +549,7 @@
     "swagger": 0.63,
     "tilt": 0.08,
     "greed": 0.56,
-    "discipline": 0.55
+    "discipline": 0.54
    }
   }
  ],
@@ -557,7 +564,7 @@
    "coid": "s1791741755345NEARUSDT",
    "filledAt": 1791742388153,
    "orderId": "1493241285744168961",
-   "live": false,
+   "live": true,
    "closedAt": 1791943769356,
    "epNet": 2.034883,
    "epCounted": true,
