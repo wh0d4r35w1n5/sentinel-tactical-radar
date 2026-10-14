@@ -1,50 +1,68 @@
 {
- "ts": "2026-10-14T18:03:47.485Z",
- "ageMs": 12963,
+ "ts": "2026-10-14T18:08:17.466Z",
+ "ageMs": 8513,
  "src": "ws",
  "futures": {
-  "equityUsd": 8.1406,
-  "availableUsd": 0.0775,
+  "equityUsd": 8.0943,
+  "availableUsd": 0.3249,
   "grantUsd": 0,
-  "equityOwnUsd": 8.1406,
-  "marginUsedUsd": 8.993,
-  "uplUsd": -0.7892,
+  "equityOwnUsd": 8.0943,
+  "marginUsedUsd": 8.7944,
+  "uplUsd": -1.1916,
   "positions": [
    {
     "k": "NEARUSDT:long",
     "size": 13,
     "marginUsd": 3.1835,
-    "uplUsd": -0.9399
+    "uplUsd": -0.9542
    },
    {
     "k": "WALUSDT:long",
-    "size": 801,
-    "marginUsd": 2.4102,
-    "uplUsd": 0.2884
+    "size": 734,
+    "marginUsd": 2.2115,
+    "uplUsd": -0.1028
    },
    {
     "k": "QUSDT:long",
     "size": 330,
     "marginUsd": 3.3993,
-    "uplUsd": -0.1376
+    "uplUsd": -0.1346
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2515,
+  "solUsd": 0.2517,
   "stableUsd": 0,
-  "bagsUsd": 0.0967,
-  "totalUsd": 0.3482,
+  "bagsUsd": 0.0964,
+  "totalUsd": 0.3481,
   "tokens": {
    "BQAeeSow": 0.0014,
-   "8PGyHCKv": 0.0953
+   "8PGyHCKv": 0.095
   },
-  "staleMs": 12963
+  "staleMs": 8513
  },
- "totalUsd": 8.4889,
+ "totalUsd": 8.4424,
  "deltas": [
+  {
+   "ts": 1792001166983,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": -0.4747
+  },
+  {
+   "ts": 1792001101582,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.4284
+  },
+  {
+   "ts": 1792001099502,
+   "kind": "size-reduced",
+   "detail": "WALUSDT:long Δ-67",
+   "amt": 0
+  },
   {
    "ts": 1792000935941,
    "kind": "balance-move",
@@ -146,30 +164,12 @@
    "kind": "position-closed",
    "detail": "WALUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1791996429904,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1623
-  },
-  {
-   "ts": 1791996272289,
-   "kind": "size-reduced",
-   "detail": "WALUSDT:long Δ-35",
-   "amt": 0
-  },
-  {
-   "ts": 1791996224125,
-   "kind": "size-reduced",
-   "detail": "WALUSDT:long Δ-49",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -857.89,
+  "netAfterAud": -857.96,
   "clearedPct": 1.4
  }
 }
