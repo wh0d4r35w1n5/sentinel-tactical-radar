@@ -1,44 +1,43 @@
 {
- "ts": "2026-10-14T01:46:45.460Z",
- "ageMs": 6150,
+ "ts": "2026-10-14T01:52:12.827Z",
+ "ageMs": 8226,
  "src": "ws",
  "futures": {
   "equityUsd": 14.8894,
   "availableUsd": 14.8894,
   "grantUsd": 0,
   "equityOwnUsd": 14.8894,
-  "marginUsedUsd": 10.6928,
-  "uplUsd": -1.5642,
-  "positions": [
-   {
-    "k": "XRPUSDT:long",
-    "size": 86,
-    "marginUsd": 6.1782,
-    "uplUsd": -0.3784
-   },
-   {
-    "k": "KORUUSDT:long",
-    "size": 3.85,
-    "marginUsd": 4.5145,
-    "uplUsd": -1.1858
-   }
-  ]
+  "marginUsedUsd": 0,
+  "uplUsd": 0,
+  "positions": []
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2586,
+  "solUsd": 0.2595,
   "stableUsd": 0,
   "bagsUsd": 0.0907,
-  "totalUsd": 0.3493,
+  "totalUsd": 0.3502,
   "tokens": {
    "8PGyHCKv": 0.0891,
    "BQAeeSow": 0.0016
   },
-  "staleMs": 12806
+  "staleMs": 8226
  },
- "totalUsd": 15.2387,
+ "totalUsd": 15.2395,
  "deltas": [
+  {
+   "ts": 1791942406084,
+   "kind": "position-closed",
+   "detail": "KORUUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1791942406084,
+   "kind": "position-closed",
+   "detail": "XRPUSDT:long",
+   "amt": 0
+  },
   {
    "ts": 1791942294164,
    "kind": "balance-move",
@@ -146,18 +145,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -1.0179
-  },
-  {
-   "ts": 1791940235613,
-   "kind": "size-reduced",
-   "detail": "KORUUSDT:long Δ-1.08",
-   "amt": 0
-  },
-  {
-   "ts": 1791940123874,
-   "kind": "size-reduced",
-   "detail": "KORUUSDT:long Δ-2.9399999999999995",
-   "amt": 0
   }
  ],
  "mission": {
