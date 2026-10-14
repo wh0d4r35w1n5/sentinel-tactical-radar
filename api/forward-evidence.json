@@ -1,15 +1,15 @@
 {
- "ts": "2026-10-14T00:53:41.602Z",
+ "ts": "2026-10-14T00:58:58.176Z",
  "windowStart": "2026-10-13T12:45:46.537Z",
  "episodes": {
-  "total": 81,
+  "total": 84,
   "independent": 1,
-  "clustered": 80,
+  "clustered": 83,
   "dip": {
-   "n": 81,
-   "netUsd": 0.487,
-   "wrPct": 58,
-   "meanPct": 0.131
+   "n": 84,
+   "netUsd": 0.3296,
+   "wrPct": 57.1,
+   "meanPct": 0.084
   },
   "pump": {
    "n": 0
@@ -19,7 +19,7 @@
   }
  },
  "realized": {
-  "netUsd": 0.487,
+  "netUsd": 0.3296,
   "equityCurve": [
    {
     "t": 1791895798918,
@@ -344,6 +344,18 @@
    {
     "t": 1791938814880,
     "eq": 0.487
+   },
+   {
+    "t": 1791938883951,
+    "eq": 0.5737
+   },
+   {
+    "t": 1791938894843,
+    "eq": 0.4685
+   },
+   {
+    "t": 1791938894843,
+    "eq": 0.3296
    }
   ],
   "maxDrawdownUsd": 3.6301
@@ -356,10 +368,10 @@
     "note": "dip>=2%/2h -> 1.2% stop +2% TP, held-out"
    },
    "live": {
-    "n": 81,
-    "netUsd": 0.487,
-    "wrPct": 58,
-    "meanPct": 0.131
+    "n": 84,
+    "netUsd": 0.3296,
+    "wrPct": 57.1,
+    "meanPct": 0.084
    }
   },
   "pump": {
@@ -373,5 +385,5 @@
    }
   }
  },
- "verdict": "live net positive over 81 episodes (+$0.49)"
+ "verdict": "live net positive over 84 episodes (+$0.33)"
 }
