@@ -1,18 +1,18 @@
 {
- "at": "2026-10-15T19:15:13.835Z",
+ "at": "2026-10-15T19:25:24.166Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.79,
-   "marginFreeUsd": 3.4,
-   "epochNetUsd": -28.73,
+   "equityUsd": 3.76,
+   "marginFreeUsd": 3.07,
+   "epochNetUsd": -29.02,
    "fills": 400,
    "positions": [
     {
-     "symbol": "CLUSDT",
+     "symbol": "SOLUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": -0.01,
      "lev": 15,
-     "margin": 0.39
+     "margin": 0.71
     }
    ]
   },
@@ -27,6 +27,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791939457209,
+    "symbol": "KORUUSDT",
+    "text": "OPEN KORUUSDT $-0.00"
+   },
    {
     "venue": "bitget",
     "ts": 1791939457209,
@@ -80,12 +86,6 @@
     "ts": 1791938814880,
     "symbol": "CLUSDT",
     "text": "CLOSE CLUSDT $-0.09"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791938814454,
-    "symbol": "NEARUSDT",
-    "text": "CLOSE NEARUSDT +$0.25"
    }
   ]
  },
@@ -540,7 +540,7 @@
    ],
    "persona": {
     "swagger": 0.46,
-    "tilt": 0.22,
+    "tilt": 0.21,
     "greed": 0.52,
     "discipline": 0.39
    }
