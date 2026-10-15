@@ -1,38 +1,116 @@
 {
- "ts": "2026-10-15T14:37:27.396Z",
- "ageMs": 5112,
+ "ts": "2026-10-15T14:42:32.422Z",
+ "ageMs": 4260,
  "src": "ws",
  "futures": {
-  "equityUsd": 4.3655,
-  "availableUsd": 0.6873,
+  "equityUsd": 4.2564,
+  "availableUsd": 0.5917,
   "grantUsd": 0,
-  "equityOwnUsd": 4.3655,
-  "marginUsedUsd": 3.6931,
-  "uplUsd": -0.166,
+  "equityOwnUsd": 4.2564,
+  "marginUsedUsd": 3.8137,
+  "uplUsd": -0.1476,
   "positions": [
    {
     "k": "BTCUSDT:long",
-    "size": 0.0035,
-    "marginUsd": 3.6931,
-    "uplUsd": -0.166
+    "size": 0.0036,
+    "marginUsd": 3.8137,
+    "uplUsd": -0.1476
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.249,
+  "solUsd": 0.2509,
   "stableUsd": 0,
-  "bagsUsd": 0.0951,
+  "bagsUsd": 0.0932,
   "totalUsd": 0.3441,
   "tokens": {
    "BQAeeSow": 0.0014,
-   "8PGyHCKv": 0.0937
+   "8PGyHCKv": 0.0918
   },
-  "staleMs": 5112
+  "staleMs": 9874
  },
- "totalUsd": 4.7096,
+ "totalUsd": 4.6005,
  "deltas": [
+  {
+   "ts": 1792075346842,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1824
+  },
+  {
+   "ts": 1792075346841,
+   "kind": "size-added",
+   "detail": "BTCUSDT:long Δ0.00009999999999999983",
+   "amt": 0
+  },
+  {
+   "ts": 1792075341205,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.053
+  },
+  {
+   "ts": 1792075341205,
+   "kind": "size-added",
+   "detail": "BTCUSDT:long Δ0.0002999999999999999",
+   "amt": 0
+  },
+  {
+   "ts": 1792075338841,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0897
+  },
+  {
+   "ts": 1792075338835,
+   "kind": "size-reduced",
+   "detail": "BTCUSDT:long Δ-0.0002999999999999999",
+   "amt": 0
+  },
+  {
+   "ts": 1792075334379,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.169
+  },
+  {
+   "ts": 1792075195893,
+   "kind": "size-added",
+   "detail": "BTCUSDT:long Δ0.0004000000000000002",
+   "amt": 0
+  },
+  {
+   "ts": 1792075195893,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0609
+  },
+  {
+   "ts": 1792075193910,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2045
+  },
+  {
+   "ts": 1792075193910,
+   "kind": "position-opened",
+   "detail": "BTCUSDT:long",
+   "amt": 3.2782
+  },
+  {
+   "ts": 1792075160793,
+   "kind": "position-closed",
+   "detail": "BTCUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792075139322,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1907
+  },
   {
    "ts": 1792074911387,
    "kind": "size-added",
@@ -74,90 +152,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.1138
-  },
-  {
-   "ts": 1792074667776,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1572
-  },
-  {
-   "ts": 1792074667275,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002000000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1792074658860,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.00019999999999999966",
-   "amt": 0
-  },
-  {
-   "ts": 1792074650445,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002000000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1792074640931,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002000000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1792074627661,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002000000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1792074619240,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002999999999999999",
-   "amt": 0
-  },
-  {
-   "ts": 1792074610645,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2099
-  },
-  {
-   "ts": 1792074610645,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0002999999999999999",
-   "amt": 0
-  },
-  {
-   "ts": 1792074602004,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2957
-  },
-  {
-   "ts": 1792074602004,
-   "kind": "size-reduced",
-   "detail": "BTCUSDT:long Δ-0.0004000000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1792074565714,
-   "kind": "size-added",
-   "detail": "BTCUSDT:long Δ0.0004000000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1792074563966,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1758
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -863.28,
+  "netAfterAud": -863.44,
   "clearedPct": 0.8
  }
 }
