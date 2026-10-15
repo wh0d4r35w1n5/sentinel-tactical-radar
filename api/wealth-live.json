@@ -1,32 +1,38 @@
 {
- "ts": "2026-10-15T09:55:20.480Z",
- "ageMs": 47,
+ "ts": "2026-10-15T10:00:25.507Z",
+ "ageMs": 3404,
  "src": "ws",
  "futures": {
-  "equityUsd": 10.9337,
-  "availableUsd": 5.6764,
+  "equityUsd": 10.8585,
+  "availableUsd": 1.8488,
   "grantUsd": 0,
-  "equityOwnUsd": 10.9337,
-  "marginUsedUsd": 5.4572,
-  "uplUsd": -0.1371,
+  "equityOwnUsd": 10.8585,
+  "marginUsedUsd": 9.2282,
+  "uplUsd": -0.1697,
   "positions": [
    {
     "k": "HYPEUSDT:long",
     "size": 0.07,
     "marginUsd": 0.2804,
-    "uplUsd": -0.009
+    "uplUsd": -0.0123
    },
    {
     "k": "VELVETUSDT:long",
     "size": 499,
     "marginUsd": 3.512,
-    "uplUsd": -0.1547
+    "uplUsd": -0.0898
+   },
+   {
+    "k": "WLFIUSDT:long",
+    "size": 1649,
+    "marginUsd": 3.7711,
+    "uplUsd": -0.0856
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 1.6648,
-    "uplUsd": 0.0266
+    "uplUsd": 0.018
    }
   ]
  },
@@ -35,16 +41,34 @@
   "solQty": 0.002413,
   "solUsd": 0.2488,
   "stableUsd": 0,
-  "bagsUsd": 0.0993,
-  "totalUsd": 0.3481,
+  "bagsUsd": 0.1012,
+  "totalUsd": 0.35,
   "tokens": {
-   "BQAeeSow": 0.0013,
-   "8PGyHCKv": 0.098
+   "BQAeeSow": 0.0014,
+   "8PGyHCKv": 0.0998
   },
-  "staleMs": 13619
+  "staleMs": 3404
  },
- "totalUsd": 11.2818,
+ "totalUsd": 11.2085,
  "deltas": [
+  {
+   "ts": 1792058291832,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.119
+  },
+  {
+   "ts": 1792058209835,
+   "kind": "size-added",
+   "detail": "WLFIUSDT:long Δ903",
+   "amt": 0
+  },
+  {
+   "ts": 1792058136076,
+   "kind": "position-opened",
+   "detail": "WLFIUSDT:long",
+   "amt": 1.7054
+  },
   {
    "ts": 1792057798554,
    "kind": "position-opened",
@@ -146,18 +170,12 @@
    "kind": "position-opened",
    "detail": "METISUSDT:long",
    "amt": 1.2873
-  },
-  {
-   "ts": 1792055958152,
-   "kind": "position-opened",
-   "detail": "HYPEUSDT:long",
-   "amt": 0.2804
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -853.91,
+  "netAfterAud": -854.01,
   "clearedPct": 1.8
  }
 }
