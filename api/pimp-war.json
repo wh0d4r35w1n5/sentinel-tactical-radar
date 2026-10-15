@@ -1,16 +1,16 @@
 {
- "at": "2026-10-15T15:24:54.943Z",
+ "at": "2026-10-15T15:34:20.750Z",
  "wallets": {
   "futures": {
-   "equityUsd": 4.63,
-   "marginFreeUsd": 0.22,
-   "epochNetUsd": -27.09,
+   "equityUsd": 4.32,
+   "marginFreeUsd": 0,
+   "epochNetUsd": -26.91,
    "fills": 400,
    "positions": [
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.18,
+     "upl": -0.12,
      "lev": 60,
      "margin": 3.84
     }
@@ -27,6 +27,24 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791933965038,
+    "symbol": "STRKUSDT",
+    "text": "OPEN STRKUSDT $-0.02"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791933965037,
+    "symbol": "STRKUSDT",
+    "text": "OPEN STRKUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791933520531,
+    "symbol": "HYPEUSDT",
+    "text": "CLOSE HYPEUSDT $-0.12"
+   },
    {
     "venue": "bitget",
     "ts": 1791933520531,
@@ -68,24 +86,6 @@
     "ts": 1791927665913,
     "symbol": "HYPEUSDT",
     "text": "OPEN HYPEUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791927665913,
-    "symbol": "HYPEUSDT",
-    "text": "OPEN HYPEUSDT $-0.04"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791927665913,
-    "symbol": "HYPEUSDT",
-    "text": "OPEN HYPEUSDT $-0.02"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791927661331,
-    "symbol": "ENAUSDT",
-    "text": "OPEN ENAUSDT $-0.10"
    }
   ]
  },
@@ -542,7 +542,7 @@
     "swagger": 0.39,
     "tilt": 0.33,
     "greed": 0.5,
-    "discipline": 0.35
+    "discipline": 0.36
    }
   }
  ],
