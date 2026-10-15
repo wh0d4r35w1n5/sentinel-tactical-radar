@@ -1,23 +1,74 @@
 {
- "at": 1792061252074,
- "graded": 1,
- "newThisRun": 1,
+ "at": 1792061648641,
+ "graded": 2697,
+ "newThisRun": 2697,
  "horizon": "4h/SL",
  "feeRtPct": 0.12,
  "byScore": {
+  "na": {
+   "n": 2696,
+   "slHitPct": 48,
+   "tpHitPct": 51,
+   "meanMfePct": 2.73,
+   "meanNetPct": 0.358,
+   "winPct": 51.9
+  },
   "s1": {
    "n": 1,
    "slHitPct": 100,
+   "tpHitPct": 0,
    "meanMfePct": 0.253,
    "meanNetPct": -0.601,
    "winPct": 0
   }
  },
- "byFactor": {},
+ "byFactor": {
+  "sym-short-squeeze": {
+   "n": 15,
+   "slHitPct": 100,
+   "tpHitPct": 0,
+   "meanMfePct": 0,
+   "meanNetPct": -1.32,
+   "winPct": 0
+  },
+  "{\"slPct\":1.2,\"tpPct\":2,\"ttlMin\":30}": {
+   "n": 2402,
+   "slHitPct": 47.2,
+   "tpHitPct": 51.9,
+   "meanMfePct": 2.759,
+   "meanNetPct": 0.361,
+   "winPct": 52.8
+  },
+  "same-beta-cap": {
+   "n": 2681,
+   "slHitPct": 47.7,
+   "tpHitPct": 51.3,
+   "meanMfePct": 2.745,
+   "meanNetPct": 0.368,
+   "winPct": 52.2
+  },
+  "{\"slPct\":1.2,\"tpPct\":2.5,\"ttlMin\":30}": {
+   "n": 294,
+   "slHitPct": 54.1,
+   "tpHitPct": 43.9,
+   "meanMfePct": 2.495,
+   "meanNetPct": 0.335,
+   "winPct": 44.9
+  }
+ },
  "byLedgerSide": {
+  "liq-shadow:short": {
+   "n": 2696,
+   "slHitPct": 48,
+   "tpHitPct": 51,
+   "meanMfePct": 2.73,
+   "meanNetPct": 0.358,
+   "winPct": 51.9
+  },
   "census:long": {
    "n": 1,
    "slHitPct": 100,
+   "tpHitPct": 0,
    "meanMfePct": 0.253,
    "meanNetPct": -0.601,
    "winPct": 0
