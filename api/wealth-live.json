@@ -1,38 +1,116 @@
 {
- "ts": "2026-10-15T12:36:41.526Z",
- "ageMs": 4437,
+ "ts": "2026-10-15T12:41:41.567Z",
+ "ageMs": 4497,
  "src": "ws",
  "futures": {
-  "equityUsd": 10.2981,
-  "availableUsd": 7.1969,
+  "equityUsd": 10.1066,
+  "availableUsd": 1.9606,
   "grantUsd": 0,
-  "equityOwnUsd": 10.2981,
-  "marginUsedUsd": 3.4018,
-  "uplUsd": -0.4158,
+  "equityOwnUsd": 10.1066,
+  "marginUsedUsd": 8.1896,
+  "uplUsd": -0.0436,
   "positions": [
    {
     "k": "ETHUSDT:long",
-    "size": 0.06,
-    "marginUsd": 3.4018,
-    "uplUsd": -0.4158
+    "size": 0.26,
+    "marginUsd": 8.1896,
+    "uplUsd": -0.0436
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.246,
+  "solUsd": 0.2466,
   "stableUsd": 0,
-  "bagsUsd": 0.0937,
-  "totalUsd": 0.3397,
+  "bagsUsd": 0.0934,
+  "totalUsd": 0.34,
   "tokens": {
-   "BQAeeSow": 0.0013,
-   "8PGyHCKv": 0.0924
+   "BQAeeSow": 0.0014,
+   "8PGyHCKv": 0.092
   },
-  "staleMs": 4437
+  "staleMs": 4497
  },
- "totalUsd": 10.6378,
+ "totalUsd": 10.4466,
  "deltas": [
+  {
+   "ts": 1792068081828,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0676
+  },
+  {
+   "ts": 1792068067647,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0691
+  },
+  {
+   "ts": 1792068067647,
+   "kind": "size-added",
+   "detail": "ETHUSDT:long Δ0.03",
+   "amt": 0
+  },
+  {
+   "ts": 1792068062939,
+   "kind": "position-opened",
+   "detail": "ETHUSDT:long",
+   "amt": 7.2444
+  },
+  {
+   "ts": 1792068062939,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2754
+  },
+  {
+   "ts": 1792068020609,
+   "kind": "position-closed",
+   "detail": "ETHUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792068004776,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.4499
+  },
+  {
+   "ts": 1792068003115,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.6477
+  },
+  {
+   "ts": 1792067984991,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1547
+  },
+  {
+   "ts": 1792067984990,
+   "kind": "size-added",
+   "detail": "ETHUSDT:long Δ0.010000000000000009",
+   "amt": 0
+  },
+  {
+   "ts": 1792067981982,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1628
+  },
+  {
+   "ts": 1792067981981,
+   "kind": "size-added",
+   "detail": "ETHUSDT:long Δ0.1",
+   "amt": 0
+  },
+  {
+   "ts": 1792067935517,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2946
+  },
   {
    "ts": 1792067721549,
    "kind": "balance-move",
@@ -74,90 +152,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.3809
-  },
-  {
-   "ts": 1792067521749,
-   "kind": "size-reduced",
-   "detail": "ETHUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1792067515105,
-   "kind": "size-added",
-   "detail": "STRKUSDT:long Δ149.7",
-   "amt": 0
-  },
-  {
-   "ts": 1792067515035,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1375
-  },
-  {
-   "ts": 1792067515034,
-   "kind": "position-opened",
-   "detail": "STRKUSDT:long",
-   "amt": 1.0785
-  },
-  {
-   "ts": 1792067513049,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.1555
-  },
-  {
-   "ts": 1792067513048,
-   "kind": "size-reduced",
-   "detail": "ETHUSDT:long Δ-0.009999999999999995",
-   "amt": 0
-  },
-  {
-   "ts": 1792067450631,
-   "kind": "position-closed",
-   "detail": "CELRUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792067442598,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0766
-  },
-  {
-   "ts": 1792067442595,
-   "kind": "position-opened",
-   "detail": "ETHUSDT:long",
-   "amt": 3.779
-  },
-  {
-   "ts": 1792067442452,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2539
-  },
-  {
-   "ts": 1792067406787,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2016
-  },
-  {
-   "ts": 1792067214046,
-   "kind": "position-opened",
-   "detail": "CELRUSDT:long",
-   "amt": 2.6171
-  },
-  {
-   "ts": 1792067150603,
-   "kind": "position-closed",
-   "detail": "CELRUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -854.82,
+  "netAfterAud": -855.1,
   "clearedPct": 1.7
  }
 }
