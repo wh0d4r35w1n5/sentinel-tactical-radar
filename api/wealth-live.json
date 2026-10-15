@@ -1,38 +1,62 @@
 {
- "ts": "2026-10-15T08:07:36.217Z",
- "ageMs": 12347,
+ "ts": "2026-10-15T08:10:18.568Z",
+ "ageMs": 5409,
  "src": "ws",
  "futures": {
-  "equityUsd": 11.4182,
-  "availableUsd": 7.7038,
+  "equityUsd": 11.2807,
+  "availableUsd": 10.9998,
   "grantUsd": 0,
-  "equityOwnUsd": 11.4182,
-  "marginUsedUsd": 3.9632,
-  "uplUsd": -0.0976,
+  "equityOwnUsd": 11.2807,
+  "marginUsedUsd": 0.2804,
+  "uplUsd": -0.0018,
   "positions": [
    {
-    "k": "MSTRUSDT:long",
-    "size": 0.56,
-    "marginUsd": 3.9632,
-    "uplUsd": -0.0976
+    "k": "HYPEUSDT:long",
+    "size": 0.07,
+    "marginUsd": 0.2804,
+    "uplUsd": -0.0018
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2486,
+  "solUsd": 0.2479,
   "stableUsd": 0,
   "bagsUsd": 0.0995,
-  "totalUsd": 0.3481,
+  "totalUsd": 0.3474,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0982
   },
-  "staleMs": 12347
+  "staleMs": 9728
  },
- "totalUsd": 11.7664,
+ "totalUsd": 11.6281,
  "deltas": [
+  {
+   "ts": 1792051787003,
+   "kind": "position-opened",
+   "detail": "HYPEUSDT:long",
+   "amt": 0.2804
+  },
+  {
+   "ts": 1792051783161,
+   "kind": "position-closed",
+   "detail": "MSTRUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792051781887,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.2378
+  },
+  {
+   "ts": 1792051662671,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1008
+  },
   {
    "ts": 1792051539591,
    "kind": "balance-move",
@@ -128,36 +152,12 @@
    "kind": "position-closed",
    "detail": "MAGMAUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792044064757,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0678
-  },
-  {
-   "ts": 1792044026140,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.059
-  },
-  {
-   "ts": 1792043750236,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1174
-  },
-  {
-   "ts": 1792043713359,
-   "kind": "position-closed",
-   "detail": "SKHYNIXUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -853.14,
+  "netAfterAud": -853.34,
   "clearedPct": 1.9
  }
 }
