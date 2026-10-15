@@ -1,44 +1,56 @@
 {
- "ts": "2026-10-15T10:41:00.753Z",
- "ageMs": 8331,
+ "ts": "2026-10-15T10:46:00.777Z",
+ "ageMs": 8406,
  "src": "ws",
  "futures": {
-  "equityUsd": 10.6424,
-  "availableUsd": 3.6908,
+  "equityUsd": 10.9247,
+  "availableUsd": 7.1583,
   "grantUsd": 0,
-  "equityOwnUsd": 10.6424,
-  "marginUsedUsd": 7.283,
-  "uplUsd": -0.0567,
+  "equityOwnUsd": 10.9247,
+  "marginUsedUsd": 3.512,
+  "uplUsd": 0.2295,
   "positions": [
    {
     "k": "VELVETUSDT:long",
     "size": 499,
     "marginUsd": 3.512,
-    "uplUsd": 0.0948
-   },
-   {
-    "k": "WLFIUSDT:long",
-    "size": 1649,
-    "marginUsd": 3.7711,
-    "uplUsd": -0.1516
+    "uplUsd": 0.2295
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.247,
+  "solUsd": 0.2461,
   "stableUsd": 0,
   "bagsUsd": 0.0963,
-  "totalUsd": 0.3433,
+  "totalUsd": 0.3424,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.095
   },
-  "staleMs": 8331
+  "staleMs": 8406
  },
- "totalUsd": 10.9857,
+ "totalUsd": 11.2672,
  "deltas": [
+  {
+   "ts": 1792061041096,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.2046
+  },
+  {
+   "ts": 1792060880490,
+   "kind": "position-closed",
+   "detail": "WLFIUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792060880094,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0628
+  },
   {
    "ts": 1792060550483,
    "kind": "position-closed",
@@ -140,30 +152,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.0569
-  },
-  {
-   "ts": 1792057036313,
-   "kind": "position-opened",
-   "detail": "VELVETUSDT:long",
-   "amt": 3.512
-  },
-  {
-   "ts": 1792057010451,
-   "kind": "position-closed",
-   "detail": "QUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792056930983,
-   "kind": "position-opened",
-   "detail": "QUSDT:long",
-   "amt": 1.2301
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -854.33,
+  "netAfterAud": -853.93,
   "clearedPct": 1.8
  }
 }
