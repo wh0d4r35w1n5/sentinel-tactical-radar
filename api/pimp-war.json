@@ -1,12 +1,20 @@
 {
- "at": "2026-10-15T17:34:29.318Z",
+ "at": "2026-10-15T17:44:35.932Z",
  "wallets": {
   "futures": {
    "equityUsd": 3.79,
-   "marginFreeUsd": 3.79,
-   "epochNetUsd": -27.03,
+   "marginFreeUsd": 2.73,
+   "epochNetUsd": -27.63,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 10,
+     "margin": 1.06
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791937749827,
+    "symbol": "STRKUSDT",
+    "text": "CLOSE STRKUSDT +$0.28"
+   },
    {
     "venue": "bitget",
     "ts": 1791937749827,
@@ -72,12 +86,6 @@
     "ts": 1791936842415,
     "symbol": "SNXXUSDT",
     "text": "CLOSE SNXXUSDT +$0.20"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791936781240,
-    "symbol": "KORUUSDT",
-    "text": "CLOSE KORUUSDT +$0.11"
    }
   ]
  },
@@ -534,7 +542,7 @@
     "swagger": 0.36,
     "tilt": 0.43,
     "greed": 0.48,
-    "discipline": 0.34
+    "discipline": 0.35
    }
   }
  ],

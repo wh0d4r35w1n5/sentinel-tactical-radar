@@ -1,26 +1,26 @@
 {
- "ts": "2026-10-15T17:43:28.906Z",
- "ageMs": 6055,
+ "ts": "2026-10-15T17:48:33.956Z",
+ "ageMs": 11324,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.8186,
-  "availableUsd": 2.3186,
+  "equityUsd": 3.8214,
+  "availableUsd": 2.4033,
   "grantUsd": 0,
-  "equityOwnUsd": 3.8186,
-  "marginUsedUsd": 1.4712,
-  "uplUsd": 0.0303,
+  "equityOwnUsd": 3.8214,
+  "marginUsedUsd": 1.3892,
+  "uplUsd": 0.0274,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 1.0599,
-    "uplUsd": 0.0147
+    "uplUsd": 0.0133
    },
    {
     "k": "SUIUSDT:long",
-    "size": 4,
-    "marginUsd": 0.4113,
-    "uplUsd": 0.0156
+    "size": 3.2,
+    "marginUsd": 0.3294,
+    "uplUsd": 0.0141
    }
   ]
  },
@@ -29,16 +29,22 @@
   "solQty": 0.002413,
   "solUsd": 0.256,
   "stableUsd": 0,
-  "bagsUsd": 0.1075,
-  "totalUsd": 0.3635,
+  "bagsUsd": 0.1069,
+  "totalUsd": 0.3629,
   "tokens": {
    "BQAeeSow": 0.0015,
-   "8PGyHCKv": 0.106
+   "8PGyHCKv": 0.1054
   },
-  "staleMs": 6055
+  "staleMs": 11324
  },
- "totalUsd": 4.1821,
+ "totalUsd": 4.1843,
  "deltas": [
+  {
+   "ts": 1792086407630,
+   "kind": "size-reduced",
+   "detail": "SUIUSDT:long Δ-0.7999999999999998",
+   "amt": 0
+  },
   {
    "ts": 1792086131247,
    "kind": "size-reduced",
@@ -152,12 +158,6 @@
    "kind": "position-closed",
    "detail": "BTCUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792080665574,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1183
   }
  ],
  "mission": {
