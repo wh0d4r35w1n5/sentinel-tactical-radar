@@ -1,12 +1,27 @@
 {
- "at": "2026-10-15T03:17:26.573Z",
+ "at": "2026-10-15T03:28:28.585Z",
  "wallets": {
   "futures": {
-   "equityUsd": 6.36,
-   "marginFreeUsd": 6.36,
-   "epochNetUsd": -13.48,
-   "fills": 279,
-   "positions": []
+   "equityUsd": 6.35,
+   "marginFreeUsd": 4.54,
+   "epochNetUsd": -14.02,
+   "fills": 280,
+   "positions": [
+    {
+     "symbol": "PAXGUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 25,
+     "margin": 2.2
+    },
+    {
+     "symbol": "SOXSUSDT",
+     "side": "short",
+     "upl": 0.01,
+     "lev": 20,
+     "margin": 0.29
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -495,17 +510,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -17.9831,
+   "net": -18.0075,
    "wins": 7,
-   "losses": 35,
-   "closes": 59,
+   "losses": 36,
+   "closes": 60,
    "stolen": 0,
    "gen": 0,
-   "form": -0.92,
+   "form": -0.5617,
    "mood": "tilt",
    "vault": 0.5029,
    "hist": [
-    -14.6999,
     -14.6844,
     -14.6573,
     -14.6264,
@@ -528,13 +542,14 @@
     -15.6929,
     -15.7269,
     -15.7339,
-    -17.9831
+    -17.9831,
+    -18.0075
    ],
    "persona": {
-    "swagger": 0.26,
-    "tilt": 0.76,
-    "greed": 0.44,
-    "discipline": 0.31
+    "swagger": 0.2,
+    "tilt": 0.93,
+    "greed": 0.42,
+    "discipline": 0.26
    }
   }
  ],
@@ -572,6 +587,10 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1792034897714,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
+  },
   {
    "ts": 1792030257944,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-2.25 on NEARUSDT incl $0.013 entry fees — docked her pay"
@@ -687,10 +706,6 @@
   {
    "ts": 1791926288133,
    "text": "💅 Solana Sadie got cocky — untouchable energy, the haters are plotting"
-  },
-  {
-   "ts": 1791926288133,
-   "text": "💰 Miss Behave (freelance — no pimp took a cut) banked $-0.65 on SOXLUSDT incl $0.079 entry fees — docked her pay"
   }
  ],
  "attrib": {
