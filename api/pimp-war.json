@@ -1,12 +1,27 @@
 {
- "at": "2026-10-15T16:29:05.362Z",
+ "at": "2026-10-15T16:39:02.211Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.77,
-   "marginFreeUsd": 3.77,
-   "epochNetUsd": -27.03,
+   "equityUsd": 3.74,
+   "marginFreeUsd": 2.73,
+   "epochNetUsd": -26.63,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "SUSHIUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 9,
+     "margin": 0.56
+    },
+    {
+     "symbol": "BNBUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 15,
+     "margin": 0.49
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +34,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791936781240,
+    "symbol": "KORUUSDT",
+    "text": "CLOSE KORUUSDT +$0.05"
+   },
    {
     "venue": "bitget",
     "ts": 1791936781240,
@@ -72,12 +93,6 @@
     "ts": 1791935275819,
     "symbol": "CLUSDT",
     "text": "OPEN CLUSDT $-0.09"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791935269556,
-    "symbol": "SOXSUSDT",
-    "text": "CLOSE SOXSUSDT +$0.05"
    }
   ]
  },
@@ -531,8 +546,8 @@
     -16.6939
    ],
    "persona": {
-    "swagger": 0.33,
-    "tilt": 0.49,
+    "swagger": 0.34,
+    "tilt": 0.48,
     "greed": 0.48,
     "discipline": 0.32
    }
