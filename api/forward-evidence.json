@@ -1,14 +1,14 @@
 {
- "ts": "2026-10-15T09:21:12.240Z",
+ "ts": "2026-10-15T09:26:35.055Z",
  "windowStart": "2026-10-13T12:45:46.537Z",
  "episodes": {
-  "total": 202,
-  "independent": 7,
+  "total": 203,
+  "independent": 8,
   "clustered": 195,
   "dip": {
-   "n": 197,
-   "netUsd": -16.0321,
-   "wrPct": 45.2,
+   "n": 198,
+   "netUsd": -16.0838,
+   "wrPct": 44.9,
    "meanPct": -0.11
   },
   "pump": {
@@ -25,7 +25,7 @@
   }
  },
  "realized": {
-  "netUsd": -19.4809,
+  "netUsd": -19.5326,
   "equityCurve": [
    {
     "t": 1791895798918,
@@ -834,9 +834,13 @@
    {
     "t": 1792051781815,
     "eq": -19.4809
+   },
+   {
+    "t": 1792056198595,
+    "eq": -19.5326
    }
   ],
-  "maxDrawdownUsd": 20.4723
+  "maxDrawdownUsd": 20.524
  },
  "claims": {
   "dip": {
@@ -846,9 +850,9 @@
     "note": "dip>=2%/2h -> 1.2% stop +2% TP, held-out"
    },
    "live": {
-    "n": 197,
-    "netUsd": -16.0321,
-    "wrPct": 45.2,
+    "n": 198,
+    "netUsd": -16.0838,
+    "wrPct": 44.9,
     "meanPct": -0.11
    }
   },
@@ -866,5 +870,5 @@
    }
   }
  },
- "verdict": "live net NEGATIVE over 202 episodes ($-19.48) — backtest edge not confirmed"
+ "verdict": "live net NEGATIVE over 203 episodes ($-19.53) — backtest edge not confirmed"
 }
