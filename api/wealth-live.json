@@ -1,62 +1,68 @@
 {
- "ts": "2026-10-16T04:11:23.525Z",
- "ageMs": 1877,
+ "ts": "2026-10-16T04:16:23.584Z",
+ "ageMs": 1945,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.5401,
-  "availableUsd": 0.4574,
+  "equityUsd": 3.595,
+  "availableUsd": 0.9661,
   "grantUsd": 0,
-  "equityOwnUsd": 3.5401,
-  "marginUsedUsd": 3.1743,
-  "uplUsd": -0.0867,
+  "equityOwnUsd": 3.595,
+  "marginUsedUsd": 2.6714,
+  "uplUsd": -0.0655,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 1.055,
-    "uplUsd": -0.0447
+    "uplUsd": -0.0318
    },
    {
     "k": "XRPUSDT:long",
     "size": 4,
     "marginUsd": 0.5344,
-    "uplUsd": -0.022
+    "uplUsd": -0.0188
    },
    {
     "k": "CLUSDT:long",
     "size": 0.06,
     "marginUsd": 0.5752,
-    "uplUsd": 0.0014
-   },
-   {
-    "k": "ADAUSDT:long",
-    "size": 22,
-    "marginUsd": 0.5029,
-    "uplUsd": -0.0022
+    "uplUsd": 0.0012
    },
    {
     "k": "DOGEUSDT:long",
     "size": 62,
     "marginUsd": 0.5069,
-    "uplUsd": -0.0192
+    "uplUsd": -0.0161
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2534,
+  "solUsd": 0.2537,
   "stableUsd": 0,
   "bagsUsd": 0.1086,
-  "totalUsd": 0.362,
+  "totalUsd": 0.3623,
   "tokens": {
    "BQAeeSow": 0.0015,
    "8PGyHCKv": 0.1071
   },
-  "staleMs": 14613
+  "staleMs": 14462
  },
- "totalUsd": 3.9022,
+ "totalUsd": 3.9574,
  "deltas": [
+  {
+   "ts": 1792124091658,
+   "kind": "position-closed",
+   "detail": "ADAUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792124071124,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0549
+  },
   {
    "ts": 1792123720688,
    "kind": "position-opened",
@@ -164,24 +170,12 @@
    "kind": "size-reduced",
    "detail": "DOGEUSDT:long Δ-12",
    "amt": 0
-  },
-  {
-   "ts": 1792119640737,
-   "kind": "position-opened",
-   "detail": "DOGEUSDT:long",
-   "amt": 0.5041
-  },
-  {
-   "ts": 1792119631851,
-   "kind": "position-opened",
-   "detail": "XRPUSDT:long",
-   "amt": 0.533
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -864.35,
-  "clearedPct": 0.6
+  "netAfterAud": -864.27,
+  "clearedPct": 0.7
  }
 }
