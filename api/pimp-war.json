@@ -1,10 +1,10 @@
 {
- "at": "2026-10-16T01:43:15.328Z",
+ "at": "2026-10-16T01:53:20.213Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.67,
-   "marginFreeUsd": 0.41,
-   "epochNetUsd": -21.32,
+   "equityUsd": 3.65,
+   "marginFreeUsd": 1.46,
+   "epochNetUsd": -21.45,
    "fills": 400,
    "positions": [
     {
@@ -15,16 +15,9 @@
      "margin": 0.36
     },
     {
-     "symbol": "ZKUSDT",
-     "side": "long",
-     "upl": -0.15,
-     "lev": 15,
-     "margin": 1.21
-    },
-    {
      "symbol": "SNDKUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0,
      "lev": 3,
      "margin": 1.85
     }
@@ -41,6 +34,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791970362512,
+    "symbol": "SNDKUSDT",
+    "text": "CLOSE SNDKUSDT $-0.07"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1791967730977,
+    "symbol": "ZECUSDT",
+    "text": "CLOSE ZECUSDT $-0.42"
+   },
    {
     "venue": "bitget",
     "ts": 1791967085863,
@@ -88,18 +93,6 @@
     "ts": 1791964483732,
     "symbol": "CLUSDT",
     "text": "CLOSE CLUSDT $-0.17"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791960703853,
-    "symbol": "CLUSDT",
-    "text": "CLOSE CLUSDT $-0.04"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791959999401,
-    "symbol": "CLUSDT",
-    "text": "OPEN CLUSDT $-0.06"
    }
   ]
  },
@@ -556,7 +549,7 @@
     "swagger": 0.48,
     "tilt": 0.16,
     "greed": 0.51,
-    "discipline": 0.44
+    "discipline": 0.45
    }
   }
  ],
