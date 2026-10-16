@@ -1,12 +1,20 @@
 {
- "at": "2026-10-16T15:06:38.505Z",
+ "at": "2026-10-16T15:16:05.062Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.19,
-   "marginFreeUsd": 1.19,
-   "epochNetUsd": -5.62,
+   "equityUsd": 1.1,
+   "marginFreeUsd": 0.78,
+   "epochNetUsd": -6.41,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "SOXLUSDT",
+     "side": "long",
+     "upl": -0.09,
+     "lev": 10,
+     "margin": 0.41
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792072486832,
+    "symbol": "VELVETUSDT",
+    "text": "CLOSE VELVETUSDT $-0.08"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792072483627,
+    "symbol": "CRVUSDT",
+    "text": "CLOSE CRVUSDT $-0.09"
+   },
    {
     "venue": "bitget",
     "ts": 1792072430904,
@@ -66,18 +86,6 @@
     "ts": 1792070137462,
     "symbol": "LINKUSDT",
     "text": "CLOSE LINKUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792070129050,
-    "symbol": "LINKUSDT",
-    "text": "CLOSE LINKUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792070120060,
-    "symbol": "LINKUSDT",
-    "text": "CLOSE LINKUSDT $-0.00"
    }
   ]
  },
@@ -532,7 +540,7 @@
    ],
    "persona": {
     "swagger": 0.25,
-    "tilt": 0.74,
+    "tilt": 0.73,
     "greed": 0.43,
     "discipline": 0.31
    }
@@ -663,10 +671,6 @@
   }
  ],
  "attrib": {
-  "1494748686073987072": {
-   "pimp": null,
-   "crack": null
-  },
   "1494757162204512256": {
    "pimp": null,
    "crack": null
@@ -1260,6 +1264,10 @@
    "crack": null
   },
   "1495003201020903424": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495004589570383873": {
    "pimp": null,
    "crack": null
   }
