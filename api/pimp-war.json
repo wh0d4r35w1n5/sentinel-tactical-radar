@@ -1,12 +1,19 @@
 {
- "at": "2026-10-16T09:48:02.469Z",
+ "at": "2026-10-16T09:58:00.369Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.59,
-   "marginFreeUsd": 2.5,
-   "epochNetUsd": -15.89,
+   "equityUsd": 3.57,
+   "marginFreeUsd": 1.5,
+   "epochNetUsd": -15.77,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 1.07
+    },
     {
      "symbol": "XRPUSDT",
      "side": "long",
@@ -15,11 +22,11 @@
      "margin": 0.54
     },
     {
-     "symbol": "CLUSDT",
+     "symbol": "DOGEUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": 0,
      "lev": 10,
-     "margin": 0.57
+     "margin": 0.5
     }
    ]
   },
@@ -34,6 +41,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792034247172,
+    "symbol": "PAXGUSDT",
+    "text": "OPEN PAXGUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792033592524,
+    "symbol": "SOXSUSDT",
+    "text": "OPEN SOXSUSDT $-0.00"
+   },
    {
     "venue": "bitget",
     "ts": 1792033591070,
@@ -81,18 +100,6 @@
     "ts": 1792032226911,
     "symbol": "QUSDT",
     "text": "CLOSE QUSDT +$0.23"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792032226755,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT +$0.26"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792032225450,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT +$0.36"
    }
   ]
  },
@@ -549,7 +556,7 @@
     "swagger": 0.49,
     "tilt": 0.13,
     "greed": 0.5,
-    "discipline": 0.47
+    "discipline": 0.48
    }
   }
  ],
@@ -678,10 +685,6 @@
   }
  ],
  "attrib": {
-  "1494609791017533440": {
-   "pimp": null,
-   "crack": null
-  },
   "1494611696057847808": {
    "pimp": null,
    "crack": null
@@ -1275,6 +1278,10 @@
    "crack": null
   },
   "1494921148115968000": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494924738700238848": {
    "pimp": null,
    "crack": null
   }
