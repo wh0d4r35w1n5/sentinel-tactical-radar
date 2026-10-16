@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-16T20:41:09.823Z",
+ "ts": "2026-10-16T20:46:09.835Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 4753.6046,
-   "short": 41.9538
+   "long": 229240.06410999998,
+   "short": 26.459444
   },
   "liq15m": {
-   "long": 87356.75892,
-   "short": 6593.696
+   "long": 254651.54893,
+   "short": 4158.968244000001
   },
   "liq60m": {
-   "long": 164933.113693,
-   "short": 19693.738049
+   "long": 394033.768423,
+   "short": 19720.197493
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,47 +20,47 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 48641.80529999999,
+    "long": 9171.0475,
     "short": 0
    },
    "liq60m": {
-    "long": 122480.51750000002,
+    "long": 126897.96040000003,
     "short": 0
    },
    "flow15m": {
-    "buy": 15392381,
-    "sell": 8660422,
-    "delta": 6731959
+    "buy": 13899242,
+    "sell": 10317765,
+    "delta": 3581477
    }
   },
   "ETHUSDT": {
    "liq15m": {
-    "long": 15933.09767,
+    "long": 38483.95048000001,
     "short": 0
    },
    "liq60m": {
-    "long": 16072.50705,
+    "long": 53910.52788,
     "short": 263.17505
    },
    "flow15m": {
-    "buy": 15315767,
-    "sell": 4039759,
-    "delta": 11276008
+    "buy": 17626494,
+    "sell": 4296802,
+    "delta": 13329692
    }
   },
   "SOLUSDT": {
    "liq15m": {
-    "long": 2630.496,
-    "short": 5723.2247
+    "long": 186845.191,
+    "short": 3262.0375000000004
    },
    "liq60m": {
-    "long": 2630.496,
+    "long": 189475.687,
     "short": 6590.0593
    },
    "flow15m": {
-    "buy": 4603354,
-    "sell": 1777618,
-    "delta": 2825736
+    "buy": 4101338,
+    "sell": 2038289,
+    "delta": 2063050
    }
   },
   "XRPUSDT": {
@@ -96,11 +96,11 @@
   "ARBUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 26.459444
    },
    "liq60m": {
     "long": 0,
-    "short": 11134.079999999998
+    "short": 11160.539443999998
    },
    "flow15m": {
     "buy": 0,
@@ -184,6 +184,15 @@
    }
   }
  },
- "biggestPrints60m": [],
- "liqCount2h": 382
+ "biggestPrints60m": [
+  {
+   "ts": 1792183509592,
+   "sym": "SOLUSDT",
+   "side": "long",
+   "usd": 186845.191,
+   "px": 102.7,
+   "venue": "okx"
+  }
+ ],
+ "liqCount2h": 268
 }
