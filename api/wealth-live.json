@@ -1,62 +1,68 @@
 {
- "ts": "2026-10-16T05:31:44.201Z",
- "ageMs": 5416,
+ "ts": "2026-10-16T05:36:44.243Z",
+ "ageMs": 3618,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.6388,
-  "availableUsd": 0.508,
+  "equityUsd": 3.5718,
+  "availableUsd": 1.0761,
   "grantUsd": 0,
-  "equityOwnUsd": 3.6388,
-  "marginUsedUsd": 3.1874,
-  "uplUsd": -0.0875,
+  "equityOwnUsd": 3.5718,
+  "marginUsedUsd": 2.6122,
+  "uplUsd": -0.1263,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 1.065,
-    "uplUsd": -0.0515
+    "uplUsd": -0.0664
    },
    {
     "k": "XRPUSDT:long",
     "size": 4,
     "marginUsd": 0.5352,
-    "uplUsd": 0.0004
-   },
-   {
-    "k": "CLUSDT:long",
-    "size": 0.06,
-    "marginUsd": 0.5752,
-    "uplUsd": 0.0053
+    "uplUsd": -0.0036
    },
    {
     "k": "ADAUSDT:long",
     "size": 22,
     "marginUsd": 0.5093,
-    "uplUsd": -0.0308
+    "uplUsd": -0.0374
    },
    {
     "k": "DOGEUSDT:long",
     "size": 61,
     "marginUsd": 0.5028,
-    "uplUsd": -0.011
+    "uplUsd": -0.0189
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2557,
+  "solUsd": 0.2554,
   "stableUsd": 0,
   "bagsUsd": 0.1061,
-  "totalUsd": 0.3618,
+  "totalUsd": 0.3615,
   "tokens": {
    "BQAeeSow": 0.0015,
    "8PGyHCKv": 0.1046
   },
-  "staleMs": 5416
+  "staleMs": 5426
  },
- "totalUsd": 4.0006,
+ "totalUsd": 3.9332,
  "deltas": [
+  {
+   "ts": 1792128981752,
+   "kind": "position-closed",
+   "detail": "CLUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792128967401,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0671
+  },
   {
    "ts": 1792127833161,
    "kind": "position-opened",
@@ -164,24 +170,12 @@
    "kind": "position-closed",
    "detail": "BATUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792123393432,
-   "kind": "size-reduced",
-   "detail": "BATUSDT:long Δ-12.899999999999999",
-   "amt": 0
-  },
-  {
-   "ts": 1792123137289,
-   "kind": "position-opened",
-   "detail": "BATUSDT:long",
-   "amt": 1.2501
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -864.21,
+  "netAfterAud": -864.31,
   "clearedPct": 0.7
  }
 }
