@@ -1,18 +1,18 @@
 {
- "at": "2026-10-16T14:08:39.197Z",
+ "at": "2026-10-16T14:18:17.295Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.82,
-   "marginFreeUsd": 1.23,
-   "epochNetUsd": -8.69,
+   "equityUsd": 1.69,
+   "marginFreeUsd": 0.81,
+   "epochNetUsd": -5.92,
    "fills": 400,
    "positions": [
     {
-     "symbol": "ADAUSDT",
+     "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.01,
-     "lev": 7,
-     "margin": 0.59
+     "upl": -0.08,
+     "lev": 77,
+     "margin": 0.96
     }
    ]
   },
@@ -27,6 +27,30 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792070129050,
+    "symbol": "LINKUSDT",
+    "text": "CLOSE LINKUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792070120060,
+    "symbol": "LINKUSDT",
+    "text": "CLOSE LINKUSDT $-0.00"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792070116890,
+    "symbol": "LINKUSDT",
+    "text": "OPEN LINKUSDT $-0.04"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792069622742,
+    "symbol": "MAGICUSDT",
+    "text": "OPEN MAGICUSDT $-0.00"
+   },
    {
     "venue": "bitget",
     "ts": 1792069215361,
@@ -62,30 +86,6 @@
     "ts": 1792069117265,
     "symbol": "PENGUUSDT",
     "text": "CLOSE PENGUUSDT $-0.03"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792069117094,
-    "symbol": "DOGEUSDT",
-    "text": "CLOSE DOGEUSDT $-0.03"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792068865782,
-    "symbol": "APTUSDT",
-    "text": "OPEN APTUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792068865656,
-    "symbol": "XLMUSDT",
-    "text": "OPEN XLMUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792068865525,
-    "symbol": "PENGUUSDT",
-    "text": "OPEN PENGUUSDT $-0.00"
    }
   ]
  },
@@ -503,18 +503,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -18.069,
+   "net": -18.2335,
    "wins": 11,
-   "losses": 45,
-   "closes": 79,
+   "losses": 47,
+   "closes": 81,
    "stolen": 0,
    "gen": 0,
-   "form": -0.3616,
-   "mood": "cold",
+   "form": -0.1907,
+   "mood": "tilt",
    "vault": 0.5029,
    "hist": [
-    -15.1278,
-    -15.0726,
     -15.491,
     -15.5286,
     -15.5539,
@@ -536,19 +534,33 @@
     -16.6939,
     -16.6195,
     -17.4977,
-    -18.069
+    -18.069,
+    -18.1016,
+    -18.2335
    ],
    "persona": {
-    "swagger": 0.37,
-    "tilt": 0.44,
-    "greed": 0.47,
-    "discipline": 0.39
+    "swagger": 0.23,
+    "tilt": 0.79,
+    "greed": 0.43,
+    "discipline": 0.3
    }
   }
  ],
  "retired": [],
  "intents": [],
  "drama": [
+  {
+   "ts": 1792160276244,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.13 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1792160276244,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on SI276 — docked her pay"
+  },
+  {
+   "ts": 1792160276244,
+   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
+  },
   {
    "ts": 1792159703843,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.57 on GOMODOGE — docked her pay"
@@ -656,29 +668,9 @@
   {
    "ts": 1792001284322,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.03 on MOIN — docked her pay"
-  },
-  {
-   "ts": 1792000622889,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.04 on QOMPUTE — docked her pay"
-  },
-  {
-   "ts": 1791999965896,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.42 on SI276 — docked her pay"
-  },
-  {
-   "ts": 1791989678879,
-   "text": "🌫 Solana Sadie let QOMPUTE go — left the wallet off-book, proceeds unverifiable"
   }
  ],
  "attrib": {
-  "1494737499642912768": {
-   "pimp": null,
-   "crack": null
-  },
-  "1494737175859421184": {
-   "pimp": null,
-   "crack": null
-  },
   "1494744091205566464": {
    "pimp": null,
    "crack": null
@@ -1268,6 +1260,14 @@
    "crack": null
   },
   "1494988435103670297": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494990063521239040": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494989408131866624": {
    "pimp": null,
    "crack": null
   }
