@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-16T22:26:40.052Z",
+ "ts": "2026-10-16T22:31:40.062Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 48.6454,
-   "short": 6576.1738000000005
+   "long": 107636.3816,
+   "short": 2396.9898
   },
   "liq15m": {
-   "long": 1150.0137,
-   "short": 24920.962570000003
+   "long": 108421.82509999999,
+   "short": 10876.58147
   },
   "liq60m": {
-   "long": 43536.92532,
-   "short": 96956.87825000004
+   "long": 151062.70084,
+   "short": 99353.86805000005
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,32 +20,32 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 0
+    "long": 107636.3816,
+    "short": 736.0515000000001
    },
    "liq60m": {
-    "long": 0,
-    "short": 0
+    "long": 107636.3816,
+    "short": 736.0515000000001
    },
    "flow15m": {
-    "buy": 5684791,
-    "sell": 3508432,
-    "delta": 2176359
+    "buy": 8903145,
+    "sell": 4547435,
+    "delta": 4355709
    }
   },
   "ETHUSDT": {
    "liq15m": {
     "long": 48.6454,
-    "short": 21234.306070000006
+    "short": 5142.79917
    },
    "liq60m": {
-    "long": 8299.67498,
+    "long": 8189.0689,
     "short": 87479.46061000002
    },
    "flow15m": {
-    "buy": 14130988,
-    "sell": 4505440,
-    "delta": 9625547
+    "buy": 3728523,
+    "sell": 3696869,
+    "delta": 31654
    }
   },
   "SOLUSDT": {
@@ -58,15 +58,15 @@
     "short": 90.8961
    },
    "flow15m": {
-    "buy": 603587,
-    "sell": 432355,
-    "delta": 171232
+    "buy": 452323,
+    "sell": 402428,
+    "delta": 49896
    }
   },
   "DOGEUSDT": {
    "liq15m": {
-    "long": 364.5702,
-    "short": 349.86400000000003
+    "long": 0,
+    "short": 0
    },
    "liq60m": {
     "long": 364.5702,
@@ -126,11 +126,11 @@
   "INJUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 1660.9382999999998
    },
    "liq60m": {
     "long": 0,
-    "short": 25.2996
+    "short": 1686.2378999999999
    },
    "flow15m": {
     "buy": 0,
@@ -139,6 +139,15 @@
    }
   }
  },
- "biggestPrints60m": [],
- "liqCount2h": 115
+ "biggestPrints60m": [
+  {
+   "ts": 1792189838013,
+   "sym": "BTCUSDT",
+   "side": "long",
+   "usd": 100908.216,
+   "px": 82039.2,
+   "venue": "bybit"
+  }
+ ],
+ "liqCount2h": 109
 }
