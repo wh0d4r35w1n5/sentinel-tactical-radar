@@ -1,50 +1,68 @@
 {
- "ts": "2026-10-16T17:20:34.744Z",
- "ageMs": 8921,
+ "ts": "2026-10-16T17:25:41.035Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.0084,
-  "availableUsd": 0.778,
+  "equityUsd": 3.0029,
+  "availableUsd": 0.1533,
   "grantUsd": 0,
-  "equityOwnUsd": 3.0084,
-  "marginUsedUsd": 2.4538,
-  "uplUsd": -0.1939,
+  "equityOwnUsd": 3.0029,
+  "marginUsedUsd": 2.9034,
+  "uplUsd": -0.0428,
   "positions": [
    {
-    "k": "ADAUSDT:long",
-    "size": 23,
-    "marginUsd": 0.7406,
-    "uplUsd": -0.0805
-   },
-   {
-    "k": "LTCUSDT:long",
-    "size": 0.1,
-    "marginUsd": 0.8571,
-    "uplUsd": -0.079
+    "k": "PHAUSDT:long",
+    "size": 113,
+    "marginUsd": 0.8188,
+    "uplUsd": -0.0136
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
-    "marginUsd": 0.8561,
-    "uplUsd": -0.0344
+    "marginUsd": 2.0846,
+    "uplUsd": -0.0292
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2486,
+  "solUsd": 0.2483,
   "stableUsd": 0,
-  "bagsUsd": 0.0994,
-  "totalUsd": 0.348,
+  "bagsUsd": 0.0975,
+  "totalUsd": 0.3458,
   "tokens": {
    "BQAeeSow": 0.0015,
-   "8PGyHCKv": 0.0979
+   "8PGyHCKv": 0.096
   },
-  "staleMs": 8921
+  "staleMs": 0
  },
- "totalUsd": 3.3564,
+ "totalUsd": 3.3487,
  "deltas": [
+  {
+   "ts": 1792171400642,
+   "kind": "margin-added",
+   "detail": "XAUUSDT:long",
+   "amt": 1.2285
+  },
+  {
+   "ts": 1792171372502,
+   "kind": "position-closed",
+   "detail": "LTCUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792171372502,
+   "kind": "position-closed",
+   "detail": "ADAUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792171368690,
+   "kind": "position-opened",
+   "detail": "PHAUSDT:long",
+   "amt": 0.8188
+  },
   {
    "ts": 1792171155065,
    "kind": "balance-move",
@@ -140,36 +158,12 @@
    "kind": "position-opened",
    "detail": "STRKUSDT:long",
    "amt": 0.4468
-  },
-  {
-   "ts": 1792169024176,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0614
-  },
-  {
-   "ts": 1792169024175,
-   "kind": "position-opened",
-   "detail": "XAUUSDT:long",
-   "amt": 1.3907
-  },
-  {
-   "ts": 1792168822417,
-   "kind": "position-closed",
-   "detail": "AVAXUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792168762447,
-   "kind": "position-closed",
-   "detail": "DOGEUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -865.18,
+  "netAfterAud": -865.19,
   "clearedPct": 0.6
  }
 }
