@@ -1,39 +1,46 @@
 {
- "at": "2026-10-16T00:05:22.867Z",
+ "at": "2026-10-16T00:14:38.889Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.69,
-   "marginFreeUsd": 1.96,
-   "epochNetUsd": -26.83,
+   "equityUsd": 3.68,
+   "marginFreeUsd": 1.62,
+   "epochNetUsd": -26.36,
    "fills": 400,
    "positions": [
     {
      "symbol": "SUSHIUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0,
      "lev": 9,
      "margin": 0.56
     },
     {
      "symbol": "XRPUSDT",
      "side": "long",
+     "upl": 0.01,
+     "lev": 15,
+     "margin": 0.35
+    },
+    {
+     "symbol": "ADAUSDT",
+     "side": "long",
      "upl": 0,
      "lev": 15,
-     "margin": 0.36
+     "margin": 0.34
     },
     {
      "symbol": "PEOPLEUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0.02,
      "lev": 11,
-     "margin": 0.46
+     "margin": 0.45
     },
     {
      "symbol": "DOGEUSDT",
      "side": "long",
      "upl": 0,
      "lev": 15,
-     "margin": 0.34
+     "margin": 0.33
     }
    ]
   },
@@ -48,6 +55,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791952010065,
+    "symbol": "SOXLUSDT",
+    "text": "CLOSE SOXLUSDT $-0.17"
+   },
    {
     "venue": "bitget",
     "ts": 1791949134555,
@@ -101,12 +114,6 @@
     "ts": 1791943703331,
     "symbol": "NEARUSDT",
     "text": "CLOSE NEARUSDT +$0.11"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791943059809,
-    "symbol": "NEARUSDT",
-    "text": "OPEN NEARUSDT $-0.09"
    }
   ]
  },

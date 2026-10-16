@@ -1,68 +1,80 @@
 {
- "ts": "2026-10-16T00:10:08.193Z",
+ "ts": "2026-10-16T00:15:08.652Z",
  "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.6575,
-  "availableUsd": 1.1304,
+  "equityUsd": 3.6612,
+  "availableUsd": 0.7196,
   "grantUsd": 0,
-  "equityOwnUsd": 3.6575,
-  "marginUsedUsd": 2.5232,
-  "uplUsd": 0.0211,
+  "equityOwnUsd": 3.6612,
+  "marginUsedUsd": 2.9303,
+  "uplUsd": 0.0107,
   "positions": [
    {
     "k": "SUSHIUSDT:long",
     "size": 22,
     "marginUsd": 0.5554,
-    "uplUsd": -0.0022
+    "uplUsd": -0.0066
    },
    {
     "k": "XRPUSDT:long",
     "size": 4,
     "marginUsd": 0.355,
-    "uplUsd": 0.0124
+    "uplUsd": 0.018
    },
    {
     "k": "BNBUSDT:long",
     "size": 0.01,
     "marginUsd": 0.4863,
-    "uplUsd": 0.0001
+    "uplUsd": -0.0047
    },
    {
     "k": "ADAUSDT:long",
     "size": 22,
     "marginUsd": 0.3371,
-    "uplUsd": -0.0022
+    "uplUsd": 0
    },
    {
     "k": "PEOPLEUSDT:long",
     "size": 652,
     "marginUsd": 0.4549,
-    "uplUsd": 0.0117
+    "uplUsd": 0.0059
+   },
+   {
+    "k": "LTCUSDT:long",
+    "size": 0.1,
+    "marginUsd": 0.4071,
+    "uplUsd": 0
    },
    {
     "k": "DOGEUSDT:long",
     "size": 62,
     "marginUsd": 0.3346,
-    "uplUsd": 0.0012
+    "uplUsd": -0.0019
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2545,
+  "solUsd": 0.2543,
   "stableUsd": 0,
   "bagsUsd": 0.1068,
-  "totalUsd": 0.3613,
+  "totalUsd": 0.3611,
   "tokens": {
    "BQAeeSow": 0.0016,
    "8PGyHCKv": 0.1052
   },
-  "staleMs": 0
+  "staleMs": 1
  },
- "totalUsd": 4.0187,
+ "totalUsd": 4.0224,
  "deltas": [
+  {
+   "ts": 1792109685055,
+   "kind": "position-opened",
+   "detail": "LTCUSDT:long",
+   "amt": 0.4071
+  },
   {
    "ts": 1792109129081,
    "kind": "position-opened",
@@ -176,12 +188,6 @@
    "kind": "size-reduced",
    "detail": "SNDKUSDT:long Δ-0.001",
    "amt": 0
-  },
-  {
-   "ts": 1792098306789,
-   "kind": "position-opened",
-   "detail": "APEUSDT:long",
-   "amt": 0.5565
   }
  ],
  "mission": {
