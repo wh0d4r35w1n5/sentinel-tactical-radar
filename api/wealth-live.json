@@ -1,38 +1,32 @@
 {
- "ts": "2026-10-16T03:16:03.128Z",
- "ageMs": 9343,
+ "ts": "2026-10-16T03:21:08.170Z",
+ "ageMs": 14367,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.6898,
-  "availableUsd": 0.864,
+  "equityUsd": 3.6909,
+  "availableUsd": 1.295,
   "grantUsd": 0,
-  "equityOwnUsd": 3.6898,
-  "marginUsedUsd": 2.7631,
-  "uplUsd": 0.0748,
+  "equityOwnUsd": 3.6909,
+  "marginUsedUsd": 2.356,
+  "uplUsd": 0.0361,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 1.0522,
-    "uplUsd": 0.039
+    "uplUsd": 0.027
    },
    {
     "k": "CLUSDT:long",
     "size": 0.06,
     "marginUsd": 0.5755,
-    "uplUsd": -0.0001
+    "uplUsd": -0.0013
    },
    {
     "k": "BNBUSDT:long",
     "size": 0.01,
     "marginUsd": 0.7284,
-    "uplUsd": 0.0094
-   },
-   {
-    "k": "DOGEUSDT:long",
-    "size": 50,
-    "marginUsd": 0.407,
-    "uplUsd": 0.0265
+    "uplUsd": 0.0104
    }
   ]
  },
@@ -41,16 +35,28 @@
   "solQty": 0.002413,
   "solUsd": 0.2546,
   "stableUsd": 0,
-  "bagsUsd": 0.1063,
-  "totalUsd": 0.3609,
+  "bagsUsd": 0.1086,
+  "totalUsd": 0.3632,
   "tokens": {
    "BQAeeSow": 0.0015,
-   "8PGyHCKv": 0.1048
+   "8PGyHCKv": 0.1071
   },
-  "staleMs": 9343
+  "staleMs": 14367
  },
- "totalUsd": 4.0508,
+ "totalUsd": 4.0541,
  "deltas": [
+  {
+   "ts": 1792120851566,
+   "kind": "position-closed",
+   "detail": "DOGEUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792120610807,
+   "kind": "size-reduced",
+   "detail": "DOGEUSDT:long Δ-2",
+   "amt": 0
+  },
   {
    "ts": 1792120281561,
    "kind": "position-closed",
@@ -158,24 +164,12 @@
    "kind": "position-opened",
    "detail": "DOGEUSDT:long",
    "amt": 0.5039
-  },
-  {
-   "ts": 1792114431467,
-   "kind": "position-closed",
-   "detail": "ZKUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792113840046,
-   "kind": "position-opened",
-   "detail": "SNDKUSDT:long",
-   "amt": 1.8465
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -864.14,
+  "netAfterAud": -864.13,
   "clearedPct": 0.7
  }
 }

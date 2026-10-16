@@ -1,18 +1,46 @@
 {
- "at": "2026-10-16T03:10:26.811Z",
+ "at": "2026-10-16T03:19:50.727Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.62,
-   "marginFreeUsd": 2.89,
-   "epochNetUsd": -21.03,
+   "equityUsd": 3.69,
+   "marginFreeUsd": 0.21,
+   "epochNetUsd": -20.41,
    "fills": 400,
    "positions": [
     {
-     "symbol": "BNBUSDT",
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0.03,
+     "lev": 10,
+     "margin": 1.05
+    },
+    {
+     "symbol": "XRPUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 10,
+     "margin": 0.53
+    },
+    {
+     "symbol": "CLUSDT",
      "side": "long",
      "upl": 0,
      "lev": 10,
+     "margin": 0.58
+    },
+    {
+     "symbol": "BNBUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 10,
      "margin": 0.73
+    },
+    {
+     "symbol": "DOGEUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 10,
+     "margin": 0.5
     }
    ]
   },
@@ -27,6 +55,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791985681019,
+    "symbol": "BTWUSDT",
+    "text": "OPEN BTWUSDT $-0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1791985681018,
@@ -80,12 +114,6 @@
     "ts": 1791974218603,
     "symbol": "ZECUSDT",
     "text": "CLOSE ZECUSDT $-0.24"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791973645831,
-    "symbol": "SNDKUSDT",
-    "text": "CLOSE SNDKUSDT $-0.29"
    }
   ]
  },
@@ -671,10 +699,6 @@
   }
  ],
  "attrib": {
-  "1494461431451213824": {
-   "pimp": null,
-   "crack": null
-  },
   "1494476292872724480": {
    "pimp": null,
    "crack": null
@@ -1268,6 +1292,10 @@
    "crack": null
   },
   "1494818940900872192": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494826057275805697": {
    "pimp": null,
    "crack": null
   }
