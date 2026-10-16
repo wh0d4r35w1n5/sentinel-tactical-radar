@@ -1,56 +1,56 @@
 {
- "ts": "2026-10-16T16:35:24.411Z",
- "ageMs": 2000,
+ "ts": "2026-10-16T16:40:25.654Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.5432,
-  "availableUsd": 0.5206,
+  "equityUsd": 3.5805,
+  "availableUsd": 1.9702,
   "grantUsd": 0,
-  "equityOwnUsd": 3.5432,
-  "marginUsedUsd": 3.0355,
-  "uplUsd": -0.02,
+  "equityOwnUsd": 3.5805,
+  "marginUsedUsd": 1.5977,
+  "uplUsd": 0.0136,
   "positions": [
    {
     "k": "ADAUSDT:long",
     "size": 23,
     "marginUsd": 0.7406,
-    "uplUsd": -0.0069
+    "uplUsd": 0.0046
    },
    {
     "k": "LTCUSDT:long",
     "size": 0.1,
     "marginUsd": 0.8571,
-    "uplUsd": -0.003
-   },
-   {
-    "k": "DOGEUSDT:long",
-    "size": 62,
-    "marginUsd": 0.7161,
-    "uplUsd": -0.0056
-   },
-   {
-    "k": "AVAXUSDT:long",
-    "size": 0.5,
-    "marginUsd": 0.7216,
-    "uplUsd": -0.0045
+    "uplUsd": 0.009
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2515,
+  "solUsd": 0.252,
   "stableUsd": 0,
-  "bagsUsd": 0.0999,
+  "bagsUsd": 0.0994,
   "totalUsd": 0.3514,
   "tokens": {
    "BQAeeSow": 0.0015,
-   "8PGyHCKv": 0.0984
+   "8PGyHCKv": 0.0979
   },
-  "staleMs": 14050
+  "staleMs": 0
  },
- "totalUsd": 3.8947,
+ "totalUsd": 3.932,
  "deltas": [
+  {
+   "ts": 1792168822417,
+   "kind": "position-closed",
+   "detail": "AVAXUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792168762447,
+   "kind": "position-closed",
+   "detail": "DOGEUSDT:long",
+   "amt": 0
+  },
   {
    "ts": 1792168466765,
    "kind": "position-opened",
@@ -158,24 +158,12 @@
    "kind": "size-added",
    "detail": "CLUSDT:long Δ2.5199999999999996",
    "amt": 0
-  },
-  {
-   "ts": 1792167566950,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.155
-  },
-  {
-   "ts": 1792167562144,
-   "kind": "size-reduced",
-   "detail": "CLUSDT:long Δ-2.8",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -864.4,
+  "netAfterAud": -864.35,
   "clearedPct": 0.6
  }
 }
