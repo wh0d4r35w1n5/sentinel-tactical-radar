@@ -1,12 +1,26 @@
 {
- "at": "2026-10-16T00:35:02.289Z",
+ "at": "2026-10-16T00:45:12.268Z",
  "wallets": {
   "futures": {
    "equityUsd": 3.65,
-   "marginFreeUsd": 2.5,
-   "epochNetUsd": -25.16,
+   "marginFreeUsd": 0.9,
+   "epochNetUsd": -25.08,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "LINKUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 15,
+     "margin": 0.83
+    },
+    {
+     "symbol": "XRPUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 15,
+     "margin": 0.36
+    },
     {
      "symbol": "BNBUSDT",
      "side": "long",
@@ -22,9 +36,16 @@
      "margin": 0.34
     },
     {
+     "symbol": "LTCUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 15,
+     "margin": 0.41
+    },
+    {
      "symbol": "DOGEUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": 0,
      "lev": 15,
      "margin": 0.33
     }
@@ -41,6 +62,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791955658148,
+    "symbol": "SOXLUSDT",
+    "text": "CLOSE SOXLUSDT $-1.67"
+   },
    {
     "venue": "bitget",
     "ts": 1791955658148,
@@ -92,12 +119,6 @@
    {
     "venue": "bitget",
     "ts": 1791954098863,
-    "symbol": "SOXLUSDT",
-    "text": "CLOSE SOXLUSDT $-0.08"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791954046863,
     "symbol": "SOXLUSDT",
     "text": "CLOSE SOXLUSDT $-0.08"
    }
@@ -701,10 +722,6 @@
   }
  ],
  "attrib": {
-  "1494390063435091970": {
-   "pimp": null,
-   "crack": null
-  },
   "1494392462576979968": {
    "pimp": null,
    "crack": null
@@ -1298,6 +1315,10 @@
    "crack": null
   },
   "1494782367207526400": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494786510953385984": {
    "pimp": null,
    "crack": null
   }
