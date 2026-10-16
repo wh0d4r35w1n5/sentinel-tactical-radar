@@ -1,38 +1,56 @@
 {
- "ts": "2026-10-16T11:43:42.519Z",
- "ageMs": 2693,
+ "ts": "2026-10-16T11:48:47.574Z",
+ "ageMs": 7796,
  "src": "ws",
  "futures": {
-  "equityUsd": 2.6366,
-  "availableUsd": 0.0683,
+  "equityUsd": 2.6168,
+  "availableUsd": 0.2881,
   "grantUsd": 0,
-  "equityOwnUsd": 2.6366,
-  "marginUsedUsd": 2.6735,
-  "uplUsd": -0.0921,
+  "equityOwnUsd": 2.6168,
+  "marginUsedUsd": 2.4344,
+  "uplUsd": -0.0997,
   "positions": [
    {
     "k": "BNBUSDT:long",
-    "size": 0.22,
-    "marginUsd": 2.6735,
-    "uplUsd": -0.0921
+    "size": 0.2,
+    "marginUsd": 2.4344,
+    "uplUsd": -0.0997
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2572,
+  "solUsd": 0.2574,
   "stableUsd": 0,
   "bagsUsd": 0.1017,
-  "totalUsd": 0.3589,
+  "totalUsd": 0.3591,
   "tokens": {
    "BQAeeSow": 0.0015,
    "8PGyHCKv": 0.1002
   },
-  "staleMs": 2693
+  "staleMs": 7796
  },
- "totalUsd": 2.9955,
+ "totalUsd": 2.9758,
  "deltas": [
+  {
+   "ts": 1792151288398,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1188
+  },
+  {
+   "ts": 1792151288398,
+   "kind": "size-reduced",
+   "detail": "BNBUSDT:long Δ-0.01999999999999999",
+   "amt": 0
+  },
+  {
+   "ts": 1792151245045,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.099
+  },
   {
    "ts": 1792150931970,
    "kind": "size-added",
@@ -134,30 +152,12 @@
    "kind": "size-reduced",
    "detail": "BNBUSDT:long Δ-0.01999999999999999",
    "amt": 0
-  },
-  {
-   "ts": 1792150714463,
-   "kind": "size-added",
-   "detail": "BNBUSDT:long Δ0.09",
-   "amt": 0
-  },
-  {
-   "ts": 1792150697646,
-   "kind": "size-reduced",
-   "detail": "BNBUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1792150685553,
-   "kind": "size-reduced",
-   "detail": "BNBUSDT:long Δ-0.010000000000000009",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -865.67,
+  "netAfterAud": -865.69,
   "clearedPct": 0.5
  }
 }
