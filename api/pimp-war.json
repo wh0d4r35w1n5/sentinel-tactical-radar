@@ -1,12 +1,26 @@
 {
- "at": "2026-10-16T03:39:42.492Z",
+ "at": "2026-10-16T03:49:03.424Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.67,
-   "marginFreeUsd": 2.36,
-   "epochNetUsd": -19.55,
+   "equityUsd": 3.47,
+   "marginFreeUsd": 0.25,
+   "epochNetUsd": -19.42,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": -0.08,
+     "lev": 10,
+     "margin": 1.05
+    },
+    {
+     "symbol": "XRPUSDT",
+     "side": "long",
+     "upl": -0.03,
+     "lev": 10,
+     "margin": 0.53
+    },
     {
      "symbol": "CLUSDT",
      "side": "long",
@@ -17,9 +31,16 @@
     {
      "symbol": "BNBUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": -0.03,
      "lev": 10,
      "margin": 0.73
+    },
+    {
+     "symbol": "DOGEUSDT",
+     "side": "long",
+     "upl": -0.04,
+     "lev": 10,
+     "margin": 0.51
     }
    ]
   },
@@ -34,6 +55,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1791992507423,
+    "symbol": "STRKUSDT",
+    "text": "CLOSE STRKUSDT +$0.03"
+   },
    {
     "venue": "bitget",
     "ts": 1791991675627,
@@ -85,12 +112,6 @@
    {
     "venue": "bitget",
     "ts": 1791985681019,
-    "symbol": "BTWUSDT",
-    "text": "OPEN BTWUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1791985681018,
     "symbol": "BTWUSDT",
     "text": "OPEN BTWUSDT $-0.01"
    }
@@ -678,10 +699,6 @@
   }
  ],
  "attrib": {
-  "1494479808961970182": {
-   "pimp": null,
-   "crack": null
-  },
   "1494485664860467200": {
    "pimp": null,
    "crack": null
@@ -1275,6 +1292,10 @@
    "crack": null
   },
   "1494828680464830464": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494833368295784448": {
    "pimp": null,
    "crack": null
   }
