@@ -1,32 +1,38 @@
 {
- "ts": "2026-10-16T02:20:47.779Z",
- "ageMs": 8721,
+ "ts": "2026-10-16T02:25:47.817Z",
+ "ageMs": 9123,
  "src": "ws",
  "futures": {
-  "equityUsd": 3.6276,
-  "availableUsd": 2.2687,
+  "equityUsd": 3.6099,
+  "availableUsd": 0.7277,
   "grantUsd": 0,
-  "equityOwnUsd": 3.6276,
-  "marginUsedUsd": 1.3668,
-  "uplUsd": -0.0075,
+  "equityOwnUsd": 3.6099,
+  "marginUsedUsd": 2.8888,
+  "uplUsd": -0.0156,
   "positions": [
    {
-    "k": "XRPUSDT:long",
-    "size": 4,
-    "marginUsd": 0.3562,
-    "uplUsd": -0.008
+    "k": "CLUSDT:long",
+    "size": 0.12,
+    "marginUsd": 1.1498,
+    "uplUsd": -0.0097
+   },
+   {
+    "k": "BNBUSDT:long",
+    "size": 0.01,
+    "marginUsd": 0.7284,
+    "uplUsd": -0.0114
    },
    {
     "k": "ADAUSDT:long",
     "size": 22,
     "marginUsd": 0.5067,
-    "uplUsd": -0.0088
+    "uplUsd": -0.0044
    },
    {
     "k": "DOGEUSDT:long",
     "size": 62,
     "marginUsd": 0.5039,
-    "uplUsd": 0.0093
+    "uplUsd": 0.0099
    }
   ]
  },
@@ -35,16 +41,40 @@
   "solQty": 0.002413,
   "solUsd": 0.2544,
   "stableUsd": 0,
-  "bagsUsd": 0.1064,
-  "totalUsd": 0.3608,
+  "bagsUsd": 0.1065,
+  "totalUsd": 0.3609,
   "tokens": {
    "BQAeeSow": 0.0016,
-   "8PGyHCKv": 0.1048
+   "8PGyHCKv": 0.1049
   },
-  "staleMs": 8721
+  "staleMs": 9123
  },
- "totalUsd": 3.9884,
+ "totalUsd": 3.9708,
  "deltas": [
+  {
+   "ts": 1792117521520,
+   "kind": "position-closed",
+   "detail": "XRPUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792117313109,
+   "kind": "position-opened",
+   "detail": "BNBUSDT:long",
+   "amt": 0.7284
+  },
+  {
+   "ts": 1792117306093,
+   "kind": "size-added",
+   "detail": "CLUSDT:long Δ0.06",
+   "amt": 0
+  },
+  {
+   "ts": 1792117305928,
+   "kind": "position-opened",
+   "detail": "CLUSDT:long",
+   "amt": 0.5749
+  },
   {
    "ts": 1792116741501,
    "kind": "position-closed",
@@ -140,36 +170,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.0882
-  },
-  {
-   "ts": 1792112679291,
-   "kind": "position-opened",
-   "detail": "CRVUSDT:long",
-   "amt": 1.2483
-  },
-  {
-   "ts": 1792112361403,
-   "kind": "position-closed",
-   "detail": "LINKUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792112091420,
-   "kind": "position-closed",
-   "detail": "BNBUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792112090734,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0631
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -864.23,
+  "netAfterAud": -864.25,
   "clearedPct": 0.7
  }
 }
