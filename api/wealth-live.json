@@ -1,44 +1,62 @@
 {
- "ts": "2026-10-16T13:59:31.634Z",
- "ageMs": 400,
+ "ts": "2026-10-16T14:04:28.500Z",
+ "ageMs": 3320,
  "src": "ws",
  "futures": {
-  "equityUsd": 1.8097,
-  "availableUsd": 1.0863,
+  "equityUsd": 1.813,
+  "availableUsd": 0.8095,
   "grantUsd": 0,
-  "equityOwnUsd": 1.8097,
-  "marginUsedUsd": 1.3106,
-  "uplUsd": 0.0048,
+  "equityOwnUsd": 1.813,
+  "marginUsedUsd": 0.9584,
+  "uplUsd": -0.0696,
   "positions": [
    {
-    "k": "ADAUSDT:long",
-    "size": 18,
-    "marginUsd": 0.5885,
-    "uplUsd": 0.0036
-   },
-   {
-    "k": "DOGEUSDT:long",
-    "size": 62,
-    "marginUsd": 0.7221,
-    "uplUsd": 0.0012
+    "k": "BTCUSDT:long",
+    "size": 0.0009,
+    "marginUsd": 0.9584,
+    "uplUsd": -0.0696
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2549,
+  "solUsd": 0.2547,
   "stableUsd": 0,
-  "bagsUsd": 0.1024,
-  "totalUsd": 0.3573,
+  "bagsUsd": 0.1006,
+  "totalUsd": 0.3553,
   "tokens": {
    "BQAeeSow": 0.0014,
-   "8PGyHCKv": 0.101
+   "8PGyHCKv": 0.0992
   },
-  "staleMs": 6240
+  "staleMs": 3320
  },
- "totalUsd": 2.167,
+ "totalUsd": 2.1683,
  "deltas": [
+  {
+   "ts": 1792159342255,
+   "kind": "position-closed",
+   "detail": "DOGEUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792159213589,
+   "kind": "size-added",
+   "detail": "BTCUSDT:long Δ0.00009999999999999994",
+   "amt": 0
+  },
+  {
+   "ts": 1792159211737,
+   "kind": "position-opened",
+   "detail": "BTCUSDT:long",
+   "amt": 0.852
+  },
+  {
+   "ts": 1792159192262,
+   "kind": "position-closed",
+   "detail": "ADAUSDT:long",
+   "amt": 0
+  },
   {
    "ts": 1792159134982,
    "kind": "position-opened",
@@ -134,30 +152,6 @@
    "kind": "size-added",
    "detail": "ETHUSDT:long Δ0.020000000000000004",
    "amt": 0
-  },
-  {
-   "ts": 1792155082180,
-   "kind": "position-closed",
-   "detail": "BNBUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792155066896,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0992
-  },
-  {
-   "ts": 1792154842173,
-   "kind": "position-closed",
-   "detail": "CAKEUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792154839036,
-   "kind": "position-opened",
-   "detail": "ETHUSDT:long",
-   "amt": 0.9872
   }
  ],
  "mission": {
