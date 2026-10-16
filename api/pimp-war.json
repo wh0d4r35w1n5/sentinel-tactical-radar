@@ -1,12 +1,19 @@
 {
- "at": "2026-10-16T08:00:56.877Z",
+ "at": "2026-10-16T08:10:27.103Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.56,
-   "marginFreeUsd": 0.82,
-   "epochNetUsd": -18.74,
+   "equityUsd": 3.55,
+   "marginFreeUsd": 2.11,
+   "epochNetUsd": -18.85,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 15,
+     "margin": 0.71
+    },
     {
      "symbol": "XRPUSDT",
      "side": "long",
@@ -20,13 +27,6 @@
      "upl": -0.01,
      "lev": 15,
      "margin": 0.38
-    },
-    {
-     "symbol": "SPCXUSDT",
-     "side": "long",
-     "upl": -0.03,
-     "lev": 3,
-     "margin": 2.04
     }
    ]
   },
@@ -41,6 +41,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792027308690,
+    "symbol": "JSTUSDT",
+    "text": "CLOSE JSTUSDT $-0.40"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792024885954,
+    "symbol": "JSTUSDT",
+    "text": "OPEN JSTUSDT $-0.03"
+   },
    {
     "venue": "bitget",
     "ts": 1792022260719,
@@ -88,18 +100,6 @@
     "ts": 1792016713578,
     "symbol": "USUSDT",
     "text": "OPEN USUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792016276224,
-    "symbol": "VELVETUSDT",
-    "text": "CLOSE VELVETUSDT $-0.17"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792016276224,
-    "symbol": "VELVETUSDT",
-    "text": "CLOSE VELVETUSDT $-0.28"
    }
   ]
  },
