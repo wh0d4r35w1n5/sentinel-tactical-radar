@@ -1,12 +1,26 @@
 {
- "at": "2026-10-16T06:22:19.519Z",
+ "at": "2026-10-16T06:31:44.444Z",
  "wallets": {
   "futures": {
-   "equityUsd": 3.54,
-   "marginFreeUsd": 1.96,
-   "epochNetUsd": -20.14,
+   "equityUsd": 3.53,
+   "marginFreeUsd": 0.63,
+   "epochNetUsd": -19.16,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 10,
+     "margin": 1.06
+    },
+    {
+     "symbol": "LINKUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 15,
+     "margin": 0.83
+    },
     {
      "symbol": "XRPUSDT",
      "side": "long",
@@ -15,16 +29,9 @@
      "margin": 0.54
     },
     {
-     "symbol": "CLUSDT",
-     "side": "long",
-     "upl": 0,
-     "lev": 10,
-     "margin": 0.58
-    },
-    {
      "symbol": "DOGEUSDT",
      "side": "long",
-     "upl": -0.02,
+     "upl": -0.01,
      "lev": 10,
      "margin": 0.5
     }
@@ -41,6 +48,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792006363213,
+    "symbol": "DEEPUSDT",
+    "text": "OPEN DEEPUSDT $-0.00"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792004893523,
+    "symbol": "VELVETUSDT",
+    "text": "CLOSE VELVETUSDT +$0.14"
+   },
    {
     "venue": "bitget",
     "ts": 1792004801629,
@@ -88,18 +107,6 @@
     "ts": 1792001098482,
     "symbol": "WALUSDT",
     "text": "CLOSE WALUSDT +$0.05"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792000935782,
-    "symbol": "WALUSDT",
-    "text": "OPEN WALUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792000935782,
-    "symbol": "WALUSDT",
-    "text": "OPEN WALUSDT $-0.00"
    }
   ]
  },
@@ -685,10 +692,6 @@
   }
  ],
  "attrib": {
-  "1494560815438368768": {
-   "pimp": null,
-   "crack": null
-  },
   "1494560815438368770": {
    "pimp": null,
    "crack": null
@@ -1282,6 +1285,10 @@
    "crack": null
   },
   "1494869948393857024": {
+   "pimp": null,
+   "crack": null
+  },
+  "1494872750243438592": {
    "pimp": null,
    "crack": null
   }
