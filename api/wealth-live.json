@@ -1,44 +1,62 @@
 {
- "ts": "2026-10-16T12:44:08.018Z",
- "ageMs": 12786,
+ "ts": "2026-10-16T12:49:08.045Z",
+ "ageMs": 13231,
  "src": "ws",
  "futures": {
-  "equityUsd": 2.2272,
-  "availableUsd": 0.7209,
+  "equityUsd": 2.1035,
+  "availableUsd": 0.3373,
   "grantUsd": 0,
-  "equityOwnUsd": 2.2272,
-  "marginUsedUsd": 1.6468,
-  "uplUsd": -0.1594,
+  "equityOwnUsd": 2.1035,
+  "marginUsedUsd": 1.9477,
+  "uplUsd": -0.2709,
   "positions": [
    {
     "k": "BNBUSDT:long",
     "size": 0.05,
     "marginUsd": 0.9605,
-    "uplUsd": -0.1467
+    "uplUsd": -0.2052
    },
    {
-    "k": "CAKEUSDT:long",
-    "size": 3.1,
-    "marginUsd": 0.6863,
-    "uplUsd": -0.0127
+    "k": "ETHUSDT:long",
+    "size": 0.03,
+    "marginUsd": 0.9872,
+    "uplUsd": -0.0657
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2561,
+  "solUsd": 0.2552,
   "stableUsd": 0,
   "bagsUsd": 0.1014,
-  "totalUsd": 0.3575,
+  "totalUsd": 0.3566,
   "tokens": {
    "BQAeeSow": 0.0015,
    "8PGyHCKv": 0.0999
   },
-  "staleMs": 12786
+  "staleMs": 13231
  },
- "totalUsd": 2.5847,
+ "totalUsd": 2.4601,
  "deltas": [
+  {
+   "ts": 1792154842173,
+   "kind": "position-closed",
+   "detail": "CAKEUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792154839036,
+   "kind": "position-opened",
+   "detail": "ETHUSDT:long",
+   "amt": 0.9872
+  },
+  {
+   "ts": 1792154839036,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0517
+  },
   {
    "ts": 1792154422175,
    "kind": "position-closed",
@@ -140,30 +158,12 @@
    "kind": "size-reduced",
    "detail": "BNBUSDT:long Δ-0.009999999999999995",
    "amt": 0
-  },
-  {
-   "ts": 1792151411253,
-   "kind": "size-reduced",
-   "detail": "BNBUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1792151402849,
-   "kind": "size-reduced",
-   "detail": "BNBUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1792151394499,
-   "kind": "size-reduced",
-   "detail": "BNBUSDT:long Δ-0.009999999999999981",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -866.26,
+  "netAfterAud": -866.44,
   "clearedPct": 0.4
  }
 }
