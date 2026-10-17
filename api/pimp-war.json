@@ -1,12 +1,20 @@
 {
- "at": "2026-10-17T23:05:34.430Z",
+ "at": "2026-10-17T23:15:17.229Z",
  "wallets": {
   "futures": {
-   "equityUsd": 0.26,
-   "marginFreeUsd": 0.26,
+   "equityUsd": 0.23,
+   "marginFreeUsd": 0,
    "epochNetUsd": -5.95,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "ETHUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 120,
+     "margin": 0.24
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792110796678,
+    "symbol": "AVAXUSDT",
+    "text": "CLOSE AVAXUSDT +$0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1792110308239,
@@ -72,12 +86,6 @@
     "ts": 1792109808732,
     "symbol": "PEOPLEUSDT",
     "text": "CLOSE PEOPLEUSDT +$0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792109684953,
-    "symbol": "LTCUSDT",
-    "text": "OPEN LTCUSDT $-0.00"
    }
   ]
  },
