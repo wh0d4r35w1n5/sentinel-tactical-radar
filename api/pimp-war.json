@@ -1,12 +1,20 @@
 {
- "at": "2026-10-17T05:02:11.100Z",
+ "at": "2026-10-17T05:11:54.485Z",
  "wallets": {
   "futures": {
-   "equityUsd": 1.64,
-   "marginFreeUsd": 1.64,
-   "epochNetUsd": -3.22,
+   "equityUsd": 1.39,
+   "marginFreeUsd": 0.52,
+   "epochNetUsd": -4.7,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "FOLKSUSDT",
+     "side": "long",
+     "upl": -0.11,
+     "lev": 15,
+     "margin": 0.98
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792091072493,
+    "symbol": "CLUSDT",
+    "text": "CLOSE CLUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792090133057,
+    "symbol": "MAGMAUSDT",
+    "text": "CLOSE MAGMAUSDT +$0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1792089982116,
@@ -64,18 +84,6 @@
    {
     "venue": "bitget",
     "ts": 1792086691416,
-    "symbol": "SUIUSDT",
-    "text": "CLOSE SUIUSDT +$0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792086407547,
-    "symbol": "SUIUSDT",
-    "text": "CLOSE SUIUSDT +$0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792086131153,
     "symbol": "SUIUSDT",
     "text": "CLOSE SUIUSDT +$0.00"
    }
@@ -495,17 +503,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -19.4572,
+   "net": -20.7807,
    "wins": 11,
-   "losses": 51,
-   "closes": 87,
+   "losses": 52,
+   "closes": 88,
    "stolen": 0,
    "gen": 0,
-   "form": -0.242,
-   "mood": "tilt",
+   "form": -0.6746,
+   "mood": "cold",
    "vault": 0.5029,
    "hist": [
-    -15.6929,
     -15.7269,
     -15.7339,
     -17.9831,
@@ -528,19 +535,28 @@
     -18.6286,
     -18.9081,
     -19.3879,
-    -19.4572
+    -19.4572,
+    -20.7807
    ],
    "persona": {
-    "swagger": 0.34,
-    "tilt": 0.39,
-    "greed": 0.46,
-    "discipline": 0.39
+    "swagger": 0.28,
+    "tilt": 0.56,
+    "greed": 0.44,
+    "discipline": 0.34
    }
   }
  ],
  "retired": [],
  "intents": [],
  "drama": [
+  {
+   "ts": 1792213899362,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-1.32 on SEAN — docked her pay"
+  },
+  {
+   "ts": 1792213899362,
+   "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
+  },
   {
    "ts": 1792170766700,
    "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
@@ -652,21 +668,9 @@
   {
    "ts": 1792034897714,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
-  },
-  {
-   "ts": 1792030257944,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-2.25 on NEARUSDT incl $0.013 entry fees — docked her pay"
-  },
-  {
-   "ts": 1792009599114,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.01 on MOIN — docked her pay"
   }
  ],
  "attrib": {
-  "1494906410048954368": {
-   "pimp": null,
-   "crack": null
-  },
   "1494906191668318209": {
    "pimp": null,
    "crack": null
@@ -1260,6 +1264,10 @@
    "crack": null
   },
   "1495212695118155776": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495216183994736640": {
    "pimp": null,
    "crack": null
   }
