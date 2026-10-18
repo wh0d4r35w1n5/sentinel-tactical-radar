@@ -1,37 +1,23 @@
 {
- "at": "2026-10-18T15:57:14.609Z",
+ "at": "2026-10-18T16:06:57.114Z",
  "wallets": {
   "futures": {
-   "equityUsd": 10.74,
+   "equityUsd": 11.08,
    "marginFreeUsd": 0,
-   "epochNetUsd": -16.21,
+   "epochNetUsd": -16.25,
    "fills": 400,
    "positions": [
     {
-     "symbol": "SOLUSDT",
-     "side": "long",
-     "upl": -0.04,
-     "lev": 5,
-     "margin": 2.05
-    },
-    {
-     "symbol": "XRPUSDT",
-     "side": "long",
-     "upl": -0.03,
-     "lev": 5,
-     "margin": 1.02
-    },
-    {
      "symbol": "CLUSDT",
      "side": "long",
-     "upl": 0,
-     "lev": 5,
-     "margin": 1.19
+     "upl": 0.01,
+     "lev": 20,
+     "margin": 4.14
     },
     {
      "symbol": "QUSDT",
      "side": "long",
-     "upl": 0.24,
+     "upl": 0.62,
      "lev": 5,
      "margin": 6.31
     }
@@ -48,6 +34,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792140439543,
+    "symbol": "SOLUSDT",
+    "text": "CLOSE SOLUSDT +$0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1792140075487,
@@ -101,12 +93,6 @@
     "ts": 1792139330784,
     "symbol": "WUSDT",
     "text": "CLOSE WUSDT +$0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792138794582,
-    "symbol": "CLUSDT",
-    "text": "CLOSE CLUSDT $-0.01"
    }
   ]
  },
