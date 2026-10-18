@@ -1,56 +1,56 @@
 {
- "ts": "2026-10-18T20:31:08.532Z",
- "ageMs": 3274,
+ "ts": "2026-10-18T20:36:08.561Z",
+ "ageMs": 3517,
  "src": "ws",
  "futures": {
-  "equityUsd": 10.6298,
-  "availableUsd": 1.7066,
+  "equityUsd": 10.6118,
+  "availableUsd": 3.9351,
   "grantUsd": 0,
-  "equityOwnUsd": 10.6298,
-  "marginUsedUsd": 8.712,
-  "uplUsd": 0.1991,
+  "equityOwnUsd": 10.6118,
+  "marginUsedUsd": 6.4976,
+  "uplUsd": 0.1743,
   "positions": [
    {
     "k": "CLUSDT:long",
     "size": 0.63,
     "marginUsd": 4.1437,
-    "uplUsd": 0.153
+    "uplUsd": 0.1662
    },
    {
     "k": "BNBUSDT:long",
     "size": 0.01,
     "marginUsd": 2.3539,
-    "uplUsd": 0.0176
-   },
-   {
-    "k": "LTCUSDT:long",
-    "size": 0.1,
-    "marginUsd": 1.8993,
-    "uplUsd": 0.023
-   },
-   {
-    "k": "AVAXUSDT:long",
-    "size": 0.1,
-    "marginUsd": 0.315,
-    "uplUsd": 0.0055
+    "uplUsd": 0.0081
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2439,
+  "solUsd": 0.2434,
   "stableUsd": 0,
   "bagsUsd": 0.0807,
-  "totalUsd": 0.3246,
+  "totalUsd": 0.3241,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0793
   },
-  "staleMs": 3274
+  "staleMs": 3517
  },
- "totalUsd": 10.9544,
+ "totalUsd": 10.9359,
  "deltas": [
+  {
+   "ts": 1792355726584,
+   "kind": "position-closed",
+   "detail": "LTCUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792355606577,
+   "kind": "position-closed",
+   "detail": "AVAXUSDT:long",
+   "amt": 0
+  },
   {
    "ts": 1792355260954,
    "kind": "size-reduced",
@@ -158,24 +158,12 @@
    "kind": "position-closed",
    "detail": "QUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792350279144,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.8289
-  },
-  {
-   "ts": 1792342719155,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2019
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -854.26,
+  "netAfterAud": -854.29,
   "clearedPct": 1.8
  }
 }
