@@ -1,44 +1,62 @@
 {
- "ts": "2026-10-18T16:20:19.280Z",
- "ageMs": 0,
+ "ts": "2026-10-18T16:25:16.799Z",
+ "ageMs": 12512,
  "src": "ws",
  "futures": {
-  "equityUsd": 11.7917,
+  "equityUsd": 11.4818,
   "availableUsd": 0.1588,
   "grantUsd": 0,
-  "equityOwnUsd": 11.7917,
+  "equityOwnUsd": 11.4818,
   "marginUsedUsd": 11.8237,
-  "uplUsd": -0.1908,
+  "uplUsd": -0.9168,
   "positions": [
    {
     "k": "CLUSDT:long",
     "size": 0.63,
     "marginUsd": 4.1437,
-    "uplUsd": -0.0304
+    "uplUsd": -0.0323
    },
    {
     "k": "QUSDT:long",
     "size": 314,
     "marginUsd": 7.68,
-    "uplUsd": -0.1605
+    "uplUsd": -0.8845
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2459,
+  "solUsd": 0.2463,
   "stableUsd": 0,
   "bagsUsd": 0.0812,
-  "totalUsd": 0.3271,
+  "totalUsd": 0.3275,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0798
   },
-  "staleMs": 0
+  "staleMs": 12512
  },
- "totalUsd": 12.1188,
+ "totalUsd": 11.8093,
  "deltas": [
+  {
+   "ts": 1792340630243,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1215
+  },
+  {
+   "ts": 1792340479498,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0791
+  },
+  {
+   "ts": 1792340457058,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1093
+  },
   {
    "ts": 1792340399085,
    "kind": "balance-move",
@@ -140,30 +158,12 @@
    "kind": "size-added",
    "detail": "CLUSDT:long Δ0.5700000000000001",
    "amt": 0
-  },
-  {
-   "ts": 1792338699305,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1156
-  },
-  {
-   "ts": 1792338536150,
-   "kind": "position-closed",
-   "detail": "XRPUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792338536149,
-   "kind": "position-closed",
-   "detail": "SOLUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -852.59,
+  "netAfterAud": -853.03,
   "clearedPct": 2
  }
 }
