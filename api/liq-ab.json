@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-18T10:08:50.926Z",
+ "ts": "2026-10-18T14:08:50.862Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 7808,
- "graded": 7650,
- "pending": 158,
+ "shadowRows": 7814,
+ "graded": 7652,
+ "pending": 162,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,22 +16,22 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 7635,
-   "wins": 3122,
-   "netPct": -1293.3799890832665,
+   "n": 7637,
+   "wins": 3124,
+   "netPct": -1293.8862105824749,
    "outcomes": {
     "sl": 3173,
-    "tp": 965,
-    "ttl": 3497
+    "tp": 966,
+    "ttl": 3498
    },
    "meanNetPct": -0.169,
    "wr": 40.9
   }
  },
  "allowedCohort": {
-  "n": 237,
-  "netUsd": -3.58,
-  "wr": 54
+  "n": 239,
+  "netUsd": -15.1,
+  "wr": 45.6
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
