@@ -1,12 +1,26 @@
 {
- "at": "2026-10-18T22:39:26.424Z",
+ "at": "2026-10-18T22:48:54.850Z",
  "wallets": {
   "futures": {
    "equityUsd": 10.63,
-   "marginFreeUsd": 8.17,
-   "epochNetUsd": -16.2,
+   "marginFreeUsd": 4.47,
+   "epochNetUsd": -16.21,
    "fills": 400,
    "positions": [
+    {
+     "symbol": "XRPUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 3,
+     "margin": 1.73
+    },
+    {
+     "symbol": "CLUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 3,
+     "margin": 1.97
+    },
     {
      "symbol": "BNBUSDT",
      "side": "long",
@@ -27,6 +41,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792149885537,
+    "symbol": "XRPUSDT",
+    "text": "CLOSE XRPUSDT +$0.00"
+   },
    {
     "venue": "bitget",
     "ts": 1792149304679,
@@ -80,12 +100,6 @@
     "ts": 1792148047734,
     "symbol": "SOLUSDT",
     "text": "CLOSE SOLUSDT $-0.05"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792147789612,
-    "symbol": "XRPUSDT",
-    "text": "CLOSE XRPUSDT $-0.01"
    }
   ]
  },
@@ -671,10 +685,6 @@
   }
  ],
  "attrib": {
-  "1495024347422384128": {
-   "pimp": null,
-   "crack": null
-  },
   "1495024341982371840": {
    "pimp": null,
    "crack": null
@@ -1268,6 +1278,10 @@
    "crack": null
   },
   "1495835673421930497": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495844892858650624": {
    "pimp": null,
    "crack": null
   }
