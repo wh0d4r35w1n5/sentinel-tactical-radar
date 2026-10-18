@@ -1,38 +1,74 @@
 {
- "ts": "2026-10-18T22:26:39.303Z",
- "ageMs": 4098,
+ "ts": "2026-10-18T22:31:39.328Z",
+ "ageMs": 4114,
  "src": "ws",
  "futures": {
-  "equityUsd": 10.6182,
-  "availableUsd": 8.167,
+  "equityUsd": 10.6189,
+  "availableUsd": 2.5123,
   "grantUsd": 0,
-  "equityOwnUsd": 10.6182,
-  "marginUsedUsd": 2.3539,
-  "uplUsd": 0.1118,
+  "equityOwnUsd": 10.6189,
+  "marginUsedUsd": 7.9984,
+  "uplUsd": 0.0912,
   "positions": [
+   {
+    "k": "XRPUSDT:long",
+    "size": 4,
+    "marginUsd": 1.7284,
+    "uplUsd": -0.0004
+   },
+   {
+    "k": "CLUSDT:long",
+    "size": 0.06,
+    "marginUsd": 1.9691,
+    "uplUsd": -0.0029
+   },
    {
     "k": "BNBUSDT:long",
     "size": 0.01,
     "marginUsd": 2.3539,
-    "uplUsd": 0.1118
+    "uplUsd": 0.1025
+   },
+   {
+    "k": "LTCUSDT:long",
+    "size": 0.1,
+    "marginUsd": 1.947,
+    "uplUsd": -0.008
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2494,
+  "solUsd": 0.2487,
   "stableUsd": 0,
   "bagsUsd": 0.0807,
-  "totalUsd": 0.3301,
+  "totalUsd": 0.3294,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0793
   },
-  "staleMs": 4098
+  "staleMs": 4114
  },
- "totalUsd": 10.9482,
+ "totalUsd": 10.9483,
  "deltas": [
+  {
+   "ts": 1792362584283,
+   "kind": "position-opened",
+   "detail": "LTCUSDT:long",
+   "amt": 1.947
+  },
+  {
+   "ts": 1792362577277,
+   "kind": "position-opened",
+   "detail": "XRPUSDT:long",
+   "amt": 1.7284
+  },
+  {
+   "ts": 1792362575105,
+   "kind": "position-opened",
+   "detail": "CLUSDT:long",
+   "amt": 1.9691
+  },
   {
    "ts": 1792360946734,
    "kind": "position-closed",
@@ -134,24 +170,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.0932
-  },
-  {
-   "ts": 1792354852586,
-   "kind": "size-reduced",
-   "detail": "AVAXUSDT:long Δ-0.09999999999999998",
-   "amt": 0
-  },
-  {
-   "ts": 1792354488879,
-   "kind": "position-opened",
-   "detail": "AVAXUSDT:long",
-   "amt": 1.8698
-  },
-  {
-   "ts": 1792354480194,
-   "kind": "position-opened",
-   "detail": "LTCUSDT:long",
-   "amt": 1.8993
   }
  ],
  "mission": {
