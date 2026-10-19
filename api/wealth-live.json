@@ -1,38 +1,38 @@
 {
- "ts": "2026-10-19T03:23:01.559Z",
- "ageMs": 4227,
+ "ts": "2026-10-19T03:28:01.600Z",
+ "ageMs": 4276,
  "src": "ws",
  "futures": {
-  "equityUsd": 18.6569,
-  "availableUsd": 8.8131,
+  "equityUsd": 18.3851,
+  "availableUsd": 14.358,
   "grantUsd": 0,
-  "equityOwnUsd": 18.6569,
-  "marginUsedUsd": 10.6467,
-  "uplUsd": 5.4732,
+  "equityOwnUsd": 18.3851,
+  "marginUsedUsd": 18.4061,
+  "uplUsd": -0.4139,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 2.1058,
-    "uplUsd": 0.0007
+    "uplUsd": -0.0019
    },
    {
     "k": "XRPUSDT:long",
     "size": 4,
     "marginUsd": 1.0495,
-    "uplUsd": 0
+    "uplUsd": -0.0076
    },
    {
     "k": "CLUSDT:long",
     "size": 0.06,
     "marginUsd": 1.171,
-    "uplUsd": 0.0011
+    "uplUsd": -0.0044
    },
    {
     "k": "QUSDT:long",
-    "size": 237,
-    "marginUsd": 6.3203,
-    "uplUsd": 5.4714
+    "size": 529,
+    "marginUsd": 14.0798,
+    "uplUsd": -0.4001
    }
   ]
  },
@@ -47,10 +47,40 @@
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0793
   },
-  "staleMs": 10522
+  "staleMs": 10536
  },
- "totalUsd": 18.9916,
+ "totalUsd": 18.7198,
  "deltas": [
+  {
+   "ts": 1792380468389,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0921
+  },
+  {
+   "ts": 1792380335476,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.144
+  },
+  {
+   "ts": 1792380278049,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3003
+  },
+  {
+   "ts": 1792380226672,
+   "kind": "size-added",
+   "detail": "QUSDT:long Δ292",
+   "amt": 0
+  },
+  {
+   "ts": 1792380214996,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0745
+  },
   {
    "ts": 1792380026927,
    "kind": "balance-move",
@@ -140,42 +170,12 @@
    "kind": "margin-added",
    "detail": "QUSDT:long",
    "amt": 0.1371
-  },
-  {
-   "ts": 1792379217270,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.092
-  },
-  {
-   "ts": 1792379187267,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.1495
-  },
-  {
-   "ts": 1792379127293,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0539
-  },
-  {
-   "ts": 1792379097273,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0865
-  },
-  {
-   "ts": 1792379079785,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0552
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -842.71,
+  "netAfterAud": -843.1,
   "clearedPct": 3.1
  }
 }
