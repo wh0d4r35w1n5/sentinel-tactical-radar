@@ -1,23 +1,23 @@
 {
- "at": "2026-10-19T03:24:40.827Z",
+ "at": "2026-10-19T03:31:44.104Z",
  "wallets": {
   "futures": {
-   "equityUsd": 18.61,
-   "marginFreeUsd": 7.96,
+   "equityUsd": 18.31,
+   "marginFreeUsd": 0,
    "epochNetUsd": -13.05,
    "fills": 400,
    "positions": [
     {
      "symbol": "SOLUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": -0.01,
      "lev": 5,
      "margin": 2.11
     },
     {
      "symbol": "XRPUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": -0.01,
      "lev": 5,
      "margin": 1.05
     },
@@ -31,9 +31,9 @@
     {
      "symbol": "QUSDT",
      "side": "long",
-     "upl": 5.47,
+     "upl": -0.36,
      "lev": 5,
-     "margin": 6.32
+     "margin": 14.09
     }
    ]
   },
@@ -48,6 +48,24 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792151363433,
+    "symbol": "BNBUSDT",
+    "text": "CLOSE BNBUSDT $-0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792151355000,
+    "symbol": "BNBUSDT",
+    "text": "CLOSE BNBUSDT $-0.02"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792151288306,
+    "symbol": "BNBUSDT",
+    "text": "CLOSE BNBUSDT $-0.02"
+   },
    {
     "venue": "bitget",
     "ts": 1792150931885,
@@ -89,24 +107,6 @@
     "ts": 1792150830502,
     "symbol": "BNBUSDT",
     "text": "CLOSE BNBUSDT $-0.07"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792150789640,
-    "symbol": "BNBUSDT",
-    "text": "OPEN BNBUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792150769908,
-    "symbol": "BNBUSDT",
-    "text": "CLOSE BNBUSDT $-0.02"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792150737851,
-    "symbol": "BNBUSDT",
-    "text": "OPEN BNBUSDT $-0.02"
    }
   ]
  },
@@ -692,10 +692,6 @@
   }
  ],
  "attrib": {
-  "1495067217462296577": {
-   "pimp": null,
-   "crack": null
-  },
   "1495193794284089344": {
    "pimp": null,
    "crack": null
@@ -1289,6 +1285,10 @@
    "crack": null
   },
   "1495913242750095360": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495916532917342208": {
    "pimp": null,
    "crack": null
   }
