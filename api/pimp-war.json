@@ -1,12 +1,20 @@
 {
- "at": "2026-10-19T08:48:42.272Z",
+ "at": "2026-10-19T08:58:25.946Z",
  "wallets": {
   "futures": {
-   "equityUsd": 11.77,
-   "marginFreeUsd": 11.77,
-   "epochNetUsd": 0.8,
+   "equityUsd": 12.71,
+   "marginFreeUsd": 0.64,
+   "epochNetUsd": -6.95,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "QUSDT",
+     "side": "long",
+     "upl": 0.59,
+     "lev": 5,
+     "margin": 12.07
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,24 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792382075487,
+    "symbol": "APRUSDT",
+    "text": "OPEN APRUSDT $-0.02"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792382007633,
+    "symbol": "QUSDT",
+    "text": "CLOSE QUSDT +$1.29"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792381838986,
+    "symbol": "ARIAUSDT",
+    "text": "CLOSE ARIAUSDT $-0.11"
+   },
    {
     "venue": "bitget",
     "ts": 1792381811848,
@@ -60,24 +86,6 @@
     "ts": 1792380737272,
     "symbol": "CLUSDT",
     "text": "CLOSE CLUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792380737099,
-    "symbol": "XRPUSDT",
-    "text": "CLOSE XRPUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792380732331,
-    "symbol": "SOLUSDT",
-    "text": "OPEN SOLUSDT $-0.03"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792380703767,
-    "symbol": "SOLUSDT",
-    "text": "CLOSE SOLUSDT +$0.00"
    }
   ]
  },
@@ -532,7 +540,7 @@
    ],
    "persona": {
     "swagger": 0.05,
-    "tilt": 0.95,
+    "tilt": 0.93,
     "greed": 0.37,
     "discipline": 0.18
    }
@@ -663,10 +671,6 @@
   }
  ],
  "attrib": {
-  "1495950478866644992": {
-   "pimp": null,
-   "crack": null
-  },
   "1495950434826457089": {
    "pimp": null,
    "crack": null
@@ -1260,6 +1264,10 @@
    "crack": "Solana Sadie"
   },
   "1495995433173651456": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495998191637368832": {
    "pimp": null,
    "crack": null
   }
