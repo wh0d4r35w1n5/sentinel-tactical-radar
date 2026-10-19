@@ -1,12 +1,20 @@
 {
- "at": "2026-10-19T04:39:56.453Z",
+ "at": "2026-10-19T04:47:31.963Z",
  "wallets": {
   "futures": {
    "equityUsd": 27.73,
-   "marginFreeUsd": 27.73,
-   "epochNetUsd": 5.27,
+   "marginFreeUsd": 27.23,
+   "epochNetUsd": 3.54,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "DOGEUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 10,
+     "margin": 9.43
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,36 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792167500014,
+    "symbol": "CLUSDT",
+    "text": "CLOSE CLUSDT +$0.01"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792167500014,
+    "symbol": "CLUSDT",
+    "text": "CLOSE CLUSDT +$0.18"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792167454343,
+    "symbol": "CLUSDT",
+    "text": "OPEN CLUSDT $-0.02"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792167452385,
+    "symbol": "CLUSDT",
+    "text": "OPEN CLUSDT $-0.00"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792167452385,
+    "symbol": "CLUSDT",
+    "text": "OPEN CLUSDT $-0.15"
+   },
    {
     "venue": "bitget",
     "ts": 1792167314326,
@@ -48,36 +86,6 @@
     "ts": 1792167259196,
     "symbol": "STRKUSDT",
     "text": "CLOSE STRKUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792167092334,
-    "symbol": "STRKUSDT",
-    "text": "OPEN STRKUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792167082693,
-    "symbol": "STRKUSDT",
-    "text": "OPEN STRKUSDT $-0.06"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792167063829,
-    "symbol": "STRKUSDT",
-    "text": "CLOSE STRKUSDT +$0.02"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792167063829,
-    "symbol": "STRKUSDT",
-    "text": "CLOSE STRKUSDT +$0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792167062551,
-    "symbol": "STRKUSDT",
-    "text": "CLOSE STRKUSDT +$0.05"
    }
   ]
  },
@@ -663,10 +671,6 @@
   }
  ],
  "attrib": {
-  "1495673035752738826": {
-   "pimp": null,
-   "crack": null
-  },
   "1495672839530614784": {
    "pimp": null,
    "crack": null
@@ -1260,6 +1264,10 @@
    "crack": null
   },
   "1495931781804462090": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495934579065479168": {
    "pimp": null,
    "crack": null
   }
