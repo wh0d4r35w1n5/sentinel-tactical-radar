@@ -1,31 +1,92 @@
 {
- "ts": "2026-10-19T21:23:07.399Z",
- "ageMs": 11304,
+ "ts": "2026-10-19T21:28:07.444Z",
+ "ageMs": 2405,
  "src": "ws",
  "futures": {
-  "equityUsd": 70.8527,
-  "availableUsd": 70.8527,
+  "equityUsd": 72.1476,
+  "availableUsd": 33.5689,
   "grantUsd": 0,
-  "equityOwnUsd": 70.8527,
-  "marginUsedUsd": 0,
-  "uplUsd": 0,
-  "positions": []
+  "equityOwnUsd": 72.1476,
+  "marginUsedUsd": 37.3515,
+  "uplUsd": 1.2272,
+  "positions": [
+   {
+    "k": "BRUSDT:long",
+    "size": 572,
+    "marginUsd": 37.3515,
+    "uplUsd": 1.2272
+   }
+  ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
   "solUsd": 0.2528,
   "stableUsd": 0,
-  "bagsUsd": 0.0963,
-  "totalUsd": 0.3491,
+  "bagsUsd": 0.0959,
+  "totalUsd": 0.3487,
   "tokens": {
    "BQAeeSow": 0.0014,
-   "8PGyHCKv": 0.0949
+   "8PGyHCKv": 0.0945
   },
-  "staleMs": 11304
+  "staleMs": 11302
  },
- "totalUsd": 71.2018,
+ "totalUsd": 72.4963,
  "deltas": [
+  {
+   "ts": 1792445285039,
+   "kind": "size-reduced",
+   "detail": "BRUSDT:long Δ-142",
+   "amt": 0
+  },
+  {
+   "ts": 1792445285038,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 1.6847
+  },
+  {
+   "ts": 1792445267140,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.4776
+  },
+  {
+   "ts": 1792445267139,
+   "kind": "size-added",
+   "detail": "BRUSDT:long Δ691",
+   "amt": 0
+  },
+  {
+   "ts": 1792445252222,
+   "kind": "size-reduced",
+   "detail": "BRUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1792445248234,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1556
+  },
+  {
+   "ts": 1792445248234,
+   "kind": "size-reduced",
+   "detail": "BRUSDT:long Δ-6",
+   "amt": 0
+  },
+  {
+   "ts": 1792445235264,
+   "kind": "position-opened",
+   "detail": "BRUSDT:long",
+   "amt": 1.9437
+  },
+  {
+   "ts": 1792445235264,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0999
+  },
   {
    "ts": 1792444974553,
    "kind": "position-closed",
@@ -91,66 +152,12 @@
    "kind": "size-reduced",
    "detail": "ARBUSDT:long Δ-102.4",
    "amt": 0
-  },
-  {
-   "ts": 1792444846764,
-   "kind": "position-opened",
-   "detail": "ARBUSDT:long",
-   "amt": 2.0119
-  },
-  {
-   "ts": 1792443924533,
-   "kind": "position-closed",
-   "detail": "PHAUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792443907093,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2317
-  },
-  {
-   "ts": 1792443895656,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1656
-  },
-  {
-   "ts": 1792443895655,
-   "kind": "size-reduced",
-   "detail": "PHAUSDT:long Δ-2",
-   "amt": 0
-  },
-  {
-   "ts": 1792443836162,
-   "kind": "size-reduced",
-   "detail": "PHAUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1792443836162,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1597
-  },
-  {
-   "ts": 1792443831485,
-   "kind": "size-reduced",
-   "detail": "PHAUSDT:long Δ-2",
-   "amt": 0
-  },
-  {
-   "ts": 1792443831485,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.074
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -768.08,
-  "clearedPct": 11.7
+  "netAfterAud": -766.23,
+  "clearedPct": 11.9
  }
 }
