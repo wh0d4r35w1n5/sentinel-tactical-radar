@@ -1,12 +1,12 @@
 {
- "ts": "2026-10-19T20:12:51.748Z",
- "ageMs": 10793,
+ "ts": "2026-10-19T20:17:51.834Z",
+ "ageMs": 10615,
  "src": "ws",
  "futures": {
-  "equityUsd": 70.4821,
-  "availableUsd": 70.4821,
+  "equityUsd": 70.2525,
+  "availableUsd": 70.2525,
   "grantUsd": 0,
-  "equityOwnUsd": 70.4821,
+  "equityOwnUsd": 70.2525,
   "marginUsedUsd": 0,
   "uplUsd": 0,
   "positions": []
@@ -14,18 +14,42 @@
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2518,
+  "solUsd": 0.2524,
   "stableUsd": 0,
   "bagsUsd": 0.0938,
-  "totalUsd": 0.3456,
+  "totalUsd": 0.3462,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0925
   },
-  "staleMs": 10793
+  "staleMs": 10615
  },
- "totalUsd": 70.8277,
+ "totalUsd": 70.5988,
  "deltas": [
+  {
+   "ts": 1792440984459,
+   "kind": "position-closed",
+   "detail": "TWLOUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792440976075,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1088
+  },
+  {
+   "ts": 1792440884419,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1208
+  },
+  {
+   "ts": 1792440884419,
+   "kind": "position-opened",
+   "detail": "TWLOUSDT:long",
+   "amt": 0.9081
+  },
   {
    "ts": 1792440564453,
    "kind": "position-closed",
@@ -121,36 +145,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.7947
-  },
-  {
-   "ts": 1792438974404,
-   "kind": "position-closed",
-   "detail": "STABLEUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792438967537,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.2163
-  },
-  {
-   "ts": 1792438966889,
-   "kind": "size-reduced",
-   "detail": "STABLEUSDT:long Δ-161",
-   "amt": 0
-  },
-  {
-   "ts": 1792438966888,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.8003
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -768.62,
-  "clearedPct": 11.7
+  "netAfterAud": -768.94,
+  "clearedPct": 11.6
  }
 }
