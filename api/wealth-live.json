@@ -1,44 +1,68 @@
 {
- "ts": "2026-10-19T06:04:06.865Z",
+ "ts": "2026-10-19T06:09:06.866Z",
  "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 29.7948,
-  "availableUsd": 27.8164,
+  "equityUsd": 29.4516,
+  "availableUsd": 28.3875,
   "grantUsd": 0,
-  "equityOwnUsd": 29.7948,
-  "marginUsedUsd": 2.0597,
-  "uplUsd": -0.0804,
+  "equityOwnUsd": 29.4516,
+  "marginUsedUsd": 1.0571,
+  "uplUsd": -0.0023,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 1.0571,
-    "uplUsd": -0.0029
-   },
-   {
-    "k": "DIAUSDT:long",
-    "size": 155,
-    "marginUsd": 1.0025,
-    "uplUsd": -0.0775
+    "uplUsd": -0.0023
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.255,
+  "solUsd": 0.2551,
   "stableUsd": 0,
   "bagsUsd": 0.0861,
-  "totalUsd": 0.3411,
+  "totalUsd": 0.3412,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0847
   },
   "staleMs": 0
  },
- "totalUsd": 30.1359,
+ "totalUsd": 29.7929,
  "deltas": [
+  {
+   "ts": 1792390077536,
+   "kind": "position-closed",
+   "detail": "APRUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792390061427,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1675
+  },
+  {
+   "ts": 1792389969712,
+   "kind": "position-opened",
+   "detail": "APRUSDT:long",
+   "amt": 0.9994
+  },
+  {
+   "ts": 1792389927514,
+   "kind": "position-closed",
+   "detail": "DIAUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792389909236,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1583
+  },
   {
    "ts": 1792389409498,
    "kind": "position-opened",
@@ -128,42 +152,12 @@
    "kind": "size-reduced",
    "detail": "QUSDT:long Δ-154",
    "amt": 0
-  },
-  {
-   "ts": 1792388504414,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.6628
-  },
-  {
-   "ts": 1792388397506,
-   "kind": "position-closed",
-   "detail": "SIRENUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792388380413,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.2665
-  },
-  {
-   "ts": 1792388354581,
-   "kind": "size-reduced",
-   "detail": "SIRENUSDT:long Δ-70",
-   "amt": 0
-  },
-  {
-   "ts": 1792388352316,
-   "kind": "size-reduced",
-   "detail": "SIRENUSDT:long Δ-70",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -826.69,
-  "clearedPct": 5
+  "netAfterAud": -827.19,
+  "clearedPct": 4.9
  }
 }
