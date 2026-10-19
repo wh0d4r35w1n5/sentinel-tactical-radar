@@ -1,12 +1,20 @@
 {
- "at": "2026-10-19T22:05:59.230Z",
+ "at": "2026-10-19T22:15:45.669Z",
  "wallets": {
   "futures": {
-   "equityUsd": 69.36,
-   "marginFreeUsd": 69.36,
-   "epochNetUsd": -6.85,
+   "equityUsd": 69.55,
+   "marginFreeUsd": 68.56,
+   "epochNetUsd": -12.43,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "KERNELUSDT",
+     "side": "long",
+     "upl": 0.19,
+     "lev": 25,
+     "margin": 0.8
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,24 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792390486762,
+    "symbol": "QUSDT",
+    "text": "OPEN QUSDT $-0.07"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792390061335,
+    "symbol": "APRUSDT",
+    "text": "CLOSE APRUSDT $-0.18"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792389969574,
+    "symbol": "APRUSDT",
+    "text": "OPEN APRUSDT $-0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1792389909142,
@@ -60,24 +86,6 @@
     "ts": 1792388869684,
     "symbol": "ARIAUSDT",
     "text": "OPEN ARIAUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792388585382,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792388585382,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792388570428,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT +$0.00"
    }
   ]
  },
@@ -495,17 +503,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": null,
-   "net": -20.1528,
-   "wins": 14,
+   "net": -20.0783,
+   "wins": 15,
    "losses": 67,
-   "closes": 111,
+   "closes": 112,
    "stolen": 0,
    "gen": 0,
-   "form": 0.3132,
-   "mood": "heater",
+   "form": 0.2177,
+   "mood": "working",
    "vault": 0.5029,
    "hist": [
-    -18.2335,
     -18.6286,
     -18.9081,
     -19.3879,
@@ -528,19 +535,24 @@
     -21.5275,
     -21.5474,
     -20.0627,
-    -20.1528
+    -20.1528,
+    -20.0783
    ],
    "persona": {
-    "swagger": 0.18,
-    "tilt": 0.58,
-    "greed": 0.44,
-    "discipline": 0.19
+    "swagger": 0.27,
+    "tilt": 0.31,
+    "greed": 0.48,
+    "discipline": 0.23
    }
   }
  ],
  "retired": [],
  "intents": [],
  "drama": [
+  {
+   "ts": 1792448127435,
+   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.07 on SWOLF"
+  },
   {
    "ts": 1792446981386,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.09 on GOMO — docked her pay"
@@ -656,25 +668,9 @@
   {
    "ts": 1792160276244,
    "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
-  },
-  {
-   "ts": 1792159703843,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.57 on GOMODOGE — docked her pay"
   }
  ],
  "attrib": {
-  "oc:2EAT1PjfjaQ2BFGP9NN1GVmzg5rMPMAjPmoZknhSw6TzBWaSSGnt6HzyxFTPrNARWtZymoMbrYw7hAd86JDSXf6K": {
-   "pimp": null,
-   "crack": "Solana Sadie"
-  },
-  "oc:5wejxKETYb3frruPvp5dS3GVnQ6LnkWYwb9hcPmNghk7KTmFKRezVhvDCEtQ8cd2qGdnFQvJpMLvJqvUNcb6Zjdg": {
-   "pimp": null,
-   "crack": "Solana Sadie"
-  },
-  "oc:4kceU518NR2NxAtpGshpN5fRpHQKeEVk9sXf1DhMr7PKCgp95HrLSKZcq9nvKBdH1iLEVXMfHi2VtwqB1dhEtyV8": {
-   "pimp": null,
-   "crack": "Solana Sadie"
-  },
   "oc:5JBx8nPpdb95UU8ofcxjTQXfxEXWNmquXsVfbH3zoEVGb2CiCVShQWzYwKLghHQ3XBxEfJFXnQp4FQP3gPKnuD6D": {
    "pimp": null,
    "crack": "Solana Sadie"
@@ -1262,6 +1258,18 @@
   "1496194379942723588": {
    "pimp": null,
    "crack": null
+  },
+  "1496198810935492609": {
+   "pimp": null,
+   "crack": null
+  },
+  "1496198701560627200": {
+   "pimp": null,
+   "crack": null
+  },
+  "oc:5yEbRRUo87VHCjsFhazJFh9oNZc2F2A4W84XEtnNgDyc5wrS9Zexhxq8obmTpFCVRzHcpSxmovBeBkMjsb4xiJG9": {
+   "pimp": null,
+   "crack": "Solana Sadie"
   }
  }
 }

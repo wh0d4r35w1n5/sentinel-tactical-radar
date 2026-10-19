@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-19T18:15:32.648Z",
+ "ts": "2026-10-19T22:15:35.037Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 10645,
- "graded": 10399,
- "pending": 246,
+ "shadowRows": 10677,
+ "graded": 10485,
+ "pending": 192,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,184 +16,184 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 10384,
-   "wins": 3765,
-   "netPct": -2558.95851674145,
+   "n": 10470,
+   "wins": 3844,
+   "netPct": -2459.125915606813,
    "outcomes": {
-    "sl": 4148,
-    "tp": 1109,
-    "ttl": 5127
+    "sl": 4154,
+    "tp": 1117,
+    "ttl": 5199
    },
-   "meanNetPct": -0.246,
-   "wr": 36.3
+   "meanNetPct": -0.235,
+   "wr": 36.7
   }
  },
  "allowedCohort": {
-  "n": 266,
-  "netUsd": -17.92,
-  "wr": 81.2
+  "n": 249,
+  "netUsd": -7.32,
+  "wr": 82.7
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
   {
-   "ts": "2026-10-19T15:16:59.029Z",
-   "sym": "TSLAUSDT",
+   "ts": "2026-10-19T16:42:43.823Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.24
+   "netPct": 1.12
   },
   {
-   "ts": "2026-10-19T15:18:02.885Z",
-   "sym": "TSLAUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.13
-  },
-  {
-   "ts": "2026-10-19T15:19:06.302Z",
-   "sym": "TSLAUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.24
-  },
-  {
-   "ts": "2026-10-19T15:20:09.789Z",
-   "sym": "TSLAUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.18
-  },
-  {
-   "ts": "2026-10-19T15:21:13.301Z",
-   "sym": "TSLAUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.15
-  },
-  {
-   "ts": "2026-10-19T15:25:30.409Z",
+   "ts": "2026-10-19T16:43:47.053Z",
    "sym": "INJUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.6
+   "netPct": 1.65
   },
   {
-   "ts": "2026-10-19T15:26:33.869Z",
-   "sym": "INJUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.74
-  },
-  {
-   "ts": "2026-10-19T15:27:37.469Z",
-   "sym": "INJUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.49
-  },
-  {
-   "ts": "2026-10-19T15:35:01.798Z",
-   "sym": "TQQQUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.79
-  },
-  {
-   "ts": "2026-10-19T15:36:05.453Z",
-   "sym": "TQQQUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.86
-  },
-  {
-   "ts": "2026-10-19T15:37:09.012Z",
-   "sym": "TQQQUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.93
-  },
-  {
-   "ts": "2026-10-19T15:38:12.369Z",
-   "sym": "TQQQUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 1.02
-  },
-  {
-   "ts": "2026-10-19T15:39:15.728Z",
-   "sym": "TQQQUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 1
-  },
-  {
-   "ts": "2026-10-19T15:40:18.909Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:43:47.053Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
    "netPct": 0.82
   },
   {
-   "ts": "2026-10-19T15:41:22.734Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:44:50.645Z",
+   "sym": "INJUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.89
+   "netPct": 1.68
   },
   {
-   "ts": "2026-10-19T15:42:26.124Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:44:50.645Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.94
+   "netPct": 0.91
   },
   {
-   "ts": "2026-10-19T15:43:29.467Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:51:12.253Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.87
+   "netPct": 1.91
   },
   {
-   "ts": "2026-10-19T15:44:32.845Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:52:15.766Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.89
+   "netPct": 1.91
   },
   {
-   "ts": "2026-10-19T15:50:53.092Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:53:19.220Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.78
+   "out": "tp",
+   "netPct": 2.38
   },
   {
-   "ts": "2026-10-19T15:51:56.455Z",
-   "sym": "TQQQUSDT",
+   "ts": "2026-10-19T16:54:22.837Z",
+   "sym": "LUMIAUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.76
+   "netPct": 2.06
+  },
+  {
+   "ts": "2026-10-19T19:38:05.737Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "sl",
+   "netPct": -1.32
+  },
+  {
+   "ts": "2026-10-19T19:39:09.133Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "sl",
+   "netPct": -1.32
+  },
+  {
+   "ts": "2026-10-19T19:40:12.501Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:40:12.501Z",
+   "sym": "SOXLUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:41:15.938Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:41:15.938Z",
+   "sym": "SOXLUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:42:19.172Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:42:19.172Z",
+   "sym": "SOXLUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:43:22.645Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-19T19:45:31.234Z",
+   "sym": "SOXLUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 1.84
+  },
+  {
+   "ts": "2026-10-19T19:48:41.182Z",
+   "sym": "SOXLUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 1.62
   }
  ]
 }
