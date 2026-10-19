@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-19T10:10:03.118Z",
+ "ts": "2026-10-19T10:15:03.175Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
    "long": 0,
-   "short": 0
+   "short": 183803.3944
   },
   "liq15m": {
-   "long": 3192.6442100000004,
-   "short": 9309.735
+   "long": 1776.61778,
+   "short": 187824.8875
   },
   "liq60m": {
    "long": 79262.84552999998,
-   "short": 383679.10120000003
+   "short": 567482.4956
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -21,31 +21,31 @@
   "BTCUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 2474.1992
+    "short": 183803.3944
    },
    "liq60m": {
     "long": 67402.0498,
-    "short": 8103.3249399999995
+    "short": 191906.71934
    },
    "flow15m": {
-    "buy": 25276668,
-    "sell": 33757909,
-    "delta": -8481241
+    "buy": 22357643,
+    "sell": 25419935,
+    "delta": -3062292
    }
   },
   "ETHUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 5340.7915
+    "short": 2936.4091000000008
    },
    "liq60m": {
     "long": 5170.3008,
     "short": 374081.0319600001
    },
    "flow15m": {
-    "buy": 15380699,
-    "sell": 14002644,
-    "delta": 1378055
+    "buy": 10927002,
+    "sell": 10586821,
+    "delta": 340181
    }
   },
   "SOLUSDT": {
@@ -58,9 +58,9 @@
     "short": 0
    },
    "flow15m": {
-    "buy": 1855954,
-    "sell": 2504921,
-    "delta": -648967
+    "buy": 1950430,
+    "sell": 2408794,
+    "delta": -458364
    }
   },
   "XRPUSDT": {
@@ -81,7 +81,7 @@
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 1433.2638000000002
+    "short": 1085.084
    },
    "liq60m": {
     "long": 0,
@@ -96,7 +96,7 @@
   "LINKUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 61.48049999999999
+    "short": 0
    },
    "liq60m": {
     "long": 0,
@@ -125,7 +125,7 @@
   },
   "OPUSDT": {
    "liq15m": {
-    "long": 1416.0264300000001,
+    "long": 0,
     "short": 0
    },
    "liq60m": {
@@ -155,6 +155,14 @@
   }
  },
  "biggestPrints60m": [
+  {
+   "ts": 1792404795515,
+   "sym": "BTCUSDT",
+   "side": "short",
+   "usd": 183721.003,
+   "px": 82386.1,
+   "venue": "bybit"
+  },
   {
    "ts": 1792401623423,
    "sym": "ETHUSDT",
