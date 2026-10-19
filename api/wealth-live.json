@@ -1,38 +1,62 @@
 {
- "ts": "2026-10-19T15:16:29.438Z",
- "ageMs": 3950,
+ "ts": "2026-10-19T15:21:29.472Z",
+ "ageMs": 3958,
  "src": "ws",
  "futures": {
-  "equityUsd": 14.8696,
+  "equityUsd": 16.1078,
   "availableUsd": 17.7373,
   "grantUsd": 0,
-  "equityOwnUsd": 14.8696,
-  "marginUsedUsd": 15.4936,
-  "uplUsd": -1.948,
+  "equityOwnUsd": 16.1078,
+  "marginUsedUsd": 15.5573,
+  "uplUsd": -1.6295,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 616,
-    "marginUsd": 15.4936,
-    "uplUsd": -1.948
+    "marginUsd": 15.5573,
+    "uplUsd": -1.6295
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2525,
+  "solUsd": 0.2532,
   "stableUsd": 0,
   "bagsUsd": 0.0962,
-  "totalUsd": 0.3487,
+  "totalUsd": 0.3494,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0949
   },
-  "staleMs": 3950
+  "staleMs": 3958
  },
- "totalUsd": 15.2183,
+ "totalUsd": 16.4572,
  "deltas": [
+  {
+   "ts": 1792423285253,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 1.2382
+  },
+  {
+   "ts": 1792423164069,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0552
+  },
+  {
+   "ts": 1792423104097,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0585
+  },
+  {
+   "ts": 1792423014092,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0615
+  },
   {
    "ts": 1792422864067,
    "kind": "margin-removed",
@@ -128,36 +152,12 @@
    "kind": "margin-added",
    "detail": "QUSDT:long",
    "amt": 0.0599
-  },
-  {
-   "ts": 1792420644033,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.137
-  },
-  {
-   "ts": 1792420614036,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.241
-  },
-  {
-   "ts": 1792420584016,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.0526
-  },
-  {
-   "ts": 1792420434007,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0802
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -848.13,
-  "clearedPct": 2.5
+  "netAfterAud": -846.35,
+  "clearedPct": 2.7
  }
 }
