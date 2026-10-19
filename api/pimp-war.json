@@ -1,18 +1,39 @@
 {
- "at": "2026-10-19T03:13:51.828Z",
+ "at": "2026-10-19T03:22:56.976Z",
  "wallets": {
   "futures": {
-   "equityUsd": 15.88,
-   "marginFreeUsd": 9.2,
-   "epochNetUsd": -15.62,
+   "equityUsd": 17.47,
+   "marginFreeUsd": 7.05,
+   "epochNetUsd": -13.82,
    "fills": 400,
    "positions": [
     {
+     "symbol": "SOLUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 5,
+     "margin": 2.11
+    },
+    {
+     "symbol": "XRPUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 5,
+     "margin": 1.05
+    },
+    {
+     "symbol": "CLUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 5,
+     "margin": 1.17
+    },
+    {
      "symbol": "QUSDT",
      "side": "long",
-     "upl": 3.48,
+     "upl": 4.33,
      "lev": 5,
-     "margin": 6.67
+     "margin": 6.09
     }
    ]
   },
@@ -27,6 +48,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792150931885,
+    "symbol": "BNBUSDT",
+    "text": "OPEN BNBUSDT $-0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1792150929341,
@@ -80,12 +107,6 @@
     "ts": 1792150737851,
     "symbol": "BNBUSDT",
     "text": "OPEN BNBUSDT $-0.02"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792150735679,
-    "symbol": "BNBUSDT",
-    "text": "CLOSE BNBUSDT $-0.02"
    }
   ]
  },
@@ -671,10 +692,6 @@
   }
  ],
  "attrib": {
-  "1495067348580433921": {
-   "pimp": null,
-   "crack": null
-  },
   "1495067217462296577": {
    "pimp": null,
    "crack": null
@@ -1268,6 +1285,10 @@
    "crack": null
   },
   "1495910237896183823": {
+   "pimp": null,
+   "crack": null
+  },
+  "1495913242750095360": {
    "pimp": null,
    "crack": null
   }
