@@ -1,20 +1,20 @@
 {
- "ts": "2026-10-19T17:22:00.320Z",
- "ageMs": 4419,
+ "ts": "2026-10-19T17:27:00.355Z",
+ "ageMs": 4321,
  "src": "ws",
  "futures": {
   "equityUsd": 58.015,
   "availableUsd": 63.488,
   "grantUsd": 0,
   "equityOwnUsd": 58.015,
-  "marginUsedUsd": 60.2187,
-  "uplUsd": -4.4853,
+  "marginUsedUsd": 60.2713,
+  "uplUsd": -4.2228,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 2409,
-    "marginUsd": 60.2187,
-    "uplUsd": -4.4853
+    "marginUsd": 60.2713,
+    "uplUsd": -4.2228
    }
   ]
  },
@@ -29,10 +29,22 @@
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0927
   },
-  "staleMs": 4419
+  "staleMs": 4321
  },
- "totalUsd": 58.3603,
+ "totalUsd": 58.3602,
  "deltas": [
+  {
+   "ts": 1792430784236,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0781
+  },
+  {
+   "ts": 1792430754239,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1021
+  },
   {
    "ts": 1792430484230,
    "kind": "margin-added",
@@ -140,18 +152,6 @@
    "kind": "margin-removed",
    "detail": "QUSDT:long",
    "amt": -0.292
-  },
-  {
-   "ts": 1792429662262,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.6601
-  },
-  {
-   "ts": 1792429644216,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.2096
   }
  ],
  "mission": {
