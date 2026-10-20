@@ -1,15 +1,22 @@
 {
- "ts": "2026-10-20T01:34:14.941Z",
- "ageMs": 3169,
+ "ts": "2026-10-20T01:39:19.972Z",
+ "ageMs": 8433,
  "src": "ws",
  "futures": {
-  "equityUsd": 59.6621,
-  "availableUsd": 59.6621,
+  "equityUsd": 59.6425,
+  "availableUsd": 58.6841,
   "grantUsd": 0,
-  "equityOwnUsd": 59.6621,
-  "marginUsedUsd": 0,
-  "uplUsd": 0,
-  "positions": []
+  "equityOwnUsd": 59.6425,
+  "marginUsedUsd": 0.9664,
+  "uplUsd": 0.016,
+  "positions": [
+   {
+    "k": "ZHIPUUSDT:long",
+    "size": 0.3,
+    "marginUsd": 0.9664,
+    "uplUsd": 0.016
+   }
+  ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -22,10 +29,16 @@
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.096
   },
-  "staleMs": 3169
+  "staleMs": 8433
  },
- "totalUsd": 60.0113,
+ "totalUsd": 59.9917,
  "deltas": [
+  {
+   "ts": 1792460323060,
+   "kind": "position-opened",
+   "detail": "ZHIPUUSDT:long",
+   "amt": 0.9664
+  },
   {
    "ts": 1792459914862,
    "kind": "position-closed",
@@ -139,18 +152,12 @@
    "kind": "position-closed",
    "detail": "TAIYOYUDENUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792458678410,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1919
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -784.1,
+  "netAfterAud": -784.13,
   "clearedPct": 9.9
  }
 }
