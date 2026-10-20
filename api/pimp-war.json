@@ -1,12 +1,20 @@
 {
- "at": "2026-10-20T03:29:45.685Z",
+ "at": "2026-10-20T03:39:27.032Z",
  "wallets": {
   "futures": {
-   "equityUsd": 58.77,
-   "marginFreeUsd": 58.77,
-   "epochNetUsd": -10.49,
+   "equityUsd": 58.67,
+   "marginFreeUsd": 58.68,
+   "epochNetUsd": -10.66,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "XAUUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 10,
+     "margin": 5.98
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,24 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792393466972,
+    "symbol": "QUSDT",
+    "text": "CLOSE QUSDT +$0.05"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792393455814,
+    "symbol": "QUSDT",
+    "text": "OPEN QUSDT $-0.04"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792393450982,
+    "symbol": "QUSDT",
+    "text": "CLOSE QUSDT $-0.42"
+   },
    {
     "venue": "bitget",
     "ts": 1792393450982,
@@ -60,24 +86,6 @@
     "ts": 1792393419339,
     "symbol": "QUSDT",
     "text": "CLOSE QUSDT +$0.03"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792393418471,
-    "symbol": "QUSDT",
-    "text": "OPEN QUSDT $-0.04"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792393414852,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT +$1.26"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792393412739,
-    "symbol": "QUSDT",
-    "text": "OPEN QUSDT $-0.01"
    }
   ]
  },
@@ -534,7 +542,7 @@
     "swagger": 0.36,
     "tilt": 0.23,
     "greed": 0.49,
-    "discipline": 0.33
+    "discipline": 0.34
    }
   }
  ],
@@ -663,10 +671,6 @@
   }
  ],
  "attrib": {
-  "1496159281495150598": {
-   "pimp": null,
-   "crack": null
-  },
   "1496159281495150600": {
    "pimp": null,
    "crack": null
@@ -1260,6 +1264,10 @@
    "crack": null
   },
   "oc:recon:ED5nyyWE:1791735319618": {
+   "pimp": null,
+   "crack": null
+  },
+  "1496280273882177536": {
    "pimp": null,
    "crack": null
   }
