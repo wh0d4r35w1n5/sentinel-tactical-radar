@@ -1,38 +1,73 @@
 {
- "ts": "2026-10-20T00:08:53.997Z",
- "ageMs": 11116,
+ "ts": "2026-10-20T00:13:57.541Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 60.7498,
-  "availableUsd": 59.7726,
+  "equityUsd": 60.4139,
+  "availableUsd": 60.4139,
   "grantUsd": 0,
-  "equityOwnUsd": 60.7498,
-  "marginUsedUsd": 0.9959,
-  "uplUsd": -0.0188,
-  "positions": [
-   {
-    "k": "SIRENUSDT:long",
-    "size": 470,
-    "marginUsd": 0.9959,
-    "uplUsd": -0.0188
-   }
-  ]
+  "equityOwnUsd": 60.4139,
+  "marginUsedUsd": 0,
+  "uplUsd": 0,
+  "positions": []
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2526,
+  "solUsd": 0.2525,
   "stableUsd": 0,
   "bagsUsd": 0.0982,
-  "totalUsd": 0.3508,
+  "totalUsd": 0.3507,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0968
   },
-  "staleMs": 11116
+  "staleMs": 883
  },
- "totalUsd": 61.1006,
+ "totalUsd": 60.7645,
  "deltas": [
+  {
+   "ts": 1792455054795,
+   "kind": "position-closed",
+   "detail": "SSBIOLOGICSUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792455049865,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1826
+  },
+  {
+   "ts": 1792455049518,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1846
+  },
+  {
+   "ts": 1792455049518,
+   "kind": "position-opened",
+   "detail": "SSBIOLOGICSUSDT:long",
+   "amt": 0.9815
+  },
+  {
+   "ts": 1792454964776,
+   "kind": "position-closed",
+   "detail": "SIRENUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792454945067,
+   "kind": "size-reduced",
+   "detail": "SIRENUSDT:long Δ-90",
+   "amt": 0
+  },
+  {
+   "ts": 1792454941710,
+   "kind": "size-reduced",
+   "detail": "SIRENUSDT:long Δ-90",
+   "amt": 0
+  },
   {
    "ts": 1792454909717,
    "kind": "position-opened",
@@ -110,54 +145,12 @@
    "kind": "position-closed",
    "detail": "EPICUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792453287884,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0725
-  },
-  {
-   "ts": 1792453273340,
-   "kind": "position-opened",
-   "detail": "EPICUSDT:long",
-   "amt": 1.003
-  },
-  {
-   "ts": 1792452744700,
-   "kind": "position-closed",
-   "detail": "BHPUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1792452721679,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1563
-  },
-  {
-   "ts": 1792452140777,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1542
-  },
-  {
-   "ts": 1792452140777,
-   "kind": "position-opened",
-   "detail": "BHPUSDT:long",
-   "amt": 0.9658
-  },
-  {
-   "ts": 1792451064659,
-   "kind": "position-closed",
-   "detail": "BRUSDT:long",
-   "amt": 0
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -782.54,
-  "clearedPct": 10.1
+  "netAfterAud": -783.02,
+  "clearedPct": 10
  }
 }
