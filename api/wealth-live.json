@@ -1,44 +1,116 @@
 {
- "ts": "2026-10-20T16:03:32.597Z",
- "ageMs": 3865,
+ "ts": "2026-10-20T16:08:32.621Z",
+ "ageMs": 4142,
  "src": "ws",
  "futures": {
-  "equityUsd": 29.8603,
+  "equityUsd": 30.8802,
   "availableUsd": 39.2129,
   "grantUsd": 5.9625,
-  "equityOwnUsd": 23.8978,
-  "marginUsedUsd": 41.8137,
-  "uplUsd": -12.9439,
+  "equityOwnUsd": 24.9177,
+  "marginUsedUsd": 41.7467,
+  "uplUsd": -13.2872,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 35.8512,
-    "uplUsd": -12.8213
+    "marginUsd": 35.7842,
+    "uplUsd": -13.1566
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.9625,
-    "uplUsd": -0.1226
+    "uplUsd": -0.1306
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2556,
+  "solUsd": 0.2558,
   "stableUsd": 0,
   "bagsUsd": 0.0939,
-  "totalUsd": 0.3495,
+  "totalUsd": 0.3497,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0926
   },
-  "staleMs": 3865
+  "staleMs": 4142
  },
- "totalUsd": 24.2474,
+ "totalUsd": 25.2673,
  "deltas": [
+  {
+   "ts": 1792512505895,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1396
+  },
+  {
+   "ts": 1792512476089,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1151
+  },
+  {
+   "ts": 1792512445909,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.065
+  },
+  {
+   "ts": 1792512355896,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0694
+  },
+  {
+   "ts": 1792512325922,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1534
+  },
+  {
+   "ts": 1792512293133,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3247
+  },
+  {
+   "ts": 1792512293132,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0625
+  },
+  {
+   "ts": 1792512270039,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1932
+  },
+  {
+   "ts": 1792512265882,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0924
+  },
+  {
+   "ts": 1792512235898,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1528
+  },
+  {
+   "ts": 1792512230009,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1669
+  },
+  {
+   "ts": 1792512230008,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 1.5377
+  },
   {
    "ts": 1792512205899,
    "kind": "margin-added",
@@ -86,84 +158,12 @@
    "kind": "margin-removed",
    "detail": "QUSDT:long",
    "amt": -0.143
-  },
-  {
-   "ts": 1792511960352,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.7357
-  },
-  {
-   "ts": 1792511927802,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.4837
-  },
-  {
-   "ts": 1792511783284,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.5256
-  },
-  {
-   "ts": 1792511755877,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.1033
-  },
-  {
-   "ts": 1792511725925,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.1148
-  },
-  {
-   "ts": 1792511695884,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.0705
-  },
-  {
-   "ts": 1792511575874,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.2219
-  },
-  {
-   "ts": 1792511515891,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0909
-  },
-  {
-   "ts": 1792511455870,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0561
-  },
-  {
-   "ts": 1792511395862,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0602
-  },
-  {
-   "ts": 1792511365859,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.2089
-  },
-  {
-   "ts": 1792511335862,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.2081
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -835.29,
-  "clearedPct": 4
+  "netAfterAud": -833.83,
+  "clearedPct": 4.2
  }
 }
