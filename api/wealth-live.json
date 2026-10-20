@@ -1,44 +1,68 @@
 {
- "ts": "2026-10-20T13:57:36.087Z",
- "ageMs": 7993,
+ "ts": "2026-10-20T14:02:36.139Z",
+ "ageMs": 7582,
  "src": "ws",
  "futures": {
   "equityUsd": 35.8565,
   "availableUsd": 39.2217,
   "grantUsd": 5.9662,
   "equityOwnUsd": 29.8903,
-  "marginUsedUsd": 42.4918,
-  "uplUsd": -9.5952,
+  "marginUsedUsd": 42.3971,
+  "uplUsd": -10.0919,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 36.5256,
-    "uplUsd": -9.4497
+    "marginUsd": 36.4309,
+    "uplUsd": -9.9231
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.9662,
-    "uplUsd": -0.1455
+    "uplUsd": -0.1688
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2527,
+  "solUsd": 0.2553,
   "stableUsd": 0,
   "bagsUsd": 0.0939,
-  "totalUsd": 0.3466,
+  "totalUsd": 0.3492,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0926
   },
-  "staleMs": 7993
+  "staleMs": 7582
  },
- "totalUsd": 30.2369,
+ "totalUsd": 30.2395,
  "deltas": [
+  {
+   "ts": 1792504945732,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1511
+  },
+  {
+   "ts": 1792504915750,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1042
+  },
+  {
+   "ts": 1792504795750,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1166
+  },
+  {
+   "ts": 1792504675738,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1004
+  },
   {
    "ts": 1792504645744,
    "kind": "margin-removed",
@@ -134,30 +158,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.799
-  },
-  {
-   "ts": 1792503865721,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0737
-  },
-  {
-   "ts": 1792503805784,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0547
-  },
-  {
-   "ts": 1792503625717,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.0544
-  },
-  {
-   "ts": 1792503475748,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.1036
   }
  ],
  "mission": {
