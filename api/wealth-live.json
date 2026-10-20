@@ -1,44 +1,80 @@
 {
- "ts": "2026-10-20T05:55:31.784Z",
- "ageMs": 4502,
+ "ts": "2026-10-20T06:00:27.271Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 57.1299,
-  "availableUsd": 0.0001,
+  "equityUsd": 50.7204,
+  "availableUsd": 0.0784,
   "grantUsd": 5.973,
-  "equityOwnUsd": 51.1569,
-  "marginUsedUsd": 62.9424,
-  "uplUsd": -5.1044,
+  "equityOwnUsd": 44.7473,
+  "marginUsedUsd": 51.2845,
+  "uplUsd": -3.1422,
   "positions": [
    {
-    "k": "BTCUSDT:long",
-    "size": 0.0354,
-    "marginUsd": 56.9694,
-    "uplUsd": -4.9029
+    "k": "BRUSDT:long",
+    "size": 654,
+    "marginUsd": 45.3115,
+    "uplUsd": -2.9536
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.973,
-    "uplUsd": -0.2015
+    "uplUsd": -0.1886
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2527,
+  "solUsd": 0.2519,
   "stableUsd": 0,
   "bagsUsd": 0.1193,
-  "totalUsd": 0.372,
+  "totalUsd": 0.3712,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.1179
   },
-  "staleMs": 4502
+  "staleMs": 0
  },
- "totalUsd": 51.5288,
+ "totalUsd": 45.1185,
  "deltas": [
+  {
+   "ts": 1792475998465,
+   "kind": "size-added",
+   "detail": "BRUSDT:long Δ22",
+   "amt": 0
+  },
+  {
+   "ts": 1792475998465,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.2216
+  },
+  {
+   "ts": 1792475995202,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.9216
+  },
+  {
+   "ts": 1792475995201,
+   "kind": "position-opened",
+   "detail": "BRUSDT:long",
+   "amt": 43.7887
+  },
+  {
+   "ts": 1792475875203,
+   "kind": "position-closed",
+   "detail": "BTCUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1792475873055,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -5.7021
+  },
   {
    "ts": 1792475660058,
    "kind": "balance-move",
@@ -122,48 +158,12 @@
    "kind": "margin-added",
    "detail": "BTCUSDT:long",
    "amt": 0.0633
-  },
-  {
-   "ts": 1792469480844,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.3351
-  },
-  {
-   "ts": 1792469449180,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.2864
-  },
-  {
-   "ts": 1792469304718,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.8534
-  },
-  {
-   "ts": 1792468339810,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.2686
-  },
-  {
-   "ts": 1792468301810,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.8216
-  },
-  {
-   "ts": 1792468024798,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.8923
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -796.24,
-  "clearedPct": 8.5
+  "netAfterAud": -805.42,
+  "clearedPct": 7.4
  }
 }
