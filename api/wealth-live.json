@@ -1,44 +1,62 @@
 {
- "ts": "2026-10-20T05:15:21.476Z",
- "ageMs": 9301,
+ "ts": "2026-10-20T05:20:21.513Z",
+ "ageMs": 9576,
  "src": "ws",
  "futures": {
-  "equityUsd": 65.5006,
+  "equityUsd": 62.681,
   "availableUsd": 0.0001,
   "grantUsd": 5.973,
-  "equityOwnUsd": 59.5276,
+  "equityOwnUsd": 56.7079,
   "marginUsedUsd": 62.9424,
-  "uplUsd": 0.2041,
+  "uplUsd": -1.0029,
   "positions": [
    {
     "k": "BTCUSDT:long",
     "size": 0.0354,
     "marginUsd": 56.9694,
-    "uplUsd": 0.2513
+    "uplUsd": -0.9346
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.973,
-    "uplUsd": -0.0472
+    "uplUsd": -0.0683
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2534,
+  "solUsd": 0.2532,
   "stableUsd": 0,
   "bagsUsd": 0.1131,
-  "totalUsd": 0.3665,
+  "totalUsd": 0.3663,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.1118
   },
-  "staleMs": 9301
+  "staleMs": 9576
  },
- "totalUsd": 59.8941,
+ "totalUsd": 57.0742,
  "deltas": [
+  {
+   "ts": 1792473517264,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.6162
+  },
+  {
+   "ts": 1792473479610,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3912
+  },
+  {
+   "ts": 1792473454810,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -3.0446
+  },
   {
    "ts": 1792472341774,
    "kind": "balance-move",
@@ -140,30 +158,12 @@
    "kind": "position-closed",
    "detail": "BRUSDT:long",
    "amt": 0
-  },
-  {
-   "ts": 1792467744985,
-   "kind": "size-reduced",
-   "detail": "BRUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1792467744471,
-   "kind": "size-reduced",
-   "detail": "BRUSDT:long Δ-3",
-   "amt": 0
-  },
-  {
-   "ts": 1792467702435,
-   "kind": "position-opened",
-   "detail": "BRUSDT:long",
-   "amt": 1.0004
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -784.27,
-  "clearedPct": 9.9
+  "netAfterAud": -788.3,
+  "clearedPct": 9.4
  }
 }
