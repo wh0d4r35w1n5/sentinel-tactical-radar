@@ -1,26 +1,26 @@
 {
- "ts": "2026-10-20T13:17:25.763Z",
- "ageMs": 74,
+ "ts": "2026-10-20T13:22:28.183Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
   "equityUsd": 35.4606,
   "availableUsd": 39.2217,
   "grantUsd": 5.9662,
   "equityOwnUsd": 29.4943,
-  "marginUsedUsd": 42.2322,
-  "uplUsd": -10.9823,
+  "marginUsedUsd": 42.5692,
+  "uplUsd": -9.2843,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 36.266,
-    "uplUsd": -10.7477
+    "marginUsd": 36.603,
+    "uplUsd": -9.0626
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.9662,
-    "uplUsd": -0.2346
+    "uplUsd": -0.2217
    }
   ]
  },
@@ -29,16 +29,22 @@
   "solQty": 0.002413,
   "solUsd": 0.252,
   "stableUsd": 0,
-  "bagsUsd": 0.1026,
-  "totalUsd": 0.3546,
+  "bagsUsd": 0.0961,
+  "totalUsd": 0.3481,
   "tokens": {
    "BQAeeSow": 0.0013,
-   "8PGyHCKv": 0.1013
+   "8PGyHCKv": 0.0948
   },
-  "staleMs": 12601
+  "staleMs": 0
  },
- "totalUsd": 29.849,
+ "totalUsd": 29.8425,
  "deltas": [
+  {
+   "ts": 1792502425689,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1586
+  },
   {
    "ts": 1792502245689,
    "kind": "margin-removed",
@@ -152,18 +158,12 @@
    "kind": "margin-added",
    "detail": "QUSDT:long",
    "amt": 0.1425
-  },
-  {
-   "ts": 1792501692289,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.9074
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -827.27,
+  "netAfterAud": -827.28,
   "clearedPct": 4.9
  }
 }
