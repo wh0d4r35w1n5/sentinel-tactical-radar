@@ -1,44 +1,86 @@
 {
- "ts": "2026-10-20T14:12:36.226Z",
- "ageMs": 7589,
+ "ts": "2026-10-20T14:17:36.602Z",
+ "ageMs": 7883,
  "src": "ws",
  "futures": {
   "equityUsd": 35.8565,
   "availableUsd": 39.2217,
   "grantUsd": 5.9662,
   "equityOwnUsd": 29.8903,
-  "marginUsedUsd": 41.8598,
-  "uplUsd": -12.779,
+  "marginUsedUsd": 40.9598,
+  "uplUsd": -17.1998,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 35.8936,
-    "uplUsd": -12.6098
+    "marginUsd": 34.9936,
+    "uplUsd": -17.1095
    },
    {
     "k": "XAUUSDT:long",
     "size": 0.01,
     "marginUsd": 5.9662,
-    "uplUsd": -0.1692
+    "uplUsd": -0.0903
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2587,
+  "solUsd": 0.2597,
   "stableUsd": 0,
   "bagsUsd": 0.0939,
-  "totalUsd": 0.3526,
+  "totalUsd": 0.3536,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0926
   },
-  "staleMs": 7589
+  "staleMs": 7883
  },
- "totalUsd": 30.2429,
+ "totalUsd": 30.2439,
  "deltas": [
+  {
+   "ts": 1792505845762,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.1042
+  },
+  {
+   "ts": 1792505785759,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.314
+  },
+  {
+   "ts": 1792505755754,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.055
+  },
+  {
+   "ts": 1792505695766,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.2582
+  },
+  {
+   "ts": 1792505665775,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0553
+  },
+  {
+   "ts": 1792505605846,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0924
+  },
+  {
+   "ts": 1792505575783,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0858
+  },
   {
    "ts": 1792505545748,
    "kind": "margin-removed",
@@ -116,48 +158,6 @@
    "kind": "margin-added",
    "detail": "QUSDT:long",
    "amt": 0.1004
-  },
-  {
-   "ts": 1792504645744,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.181
-  },
-  {
-   "ts": 1792504585733,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.0714
-  },
-  {
-   "ts": 1792504555768,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0567
-  },
-  {
-   "ts": 1792504525734,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.1344
-  },
-  {
-   "ts": 1792504495741,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0814
-  },
-  {
-   "ts": 1792504465738,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0576
-  },
-  {
-   "ts": 1792504405732,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.0507
   }
  ],
  "mission": {
