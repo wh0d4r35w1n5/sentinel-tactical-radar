@@ -1,38 +1,68 @@
 {
- "ts": "2026-10-21T05:01:25.017Z",
- "ageMs": 9030,
+ "ts": "2026-10-21T05:06:25.060Z",
+ "ageMs": 8569,
  "src": "ws",
  "futures": {
   "equityUsd": 26.2699,
   "availableUsd": 39.3531,
   "grantUsd": 0,
   "equityOwnUsd": 26.2699,
-  "marginUsedUsd": 35.0776,
-  "uplUsd": -16.6893,
+  "marginUsedUsd": 34.9743,
+  "uplUsd": -17.2059,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 35.0776,
-    "uplUsd": -16.6893
+    "marginUsd": 34.9743,
+    "uplUsd": -17.2059
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2552,
+  "solUsd": 0.2559,
   "stableUsd": 0,
   "bagsUsd": 0.0905,
-  "totalUsd": 0.3457,
+  "totalUsd": 0.3464,
   "tokens": {
    "BQAeeSow": 0.0013,
    "8PGyHCKv": 0.0892
   },
-  "staleMs": 9030
+  "staleMs": 8569
  },
- "totalUsd": 26.6156,
+ "totalUsd": 26.6163,
  "deltas": [
+  {
+   "ts": 1792559156799,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0855
+  },
+  {
+   "ts": 1792559006800,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.0714
+  },
+  {
+   "ts": 1792558946804,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.2645
+  },
+  {
+   "ts": 1792558916810,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0717
+  },
+  {
+   "ts": 1792558886790,
+   "kind": "margin-added",
+   "detail": "QUSDT:long",
+   "amt": 0.1427
+  },
   {
    "ts": 1792558826787,
    "kind": "margin-removed",
@@ -122,36 +152,6 @@
    "kind": "margin-removed",
    "detail": "QUSDT:long",
    "amt": -0.4999
-  },
-  {
-   "ts": 1792558381113,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -2.9111
-  },
-  {
-   "ts": 1792558381105,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.1073
-  },
-  {
-   "ts": 1792558376795,
-   "kind": "margin-removed",
-   "detail": "QUSDT:long",
-   "amt": -0.4749
-  },
-  {
-   "ts": 1792558361228,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.7843
-  },
-  {
-   "ts": 1792558361228,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 9.6053
   }
  ],
  "mission": {
