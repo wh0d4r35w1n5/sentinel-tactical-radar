@@ -1,38 +1,62 @@
 {
- "ts": "2026-10-21T03:41:09.123Z",
- "ageMs": 8217,
+ "ts": "2026-10-21T03:46:09.166Z",
+ "ageMs": 8153,
  "src": "ws",
  "futures": {
-  "equityUsd": 15.5235,
+  "equityUsd": 15.7523,
   "availableUsd": 39.3128,
   "grantUsd": 0,
-  "equityOwnUsd": 15.5235,
-  "marginUsedUsd": 33.7368,
-  "uplUsd": -23.3936,
+  "equityOwnUsd": 15.7523,
+  "marginUsedUsd": 33.7034,
+  "uplUsd": -23.5605,
   "positions": [
    {
     "k": "QUSDT:long",
     "size": 1439,
-    "marginUsd": 33.7368,
-    "uplUsd": -23.3936
+    "marginUsd": 33.7034,
+    "uplUsd": -23.5605
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2557,
+  "solUsd": 0.2556,
   "stableUsd": 0,
-  "bagsUsd": 0.0897,
-  "totalUsd": 0.3454,
+  "bagsUsd": 0.0895,
+  "totalUsd": 0.3451,
   "tokens": {
    "BQAeeSow": 0.0013,
-   "8PGyHCKv": 0.0884
+   "8PGyHCKv": 0.0882
   },
-  "staleMs": 8217
+  "staleMs": 8153
  },
- "totalUsd": 15.8689,
+ "totalUsd": 16.0974,
  "deltas": [
+  {
+   "ts": 1792554360379,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.3583
+  },
+  {
+   "ts": 1792554341858,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1295
+  },
+  {
+   "ts": 1792554326681,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0518
+  },
+  {
+   "ts": 1792554146680,
+   "kind": "margin-removed",
+   "detail": "QUSDT:long",
+   "amt": -0.0711
+  },
   {
    "ts": 1792553996696,
    "kind": "margin-added",
@@ -128,36 +152,12 @@
    "kind": "margin-removed",
    "detail": "QUSDT:long",
    "amt": -0.0731
-  },
-  {
-   "ts": 1792553216664,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.0676
-  },
-  {
-   "ts": 1792553186654,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.2046
-  },
-  {
-   "ts": 1792553156675,
-   "kind": "margin-added",
-   "detail": "QUSDT:long",
-   "amt": 0.072
-  },
-  {
-   "ts": 1792553066165,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.3497
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -847.28,
+  "netAfterAud": -846.95,
   "clearedPct": 2.6
  }
 }
