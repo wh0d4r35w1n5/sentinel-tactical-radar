@@ -1,15 +1,22 @@
 {
- "ts": "2026-10-22T03:00:53.409Z",
- "ageMs": 3183,
+ "ts": "2026-10-22T03:05:53.452Z",
+ "ageMs": 3001,
  "src": "ws",
  "futures": {
-  "equityUsd": 2.2519,
-  "availableUsd": 2.2519,
+  "equityUsd": 2.1836,
+  "availableUsd": 0,
   "grantUsd": 0,
-  "equityOwnUsd": 2.2519,
-  "marginUsedUsd": 0,
-  "uplUsd": 0,
-  "positions": []
+  "equityOwnUsd": 2.1836,
+  "marginUsedUsd": 2.1872,
+  "uplUsd": -0.1155,
+  "positions": [
+   {
+    "k": "BTCUSDT:long",
+    "size": 0.0013,
+    "marginUsd": 2.1872,
+    "uplUsd": -0.1155
+   }
+  ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -22,10 +29,34 @@
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.0849
   },
-  "staleMs": 3183
+  "staleMs": 3001
  },
- "totalUsd": 2.593,
+ "totalUsd": 2.5246,
  "deltas": [
+  {
+   "ts": 1792638179625,
+   "kind": "margin-added",
+   "detail": "BTCUSDT:long",
+   "amt": 0.0724
+  },
+  {
+   "ts": 1792638169277,
+   "kind": "size-added",
+   "detail": "BTCUSDT:long Δ0.00010000000000000005",
+   "amt": 0
+  },
+  {
+   "ts": 1792638165439,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0529
+  },
+  {
+   "ts": 1792638165438,
+   "kind": "position-opened",
+   "detail": "BTCUSDT:long",
+   "amt": 1.9521
+  },
   {
    "ts": 1792632928385,
    "kind": "position-closed",
@@ -121,36 +152,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.8806
-  },
-  {
-   "ts": 1792594342478,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.0593
-  },
-  {
-   "ts": 1792594271166,
-   "kind": "size-added",
-   "detail": "BTCUSDT:long Δ0.0000999999999999994",
-   "amt": 0
-  },
-  {
-   "ts": 1792594268256,
-   "kind": "size-added",
-   "detail": "BTCUSDT:long Δ0.0004000000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1792594264452,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.203
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -866.31,
+  "netAfterAud": -866.41,
   "clearedPct": 0.4
  }
 }
