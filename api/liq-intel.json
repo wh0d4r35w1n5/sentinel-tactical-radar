@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-23T10:52:32.842Z",
+ "ts": "2026-10-23T10:57:32.847Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 0
+   "long": 1319.3332,
+   "short": 900.8376000000001
   },
   "liq15m": {
-   "long": 140147.59972000003,
-   "short": 119.528
+   "long": 1319.3332,
+   "short": 1020.3656000000001
   },
   "liq60m": {
-   "long": 144439.10180000003,
-   "short": 21513.325553
+   "long": 145758.43500000003,
+   "short": 22414.163153
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,7 +20,7 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 14726.191620000001,
+    "long": 0,
     "short": 0
    },
    "liq60m": {
@@ -28,44 +28,44 @@
     "short": 5539.8417
    },
    "flow15m": {
-    "buy": 5925262,
-    "sell": 2977945,
-    "delta": 2947317
+    "buy": 5918027,
+    "sell": 3320755,
+    "delta": 2597272
    }
   },
   "ETHUSDT": {
    "liq15m": {
-    "long": 78259.0065,
+    "long": 124.464,
     "short": 119.528
    },
    "liq60m": {
-    "long": 78561.28806,
+    "long": 78685.75206,
     "short": 12073.369579999999
    },
    "flow15m": {
-    "buy": 1673195,
-    "sell": 2247429,
-    "delta": -574233
+    "buy": 1505267,
+    "sell": 3998735,
+    "delta": -2493468
    }
   },
   "SOLUSDT": {
    "liq15m": {
-    "long": 41784.0416,
+    "long": 653.3712,
     "short": 0
    },
    "liq60m": {
-    "long": 42446.308399999994,
+    "long": 43099.679599999996,
     "short": 0
    },
    "flow15m": {
-    "buy": 466574,
-    "sell": 604384,
-    "delta": -137809
+    "buy": 460236,
+    "sell": 607415,
+    "delta": -147179
    }
   },
   "DOGEUSDT": {
    "liq15m": {
-    "long": 4006.5,
+    "long": 0,
     "short": 0
    },
    "liq60m": {
@@ -80,12 +80,27 @@
   },
   "XRPUSDT": {
    "liq15m": {
-    "long": 1371.86,
+    "long": 0,
     "short": 0
    },
    "liq60m": {
     "long": 1371.86,
     "short": 0
+   },
+   "flow15m": {
+    "buy": 0,
+    "sell": 0,
+    "delta": 0
+   }
+  },
+  "NEARUSDT": {
+   "liq15m": {
+    "long": 541.498,
+    "short": 900.8376000000001
+   },
+   "liq60m": {
+    "long": 541.498,
+    "short": 900.8376000000001
    },
    "flow15m": {
     "buy": 0,
@@ -140,5 +155,5 @@
   }
  },
  "biggestPrints60m": [],
- "liqCount2h": 286
+ "liqCount2h": 292
 }
