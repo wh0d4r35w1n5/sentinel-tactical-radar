@@ -1,31 +1,62 @@
 {
- "ts": "2026-10-23T05:16:26.333Z",
- "ageMs": 185,
+ "ts": "2026-10-23T05:21:26.395Z",
+ "ageMs": 236,
  "src": "ws",
  "futures": {
-  "equityUsd": 6.9715,
-  "availableUsd": 6.9715,
+  "equityUsd": 7.0381,
+  "availableUsd": 0.0145,
   "grantUsd": 0,
-  "equityOwnUsd": 6.9715,
-  "marginUsedUsd": 0,
-  "uplUsd": 0,
-  "positions": []
+  "equityOwnUsd": 7.0381,
+  "marginUsedUsd": 6.8745,
+  "uplUsd": 0.2166,
+  "positions": [
+   {
+    "k": "USELESSUSDT:long",
+    "size": 844,
+    "marginUsd": 6.8745,
+    "uplUsd": 0.2166
+   }
+  ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2518,
+  "solUsd": 0.2517,
   "stableUsd": 0,
   "bagsUsd": 0.1024,
-  "totalUsd": 0.3542,
+  "totalUsd": 0.3541,
   "tokens": {
    "BQAeeSow": 0.0014,
    "8PGyHCKv": 0.101
   },
-  "staleMs": 185
+  "staleMs": 236
  },
- "totalUsd": 7.3258,
+ "totalUsd": 7.3923,
  "deltas": [
+  {
+   "ts": 1792732807544,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1772
+  },
+  {
+   "ts": 1792732797564,
+   "kind": "size-added",
+   "detail": "USELESSUSDT:long Δ35",
+   "amt": 0
+  },
+  {
+   "ts": 1792732794271,
+   "kind": "position-opened",
+   "detail": "USELESSUSDT:long",
+   "amt": 6.5895
+  },
+  {
+   "ts": 1792732794270,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1157
+  },
   {
    "ts": 1792732201229,
    "kind": "position-closed",
@@ -121,36 +152,12 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.0764
-  },
-  {
-   "ts": 1792724650410,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0925
-  },
-  {
-   "ts": 1792724178213,
-   "kind": "margin-added",
-   "detail": "USELESSUSDT:long",
-   "amt": 0.2011
-  },
-  {
-   "ts": 1792724169229,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1059
-  },
-  {
-   "ts": 1792724169228,
-   "kind": "position-opened",
-   "detail": "USELESSUSDT:long",
-   "amt": 3.1338
   }
  ],
  "mission": {
   "debtsAud": 870,
   "paidAud": 0,
-  "netAfterAud": -859.55,
+  "netAfterAud": -859.46,
   "clearedPct": 1.2
  }
 }
