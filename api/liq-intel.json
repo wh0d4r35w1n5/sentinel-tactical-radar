@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-23T00:10:16.283Z",
+ "ts": "2026-10-23T00:15:16.307Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 594.0675
+   "long": 269.469,
+   "short": 18398.550199999998
   },
   "liq15m": {
-   "long": 527.697,
-   "short": 15974.308599999998
+   "long": 797.1659999999999,
+   "short": 34372.8588
   },
   "liq60m": {
-   "long": 32400.54086,
-   "short": 18988.238342
+   "long": 32184.157500000005,
+   "short": 37052.005880000004
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -21,16 +21,16 @@
   "BTCUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 15380.2411
+    "short": 33743.615300000005
    },
    "liq60m": {
     "long": 479.68947000000003,
-    "short": 15380.2411
+    "short": 33743.615300000005
    },
    "flow15m": {
-    "buy": 25978463,
-    "sell": 19339193,
-    "delta": 6639270
+    "buy": 30413255,
+    "sell": 31886922,
+    "delta": -1473667
    }
   },
   "ETHUSDT": {
@@ -43,9 +43,9 @@
     "short": 3039.4287000000004
    },
    "flow15m": {
-    "buy": 3639709,
-    "sell": 3538365,
-    "delta": 101344
+    "buy": 3555905,
+    "sell": 4390965,
+    "delta": -835060
    }
   },
   "SOLUSDT": {
@@ -58,9 +58,24 @@
     "short": 0
    },
    "flow15m": {
-    "buy": 1245459,
-    "sell": 808623,
-    "delta": 436837
+    "buy": 942212,
+    "sell": 933946,
+    "delta": 8266
+   }
+  },
+  "ARBUSDT": {
+   "liq15m": {
+    "long": 269.469,
+    "short": 0
+   },
+   "liq60m": {
+    "long": 269.469,
+    "short": 0
+   },
+   "flow15m": {
+    "buy": 0,
+    "sell": 0,
+    "delta": 0
    }
   },
   "INJUSDT": {
@@ -81,26 +96,11 @@
   "MAGICUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 35.176
    },
    "liq60m": {
-    "long": 486.21112,
-    "short": 92.89548
-   },
-   "flow15m": {
-    "buy": 0,
-    "sell": 0,
-    "delta": 0
-   }
-  },
-  "LUMIAUSDT": {
-   "liq15m": {
-    "long": 0,
-    "short": 0
-   },
-   "liq60m": {
-    "long": 0,
-    "short": 334.782662
+    "long": 0.35876,
+    "short": 128.07148
    },
    "flow15m": {
     "buy": 0,
@@ -110,5 +110,5 @@
   }
  },
  "biggestPrints60m": [],
- "liqCount2h": 66
+ "liqCount2h": 79
 }
