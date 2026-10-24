@@ -1,18 +1,18 @@
 {
- "at": "2026-10-24T12:01:05.462Z",
+ "at": "2026-10-24T12:10:37.571Z",
  "wallets": {
   "futures": {
-   "equityUsd": 0.98,
-   "marginFreeUsd": 0.1,
-   "epochNetUsd": 0.93,
+   "equityUsd": 0.54,
+   "marginFreeUsd": 0,
+   "epochNetUsd": 0.27,
    "fills": 400,
    "positions": [
     {
      "symbol": "KATUSDT",
      "side": "long",
-     "upl": 0.07,
-     "lev": 20,
-     "margin": 0.88
+     "upl": -0.07,
+     "lev": 16,
+     "margin": 0.56
     }
    ]
   },
@@ -27,6 +27,18 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792437265550,
+    "symbol": "QUSDT",
+    "text": "OPEN QUSDT $-0.02"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1792437261810,
+    "symbol": "QUSDT",
+    "text": "CLOSE QUSDT +$0.90"
+   },
    {
     "venue": "bitget",
     "ts": 1792437261810,
@@ -74,18 +86,6 @@
     "ts": 1792436683344,
     "symbol": "QUSDT",
     "text": "CLOSE QUSDT +$2.55"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792436683344,
-    "symbol": "QUSDT",
-    "text": "CLOSE QUSDT +$1.89"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792436403878,
-    "symbol": "LENUSDT",
-    "text": "CLOSE LENUSDT $-0.38"
    }
   ]
  },
@@ -671,10 +671,6 @@
   }
  ],
  "attrib": {
-  "1496201162568503297": {
-   "pimp": null,
-   "crack": null
-  },
   "1496201129169260545": {
    "pimp": null,
    "crack": null
@@ -1268,6 +1264,10 @@
    "crack": null
   },
   "1497854237565771778": {
+   "pimp": null,
+   "crack": null
+  },
+  "1497858329486811136": {
    "pimp": null,
    "crack": null
   }
