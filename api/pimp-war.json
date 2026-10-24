@@ -1,12 +1,20 @@
 {
- "at": "2026-10-24T12:38:30.014Z",
+ "at": "2026-10-24T12:48:03.142Z",
  "wallets": {
   "futures": {
-   "equityUsd": 0.17,
-   "marginFreeUsd": 0.17,
+   "equityUsd": 0.16,
+   "marginFreeUsd": 0.03,
    "epochNetUsd": -7.22,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "BTCUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 120,
+     "margin": 0.13
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792437290469,
+    "symbol": "QUSDT",
+    "text": "CLOSE QUSDT +$0.57"
+   },
    {
     "venue": "bitget",
     "ts": 1792437271072,
@@ -72,12 +86,6 @@
     "ts": 1792436691251,
     "symbol": "QUSDT",
     "text": "OPEN QUSDT $-0.00"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792436688802,
-    "symbol": "QUSDT",
-    "text": "OPEN QUSDT $-0.06"
    }
   ]
  },
