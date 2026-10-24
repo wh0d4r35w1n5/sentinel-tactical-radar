@@ -1,12 +1,20 @@
 {
- "at": "2026-10-24T11:42:20.648Z",
+ "at": "2026-10-24T11:51:54.569Z",
  "wallets": {
   "futures": {
    "equityUsd": 1.55,
-   "marginFreeUsd": 1.55,
+   "marginFreeUsd": 0.14,
    "epochNetUsd": 0.97,
    "fills": 400,
-   "positions": []
+   "positions": [
+    {
+     "symbol": "KATUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 20,
+     "margin": 1.41
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -19,6 +27,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1792436688802,
+    "symbol": "QUSDT",
+    "text": "OPEN QUSDT $-0.06"
+   },
    {
     "venue": "bitget",
     "ts": 1792436688802,
@@ -72,12 +86,6 @@
     "ts": 1792436334372,
     "symbol": "BRUSDT",
     "text": "CLOSE BRUSDT +$0.02"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1792436329832,
-    "symbol": "BRUSDT",
-    "text": "CLOSE BRUSDT +$0.01"
    }
   ]
  },
