@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-25T14:36:07.120Z",
+ "ts": "2026-10-25T14:47:53.909Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 17766,
- "graded": 17504,
- "pending": 262,
+ "shadowRows": 17770,
+ "graded": 17726,
+ "pending": 44,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,16 +16,27 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 17489,
-   "wins": 7528,
-   "netPct": -1396.966311530746,
+   "n": 17477,
+   "wins": 7526,
+   "netPct": -1387.5215813789468,
    "outcomes": {
-    "sl": 6368,
+    "sl": 6356,
     "tp": 2128,
     "ttl": 8993
    },
-   "meanNetPct": -0.08,
-   "wr": 43
+   "meanNetPct": -0.079,
+   "wr": 43.1
+  },
+  "structure-short:factor-floor": {
+   "n": 234,
+   "wins": 26,
+   "netPct": -357.8443078296349,
+   "outcomes": {
+    "ttl": 107,
+    "sl": 127
+   },
+   "meanNetPct": -1.529,
+   "wr": 11.1
   }
  },
  "allowedCohort": {
@@ -35,30 +46,6 @@
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
-  {
-   "ts": "2026-10-25T10:53:18.157Z",
-   "sym": "QUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-25T10:54:22.213Z",
-   "sym": "QUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-25T10:55:25.965Z",
-   "sym": "QUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
   {
    "ts": "2026-10-25T10:56:29.866Z",
    "sym": "QUSDT",
@@ -194,6 +181,30 @@
    "gate": "same-beta-cap",
    "out": "ttl",
    "netPct": 0.7
+  },
+  {
+   "ts": "2026-10-25T11:58:13.237Z",
+   "sym": "NEARUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.66
+  },
+  {
+   "ts": "2026-10-25T11:59:17.045Z",
+   "sym": "NEARUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.64
+  },
+  {
+   "ts": "2026-10-25T12:04:36.856Z",
+   "sym": "NEARUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.51
   }
  ]
 }
