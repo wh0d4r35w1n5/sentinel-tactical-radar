@@ -1,18 +1,25 @@
 {
- "at": "2026-10-26T21:48:51.080Z",
+ "at": "2026-10-26T21:52:46.571Z",
  "wallets": {
   "futures": {
-   "equityUsd": 50111.84,
-   "marginFreeUsd": 50142.57,
+   "equityUsd": 50112.13,
+   "marginFreeUsd": 50142.85,
    "epochNetUsd": -70.36,
    "fills": 153,
    "positions": [
     {
+     "symbol": "MORPHOUSDT",
+     "side": "long",
+     "upl": 0.08,
+     "lev": 10,
+     "margin": 0.65
+    },
+    {
      "symbol": "POLYXUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0.02,
      "lev": 10,
-     "margin": 0.5
+     "margin": 0.51
     },
     {
      "symbol": "EGLDUSDT",
@@ -20,13 +27,6 @@
      "upl": 0.03,
      "lev": 10,
      "margin": 0.51
-    },
-    {
-     "symbol": "MORPHOUSDT",
-     "side": "long",
-     "upl": 0.06,
-     "lev": 10,
-     "margin": 0.64
     }
    ]
   },
@@ -554,9 +554,9 @@
    ],
    "persona": {
     "swagger": 0.31,
-    "tilt": 0.54,
+    "tilt": 0.53,
     "greed": 0.45,
-    "discipline": 0.36
+    "discipline": 0.37
    }
   }
  ],
