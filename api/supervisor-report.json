@@ -1,42 +1,43 @@
 {
-  "refreshedAt": "2026-10-26T20:30:31.713Z",
+  "refreshedAt": "2026-10-26T20:40:35.556Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50110.92
+    "equityUsd": 50105.88
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-10-26T20:30:31.713Z"
+    "at": "2026-10-26T20:40:35.556Z"
   },
   "sweep": {
-    "scanned": 20,
-    "cancelled": 0,
-    "at": "2026-10-26T20:30:31.713Z"
+    "scanned": 22,
+    "cancelled": 6,
+    "at": "2026-10-26T20:40:35.556Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 136
+    "demoFillsBybit": 142
   },
   "evidence": {
-    "demoEpisodes": 59,
-    "demoNetUsd": -53.8556,
+    "demoEpisodes": 62,
+    "demoNetUsd": -53.8006,
     "demoWinRate": 33.9,
-    "demoSqN": -0.11,
+    "demoSqN": -0.1,
     "excluded": 3,
     "cellCount": 6
   },
   "positions": [
-    "BANKUSDT:1.4516",
-    "YBUSDT:0",
-    "XDCUSDT:-1.7983",
-    "ETHFIUSDT:-0.01092",
-    "CAKEUSDT:-5.1611",
-    "XMRUSDT:-5.1858"
+    "LITUSDT:-0.01615",
+    "XDCUSDT:-4.23885",
+    "ETHFIUSDT:0.00156",
+    "CAKEUSDT:-4.4541",
+    "XMRUSDT:-5.3922"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 6 untriggered legs on dead seats"
+  ]
 }
