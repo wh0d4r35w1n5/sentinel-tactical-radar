@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-25T22:36:54.227Z",
+ "ts": "2026-10-26T02:38:20.223Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
  "shadowRows": 17843,
- "graded": 17829,
- "pending": 14,
+ "graded": 17831,
+ "pending": 12,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -28,15 +28,15 @@
    "wr": 43.1
   },
   "structure-short:factor-floor": {
-   "n": 257,
-   "wins": 26,
-   "netPct": -411.9657351368675,
+   "n": 259,
+   "wins": 28,
+   "netPct": -410.2558830888999,
    "outcomes": {
-    "ttl": 118,
+    "ttl": 120,
     "sl": 139
    },
-   "meanNetPct": -1.603,
-   "wr": 10.1
+   "meanNetPct": -1.584,
+   "wr": 10.8
   }
  },
  "allowedCohort": {
@@ -46,22 +46,6 @@
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
-  {
-   "ts": "2026-10-25T18:43:53.394Z",
-   "sym": "ENAUSDT",
-   "side": "short",
-   "gate": "factor-floor",
-   "out": "ttl",
-   "netPct": -0.27
-  },
-  {
-   "ts": "2026-10-25T18:45:36.653Z",
-   "sym": "QUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
   {
    "ts": "2026-10-25T18:46:40.107Z",
    "sym": "QUSDT",
@@ -205,6 +189,22 @@
    "gate": "factor-floor",
    "out": "sl",
    "netPct": -4.08
+  },
+  {
+   "ts": "2026-10-25T20:32:07.413Z",
+   "sym": "INITUSDT",
+   "side": "short",
+   "gate": "factor-floor",
+   "out": "ttl",
+   "netPct": 0.85
+  },
+  {
+   "ts": "2026-10-25T20:41:43.273Z",
+   "sym": "INITUSDT",
+   "side": "short",
+   "gate": "factor-floor",
+   "out": "ttl",
+   "netPct": 0.85
   }
  ]
 }
