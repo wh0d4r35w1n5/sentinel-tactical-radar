@@ -1,12 +1,27 @@
 {
- "at": "2026-10-26T19:15:56.182Z",
+ "at": "2026-10-26T19:26:02.606Z",
  "wallets": {
   "futures": {
-   "equityUsd": 50127.06,
-   "marginFreeUsd": 50159.43,
-   "epochNetUsd": -64.08,
-   "fills": 109,
-   "positions": []
+   "equityUsd": 50126.73,
+   "marginFreeUsd": 50007.67,
+   "epochNetUsd": -64.09,
+   "fills": 111,
+   "positions": [
+    {
+     "symbol": "OPGUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 10,
+     "margin": 0.51
+    },
+    {
+     "symbol": "NEARUSDT",
+     "side": "long",
+     "upl": 3.9,
+     "lev": 10,
+     "margin": 151.16
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -532,7 +547,7 @@
    ],
    "persona": {
     "swagger": 0.11,
-    "tilt": 0.97,
+    "tilt": 0.96,
     "greed": 0.39,
     "discipline": 0.22
    }
