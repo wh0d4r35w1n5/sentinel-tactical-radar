@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-26T20:23:15.889Z",
+ "ts": "2026-10-26T20:28:15.904Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 2169.0387600000004
+   "long": 349356.4375,
+   "short": 2785.552
   },
   "liq15m": {
-   "long": 0,
-   "short": 46908.07958
+   "long": 349356.4375,
+   "short": 39705.45768
   },
   "liq60m": {
-   "long": 265314.4704,
-   "short": 56262.72898
+   "long": 614670.9079,
+   "short": 59048.28098
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,32 +20,32 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 11615.698260000001
+    "long": 349356.4375,
+    "short": 4954.590760000001
    },
    "liq60m": {
-    "long": 0,
-    "short": 11615.698260000001
+    "long": 349356.4375,
+    "short": 14401.25026
    },
    "flow15m": {
-    "buy": 9356598,
-    "sell": 19297770,
-    "delta": -9941172
+    "buy": 14123729,
+    "sell": 37079717,
+    "delta": -22955988
    }
   },
   "ETHUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 34929.89192
+    "short": 34750.86692
    },
    "liq60m": {
     "long": 0,
     "short": 34929.89192
    },
    "flow15m": {
-    "buy": 2916904,
-    "sell": 4305822,
-    "delta": -1388918
+    "buy": 3410825,
+    "sell": 5291257,
+    "delta": -1880432
    }
   },
   "SOLUSDT": {
@@ -58,15 +58,15 @@
     "short": 0
    },
    "flow15m": {
-    "buy": 996261,
-    "sell": 2082717,
-    "delta": -1086456
+    "buy": 963015,
+    "sell": 2156678,
+    "delta": -1193663
    }
   },
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 362.48940000000005
+    "short": 0
    },
    "liq60m": {
     "long": 0,
@@ -111,6 +111,14 @@
  },
  "biggestPrints60m": [
   {
+   "ts": 1793046415947,
+   "sym": "BTCUSDT",
+   "side": "long",
+   "usd": 349356.4375,
+   "px": 79852.9,
+   "venue": "okx"
+  },
+  {
    "ts": 1793045056520,
    "sym": "SOLUSDT",
    "side": "long",
@@ -119,5 +127,5 @@
    "venue": "okx"
   }
  ],
- "liqCount2h": 208
+ "liqCount2h": 204
 }
