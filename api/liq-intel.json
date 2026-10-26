@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-26T20:03:15.863Z",
+ "ts": "2026-10-26T20:08:15.864Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 8761.9645
+   "long": 263000.69039999996,
+   "short": 588.1829
   },
   "liq15m": {
-   "long": 0,
-   "short": 8761.9645
+   "long": 263000.69039999996,
+   "short": 9350.1474
   },
   "liq60m": {
-   "long": 21547.95369,
-   "short": 11225.0305
+   "long": 284309.14261,
+   "short": 11813.2134
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -24,13 +24,13 @@
     "short": 0
    },
    "liq60m": {
-    "long": 16357.07133,
+    "long": 16349.07795,
     "short": 0
    },
    "flow15m": {
-    "buy": 8391558,
-    "sell": 7470964,
-    "delta": 920594
+    "buy": 9867885,
+    "sell": 11198546,
+    "delta": -1330661
    }
   },
   "ETHUSDT": {
@@ -39,28 +39,28 @@
     "short": 0
    },
    "liq60m": {
-    "long": 2522.41426,
+    "long": 2415.98636,
     "short": 0
    },
    "flow15m": {
-    "buy": 2863348,
-    "sell": 4458354,
-    "delta": -1595006
+    "buy": 3456280,
+    "sell": 4256989,
+    "delta": -800709
    }
   },
   "SOLUSDT": {
    "liq15m": {
-    "long": 0,
+    "long": 263000.69039999996,
     "short": 0
    },
    "liq60m": {
-    "long": 16.1648,
+    "long": 263016.8552,
     "short": 0
    },
    "flow15m": {
-    "buy": 1249850,
-    "sell": 1742971,
-    "delta": -493121
+    "buy": 1592294,
+    "sell": 2080879,
+    "delta": -488584
    }
   },
   "DOGEUSDT": {
@@ -69,7 +69,7 @@
     "short": 0
    },
    "liq60m": {
-    "long": 321.7623,
+    "long": 196.6821,
     "short": 0
    },
    "flow15m": {
@@ -81,11 +81,11 @@
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 500.7115
+    "short": 1088.8944
    },
    "liq60m": {
     "long": 16.761000000000003,
-    "short": 2963.7775
+    "short": 3551.9604000000004
    },
    "flow15m": {
     "buy": 0,
@@ -124,6 +124,15 @@
    }
   }
  },
- "biggestPrints60m": [],
- "liqCount2h": 204
+ "biggestPrints60m": [
+  {
+   "ts": 1793045056520,
+   "sym": "SOLUSDT",
+   "side": "long",
+   "usd": 263000.69039999996,
+   "px": 100.24,
+   "venue": "okx"
+  }
+ ],
+ "liqCount2h": 207
 }
