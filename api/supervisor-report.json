@@ -1,47 +1,42 @@
 {
-  "refreshedAt": "2026-10-27T08:24:48.309Z",
+  "refreshedAt": "2026-10-27T08:35:59.474Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50091.91
+    "equityUsd": 50080.51
   },
   "units": {
     "checked": 6,
-    "dead": [
-      "sentinel-liq-guard:active"
-    ],
-    "at": "2026-10-27T08:24:48.309Z"
+    "dead": 0,
+    "at": "2026-10-27T08:35:59.474Z"
   },
   "sweep": {
-    "scanned": 23,
-    "cancelled": 0,
-    "at": "2026-10-27T08:24:48.309Z"
+    "scanned": 9,
+    "cancelled": 8,
+    "at": "2026-10-27T08:35:59.474Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 186
+    "demoFillsBybit": 190
   },
   "evidence": {
-    "demoEpisodes": 84,
-    "demoNetUsd": -82.3546,
-    "demoWinRate": 28.6,
-    "demoSqN": -1.77,
+    "demoEpisodes": 87,
+    "demoNetUsd": -84.5013,
+    "demoWinRate": 27.6,
+    "demoSqN": -2,
     "excluded": 3,
     "cellCount": 8
   },
   "positions": [
-    "SAHARAUSDT:0.754845",
-    "ERAUSDT:-2.09413",
-    "KAIAUSDT:-2.73276",
-    "LSKUSDT:-0.03162",
-    "ALGOUSDT:0.005808",
-    "COMPUSDT:0.62656",
-    "FILUSDT:0.02408"
+    "SAHARAUSDT:-6.90144",
+    "ERAUSDT:-2.71207",
+    "KAIAUSDT:-4.09914",
+    "ALGOUSDT:-0.013068"
   ],
   "problems": [],
   "notes": [
-    "restarted sentinel-liq-guard (was activating)"
+    "orphan sweep — cancelled 8 untriggered legs on dead seats"
   ]
 }
