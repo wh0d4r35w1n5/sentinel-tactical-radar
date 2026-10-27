@@ -1,21 +1,23 @@
 {
-  "refreshedAt": "2026-10-27T12:46:08.242Z",
+  "refreshedAt": "2026-10-27T12:56:51.292Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50066.58
+    "equityUsd": 50070.15
   },
   "units": {
     "checked": 6,
-    "dead": 0,
-    "at": "2026-10-27T12:46:08.242Z"
+    "dead": [
+      "sentinel-liq-guard:active"
+    ],
+    "at": "2026-10-27T12:56:51.292Z"
   },
   "sweep": {
-    "scanned": 2,
+    "scanned": 0,
     "cancelled": 0,
-    "at": "2026-10-27T12:46:08.242Z"
+    "at": "2026-10-27T12:56:51.292Z"
   },
   "journals": {
     "realFills": 400,
@@ -30,8 +32,10 @@
     "cellCount": 9
   },
   "positions": [
-    "ALGOUSDT:0.009196"
+    "ALGOUSDT:0.013552"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "restarted sentinel-liq-guard (was activating)"
+  ]
 }
