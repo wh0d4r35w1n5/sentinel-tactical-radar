@@ -1,39 +1,41 @@
 {
-  "refreshedAt": "2026-10-27T17:47:45.707Z",
+  "refreshedAt": "2026-10-27T17:58:23.232Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50092.67
+    "equityUsd": 50097.97
   },
   "units": {
     "checked": 6,
-    "dead": 0,
-    "at": "2026-10-27T17:47:45.707Z"
+    "dead": [
+      "sentinel-liq-guard:active"
+    ],
+    "at": "2026-10-27T17:58:23.232Z"
   },
   "sweep": {
     "scanned": 2,
     "cancelled": 0,
-    "at": "2026-10-27T17:47:45.707Z"
+    "at": "2026-10-27T17:58:23.232Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 229
+    "demoFillsBybit": 231
   },
   "evidence": {
-    "demoEpisodes": 105,
-    "demoNetUsd": -107.5686,
-    "demoWinRate": 29.5,
-    "demoSqN": -2.17,
+    "demoEpisodes": 107,
+    "demoNetUsd": -107.562,
+    "demoWinRate": 29.9,
+    "demoSqN": -2.12,
     "excluded": 3,
-    "cellCount": 9
+    "cellCount": 10
   },
   "positions": [
-    "XTZUSDT:0.02506",
-    "XAUTUSDT:0.0069",
-    "SOLUSDT:0.014"
+    "SOLUSDT:0.0073"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "restarted sentinel-liq-guard (was activating)"
+  ]
 }
