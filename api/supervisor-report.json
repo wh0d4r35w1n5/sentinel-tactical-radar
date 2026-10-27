@@ -1,43 +1,47 @@
 {
-  "refreshedAt": "2026-10-27T08:14:47.420Z",
+  "refreshedAt": "2026-10-27T08:24:48.309Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50102.23
+    "equityUsd": 50091.91
   },
   "units": {
     "checked": 6,
-    "dead": 0,
-    "at": "2026-10-27T08:14:47.420Z"
+    "dead": [
+      "sentinel-liq-guard:active"
+    ],
+    "at": "2026-10-27T08:24:48.309Z"
   },
   "sweep": {
     "scanned": 23,
     "cancelled": 0,
-    "at": "2026-10-27T08:14:47.420Z"
+    "at": "2026-10-27T08:24:48.309Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 181
+    "demoFillsBybit": 186
   },
   "evidence": {
-    "demoEpisodes": 82,
-    "demoNetUsd": -78.8055,
-    "demoWinRate": 29.3,
-    "demoSqN": -1.7,
+    "demoEpisodes": 84,
+    "demoNetUsd": -82.3546,
+    "demoWinRate": 28.6,
+    "demoSqN": -1.77,
     "excluded": 3,
     "cellCount": 8
   },
   "positions": [
-    "ERAUSDT:-0.17165",
-    "BERAUSDT:-0.8088",
-    "KAIAUSDT:-1.13865",
-    "LSKUSDT:-0.04216",
-    "ALGOUSDT:0.011616",
-    "COMPUSDT:-0.25632",
-    "FILUSDT:0.02856"
+    "SAHARAUSDT:0.754845",
+    "ERAUSDT:-2.09413",
+    "KAIAUSDT:-2.73276",
+    "LSKUSDT:-0.03162",
+    "ALGOUSDT:0.005808",
+    "COMPUSDT:0.62656",
+    "FILUSDT:0.02408"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "restarted sentinel-liq-guard (was activating)"
+  ]
 }
