@@ -1,42 +1,44 @@
 {
-  "refreshedAt": "2026-10-27T07:35:07.610Z",
+  "refreshedAt": "2026-10-27T07:44:46.656Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50109.86
+    "equityUsd": 50110.78
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-10-27T07:35:07.610Z"
+    "at": "2026-10-27T07:44:46.656Z"
   },
   "sweep": {
-    "scanned": 8,
-    "cancelled": 0,
-    "at": "2026-10-27T07:35:07.610Z"
+    "scanned": 6,
+    "cancelled": 6,
+    "at": "2026-10-27T07:44:46.656Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 166
+    "demoFillsBybit": 171
   },
   "evidence": {
-    "demoEpisodes": 74,
-    "demoNetUsd": -69.9383,
-    "demoWinRate": 31.1,
-    "demoSqN": -0.89,
+    "demoEpisodes": 77,
+    "demoNetUsd": -70.0012,
+    "demoWinRate": 29.9,
+    "demoSqN": -1.17,
     "excluded": 3,
     "cellCount": 6
   },
   "positions": [
-    "ETCUSDT:0.0021",
-    "ALGOUSDT:0.002904",
-    "GALAUSDT:0",
-    "RLCUSDT:0",
-    "ARKUSDT:0.00868",
-    "FILUSDT:0.00616"
+    "AVNTUSDT:0",
+    "BLENDUSDT:0.90144",
+    "LSKUSDT:-0.00279",
+    "ARKUSDT:0.00186",
+    "ALGOUSDT:0.00242",
+    "FILUSDT:0.01792"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 6 untriggered legs on dead seats"
+  ]
 }
