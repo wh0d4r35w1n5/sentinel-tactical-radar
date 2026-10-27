@@ -1,25 +1,25 @@
 {
-  "refreshedAt": "2026-10-27T11:36:04.560Z",
+  "refreshedAt": "2026-10-27T11:46:05.012Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50063.19
+    "equityUsd": 50066.71
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-10-27T11:36:04.560Z"
+    "at": "2026-10-27T11:46:05.012Z"
   },
   "sweep": {
-    "scanned": 2,
-    "cancelled": 0,
-    "at": "2026-10-27T11:36:04.560Z"
+    "scanned": 7,
+    "cancelled": 5,
+    "at": "2026-10-27T11:46:05.012Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 217
+    "demoFillsBybit": 218
   },
   "evidence": {
     "demoEpisodes": 100,
@@ -30,8 +30,11 @@
     "cellCount": 9
   },
   "positions": [
-    "ALGOUSDT:-0.035816"
+    "JCTUSDT:5.1456",
+    "ALGOUSDT:-0.032428"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+  ]
 }
