@@ -1,38 +1,42 @@
 {
-  "refreshedAt": "2026-10-29T16:06:19.765Z",
+  "refreshedAt": "2026-10-29T16:16:23.040Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50112.39
+    "equityUsd": 50114.91
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-10-29T16:06:19.765Z"
+    "at": "2026-10-29T16:16:23.040Z"
   },
   "sweep": {
-    "scanned": 6,
-    "cancelled": 0,
-    "at": "2026-10-29T16:06:19.765Z"
+    "scanned": 10,
+    "cancelled": 1,
+    "at": "2026-10-29T16:16:23.040Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 398
+    "demoFillsBybit": 403
   },
   "evidence": {
-    "demoEpisodes": 177,
-    "demoNetUsd": -142.7497,
-    "demoWinRate": 32.2,
-    "demoSqN": -2.94,
+    "demoEpisodes": 179,
+    "demoNetUsd": -138.2919,
+    "demoWinRate": 32.4,
+    "demoSqN": -2.87,
     "excluded": 3,
     "cellCount": 8
   },
   "positions": [
-    "BROCCOLIUSDT:10.169148",
-    "HYPEUSDT:10.04055"
+    "THETAUSDT:0.078272",
+    "HYPEUSDT:9.16084",
+    "TRBUSDT:-2.8106",
+    "BROCCOLIUSDT:12.085728"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 1 untriggered legs on dead seats"
+  ]
 }
