@@ -1,50 +1,54 @@
 {
-  "refreshedAt": "2026-10-31T10:40:56.018Z",
+  "refreshedAt": "2026-10-31T10:50:56.179Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50063.07
+    "equityUsd": 50050.33
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-10-31T10:40:56.018Z"
+    "at": "2026-10-31T10:50:56.179Z"
   },
   "sweep": {
-    "scanned": 78,
-    "cancelled": 0,
-    "at": "2026-10-31T10:40:56.018Z"
+    "scanned": 87,
+    "cancelled": 5,
+    "at": "2026-10-31T10:50:56.179Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 458
+    "demoFillsBybit": 465
   },
   "evidence": {
-    "demoEpisodes": 198,
-    "demoNetUsd": -144.3998,
-    "demoWinRate": 31.3,
-    "demoSqN": -2.63,
+    "demoEpisodes": 201,
+    "demoNetUsd": -146.0756,
+    "demoWinRate": 30.8,
+    "demoSqN": -2.72,
     "excluded": 3,
     "cellCount": 4
   },
   "positions": [
-    "ENAUSDT:0.4787",
-    "PENDLEUSDT:3.1577",
+    "BNBUSDT:0",
+    "MORPHOUSDT:0",
+    "ORDERUSDT:0",
     "LINKUSDT:4.2032",
-    "ENJUSDT:-0.3002264",
-    "TRIAUSDT:-0.33759",
-    "BANUSDT:2.49808",
-    "JELLYJELLYUSDT:-1.17555",
-    "ACUUSDT:-0.56784",
-    "ALTUSDT:-2.93366",
-    "VETUSDT:2.29434",
-    "VIRTUALUSDT:-1.3239",
-    "ETHUSDT:0.5781",
-    "SOLUSDT:2.328",
-    "XRPUSDT:1.1352"
+    "BCHUSDT:0.0024",
+    "PENDLEUSDT:2.5678",
+    "ENJUSDT:-1.125849",
+    "TRIAUSDT:1.68795",
+    "JELLYJELLYUSDT:-0.94044",
+    "ACUUSDT:-3.83292",
+    "ALTUSDT:-4.107124",
+    "VETUSDT:-0.152956",
+    "VIRTUALUSDT:-3.9717",
+    "ETHUSDT:0.0205",
+    "SOLUSDT:0.9215",
+    "XRPUSDT:0.68112"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+  ]
 }
