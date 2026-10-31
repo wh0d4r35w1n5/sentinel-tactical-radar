@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-31T02:18:54.397Z",
+ "ts": "2026-10-31T06:19:13.397Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 25189,
- "graded": 24959,
- "pending": 230,
+ "shadowRows": 25192,
+ "graded": 25168,
+ "pending": 24,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,13 +16,13 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 24645,
-   "wins": 10638,
-   "netPct": -2574.2233918545962,
+   "n": 24854,
+   "wins": 10730,
+   "netPct": -2594.911581013636,
    "outcomes": {
-    "sl": 8782,
-    "tp": 2545,
-    "ttl": 13318
+    "sl": 8840,
+    "tp": 2553,
+    "ttl": 13461
    },
    "meanNetPct": -0.104,
    "wr": 43.2
@@ -47,164 +47,164 @@
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
   {
-   "ts": "2026-10-30T22:33:41.160Z",
+   "ts": "2026-10-31T01:11:04.437Z",
    "sym": "LINKUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.55
+   "netPct": -0.27
   },
   {
-   "ts": "2026-10-30T22:33:41.160Z",
-   "sym": "OPUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-30T22:34:44.972Z",
-   "sym": "LINKUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.34
-  },
-  {
-   "ts": "2026-10-30T22:34:44.972Z",
-   "sym": "OPUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-30T22:35:48.852Z",
-   "sym": "LINKUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.39
-  },
-  {
-   "ts": "2026-10-30T22:35:48.852Z",
-   "sym": "OPUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-30T22:36:52.595Z",
-   "sym": "LINKUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.55
-  },
-  {
-   "ts": "2026-10-30T22:36:52.595Z",
-   "sym": "OPUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "sl",
-   "netPct": -1.32
-  },
-  {
-   "ts": "2026-10-30T22:37:56.279Z",
-   "sym": "LINKUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.52
-  },
-  {
-   "ts": "2026-10-30T22:37:56.279Z",
+   "ts": "2026-10-31T01:11:04.437Z",
    "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.97
+   "netPct": 0.13
   },
   {
-   "ts": "2026-10-30T22:39:00.314Z",
+   "ts": "2026-10-31T01:12:08.341Z",
    "sym": "LINKUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.52
+   "netPct": -0.29
   },
   {
-   "ts": "2026-10-30T22:39:00.314Z",
+   "ts": "2026-10-31T01:12:08.341Z",
    "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.71
+   "netPct": -0.37
   },
   {
-   "ts": "2026-10-30T22:40:04.036Z",
+   "ts": "2026-10-31T01:13:11.948Z",
    "sym": "LINKUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.43
+   "netPct": -0.25
   },
   {
-   "ts": "2026-10-30T22:40:04.036Z",
+   "ts": "2026-10-31T01:13:11.948Z",
    "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.97
+   "netPct": -0.04
   },
   {
-   "ts": "2026-10-30T22:41:08.180Z",
-   "sym": "LINKUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.47
-  },
-  {
-   "ts": "2026-10-30T22:41:08.180Z",
+   "ts": "2026-10-31T01:14:15.847Z",
    "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -1.06
+   "netPct": -0.2
   },
   {
-   "ts": "2026-10-30T22:42:12.121Z",
-   "sym": "LINKUSDT",
+   "ts": "2026-10-31T01:15:19.699Z",
+   "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.47
+   "netPct": 2.2
   },
   {
-   "ts": "2026-10-30T22:43:15.956Z",
-   "sym": "LINKUSDT",
+   "ts": "2026-10-31T01:16:23.571Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:17:27.629Z",
+   "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.45
+   "netPct": 2.03
   },
   {
-   "ts": "2026-10-30T22:44:20.011Z",
-   "sym": "LINKUSDT",
+   "ts": "2026-10-31T01:18:31.401Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:19:35.180Z",
+   "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": -0.47
+   "netPct": 1.95
   },
   {
-   "ts": "2026-10-30T23:06:39.660Z",
-   "sym": "USUSDT",
+   "ts": "2026-10-31T01:20:38.948Z",
+   "sym": "OPUSDT",
    "side": "short",
    "gate": "same-beta-cap",
    "out": "ttl",
-   "netPct": 0.1
+   "netPct": 2.03
+  },
+  {
+   "ts": "2026-10-31T01:21:43.021Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:22:46.913Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:23:50.579Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 2.2
+  },
+  {
+   "ts": "2026-10-31T01:24:54.482Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:25:58.169Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:27:02.100Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
+  },
+  {
+   "ts": "2026-10-31T01:28:05.964Z",
+   "sym": "OPUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "tp",
+   "netPct": 2.38
   }
  ]
 }
