@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-31T10:20:02.962Z",
+ "ts": "2026-10-31T14:19:30.584Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 25220,
- "graded": 25196,
- "pending": 24,
+ "shadowRows": 25257,
+ "graded": 25197,
+ "pending": 60,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,13 +16,13 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 24882,
-   "wins": 10758,
-   "netPct": -2559.7210017646007,
+   "n": 24883,
+   "wins": 10759,
+   "netPct": -2558.392022172764,
    "outcomes": {
     "sl": 8840,
     "tp": 2555,
-    "ttl": 13487
+    "ttl": 13488
    },
    "meanNetPct": -0.103,
    "wr": 43.2
@@ -46,14 +46,6 @@
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
-  {
-   "ts": "2026-10-31T06:52:27.308Z",
-   "sym": "ARBUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 1.44
-  },
   {
    "ts": "2026-10-31T06:52:27.308Z",
    "sym": "USUSDT",
@@ -205,6 +197,14 @@
    "gate": "same-beta-cap",
    "out": "ttl",
    "netPct": 1.49
+  },
+  {
+   "ts": "2026-10-31T07:26:28.292Z",
+   "sym": "USUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 1.33
   }
  ]
 }
