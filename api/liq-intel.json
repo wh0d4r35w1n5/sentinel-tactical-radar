@@ -1,18 +1,18 @@
 {
- "ts": "2026-10-31T07:08:42.159Z",
+ "ts": "2026-10-31T07:13:42.169Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
    "long": 0,
-   "short": 0
+   "short": 1300.61348
   },
   "liq15m": {
    "long": 292.71766,
-   "short": 128.595781
+   "short": 1300.61348
   },
   "liq60m": {
    "long": 17732.421972000004,
-   "short": 302568.77922100003
+   "short": 15678.142561
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -25,12 +25,12 @@
    },
    "liq60m": {
     "long": 13282.470899999998,
-    "short": 267378.90992000006
+    "short": 0
    },
    "flow15m": {
-    "buy": 7335042,
-    "sell": 7301463,
-    "delta": 33579
+    "buy": 9911811,
+    "sell": 7207639,
+    "delta": 2704172
    }
   },
   "ETHUSDT": {
@@ -40,12 +40,12 @@
    },
    "liq60m": {
     "long": 1915.3601999999998,
-    "short": 21416.460199999998
+    "short": 642.6219799999999
    },
    "flow15m": {
-    "buy": 1291272,
-    "sell": 2556324,
-    "delta": -1265053
+    "buy": 1559150,
+    "sell": 2115704,
+    "delta": -556555
    }
   },
   "SOLUSDT": {
@@ -58,19 +58,19 @@
     "short": 5265.528
    },
    "flow15m": {
-    "buy": 1210670,
-    "sell": 824358,
-    "delta": 386312
+    "buy": 1095587,
+    "sell": 805303,
+    "delta": 290285
    }
   },
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 1246.728
    },
    "liq60m": {
     "long": 0,
-    "short": 291.382
+    "short": 1499.6080000000002
    },
    "flow15m": {
     "buy": 0,
@@ -111,11 +111,11 @@
   "OPUSDT": {
    "liq15m": {
     "long": 292.71766,
-    "short": 128.595781
+    "short": 53.88548
    },
    "liq60m": {
     "long": 2500.954544,
-    "short": 7736.668561
+    "short": 7790.554041
    },
    "flow15m": {
     "buy": 0,
@@ -124,15 +124,6 @@
    }
   }
  },
- "biggestPrints60m": [
-  {
-   "ts": 1793427079029,
-   "sym": "BTCUSDT",
-   "side": "short",
-   "usd": 265397.82560000004,
-   "px": 78613.1,
-   "venue": "okx"
-  }
- ],
- "liqCount2h": 59
+ "biggestPrints60m": [],
+ "liqCount2h": 61
 }
