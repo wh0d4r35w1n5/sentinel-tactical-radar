@@ -1,9 +1,9 @@
 {
- "ts": "2026-10-31T22:19:57.944Z",
+ "ts": "2026-11-01T06:20:40.454Z",
  "method": "frozen-rule counterfactual on real forward tape; stop wins intra-candle ties; 0.12% RT fees; 24h window",
- "shadowRows": 25524,
- "graded": 25500,
- "pending": 24,
+ "shadowRows": 25613,
+ "graded": 25504,
+ "pending": 109,
  "blockedWouldHave": {
   "pump:sym-short-squeeze": {
    "n": 15,
@@ -16,15 +16,15 @@
    "wr": 0
   },
   "pump:same-beta-cap": {
-   "n": 25186,
-   "wins": 10956,
-   "netPct": -2457.2698882165982,
+   "n": 25190,
+   "wins": 10960,
+   "netPct": -2453.8733791140667,
    "outcomes": {
     "sl": 8867,
     "tp": 2571,
-    "ttl": 13748
+    "ttl": 13752
    },
-   "meanNetPct": -0.098,
+   "meanNetPct": -0.097,
    "wr": 43.5
   },
   "structure-short:factor-floor": {
@@ -46,38 +46,6 @@
  },
  "verdict": "gate net-positive — blocked trades would have lost on average",
  "sample": [
-  {
-   "ts": "2026-10-31T17:04:26.810Z",
-   "sym": "NEARUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.01
-  },
-  {
-   "ts": "2026-10-31T17:04:26.810Z",
-   "sym": "INJUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": -0.08
-  },
-  {
-   "ts": "2026-10-31T17:05:30.586Z",
-   "sym": "INJUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0
-  },
-  {
-   "ts": "2026-10-31T17:06:34.456Z",
-   "sym": "INJUSDT",
-   "side": "short",
-   "gate": "same-beta-cap",
-   "out": "ttl",
-   "netPct": 0.15
-  },
   {
    "ts": "2026-10-31T17:07:38.307Z",
    "sym": "NEARUSDT",
@@ -205,6 +173,38 @@
    "gate": "same-beta-cap",
    "out": "ttl",
    "netPct": 0
+  },
+  {
+   "ts": "2026-10-31T20:01:10.438Z",
+   "sym": "LINKUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.99
+  },
+  {
+   "ts": "2026-11-01T00:43:27.916Z",
+   "sym": "LUMIAUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.53
+  },
+  {
+   "ts": "2026-11-01T00:44:32.691Z",
+   "sym": "LUMIAUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 0.63
+  },
+  {
+   "ts": "2026-11-01T01:35:50.164Z",
+   "sym": "INJUSDT",
+   "side": "short",
+   "gate": "same-beta-cap",
+   "out": "ttl",
+   "netPct": 1.26
   }
  ]
 }
