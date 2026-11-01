@@ -1,57 +1,54 @@
 {
-  "refreshedAt": "2026-11-01T18:58:48.455Z",
+  "refreshedAt": "2026-11-01T19:08:55.989Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 58.9
+    "equityUsd": 58.14
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-01T18:58:48.455Z"
+    "at": "2026-11-01T19:08:55.989Z"
   },
   "sweep": {
-    "scanned": 91,
-    "cancelled": 0,
-    "at": "2026-11-01T18:58:48.455Z"
+    "scanned": 108,
+    "cancelled": 15,
+    "at": "2026-11-01T19:08:55.989Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 118
+    "demoFillsBybit": 127
   },
   "evidence": {
-    "demoEpisodes": 43,
-    "demoNetUsd": -5.8455,
-    "demoWinRate": 25.6,
-    "demoSqN": -1.19,
+    "demoEpisodes": 49,
+    "demoNetUsd": -6.9317,
+    "demoWinRate": 26.5,
+    "demoSqN": -1.62,
     "excluded": 0,
     "cellCount": 9
   },
   "positions": [
-    "ONDOUSDT:0",
-    "STEEMUSDT:0",
-    "BMTUSDT:0.003316",
-    "BIOUSDT:0.00973",
-    "TIAUSDT:-0.02104",
-    "TAOUSDT:-0.00576",
-    "WLDUSDT:-0.01533",
-    "1INCHUSDT:0",
-    "LITUSDT:-0.02205",
-    "INJUSDT:-0.0558",
-    "AAVEUSDT:-0.2176",
-    "SANDUSDT:-0.12441",
-    "ENAUSDT:-0.36512",
-    "UNIUSDT:0.0252",
-    "ALGOUSDT:-0.009956",
-    "MORPHOUSDT:-0.247",
-    "CRVUSDT:-0.38736",
-    "POWRUSDT:0.01286",
-    "OPUSDT:-0.167629",
-    "AVAXUSDT:-0.0882",
-    "LDOUSDT:-0.265"
+    "SEIUSDT:0.03704",
+    "ONDOUSDT:-0.0054",
+    "STEEMUSDT:-0.007",
+    "BMTUSDT:-0.138443",
+    "TIAUSDT:-0.06838",
+    "TAOUSDT:-0.0096",
+    "WLDUSDT:-0.09709",
+    "1INCHUSDT:0.023949",
+    "LITUSDT:-0.0483",
+    "INJUSDT:-0.093",
+    "AAVEUSDT:-0.3366",
+    "SANDUSDT:-0.04785",
+    "ENAUSDT:-0.38528",
+    "UNIUSDT:-0.0882",
+    "ALGOUSDT:-0.084626",
+    "MORPHOUSDT:-0.2242"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 15 untriggered legs on dead seats"
+  ]
 }
