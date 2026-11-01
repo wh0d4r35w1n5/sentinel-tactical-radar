@@ -1,16 +1,23 @@
 {
- "at": "2026-11-01T18:05:59.040Z",
+ "at": "2026-11-01T18:11:30.540Z",
  "wallets": {
   "futures": {
    "equityUsd": 60.62,
-   "marginFreeUsd": 50058.59,
+   "marginFreeUsd": 50055.44,
    "epochNetUsd": -4.11,
-   "fills": 80,
+   "fills": 81,
    "positions": [
+    {
+     "symbol": "USUSDT",
+     "side": "long",
+     "upl": -0.12,
+     "lev": 10,
+     "margin": 4.2
+    },
     {
      "symbol": "ARBUSDT",
      "side": "long",
-     "upl": -0.02,
+     "upl": -0.01,
      "lev": 10,
      "margin": 4.91
     }
@@ -338,7 +345,7 @@
    "hist": [],
    "persona": {
     "swagger": 0.49,
-    "tilt": 0.13,
+    "tilt": 0.12,
     "greed": 0.5,
     "discipline": 0.49
    }
@@ -447,9 +454,9 @@
    ],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.23,
+    "tilt": 0.22,
     "greed": 0.49,
-    "discipline": 0.46
+    "discipline": 0.47
    }
   },
   {
@@ -473,7 +480,7 @@
    ],
    "persona": {
     "swagger": 0.4,
-    "tilt": 0.36,
+    "tilt": 0.35,
     "greed": 0.47,
     "discipline": 0.43
    }
@@ -497,7 +504,7 @@
     -0.588
    ],
    "persona": {
-    "swagger": 0.57,
+    "swagger": 0.56,
     "tilt": 0.08,
     "greed": 0.53,
     "discipline": 0.52
@@ -506,21 +513,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "1INCHUSDT",
-   "direction": "LONG",
-   "ts": 1793545163692,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s17935450631251INCHUSDT",
-   "live": false,
-   "filledAt": 1793545167710,
-   "orderId": "aea4589f-1e1e-43cc-8f12-230aadac688a",
-   "closedAt": 1793545358233,
-   "epNet": -0.2497,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "ORDIUSDT",
    "direction": "LONG",
@@ -670,11 +662,21 @@
   {
    "symbol": "USUSDT",
    "direction": "LONG",
-   "ts": 1793555894110,
+   "ts": 1793556525951,
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana",
+   "coid": "s1793556434917USUSDT",
+   "live": true,
+   "filledAt": 1793556529831,
+   "orderId": "097e24e7-b9ad-4d23-8ec8-3ba4c157683d"
+  },
+  {
+   "symbol": "LDOUSDT",
+   "direction": "LONG",
+   "ts": 1793556685985,
    "pimp": "Silky Slim",
    "crack": "Solana Sadie",
-   "coid": "s1793555812805USUSDT",
-   "live": false
+   "coid": "s1793556609521LDOUSDT"
   }
  ],
  "drama": [
