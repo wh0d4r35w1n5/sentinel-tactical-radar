@@ -1,16 +1,23 @@
 {
- "at": "2026-11-01T19:22:25.002Z",
+ "at": "2026-11-01T19:26:54.024Z",
  "wallets": {
   "futures": {
-   "equityUsd": 55.15,
-   "marginFreeUsd": 50012.55,
-   "epochNetUsd": -9.85,
-   "fills": 142,
+   "equityUsd": 55.14,
+   "marginFreeUsd": 50010.41,
+   "epochNetUsd": -9.86,
+   "fills": 144,
    "positions": [
+    {
+     "symbol": "SUNUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 1.66
+    },
     {
      "symbol": "1000CATUSDT",
      "side": "long",
-     "upl": 0.05,
+     "upl": 0.01,
      "lev": 10,
      "margin": 1.74
     },
@@ -24,107 +31,107 @@
     {
      "symbol": "RENDERUSDT",
      "side": "long",
-     "upl": -0.06,
+     "upl": -0.02,
      "lev": 10,
      "margin": 1.84
     },
     {
      "symbol": "ATOMUSDT",
      "side": "long",
-     "upl": 0.03,
+     "upl": 0.04,
      "lev": 10,
      "margin": 2.21
     },
     {
      "symbol": "PENDLEUSDT",
      "side": "long",
-     "upl": -0.05,
+     "upl": -0.03,
      "lev": 10,
      "margin": 1.65
     },
     {
      "symbol": "JUPUSDT",
      "side": "long",
-     "upl": -0.1,
+     "upl": -0.07,
      "lev": 10,
-     "margin": 2.12
+     "margin": 2.13
     },
     {
      "symbol": "MAGICUSDT",
      "side": "long",
-     "upl": -0.07,
+     "upl": -0.06,
      "lev": 10,
      "margin": 2.22
     },
     {
      "symbol": "SEIUSDT",
      "side": "long",
-     "upl": -0.03,
+     "upl": -0.01,
      "lev": 10,
      "margin": 2.2
     },
     {
      "symbol": "ONDOUSDT",
      "side": "long",
-     "upl": -0.08,
+     "upl": -0.04,
      "lev": 10,
-     "margin": 2.17
+     "margin": 2.18
     },
     {
      "symbol": "STEEMUSDT",
      "side": "long",
-     "upl": -0.06,
+     "upl": -0.03,
      "lev": 10,
      "margin": 1.77
     },
     {
      "symbol": "TIAUSDT",
      "side": "long",
-     "upl": -0.14,
+     "upl": -0.13,
      "lev": 10,
      "margin": 2.47
     },
     {
      "symbol": "TAOUSDT",
      "side": "long",
-     "upl": -0.1,
+     "upl": -0.07,
      "lev": 10,
      "margin": 2.24
     },
     {
      "symbol": "1INCHUSDT",
      "side": "long",
-     "upl": -0.1,
+     "upl": -0.06,
      "lev": 10,
      "margin": 2.18
     },
     {
      "symbol": "SANDUSDT",
      "side": "long",
-     "upl": -0.15,
+     "upl": -0.11,
      "lev": 10,
-     "margin": 4.4
+     "margin": 4.41
     },
     {
      "symbol": "UNIUSDT",
      "side": "long",
-     "upl": -0.15,
+     "upl": -0.06,
      "lev": 10,
-     "margin": 4.49
+     "margin": 4.5
     },
     {
      "symbol": "ALGOUSDT",
      "side": "long",
-     "upl": -0.2,
+     "upl": -0.17,
      "lev": 10,
      "margin": 4.66
     },
     {
      "symbol": "MORPHOUSDT",
      "side": "long",
-     "upl": -0.42,
+     "upl": -0.32,
      "lev": 10,
-     "margin": 4.26
+     "margin": 4.27
     }
    ]
   },
@@ -308,7 +315,7 @@
     "swagger": 0.52,
     "tilt": 0.14,
     "greed": 0.52,
-    "discipline": 0.48
+    "discipline": 0.49
    }
   },
   {
@@ -329,10 +336,10 @@
     0.0355
    ],
    "persona": {
-    "swagger": 0.61,
+    "swagger": 0.6,
     "tilt": 0.06,
     "greed": 0.55,
-    "discipline": 0.54
+    "discipline": 0.53
    }
   },
   {
@@ -354,7 +361,7 @@
    "persona": {
     "swagger": 0.58,
     "tilt": 0.06,
-    "greed": 0.54,
+    "greed": 0.53,
     "discipline": 0.53
    }
   },
@@ -523,8 +530,8 @@
     -0.0273
    ],
    "persona": {
-    "swagger": 0.4,
-    "tilt": 0.34,
+    "swagger": 0.41,
+    "tilt": 0.33,
     "greed": 0.47,
     "discipline": 0.43
    }
@@ -550,9 +557,9 @@
    ],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.23,
+    "tilt": 0.22,
     "greed": 0.49,
-    "discipline": 0.46
+    "discipline": 0.47
    }
   },
   {
@@ -588,7 +595,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 18,
+   "stolen": 21,
    "gen": 0,
    "form": -0.2434,
    "mood": "working",
@@ -628,25 +635,14 @@
    ],
    "persona": {
     "swagger": 0.52,
-    "tilt": 0.26,
+    "tilt": 0.25,
     "greed": 0.53,
-    "discipline": 0.45
+    "discipline": 0.46
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "MAGICUSDT",
-   "direction": "LONG",
-   "ts": 1793560147148,
-   "pimp": "Silky Slim",
-   "crack": "Crystal Meth",
-   "coid": "s1793560053531MAGICUSDT",
-   "filledAt": 1793560151623,
-   "orderId": "253864ee-a275-43f8-9a0b-91f4c6ef98d3",
-   "live": true
-  },
   {
    "symbol": "JUPUSDT",
    "direction": "LONG",
@@ -718,15 +714,6 @@
    "orderId": "2facb914-d054-4bb2-8763-34b93cf3c9b0"
   },
   {
-   "symbol": "SNXXUSDT",
-   "direction": "LONG",
-   "ts": 1793560201596,
-   "pimp": "Madam Razor",
-   "crack": "Gold Teeth",
-   "coid": "s1793560053531SNXXUSDT",
-   "live": false
-  },
-  {
    "symbol": "1000CATUSDT",
    "direction": "LONG",
    "ts": 1793560567287,
@@ -753,7 +740,9 @@
    "pimp": "Big Daddy Kane",
    "crack": "Bolt Betsy",
    "coid": "s1793560773003SUNUSDT",
-   "live": false
+   "live": true,
+   "filledAt": 1793560868704,
+   "orderId": "69d76a88-66c1-4383-95af-cb1f12a13d30"
   },
   {
    "symbol": "KORUUSDT",
@@ -763,9 +752,31 @@
    "crack": "Velvet Vice",
    "coid": "s1793560773003KORUUSDT",
    "live": false
+  },
+  {
+   "symbol": "SNDKUSDT",
+   "direction": "LONG",
+   "ts": 1793561187939,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1793561085046SNDKUSDT",
+   "live": false
+  },
+  {
+   "symbol": "LITEUSDT",
+   "direction": "LONG",
+   "ts": 1793561191924,
+   "pimp": "Silky Slim",
+   "crack": "Diamond Dust",
+   "coid": "s1793561085046LITEUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793561158759,
+   "text": "🧬 Solana Sadie tweaked her reads — alt downweighted (street R&D)"
+  },
   {
    "ts": 1793560944999,
    "text": "🧬 Sprint Santana tweaked her reads — score upweighted (street R&D)"
@@ -881,17 +892,9 @@
   {
    "ts": 1793557790558,
    "text": "💰 Trixie (working for Big Daddy Kane) banked +$0.01 on NEARUSDT"
-  },
-  {
-   "ts": 1793557611661,
-   "text": "📓 Solana Sadie stole Fastlane Faye's playbook — third time this week the corner talks about it"
   }
  ],
  "attrib": {
-  "be673f5a-60b9-44b4-8ed7-9c7f1449f757": {
-   "pimp": null,
-   "crack": null
-  },
   "aca0e1a0-c406-4145-8e41-e9286bb1edb3": {
    "pimp": null,
    "crack": null
@@ -1485,6 +1488,10 @@
    "crack": null
   },
   "072bca11-f0a0-4f85-bf47-26f94ee68cb1": {
+   "pimp": null,
+   "crack": null
+  },
+  "c740feb5-46cd-4d7e-9b56-176628cfc319": {
    "pimp": null,
    "crack": null
   }
