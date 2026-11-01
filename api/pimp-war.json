@@ -1,88 +1,95 @@
 {
- "at": "2026-11-01T18:46:33.514Z",
+ "at": "2026-11-01T18:51:37.037Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.22,
-   "marginFreeUsd": 50006.49,
-   "epochNetUsd": -4.51,
-   "fills": 0,
+   "equityUsd": 60.46,
+   "marginFreeUsd": 50010.77,
+   "epochNetUsd": -4.54,
+   "fills": 106,
    "positions": [
+    {
+     "symbol": "AAVEUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 10,
+     "margin": 4.61
+    },
+    {
+     "symbol": "SANDUSDT",
+     "side": "long",
+     "upl": -0.05,
+     "lev": 10,
+     "margin": 4.41
+    },
+    {
+     "symbol": "ENAUSDT",
+     "side": "long",
+     "upl": -0.15,
+     "lev": 10,
+     "margin": 4.09
+    },
     {
      "symbol": "UNIUSDT",
      "side": "long",
-     "upl": 0.11,
+     "upl": 0.05,
      "lev": 10,
      "margin": 4.51
     },
     {
      "symbol": "ALGOUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": -0.03,
      "lev": 10,
      "margin": 4.68
     },
     {
      "symbol": "MORPHOUSDT",
      "side": "long",
-     "upl": -0.07,
+     "upl": -0.19,
      "lev": 10,
-     "margin": 4.3
+     "margin": 4.29
     },
     {
      "symbol": "CRVUSDT",
      "side": "long",
-     "upl": -0.02,
+     "upl": -0.05,
      "lev": 10,
      "margin": 4.52
     },
     {
      "symbol": "FLOCKUSDT",
      "side": "long",
-     "upl": -0.02,
+     "upl": -0.04,
      "lev": 10,
      "margin": 4.18
     },
     {
-     "symbol": "ZROUSDT",
-     "side": "long",
-     "upl": -0.14,
-     "lev": 10,
-     "margin": 4.27
-    },
-    {
      "symbol": "POWRUSDT",
      "side": "long",
-     "upl": 0.09,
+     "upl": 0.08,
      "lev": 10,
      "margin": 3.78
     },
     {
      "symbol": "OPUSDT",
      "side": "long",
-     "upl": -0.04,
+     "upl": -0.11,
      "lev": 10,
      "margin": 3.89
     },
     {
      "symbol": "AVAXUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": -0.04,
      "lev": 10,
      "margin": 4.27
     },
     {
-     "symbol": "XPLUSDT",
-     "side": "long",
-     "upl": -0.16,
-     "lev": 10,
-     "margin": 16.06
-    },
-    {
      "symbol": "LDOUSDT",
      "side": "long",
-     "upl": -0.16,
+     "upl": -0.24,
      "lev": 10,
-     "margin": 4.53
+     "margin": 4.52
     }
    ]
   },
@@ -177,22 +184,6 @@
    "mood": "working"
   },
   {
-   "name": "Fancy Red",
-   "roster": [
-    "Lucky Lucy",
-    "Baby Back",
-    "Sprint Santana"
-   ],
-   "net": -0.0905,
-   "wins": 1,
-   "losses": 1,
-   "crown": false,
-   "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
-   "mood": "working"
-  },
-  {
    "name": "Madam Razor",
    "roster": [
     "Velvet Vice",
@@ -235,6 +226,22 @@
    "wins": 1,
    "losses": 1,
    "crown": false,
+   "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
+   "mood": "working"
+  },
+  {
+   "name": "Fancy Red",
+   "roster": [
+    "Lucky Lucy",
+    "Baby Back",
+    "Sprint Santana"
+   ],
+   "net": -0.6915,
+   "wins": 1,
+   "losses": 2,
+   "crown": false,
    "crippled": true,
    "vault": 0,
    "vaultSweeps": 0,
@@ -263,9 +270,9 @@
     0.0355
    ],
    "persona": {
-    "swagger": 0.65,
+    "swagger": 0.64,
     "tilt": 0.04,
-    "greed": 0.57,
+    "greed": 0.56,
     "discipline": 0.55
    }
   },
@@ -476,35 +483,10 @@
     -0.0273
    ],
    "persona": {
-    "swagger": 0.37,
-    "tilt": 0.43,
+    "swagger": 0.38,
+    "tilt": 0.42,
     "greed": 0.46,
     "discipline": 0.41
-   }
-  },
-  {
-   "name": "Sprint Santana",
-   "tag": "bagrunner — alt bags",
-   "pimp": "Fancy Red",
-   "net": -0.0905,
-   "wins": 1,
-   "losses": 1,
-   "closes": 2,
-   "stolen": 0,
-   "gen": 0,
-   "form": -0.0049,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    -0.123,
-    -0.1215,
-    -0.0905
-   ],
-   "persona": {
-    "swagger": 0.64,
-    "tilt": 0.05,
-    "greed": 0.56,
-    "discipline": 0.54
    }
   },
   {
@@ -515,7 +497,7 @@
    "wins": 0,
    "losses": 2,
    "closes": 2,
-   "stolen": 1,
+   "stolen": 3,
    "gen": 0,
    "form": -0.1273,
    "mood": "working",
@@ -526,7 +508,7 @@
    ],
    "persona": {
     "swagger": 0.4,
-    "tilt": 0.36,
+    "tilt": 0.35,
     "greed": 0.47,
     "discipline": 0.43
    }
@@ -551,7 +533,7 @@
     -0.4747
    ],
    "persona": {
-    "swagger": 0.43,
+    "swagger": 0.44,
     "tilt": 0.27,
     "greed": 0.48,
     "discipline": 0.45
@@ -581,32 +563,36 @@
     "greed": 0.52,
     "discipline": 0.51
    }
+  },
+  {
+   "name": "Sprint Santana",
+   "tag": "bagrunner — alt bags",
+   "pimp": "Fancy Red",
+   "net": -0.6915,
+   "wins": 1,
+   "losses": 2,
+   "closes": 3,
+   "stolen": 1,
+   "gen": 0,
+   "form": -0.2434,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.123,
+    -0.1215,
+    -0.0905,
+    -0.6915
+   ],
+   "persona": {
+    "swagger": 0.56,
+    "tilt": 0.23,
+    "greed": 0.54,
+    "discipline": 0.49
+   }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "OPUSDT",
-   "direction": "LONG",
-   "ts": 1793557303318,
-   "pimp": "Silky Slim",
-   "crack": "Crystal Meth",
-   "coid": "s1793557211783OPUSDT",
-   "live": true,
-   "filledAt": 1793557306604,
-   "orderId": "30b2c1d8-ac6b-432d-a179-1a21b527d272"
-  },
-  {
-   "symbol": "POWRUSDT",
-   "direction": "LONG",
-   "ts": 1793558107351,
-   "pimp": "Big Daddy Kane",
-   "crack": "Trixie",
-   "coid": "s1793557993414POWRUSDT",
-   "filledAt": 1793558110515,
-   "orderId": "d50a09ab-a48f-47a3-80d5-170c37503d49",
-   "live": true
-  },
   {
    "symbol": "QUSDT",
    "direction": "LONG",
@@ -631,7 +617,11 @@
    "coid": "s1793558299050ZROUSDT",
    "filledAt": 1793558379298,
    "orderId": "a72b00f8-eb1c-4a72-8d4e-69d7985da730",
-   "live": true
+   "live": false,
+   "closedAt": 1793558943830,
+   "epNet": -0.60106,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "FLOCKUSDT",
@@ -703,7 +693,10 @@
    "ts": 1793558782684,
    "pimp": "Madam Razor",
    "crack": "Neon Nicki",
-   "coid": "s1793558698000ENAUSDT"
+   "coid": "s1793558698000ENAUSDT",
+   "filledAt": 1793558784303,
+   "orderId": "4f0984a2-d607-4284-869b-43ab9930623b",
+   "live": true
   },
   {
    "symbol": "SANDUSDT",
@@ -711,10 +704,41 @@
    "ts": 1793558788689,
    "pimp": "Fancy Red",
    "crack": "Baby Back",
-   "coid": "s1793558698000SANDUSDT"
+   "coid": "s1793558698000SANDUSDT",
+   "live": true,
+   "filledAt": 1793558792869,
+   "orderId": "89017ad3-2a8e-40a6-b48b-fb9e8d9f4c9f"
+  },
+  {
+   "symbol": "AAVEUSDT",
+   "direction": "LONG",
+   "ts": 1793558918303,
+   "pimp": "Cold Cash Cole",
+   "crack": "Fastlane Faye",
+   "coid": "s1793558796645AAVEUSDT",
+   "live": true,
+   "filledAt": 1793558922436,
+   "orderId": "3227af4e-02ed-4c7a-9f69-30cc3a718a5c"
+  },
+  {
+   "symbol": "INJUSDT",
+   "direction": "LONG",
+   "ts": 1793558993962,
+   "pimp": "Cold Cash Cole",
+   "crack": "Sugar Tits",
+   "coid": "s1793558796645INJUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793559097035,
+   "text": "📓 Sprint Santana stole Fastlane Faye's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793559097034,
+   "text": "💰 Sprint Santana (working for Fancy Red) banked $-0.60 on ZROUSDT incl $0.023 entry fees — docked her pay"
+  },
   {
    "ts": 1793558760756,
    "text": "📓 Neon Nicki stole Sprint Santana's playbook — third time this week the corner talks about it"
@@ -821,14 +845,6 @@
   }
  ],
  "attrib": {
-  "bbd22f31-1c46-4947-837e-3dc3761cb2a4": {
-   "pimp": null,
-   "crack": null
-  },
-  "93d5d4d9-2e16-47bb-ac82-a7262f518278": {
-   "pimp": null,
-   "crack": null
-  },
   "17444fe1-25ba-4d93-8bb7-2c60597d8e58": {
    "pimp": null,
    "crack": null
@@ -1420,6 +1436,14 @@
   "66300a50-52e3-45f5-8845-1c53727b393e": {
    "pimp": "Madam Razor",
    "crack": "Neon Nicki"
+  },
+  "e951d022-d03d-4716-a3ab-20cf8506f320": {
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana"
+  },
+  "7a02123f-1ed8-4b98-921a-e65ca1493941": {
+   "pimp": null,
+   "crack": null
   }
  }
 }

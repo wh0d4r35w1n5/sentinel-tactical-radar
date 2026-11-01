@@ -1,43 +1,52 @@
 {
-  "refreshedAt": "2026-11-01T18:38:44.866Z",
+  "refreshedAt": "2026-11-01T18:48:45.860Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 60.53
+    "equityUsd": 60.21
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-01T18:38:44.866Z"
+    "at": "2026-11-01T18:48:45.860Z"
   },
   "sweep": {
-    "scanned": 40,
-    "cancelled": 0,
-    "at": "2026-11-01T18:38:44.866Z"
+    "scanned": 85,
+    "cancelled": 5,
+    "at": "2026-11-01T18:48:45.860Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 93
+    "demoFillsBybit": 103
   },
   "evidence": {
-    "demoEpisodes": 38,
-    "demoNetUsd": -4.0725,
-    "demoWinRate": 23.7,
-    "demoSqN": -0.53,
+    "demoEpisodes": 40,
+    "demoNetUsd": -4.2341,
+    "demoWinRate": 25,
+    "demoSqN": -0.64,
     "excluded": 0,
     "cellCount": 9
   },
   "positions": [
-    "POWRUSDT:-0.01929",
-    "USUSDT:0.1358",
-    "OPUSDT:-0.061578",
-    "AVAXUSDT:-0.0098",
-    "XPLUSDT:-0.04432",
-    "LDOUSDT:-0.14575",
-    "ARBUSDT:-0.05976"
+    "AAVEUSDT:0.0034",
+    "SANDUSDT:-0.04785",
+    "ENAUSDT:-0.15904",
+    "UNIUSDT:0.0567",
+    "ALGOUSDT:-0.034846",
+    "MORPHOUSDT:-0.1178",
+    "CRVUSDT:-0.04842",
+    "FLOCKUSDT:-0.0107",
+    "ZROUSDT:-0.20416",
+    "POWRUSDT:0.03858",
+    "OPUSDT:-0.099209",
+    "AVAXUSDT:-0.0343",
+    "XPLUSDT:-0.81992",
+    "LDOUSDT:-0.212"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+  ]
 }
