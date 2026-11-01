@@ -1,23 +1,23 @@
 {
- "at": "2026-11-01T14:49:56.568Z",
+ "at": "2026-11-01T14:55:34.035Z",
  "wallets": {
   "futures": {
-   "equityUsd": 65.65,
-   "marginFreeUsd": 50011.82,
-   "epochNetUsd": 0.65,
-   "fills": 50,
+   "equityUsd": 64.87,
+   "marginFreeUsd": 50012.12,
+   "epochNetUsd": 0.15,
+   "fills": 52,
    "positions": [
     {
      "symbol": "LDOUSDT",
      "side": "long",
-     "upl": 0.18,
+     "upl": 0.46,
      "lev": 10,
-     "margin": 4.75
+     "margin": 4.78
     },
     {
      "symbol": "DASHUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": 0,
      "lev": 10,
      "margin": 0.54
     },
@@ -31,16 +31,16 @@
     {
      "symbol": "IMXUSDT",
      "side": "long",
-     "upl": -1.44,
+     "upl": -1.28,
      "lev": 10,
-     "margin": 22.64
+     "margin": 22.66
     },
     {
      "symbol": "TRBUSDT",
      "side": "long",
-     "upl": -0.35,
+     "upl": -0.26,
      "lev": 10,
-     "margin": 22.83
+     "margin": 22.84
     }
    ]
   },
@@ -119,23 +119,6 @@
  },
  "pimps": [
   {
-   "name": "Silky Slim",
-   "roster": [
-    "Diamond Dust",
-    "Crystal Meth",
-    "Miss Behave",
-    "Solana Sadie"
-   ],
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "crown": false,
-   "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
-   "mood": "working"
-  },
-  {
    "name": "Madam Razor",
    "roster": [
     "Velvet Vice",
@@ -193,6 +176,23 @@
    "net": 0,
    "wins": 0,
    "losses": 0,
+   "crown": false,
+   "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
+   "mood": "working"
+  },
+  {
+   "name": "Silky Slim",
+   "roster": [
+    "Diamond Dust",
+    "Crystal Meth",
+    "Miss Behave",
+    "Solana Sadie"
+   ],
+   "net": -0.5023,
+   "wins": 0,
+   "losses": 1,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -537,17 +537,16 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": "Silky Slim",
-   "net": -24.2395,
+   "net": -24.7418,
    "wins": 15,
-   "losses": 76,
-   "closes": 129,
+   "losses": 77,
+   "closes": 130,
    "stolen": 0,
    "gen": 0,
-   "form": -0.6746,
-   "mood": "tilt",
+   "form": -0.6057,
+   "mood": "cold",
    "vault": 0.5029,
    "hist": [
-    -21.4009,
     -21.435,
     -21.4419,
     -21.4663,
@@ -570,13 +569,14 @@
     -22.3669,
     -22.8467,
     -22.9161,
-    -24.2395
+    -24.2395,
+    -24.7418
    ],
    "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
+    "swagger": 0.43,
+    "tilt": 0.27,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   }
  ],
@@ -589,10 +589,24 @@
    "pimp": "Silky Slim",
    "crack": "Solana Sadie",
    "coid": "s1793544399136ALLOUSDT",
-   "live": false
+   "live": false,
+   "filledAt": 1793544499874,
+   "orderId": "462fac54-f8fe-40ad-8e12-999140b97302",
+   "closedAt": 1793544582818,
+   "epNet": -0.502316,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793544680788,
+   "text": "💰 Solana Sadie (working for Silky Slim) banked $-0.50 on ALLOUSDT incl $0.197 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793544680788,
+   "text": "🧊 Solana Sadie can't buy a trick — cold streak, the bench is watching"
+  },
   {
    "ts": 1793049179213,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-1.32 on SEAN — docked her pay"
@@ -704,21 +718,9 @@
   {
    "ts": 1792405804450,
    "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked $-0.02 on MOIN — docked her pay"
-  },
-  {
-   "ts": 1792405804449,
-   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
-  },
-  {
-   "ts": 1792405678404,
-   "text": "💰 Solana Sadie (freelance — no pimp took a cut) banked +$0.17 on SECRETFROG"
   }
  ],
  "attrib": {
-  "9d5a17da-0042-4d76-9515-9d12d9fe53db": {
-   "pimp": null,
-   "crack": null
-  },
   "9869df6f-73ec-449f-83fb-634c7215c5d7": {
    "pimp": null,
    "crack": null
@@ -1314,6 +1316,10 @@
   "08d01d12-7c73-4d63-8169-ee71b0f93879": {
    "pimp": null,
    "crack": null
+  },
+  "4ff2205c-a724-4458-b77d-72cd21f651d5": {
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie"
   }
  }
 }
