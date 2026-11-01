@@ -1,53 +1,88 @@
 {
- "at": "2026-11-01T18:41:51.932Z",
+ "at": "2026-11-01T18:46:33.514Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.52,
-   "marginFreeUsd": 50026.2,
-   "epochNetUsd": -4.21,
-   "fills": 97,
+   "equityUsd": 60.22,
+   "marginFreeUsd": 50006.49,
+   "epochNetUsd": -4.51,
+   "fills": 0,
    "positions": [
+    {
+     "symbol": "UNIUSDT",
+     "side": "long",
+     "upl": 0.11,
+     "lev": 10,
+     "margin": 4.51
+    },
+    {
+     "symbol": "ALGOUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 10,
+     "margin": 4.68
+    },
+    {
+     "symbol": "MORPHOUSDT",
+     "side": "long",
+     "upl": -0.07,
+     "lev": 10,
+     "margin": 4.3
+    },
+    {
+     "symbol": "CRVUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 4.52
+    },
+    {
+     "symbol": "FLOCKUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 4.18
+    },
+    {
+     "symbol": "ZROUSDT",
+     "side": "long",
+     "upl": -0.14,
+     "lev": 10,
+     "margin": 4.27
+    },
     {
      "symbol": "POWRUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": 0.09,
      "lev": 10,
-     "margin": 3.77
+     "margin": 3.78
     },
     {
      "symbol": "OPUSDT",
      "side": "long",
-     "upl": -0.09,
+     "upl": -0.04,
      "lev": 10,
      "margin": 3.89
     },
     {
      "symbol": "AVAXUSDT",
      "side": "long",
-     "upl": -0.03,
+     "upl": -0.01,
      "lev": 10,
      "margin": 4.27
     },
     {
      "symbol": "XPLUSDT",
      "side": "long",
-     "upl": -0.2,
+     "upl": -0.16,
      "lev": 10,
-     "margin": 16.05
+     "margin": 16.06
     },
     {
      "symbol": "LDOUSDT",
      "side": "long",
-     "upl": -0.19,
+     "upl": -0.16,
      "lev": 10,
-     "margin": 4.52
-    },
-    {
-     "symbol": "ARBUSDT",
-     "side": "long",
-     "upl": -0.12,
-     "lev": 10,
-     "margin": 4.9
+     "margin": 4.53
     }
    ]
   },
@@ -164,9 +199,9 @@
     "Neon Nicki",
     "Gold Teeth"
    ],
-   "net": -0.2344,
+   "net": -0.4285,
    "wins": 0,
-   "losses": 2,
+   "losses": 3,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -442,9 +477,9 @@
    ],
    "persona": {
     "swagger": 0.37,
-    "tilt": 0.45,
+    "tilt": 0.43,
     "greed": 0.46,
-    "discipline": 0.4
+    "discipline": 0.41
    }
   },
   {
@@ -468,7 +503,7 @@
    "persona": {
     "swagger": 0.64,
     "tilt": 0.05,
-    "greed": 0.57,
+    "greed": 0.56,
     "discipline": 0.54
    }
   },
@@ -476,23 +511,24 @@
    "name": "Neon Nicki",
    "tag": "alt-coin junkie",
    "pimp": "Madam Razor",
-   "net": -0.2071,
+   "net": -0.4012,
    "wins": 0,
-   "losses": 1,
-   "closes": 1,
-   "stolen": 0,
+   "losses": 2,
+   "closes": 2,
+   "stolen": 1,
    "gen": 0,
-   "form": -0.0828,
+   "form": -0.1273,
    "mood": "working",
    "vault": 0,
    "hist": [
-    -0.2071
+    -0.2071,
+    -0.4012
    ],
    "persona": {
-    "swagger": 0.47,
-    "tilt": 0.19,
-    "greed": 0.49,
-    "discipline": 0.48
+    "swagger": 0.4,
+    "tilt": 0.36,
+    "greed": 0.47,
+    "discipline": 0.43
    }
   },
   {
@@ -503,7 +539,7 @@
    "wins": 0,
    "losses": 4,
    "closes": 4,
-   "stolen": 11,
+   "stolen": 13,
    "gen": 0,
    "form": -0.117,
    "mood": "tilt",
@@ -516,7 +552,7 @@
    ],
    "persona": {
     "swagger": 0.43,
-    "tilt": 0.28,
+    "tilt": 0.27,
     "greed": 0.48,
     "discipline": 0.45
    }
@@ -540,7 +576,7 @@
     -0.588
    ],
    "persona": {
-    "swagger": 0.55,
+    "swagger": 0.54,
     "tilt": 0.09,
     "greed": 0.52,
     "discipline": 0.51
@@ -549,43 +585,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "XPLUSDT",
-   "direction": "LONG",
-   "ts": 1793556770549,
-   "pimp": "Cold Cash Cole",
-   "crack": "Sugar Tits",
-   "coid": "s1793556693128XPLUSDT",
-   "live": true,
-   "filledAt": 1793556771763,
-   "orderId": "1023fc20-de02-47a2-bcb8-6becfa2a0386"
-  },
-  {
-   "symbol": "NEARUSDT",
-   "direction": "LONG",
-   "ts": 1793557204970,
-   "pimp": "Big Daddy Kane",
-   "crack": "Trixie",
-   "coid": "s1793557124971NEARUSDT",
-   "live": false,
-   "filledAt": 1793557208195,
-   "orderId": "4230a3c0-8b77-49ee-9313-8117c10b289e",
-   "closedAt": 1793557626655,
-   "epNet": 0.035539,
-   "epCounted": true,
-   "epVerdict": 1
-  },
-  {
-   "symbol": "AVAXUSDT",
-   "direction": "LONG",
-   "ts": 1793557297328,
-   "pimp": "Silky Slim",
-   "crack": "Diamond Dust",
-   "coid": "s1793557211783AVAXUSDT",
-   "filledAt": 1793557301167,
-   "orderId": "21c52efb-daa5-479b-8bce-67e497242fee",
-   "live": true
-  },
   {
    "symbol": "OPUSDT",
    "direction": "LONG",
@@ -596,15 +595,6 @@
    "live": true,
    "filledAt": 1793557306604,
    "orderId": "30b2c1d8-ac6b-432d-a179-1a21b527d272"
-  },
-  {
-   "symbol": "SOXLUSDT",
-   "direction": "LONG",
-   "ts": 1793557629687,
-   "pimp": "Madam Razor",
-   "crack": "Velvet Vice",
-   "coid": "s1793557508170SOXLUSDT",
-   "live": false
   },
   {
    "symbol": "POWRUSDT",
@@ -672,7 +662,9 @@
    "pimp": "Big Daddy Kane",
    "crack": "Bolt Betsy",
    "coid": "s1793558299050MORPHOUSDT",
-   "live": false
+   "live": true,
+   "filledAt": 1793558398443,
+   "orderId": "af34968a-b539-45a2-880d-802c954158c1"
   },
   {
    "symbol": "ALGOUSDT",
@@ -680,10 +672,57 @@
    "ts": 1793558507828,
    "pimp": "Fancy Red",
    "crack": "Lucky Lucy",
-   "coid": "s1793558402683ALGOUSDT"
+   "coid": "s1793558402683ALGOUSDT",
+   "live": true,
+   "filledAt": 1793558511045,
+   "orderId": "41f1766d-12e0-4378-ac2a-0509957fab85"
+  },
+  {
+   "symbol": "UNIUSDT",
+   "direction": "LONG",
+   "ts": 1793558605820,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1793558515400UNIUSDT",
+   "live": true,
+   "filledAt": 1793558609044,
+   "orderId": "0b052057-66e7-4bfe-8426-462becb270aa"
+  },
+  {
+   "symbol": "SMCIUSDT",
+   "direction": "LONG",
+   "ts": 1793558695086,
+   "pimp": "Madam Razor",
+   "crack": "Gold Teeth",
+   "coid": "s1793558612104SMCIUSDT",
+   "live": false
+  },
+  {
+   "symbol": "ENAUSDT",
+   "direction": "LONG",
+   "ts": 1793558782684,
+   "pimp": "Madam Razor",
+   "crack": "Neon Nicki",
+   "coid": "s1793558698000ENAUSDT"
+  },
+  {
+   "symbol": "SANDUSDT",
+   "direction": "LONG",
+   "ts": 1793558788689,
+   "pimp": "Fancy Red",
+   "crack": "Baby Back",
+   "coid": "s1793558698000SANDUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1793558760756,
+   "text": "📓 Neon Nicki stole Sprint Santana's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793558760754,
+   "text": "💰 Neon Nicki (working for Madam Razor) banked $-0.19 on ARBUSDT incl $0.027 entry fees — docked her pay"
+  },
   {
    "ts": 1793558482994,
    "text": "💰 Sprint Santana (working for Fancy Red) banked +$0.03 on USUSDT"
@@ -782,10 +821,6 @@
   }
  ],
  "attrib": {
-  "c28f1cd7-bf8b-4d8c-ac9e-426e41b5909a": {
-   "pimp": null,
-   "crack": null
-  },
   "bbd22f31-1c46-4947-837e-3dc3761cb2a4": {
    "pimp": null,
    "crack": null
@@ -1381,6 +1416,10 @@
   "2f9fa358-fe1b-4d78-b719-3af3587958b4": {
    "pimp": "Fancy Red",
    "crack": "Sprint Santana"
+  },
+  "66300a50-52e3-45f5-8845-1c53727b393e": {
+   "pimp": "Madam Razor",
+   "crack": "Neon Nicki"
   }
  }
 }
