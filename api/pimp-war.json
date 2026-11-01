@@ -1,39 +1,46 @@
 {
- "at": "2026-11-01T18:15:34.735Z",
+ "at": "2026-11-01T18:21:43.319Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.55,
-   "marginFreeUsd": 50035.07,
-   "epochNetUsd": -4.18,
-   "fills": 83,
+   "equityUsd": 60.52,
+   "marginFreeUsd": 50030.29,
+   "epochNetUsd": -4.21,
+   "fills": 0,
    "positions": [
+    {
+     "symbol": "NEARUSDT",
+     "side": "long",
+     "upl": 0.05,
+     "lev": 10,
+     "margin": 4.87
+    },
     {
      "symbol": "XPLUSDT",
      "side": "long",
-     "upl": -0.2,
+     "upl": -0.71,
      "lev": 10,
-     "margin": 16.05
+     "margin": 16
     },
     {
      "symbol": "LDOUSDT",
      "side": "long",
-     "upl": -0.03,
+     "upl": -0.23,
      "lev": 10,
-     "margin": 4.54
+     "margin": 4.52
     },
     {
      "symbol": "USUSDT",
      "side": "long",
-     "upl": 0.05,
+     "upl": 0,
      "lev": 10,
-     "margin": 4.22
+     "margin": 4.21
     },
     {
      "symbol": "ARBUSDT",
      "side": "long",
-     "upl": -0.04,
+     "upl": -0.15,
      "lev": 10,
-     "margin": 4.91
+     "margin": 4.9
     }
    ]
   },
@@ -494,9 +501,9 @@
    ],
    "persona": {
     "swagger": 0.41,
-    "tilt": 0.34,
-    "greed": 0.47,
-    "discipline": 0.43
+    "tilt": 0.32,
+    "greed": 0.48,
+    "discipline": 0.44
    }
   },
   {
@@ -521,57 +528,12 @@
     "swagger": 0.56,
     "tilt": 0.08,
     "greed": 0.53,
-    "discipline": 0.52
+    "discipline": 0.51
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "TRXUSDT",
-   "direction": "LONG",
-   "ts": 1793545708051,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793545607519TRXUSDT",
-   "live": false,
-   "filledAt": 1793545711289,
-   "orderId": "d7415b3d-e17b-47df-9b06-252635e739b2",
-   "closedAt": 1793545796545,
-   "epNet": -0.175038,
-   "epCounted": true,
-   "epVerdict": -1
-  },
-  {
-   "symbol": "SOONUSDT",
-   "direction": "LONG",
-   "ts": 1793547219202,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793547118914SOONUSDT",
-   "live": false,
-   "filledAt": 1793547223120,
-   "orderId": "8ce08445-829a-4625-820d-82d9d7ea1dc0",
-   "closedAt": 1793547289797,
-   "epNet": -0.005651,
-   "epCounted": true,
-   "epVerdict": -1
-  },
-  {
-   "symbol": "1INCHUSDT",
-   "direction": "LONG",
-   "ts": 1793549185237,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s17935491126361INCHUSDT",
-   "live": false,
-   "filledAt": 1793549189087,
-   "orderId": "2aa3931c-f2ae-4daa-9d06-bb2a8cedfb98",
-   "closedAt": 1793549254862,
-   "epNet": -0.161776,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "LDOUSDT",
    "direction": "LONG",
@@ -690,6 +652,31 @@
    "live": true,
    "filledAt": 1793556771763,
    "orderId": "1023fc20-de02-47a2-bcb8-6becfa2a0386"
+  },
+  {
+   "symbol": "NEARUSDT",
+   "direction": "LONG",
+   "ts": 1793557204970,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1793557124971NEARUSDT",
+   "live": false
+  },
+  {
+   "symbol": "AVAXUSDT",
+   "direction": "LONG",
+   "ts": 1793557297328,
+   "pimp": "Silky Slim",
+   "crack": "Diamond Dust",
+   "coid": "s1793557211783AVAXUSDT"
+  },
+  {
+   "symbol": "OPUSDT",
+   "direction": "LONG",
+   "ts": 1793557303318,
+   "pimp": "Silky Slim",
+   "crack": "Crystal Meth",
+   "coid": "s1793557211783OPUSDT"
   }
  ],
  "drama": [
