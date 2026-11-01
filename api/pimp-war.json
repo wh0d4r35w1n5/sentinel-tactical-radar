@@ -1,25 +1,25 @@
 {
- "at": "2026-11-01T15:30:26.943Z",
+ "at": "2026-11-01T15:36:04.389Z",
  "wallets": {
   "futures": {
-   "equityUsd": 61.59,
-   "marginFreeUsd": 50045.32,
-   "epochNetUsd": -3.14,
-   "fills": 62,
+   "equityUsd": 61.95,
+   "marginFreeUsd": 50045.01,
+   "epochNetUsd": -2.77,
+   "fills": 65,
    "positions": [
+    {
+     "symbol": "SOONUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 10,
+     "margin": 0.52
+    },
     {
      "symbol": "ORDIUSDT",
      "side": "long",
-     "upl": -0.4,
+     "upl": -0.62,
      "lev": 10,
-     "margin": 15.63
-    },
-    {
-     "symbol": "LDOUSDT",
-     "side": "long",
-     "upl": 0.47,
-     "lev": 10,
-     "margin": 3.83
+     "margin": 15.61
     }
    ]
   },
@@ -98,22 +98,6 @@
  },
  "pimps": [
   {
-   "name": "Silky Slim",
-   "roster": [
-    "Diamond Dust",
-    "Crystal Meth",
-    "Solana Sadie"
-   ],
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "crown": false,
-   "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
-   "mood": "working"
-  },
-  {
    "name": "Madam Razor",
    "roster": [
     "Velvet Vice",
@@ -171,6 +155,22 @@
    "net": 0,
    "wins": 0,
    "losses": 0,
+   "crown": false,
+   "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
+   "mood": "working"
+  },
+  {
+   "name": "Silky Slim",
+   "roster": [
+    "Diamond Dust",
+    "Crystal Meth",
+    "Solana Sadie"
+   ],
+   "net": -0.0057,
+   "wins": 0,
+   "losses": 1,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -365,8 +365,8 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.44,
-    "tilt": 0.25,
+    "swagger": 0.45,
+    "tilt": 0.24,
     "greed": 0.48,
     "discipline": 0.46
    }
@@ -480,21 +480,23 @@
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": "Silky Slim",
-   "net": 0,
+   "net": -0.0057,
    "wins": 0,
-   "losses": 0,
-   "closes": 0,
+   "losses": 1,
+   "closes": 1,
    "stolen": 0,
    "gen": 0,
-   "form": 0,
+   "form": -0.0023,
    "mood": "working",
    "vault": 0.5029,
-   "hist": [],
+   "hist": [
+    -0.0057
+   ],
    "persona": {
-    "swagger": 0.4,
-    "tilt": 0.36,
-    "greed": 0.47,
-    "discipline": 0.43
+    "swagger": 0.34,
+    "tilt": 0.52,
+    "greed": 0.45,
+    "discipline": 0.38
    }
   }
  ],
@@ -555,23 +557,34 @@
    "epNet": -0.175038,
    "epCounted": true,
    "epVerdict": -1
+  },
+  {
+   "symbol": "SOONUSDT",
+   "direction": "LONG",
+   "ts": 1793547219202,
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie",
+   "coid": "s1793547118914SOONUSDT",
+   "live": false,
+   "filledAt": 1793547223120,
+   "orderId": "8ce08445-829a-4625-820d-82d9d7ea1dc0",
+   "closedAt": 1793547289797,
+   "epNet": -0.005651,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793547364378,
+   "text": "💰 Solana Sadie (working for Silky Slim) banked $-0.01 on SOONUSDT incl $0.003 entry fees — docked her pay"
+  },
   {
    "ts": 1793545987228,
    "text": "🌆 Pimpcity rebooted — clean ledgers, every girl rostered, the contrarian is gone"
   }
  ],
  "attrib": {
-  "0bc11c0f-5f04-437a-b2ec-e4b7f83aa3fa": {
-   "pimp": null,
-   "crack": null
-  },
-  "32d223dd-ecde-4958-ad6a-57b5740deb46": {
-   "pimp": null,
-   "crack": null
-  },
   "6197a323-0b1c-4314-a3df-ab49059ab9f0": {
    "pimp": null,
    "crack": null
@@ -1163,6 +1176,14 @@
   "06811b17-0fa4-4d8e-ad21-b878a6f1264a": {
    "pimp": null,
    "crack": null
+  },
+  "f9dca6a5-f935-4c38-ae04-02bcc9d9adaf": {
+   "pimp": null,
+   "crack": null
+  },
+  "a9d6a4e1-1c3e-4197-a529-49b41efaea75": {
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie"
   }
  }
 }
