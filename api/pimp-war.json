@@ -1,20 +1,12 @@
 {
- "at": "2026-11-01T15:45:40.926Z",
+ "at": "2026-11-01T15:50:50.734Z",
  "wallets": {
   "futures": {
-   "equityUsd": 61.95,
-   "marginFreeUsd": 50045.52,
-   "epochNetUsd": -2.78,
-   "fills": 65,
-   "positions": [
-    {
-     "symbol": "ORDIUSDT",
-     "side": "long",
-     "upl": -0.58,
-     "lev": 10,
-     "margin": 15.61
-    }
-   ]
+   "equityUsd": 61.15,
+   "marginFreeUsd": 50059.54,
+   "epochNetUsd": -3.57,
+   "fills": 66,
+   "positions": []
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -107,22 +99,6 @@
    "mood": "working"
   },
   {
-   "name": "Cold Cash Cole",
-   "roster": [
-    "Sugar Tits",
-    "Queen B",
-    "Fastlane Faye"
-   ],
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "crown": false,
-   "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
-   "mood": "working"
-  },
-  {
    "name": "Big Daddy Kane",
    "roster": [
     "Trixie",
@@ -162,6 +138,22 @@
     "Solana Sadie"
    ],
    "net": -0.0057,
+   "wins": 0,
+   "losses": 1,
+   "crown": false,
+   "crippled": false,
+   "vault": 0,
+   "vaultSweeps": 0,
+   "mood": "working"
+  },
+  {
+   "name": "Cold Cash Cole",
+   "roster": [
+    "Sugar Tits",
+    "Queen B",
+    "Fastlane Faye"
+   ],
+   "net": -0.8796,
    "wins": 0,
    "losses": 1,
    "crown": false,
@@ -359,7 +351,7 @@
    "hist": [],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.23,
+    "tilt": 0.22,
     "greed": 0.49,
     "discipline": 0.47
    }
@@ -389,27 +381,6 @@
    "name": "Gold Teeth",
    "tag": "carry queen",
    "pimp": "Madam Razor",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Fastlane Faye",
-   "tag": "bagrunner — chase & dump",
-   "pimp": "Cold Cash Cole",
    "net": 0,
    "wins": 0,
    "losses": 0,
@@ -486,10 +457,33 @@
     -0.0057
    ],
    "persona": {
-    "swagger": 0.35,
-    "tilt": 0.49,
+    "swagger": 0.36,
+    "tilt": 0.46,
     "greed": 0.46,
-    "discipline": 0.39
+    "discipline": 0.4
+   }
+  },
+  {
+   "name": "Fastlane Faye",
+   "tag": "bagrunner — chase & dump",
+   "pimp": "Cold Cash Cole",
+   "net": -0.8796,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.3518,
+   "mood": "cold",
+   "vault": 0,
+   "hist": [
+    -0.8796
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.27,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   }
  ],
@@ -532,9 +526,13 @@
    "pimp": "Cold Cash Cole",
    "crack": "Fastlane Faye",
    "coid": "s1793545276694ORDIUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793545378677,
-   "orderId": "bb660a44-8ffc-449d-ad53-61ba116b0fd6"
+   "orderId": "bb660a44-8ffc-449d-ad53-61ba116b0fd6",
+   "closedAt": 1793548099475,
+   "epNet": -0.879591,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "TRXUSDT",
@@ -569,6 +567,14 @@
  ],
  "drama": [
   {
+   "ts": 1793548174399,
+   "text": "💰 Fastlane Faye (working for Cold Cash Cole) banked $-0.88 on ORDIUSDT incl $0.086 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793548174399,
+   "text": "🧊 Fastlane Faye can't buy a trick — cold streak, the bench is watching"
+  },
+  {
    "ts": 1793547364378,
    "text": "💰 Solana Sadie (working for Silky Slim) banked $-0.01 on SOONUSDT incl $0.003 entry fees — docked her pay"
   },
@@ -578,10 +584,6 @@
   }
  ],
  "attrib": {
-  "6197a323-0b1c-4314-a3df-ab49059ab9f0": {
-   "pimp": null,
-   "crack": null
-  },
   "00c2ca10-7051-499e-b49d-47632f8f27bc": {
    "pimp": null,
    "crack": null
@@ -1177,6 +1179,10 @@
   "a9d6a4e1-1c3e-4197-a529-49b41efaea75": {
    "pimp": "Silky Slim",
    "crack": "Solana Sadie"
+  },
+  "c3b3c641-3e68-44cd-ad35-921e21ef6f1e": {
+   "pimp": "Cold Cash Cole",
+   "crack": "Fastlane Faye"
   }
  }
 }
