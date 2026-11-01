@@ -1,18 +1,25 @@
 {
- "at": "2026-11-01T16:50:49.951Z",
+ "at": "2026-11-01T16:56:27.683Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.76,
-   "marginFreeUsd": 50047.25,
-   "epochNetUsd": -3.96,
-   "fills": 71,
+   "equityUsd": 60.64,
+   "marginFreeUsd": 50037.84,
+   "epochNetUsd": -4.09,
+   "fills": 75,
    "positions": [
+    {
+     "symbol": "1INCHUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 9.21
+    },
     {
      "symbol": "XCNUSDT",
      "side": "short",
-     "upl": 0.15,
+     "upl": 0.47,
      "lev": 5,
-     "margin": 16.03
+     "margin": 15.96
     }
    ]
   },
@@ -129,9 +136,9 @@
     "Baby Back",
     "Sprint Santana"
    ],
-   "net": 0,
+   "net": -0.123,
    "wins": 0,
-   "losses": 0,
+   "losses": 1,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -145,9 +152,9 @@
     "Crystal Meth",
     "Solana Sadie"
    ],
-   "net": -0.3529,
+   "net": -0.4747,
    "wins": 0,
-   "losses": 3,
+   "losses": 4,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -431,46 +438,49 @@
    "name": "Sprint Santana",
    "tag": "bagrunner — alt bags",
    "pimp": "Fancy Red",
-   "net": 0,
+   "net": -0.123,
    "wins": 0,
-   "losses": 0,
-   "closes": 0,
+   "losses": 1,
+   "closes": 1,
    "stolen": 0,
    "gen": 0,
-   "form": 0,
+   "form": -0.0492,
    "mood": "working",
    "vault": 0,
-   "hist": [],
+   "hist": [
+    -0.123
+   ],
    "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   },
   {
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
    "pimp": "Silky Slim",
-   "net": -0.3529,
+   "net": -0.4747,
    "wins": 0,
-   "losses": 3,
-   "closes": 3,
+   "losses": 4,
+   "closes": 4,
    "stolen": 0,
    "gen": 0,
-   "form": -0.1138,
+   "form": -0.117,
    "mood": "tilt",
    "vault": 0.5029,
    "hist": [
     -0.0057,
     -0.1674,
-    -0.3529
+    -0.3529,
+    -0.4747
    ],
    "persona": {
-    "swagger": 0.33,
-    "tilt": 0.53,
-    "greed": 0.45,
-    "discipline": 0.38
+    "swagger": 0.27,
+    "tilt": 0.68,
+    "greed": 0.44,
+    "discipline": 0.34
    }
   },
   {
@@ -491,7 +501,7 @@
    ],
    "persona": {
     "swagger": 0.47,
-    "tilt": 0.19,
+    "tilt": 0.18,
     "greed": 0.49,
     "discipline": 0.48
    }
@@ -621,10 +631,40 @@
    "ts": 1793551846123,
    "pimp": "Silky Slim",
    "crack": "Solana Sadie",
-   "coid": "s1793551767611LDOUSDT"
+   "coid": "s1793551767611LDOUSDT",
+   "live": false,
+   "filledAt": 1793551849436,
+   "orderId": "6a05959e-19cb-4b29-9602-4be8954aab18",
+   "closedAt": 1793552008227,
+   "epNet": -0.12179,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "1INCHUSDT",
+   "direction": "LONG",
+   "ts": 1793552022629,
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana",
+   "coid": "s17935519385921INCHUSDT",
+   "live": false,
+   "filledAt": 1793552026450,
+   "orderId": "91bf3fa6-dd12-47eb-9cea-4bd33ea07a6d",
+   "closedAt": 1793552096073,
+   "epNet": -0.123009,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793552172758,
+   "text": "💰 Sprint Santana (working for Fancy Red) banked $-0.12 on 1INCHUSDT incl $0.050 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793552093365,
+   "text": "💰 Solana Sadie (working for Silky Slim) banked $-0.12 on LDOUSDT incl $0.048 entry fees — docked her pay"
+  },
   {
    "ts": 1793550171617,
    "text": "💰 Solana Sadie (working for Silky Slim) banked $-0.19 on LDOUSDT incl $0.052 entry fees — docked her pay"
@@ -655,14 +695,6 @@
   }
  ],
  "attrib": {
-  "1c7b4b2f-2b6c-492a-8631-99063da96711": {
-   "pimp": null,
-   "crack": null
-  },
-  "452bff71-00b2-4fde-9dea-c749b191aae5": {
-   "pimp": null,
-   "crack": null
-  },
   "28747c01-a511-42a9-8840-8c13c12722f5": {
    "pimp": null,
    "crack": null
@@ -1254,6 +1286,14 @@
   "d1adc4fe-175b-4225-ab1b-8a07f753dcaa": {
    "pimp": "Silky Slim",
    "crack": "Solana Sadie"
+  },
+  "3faa33dd-b4bc-46d1-a1af-136e397995ca": {
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie"
+  },
+  "46432cb5-0dbc-401e-998c-197f016ed1af": {
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana"
   }
  }
 }
