@@ -1,12 +1,20 @@
 {
- "at": "2026-11-01T17:56:35.636Z",
+ "at": "2026-11-01T18:00:49.910Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.64,
-   "marginFreeUsd": 50065.5,
-   "epochNetUsd": -4.08,
-   "fills": 79,
-   "positions": []
+   "equityUsd": 60.62,
+   "marginFreeUsd": 50059.59,
+   "epochNetUsd": -4.11,
+   "fills": 80,
+   "positions": [
+    {
+     "symbol": "ARBUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 10,
+     "margin": 4.91
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -465,7 +473,7 @@
    ],
    "persona": {
     "swagger": 0.39,
-    "tilt": 0.39,
+    "tilt": 0.38,
     "greed": 0.47,
     "discipline": 0.42
    }
@@ -489,30 +497,15 @@
     -0.588
    ],
    "persona": {
-    "swagger": 0.58,
+    "swagger": 0.57,
     "tilt": 0.08,
-    "greed": 0.54,
+    "greed": 0.53,
     "discipline": 0.52
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "ALLOUSDT",
-   "direction": "LONG",
-   "ts": 1793544495888,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793544399136ALLOUSDT",
-   "live": false,
-   "filledAt": 1793544499874,
-   "orderId": "462fac54-f8fe-40ad-8e12-999140b97302",
-   "closedAt": 1793544582818,
-   "epNet": -0.502316,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "1INCHUSDT",
    "direction": "LONG",
@@ -662,6 +655,26 @@
    "epNet": -0.20709,
    "epCounted": true,
    "epVerdict": -1
+  },
+  {
+   "symbol": "ARBUSDT",
+   "direction": "LONG",
+   "ts": 1793555887948,
+   "pimp": "Madam Razor",
+   "crack": "Neon Nicki",
+   "coid": "s1793555812805ARBUSDT",
+   "filledAt": 1793555891883,
+   "orderId": "ae77dca1-618a-4d81-bfe5-12cb2bb1e3a9",
+   "live": true
+  },
+  {
+   "symbol": "USUSDT",
+   "direction": "LONG",
+   "ts": 1793555894110,
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie",
+   "coid": "s1793555812805USUSDT",
+   "live": false
   }
  ],
  "drama": [
