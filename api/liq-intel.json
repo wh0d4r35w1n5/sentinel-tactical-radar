@@ -1,18 +1,18 @@
 {
- "ts": "2026-11-01T23:33:30.829Z",
+ "ts": "2026-11-01T23:38:45.842Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 0
+   "long": 617869.4309999999,
+   "short": 29696.253210000003
   },
   "liq15m": {
-   "long": 0,
-   "short": 0
+   "long": 617869.4309999999,
+   "short": 29696.253210000003
   },
   "liq60m": {
-   "long": 446170.93248999986,
-   "short": 293927.30179000006
+   "long": 1062156.56349,
+   "short": 323623.55500000005
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,32 +20,32 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 0
+    "long": 521934.36049999984,
+    "short": 29305.31721
    },
    "liq60m": {
-    "long": 164031.18300000002,
-    "short": 211554.71048
+    "long": 685965.5435,
+    "short": 240860.02769
    },
    "flow15m": {
-    "buy": 6783204,
-    "sell": 6357599,
-    "delta": 425605
+    "buy": 29094794,
+    "sell": 10481759,
+    "delta": 18613035
    }
   },
   "ETHUSDT": {
    "liq15m": {
-    "long": 0,
+    "long": 95935.0705,
     "short": 0
    },
    "liq60m": {
-    "long": 178248.45314000003,
+    "long": 274183.52364,
     "short": 49781.27081000001
    },
    "flow15m": {
-    "buy": 2821525,
-    "sell": 3138965,
-    "delta": -317440
+    "buy": 5671468,
+    "sell": 2824887,
+    "delta": 2846580
    }
   },
   "SOLUSDT": {
@@ -54,13 +54,13 @@
     "short": 0
    },
    "liq60m": {
-    "long": 101484.14229999999,
+    "long": 99600.34229999999,
     "short": 32561.267699999997
    },
    "flow15m": {
-    "buy": 698815,
-    "sell": 1207543,
-    "delta": -508727
+    "buy": 1508061,
+    "sell": 951295,
+    "delta": 556767
    }
   },
   "DOGEUSDT": {
@@ -96,11 +96,11 @@
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 390.93600000000004
    },
    "liq60m": {
     "long": 1019.643,
-    "short": 0
+    "short": 390.93600000000004
    },
    "flow15m": {
     "buy": 0,
@@ -111,6 +111,22 @@
  },
  "biggestPrints60m": [
   {
+   "ts": 1793576310012,
+   "sym": "BTCUSDT",
+   "side": "long",
+   "usd": 165457.4688,
+   "px": 78564.8,
+   "venue": "bybit"
+  },
+  {
+   "ts": 1793576304012,
+   "sym": "BTCUSDT",
+   "side": "long",
+   "usd": 181044.5212,
+   "px": 78510.2,
+   "venue": "bybit"
+  },
+  {
    "ts": 1793574691892,
    "sym": "BTCUSDT",
    "side": "short",
@@ -119,5 +135,5 @@
    "venue": "okx"
   }
  ],
- "liqCount2h": 301
+ "liqCount2h": 349
 }
