@@ -1,38 +1,62 @@
 {
- "ts": "2026-11-01T19:12:24.897Z",
- "ageMs": 4305,
+ "ts": "2026-11-01T19:17:35.600Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 56.7597,
+  "equityUsd": 43.9216,
   "availableUsd": 0,
   "grantUsd": 0,
-  "equityOwnUsd": 56.7597,
-  "marginUsedUsd": 105.5598,
-  "uplUsd": -49.2853,
+  "equityOwnUsd": 43.9216,
+  "marginUsedUsd": 89.0056,
+  "uplUsd": -43.5528,
   "positions": [
    {
     "k": "ZECUSDT:long",
-    "size": 2.553,
-    "marginUsd": 105.5598,
-    "uplUsd": -49.2853
+    "size": 1.914,
+    "marginUsd": 89.0056,
+    "uplUsd": -43.5528
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2266,
+  "solUsd": 0.2263,
   "stableUsd": 0,
-  "bagsUsd": 0.0575,
-  "totalUsd": 0.2841,
+  "bagsUsd": 0.0574,
+  "totalUsd": 0.2837,
   "tokens": {
    "BQAeeSow": 0.001,
-   "8PGyHCKv": 0.0565
+   "8PGyHCKv": 0.0564
   },
-  "staleMs": 4305
+  "staleMs": 0
  },
- "totalUsd": 57.0438,
+ "totalUsd": 44.2054,
  "deltas": [
+  {
+   "ts": 1793560500605,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 1.7417
+  },
+  {
+   "ts": 1793560419101,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.3062
+  },
+  {
+   "ts": 1793560409793,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -14.886
+  },
+  {
+   "ts": 1793560409791,
+   "kind": "size-reduced",
+   "detail": "ZECUSDT:long Δ-0.639",
+   "amt": 0
+  },
   {
    "ts": 1793560176048,
    "kind": "balance-move",
@@ -128,30 +152,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": -0.0511
-  },
-  {
-   "ts": 1793554662103,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": -0.817
-  },
-  {
-   "ts": 1793554651615,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 12.5863
-  },
-  {
-   "ts": 1793553682562,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -4.1614
-  },
-  {
-   "ts": 1793553581312,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.6382
   }
  ]
 }

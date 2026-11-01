@@ -1,123 +1,130 @@
 {
- "at": "2026-11-01T19:11:43.425Z",
+ "at": "2026-11-01T19:17:32.858Z",
  "wallets": {
   "futures": {
-   "equityUsd": 57.82,
-   "marginFreeUsd": 50006.18,
-   "epochNetUsd": -7.18,
-   "fills": 134,
+   "equityUsd": 55.45,
+   "marginFreeUsd": 50011.37,
+   "epochNetUsd": -9.55,
+   "fills": 141,
    "positions": [
     {
-     "symbol": "SEIUSDT",
+     "symbol": "1000BTTUSDT",
      "side": "long",
-     "upl": 0.03,
+     "upl": 0,
+     "lev": 10,
+     "margin": 1.8
+    },
+    {
+     "symbol": "RENDERUSDT",
+     "side": "long",
+     "upl": -0.09,
+     "lev": 10,
+     "margin": 1.84
+    },
+    {
+     "symbol": "ATOMUSDT",
+     "side": "long",
+     "upl": -0.02,
      "lev": 10,
      "margin": 2.21
     },
     {
-     "symbol": "ONDOUSDT",
-     "side": "long",
-     "upl": -0.01,
-     "lev": 10,
-     "margin": 2.18
-    },
-    {
-     "symbol": "STEEMUSDT",
-     "side": "long",
-     "upl": 0,
-     "lev": 10,
-     "margin": 1.77
-    },
-    {
-     "symbol": "BMTUSDT",
-     "side": "long",
-     "upl": -0.15,
-     "lev": 5,
-     "margin": 3.69
-    },
-    {
-     "symbol": "TIAUSDT",
+     "symbol": "PENDLEUSDT",
      "side": "long",
      "upl": -0.06,
      "lev": 10,
-     "margin": 2.48
+     "margin": 1.65
     },
     {
-     "symbol": "TAOUSDT",
+     "symbol": "JUPUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": -0.12,
      "lev": 10,
-     "margin": 2.25
+     "margin": 2.12
     },
     {
-     "symbol": "WLDUSDT",
+     "symbol": "MAGICUSDT",
      "side": "long",
-     "upl": -0.1,
+     "upl": -0.07,
      "lev": 10,
-     "margin": 2.01
+     "margin": 2.22
     },
     {
-     "symbol": "1INCHUSDT",
+     "symbol": "SEIUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": -0.08,
      "lev": 10,
      "margin": 2.19
     },
     {
+     "symbol": "ONDOUSDT",
+     "side": "long",
+     "upl": -0.12,
+     "lev": 10,
+     "margin": 2.17
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": -0.07,
+     "lev": 10,
+     "margin": 1.77
+    },
+    {
+     "symbol": "TIAUSDT",
+     "side": "long",
+     "upl": -0.16,
+     "lev": 10,
+     "margin": 2.47
+    },
+    {
+     "symbol": "TAOUSDT",
+     "side": "long",
+     "upl": -0.12,
+     "lev": 10,
+     "margin": 2.24
+    },
+    {
+     "symbol": "1INCHUSDT",
+     "side": "long",
+     "upl": -0.07,
+     "lev": 10,
+     "margin": 2.18
+    },
+    {
      "symbol": "LITUSDT",
      "side": "long",
-     "upl": -0.06,
+     "upl": -0.21,
      "lev": 10,
-     "margin": 3.36
-    },
-    {
-     "symbol": "INJUSDT",
-     "side": "long",
-     "upl": -0.1,
-     "lev": 10,
-     "margin": 4.41
-    },
-    {
-     "symbol": "AAVEUSDT",
-     "side": "long",
-     "upl": -0.32,
-     "lev": 10,
-     "margin": 4.58
+     "margin": 3.34
     },
     {
      "symbol": "SANDUSDT",
      "side": "long",
-     "upl": -0.06,
+     "upl": -0.14,
      "lev": 10,
-     "margin": 4.41
-    },
-    {
-     "symbol": "ENAUSDT",
-     "side": "long",
-     "upl": -0.38,
-     "lev": 10,
-     "margin": 4.07
+     "margin": 4.4
     },
     {
      "symbol": "UNIUSDT",
      "side": "long",
-     "upl": -0.1,
+     "upl": -0.19,
      "lev": 10,
-     "margin": 4.49
+     "margin": 4.48
     },
     {
      "symbol": "ALGOUSDT",
      "side": "long",
-     "upl": -0.11,
+     "upl": -0.26,
      "lev": 10,
-     "margin": 4.67
+     "margin": 4.65
     },
     {
      "symbol": "MORPHOUSDT",
      "side": "long",
-     "upl": -0.23,
+     "upl": -0.43,
      "lev": 10,
-     "margin": 4.28
+     "margin": 4.26
     }
    ]
   },
@@ -202,8 +209,8 @@
     "Foxy",
     "Bolt Betsy"
    ],
-   "net": 0.0355,
-   "wins": 1,
+   "net": 0.0414,
+   "wins": 2,
    "losses": 0,
    "crown": true,
    "crippled": false,
@@ -299,7 +306,7 @@
    ],
    "persona": {
     "swagger": 0.52,
-    "tilt": 0.15,
+    "tilt": 0.14,
     "greed": 0.52,
     "discipline": 0.48
    }
@@ -322,10 +329,33 @@
     0.0355
    ],
    "persona": {
-    "swagger": 0.62,
-    "tilt": 0.05,
+    "swagger": 0.61,
+    "tilt": 0.06,
     "greed": 0.55,
     "discipline": 0.54
+   }
+  },
+  {
+   "name": "Bolt Betsy",
+   "tag": "bagrunner — pure speed",
+   "pimp": "Big Daddy Kane",
+   "net": 0.0059,
+   "wins": 1,
+   "losses": 0,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": 0.0023,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    0.0059
+   ],
+   "persona": {
+    "swagger": 0.59,
+    "tilt": 0.06,
+    "greed": 0.54,
+    "discipline": 0.53
    }
   },
   {
@@ -476,27 +506,6 @@
    }
   },
   {
-   "name": "Bolt Betsy",
-   "tag": "bagrunner — pure speed",
-   "pimp": "Big Daddy Kane",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
    "name": "Gold Teeth",
    "tag": "carry queen",
    "pimp": "Madam Razor",
@@ -515,7 +524,7 @@
    ],
    "persona": {
     "swagger": 0.4,
-    "tilt": 0.37,
+    "tilt": 0.36,
     "greed": 0.47,
     "discipline": 0.43
    }
@@ -541,8 +550,8 @@
    ],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.24,
-    "greed": 0.48,
+    "tilt": 0.23,
+    "greed": 0.49,
     "discipline": 0.46
    }
   },
@@ -565,7 +574,7 @@
     -0.588
    ],
    "persona": {
-    "swagger": 0.54,
+    "swagger": 0.53,
     "tilt": 0.09,
     "greed": 0.52,
     "discipline": 0.51
@@ -579,7 +588,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 12,
+   "stolen": 15,
    "gen": 0,
    "form": -0.2434,
    "mood": "working",
@@ -593,7 +602,7 @@
    "persona": {
     "swagger": 0.55,
     "tilt": 0.21,
-    "greed": 0.54,
+    "greed": 0.53,
     "discipline": 0.49
    }
   },
@@ -627,28 +636,6 @@
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "ONDOUSDT",
-   "direction": "LONG",
-   "ts": 1793559431810,
-   "pimp": "Madam Razor",
-   "crack": "Neon Nicki",
-   "coid": "s1793559289278ONDOUSDT",
-   "filledAt": 1793559436048,
-   "orderId": "deb6e175-4659-454b-8eca-87bf234ebe45",
-   "live": true
-  },
-  {
-   "symbol": "SEIUSDT",
-   "direction": "LONG",
-   "ts": 1793559566085,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793559440077SEIUSDT",
-   "filledAt": 1793559570139,
-   "orderId": "f0d77026-49cf-4592-a5d5-29254b071c7d",
-   "live": true
-  },
   {
    "symbol": "TERUSDT",
    "direction": "LONG",
@@ -698,7 +685,11 @@
    "coid": "s1793560053531LINKUSDT",
    "filledAt": 1793560167838,
    "orderId": "6e1c88b4-b63e-41d4-a167-c3bd7a6d64e0",
-   "live": true
+   "live": false,
+   "closedAt": 1793560289089,
+   "epNet": 0.005852,
+   "epCounted": true,
+   "epVerdict": 1
   },
   {
    "symbol": "PENDLEUSDT",
@@ -740,7 +731,9 @@
    "pimp": "Madam Razor",
    "crack": "Gold Teeth",
    "coid": "s17935600535311000BTTUSDT",
-   "live": false
+   "live": true,
+   "filledAt": 1793560197594,
+   "orderId": "2facb914-d054-4bb2-8763-34b93cf3c9b0"
   },
   {
    "symbol": "SNXXUSDT",
@@ -750,9 +743,41 @@
    "crack": "Gold Teeth",
    "coid": "s1793560053531SNXXUSDT",
    "live": false
+  },
+  {
+   "symbol": "1000CATUSDT",
+   "direction": "LONG",
+   "ts": 1793560567287,
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana",
+   "coid": "s17935604485371000CATUSDT",
+   "filledAt": 1793560570505,
+   "orderId": "d46b05dc-dba8-4a2b-9b39-c2a541e72eb9",
+   "live": true
+  },
+  {
+   "symbol": "CTCUSDT",
+   "direction": "LONG",
+   "ts": 1793560576344,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1793560448537CTCUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793560652855,
+   "text": "🧬 Neon Nicki tweaked her reads — alt upweighted (street R&D)"
+  },
+  {
+   "ts": 1793560534778,
+   "text": "🧬 Solana Sadie tweaked her reads — mom upweighted (street R&D)"
+  },
+  {
+   "ts": 1793560409347,
+   "text": "💰 Bolt Betsy (working for Big Daddy Kane) banked +$0.01 on LINKUSDT incl $0.011 entry fees"
+  },
   {
    "ts": 1793560273993,
    "text": "🧬 Sprint Santana tweaked her reads — stratW downweighted (street R&D)"
@@ -860,41 +885,9 @@
   {
    "ts": 1793557611659,
    "text": "💰 Trixie (working for Big Daddy Kane) banked +$0.03 on NEARUSDT incl $0.027 entry fees"
-  },
-  {
-   "ts": 1793554546638,
-   "text": "💰 Neon Nicki (working for Madam Razor) banked $-0.21 on LUMIAUSDT incl $0.020 entry fees — docked her pay"
-  },
-  {
-   "ts": 1793552348475,
-   "text": "💰 Fastlane Faye (working for Cold Cash Cole) banked +$0.22 on XCNUSDT"
-  },
-  {
-   "ts": 1793552247435,
-   "text": "💰 Fastlane Faye (working for Cold Cash Cole) banked +$0.07 on XCNUSDT incl $0.044 entry fees"
   }
  ],
  "attrib": {
-  "58cd3653-5e22-46f4-9c8a-eb7aea32aa0d": {
-   "pimp": null,
-   "crack": null
-  },
-  "1bbc0075-0557-4094-8887-d671bbf54548": {
-   "pimp": null,
-   "crack": null
-  },
-  "e97e7945-031b-43dc-82bd-8aaf8e9e27c7": {
-   "pimp": null,
-   "crack": null
-  },
-  "b239d862-e339-497e-8a69-48287dcd16b8": {
-   "pimp": null,
-   "crack": null
-  },
-  "e6f05e1a-f95e-4f06-804c-69ba1aa750cc": {
-   "pimp": null,
-   "crack": null
-  },
   "17ec4fea-77ea-4fd4-a9e2-b7c04384dfae": {
    "pimp": null,
    "crack": null
@@ -1474,6 +1467,26 @@
   "a7e92a16-a90a-4217-a8e5-d11b230885b8": {
    "pimp": "Madam Razor",
    "crack": "Neon Nicki"
+  },
+  "8c175ddc-740d-47b0-80af-e96cec9d74d6": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Bolt Betsy"
+  },
+  "c70ba6cd-5329-49d1-bee4-429c13fc38f9": {
+   "pimp": null,
+   "crack": null
+  },
+  "fd792711-52ad-4d6e-92a2-9f277ab75117": {
+   "pimp": null,
+   "crack": null
+  },
+  "d00b3c85-2816-46b2-93f2-a613d0788abd": {
+   "pimp": null,
+   "crack": null
+  },
+  "8cdff661-7c29-4d1b-8839-b9c7df40f487": {
+   "pimp": null,
+   "crack": null
   }
  }
 }
