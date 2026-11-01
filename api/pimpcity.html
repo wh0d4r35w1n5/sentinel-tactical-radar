@@ -189,8 +189,7 @@ async function load(){
     <div class="stat"><div class="k">🌆 Street net</div><div class="v ${streetNet>=0?'pos':'neg'}">${streetNet>=0?'+':''}$${streetNet.toFixed(2)}</div><div class="s">all booked tricks</div></div>
     <div class="stat"><div class="k">⚡ Futures book</div><div class="v cy">$${(+F.equityUsd||0).toFixed(2)}</div><div class="s">${F.fills||0} fills · ${(F.positions||[]).length} open</div></div>
     <div class="stat"><div class="k">⛓ On-chain purse</div><div class="v cy">$${(+O.purseUsd||0).toFixed(2)}</div><div class="s">${O.positions||0} bags · lane ${(+O.laneNet||0)>=0?'+':''}$${(+O.laneNet||0).toFixed(2)} (${O.laneWins||0}/${O.laneTrades||0}W)</div></div>
-    <div class="stat"><div class="k">🚧 Open positions</div><div class="v">${((F.positions||[]).length)+(O.positions||0)}</div><div class="s">${(F.positions||[]).map(p=>`${p.symbol} ${(+p.upl)>=0?'+':''}$${(+p.upl||0).toFixed(2)}`).join(' · ')||'flat'}</div></div>
-    ${wl?.mission?`<div class="stat"><div class="k">🎯 Debt attack</div><div class="v ${wl.mission.netAfterAud>=0?'pos':'neg'}">${wl.mission.netAfterAud>=0?'+':'−'}A$${Math.abs(wl.mission.netAfterAud).toFixed(0)}</div><div class="s">${wl.mission.clearedPct}% of A$${wl.mission.debtsAud} covered</div></div>`:''}`;
+    <div class="stat"><div class="k">🚧 Open positions</div><div class="v">${((F.positions||[]).length)+(O.positions||0)}</div><div class="s">${(F.positions||[]).map(p=>`${p.symbol} ${(+p.upl)>=0?'+':''}$${(+p.upl||0).toFixed(2)}`).join(' · ')||'flat'}</div></div>`;
   // tick tape: latest activity + drama headline
   const tape=(w.activity||[]).slice(0,8).map(a=>`<b>[${a.venue==='solana'?'⛓':'⚡'}]</b> ${esc(a.text)} <span style="opacity:.55">· ${ago(a.ts)}</span>`).join(' &nbsp;│&nbsp; ');
   $('tickTape').innerHTML=tape||'the street is quiet';
