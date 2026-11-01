@@ -1,60 +1,53 @@
 {
- "at": "2026-11-01T18:26:29.539Z",
+ "at": "2026-11-01T18:31:51.202Z",
  "wallets": {
   "futures": {
-   "equityUsd": 60.46,
-   "marginFreeUsd": 50021.58,
-   "epochNetUsd": -4.27,
-   "fills": 86,
+   "equityUsd": 60.57,
+   "marginFreeUsd": 50028.46,
+   "epochNetUsd": -4.16,
+   "fills": 89,
    "positions": [
     {
      "symbol": "USUSDT",
      "side": "long",
-     "upl": 0.14,
+     "upl": 0.03,
      "lev": 10,
-     "margin": 4.23
+     "margin": 3.38
     },
     {
      "symbol": "OPUSDT",
      "side": "long",
-     "upl": -0.07,
+     "upl": -0.02,
      "lev": 10,
-     "margin": 3.89
+     "margin": 3.9
     },
     {
      "symbol": "AVAXUSDT",
      "side": "long",
-     "upl": -0.04,
+     "upl": 0.04,
      "lev": 10,
-     "margin": 4.27
-    },
-    {
-     "symbol": "NEARUSDT",
-     "side": "long",
-     "upl": 0.03,
-     "lev": 10,
-     "margin": 4.86
+     "margin": 4.28
     },
     {
      "symbol": "XPLUSDT",
      "side": "long",
-     "upl": -0.35,
+     "upl": 0.24,
      "lev": 10,
-     "margin": 16.04
+     "margin": 16.1
     },
     {
      "symbol": "LDOUSDT",
      "side": "long",
-     "upl": -0.2,
+     "upl": -0.13,
      "lev": 10,
-     "margin": 4.52
+     "margin": 4.53
     },
     {
      "symbol": "ARBUSDT",
      "side": "long",
-     "upl": -0.12,
+     "upl": -0.03,
      "lev": 10,
-     "margin": 4.9
+     "margin": 4.91
     }
    ]
   },
@@ -139,10 +132,10 @@
     "Foxy",
     "Bolt Betsy"
    ],
-   "net": 0,
-   "wins": 0,
+   "net": 0.0355,
+   "wins": 1,
    "losses": 0,
-   "crown": false,
+   "crown": true,
    "crippled": false,
    "vault": 0,
    "vaultSweeps": 0,
@@ -155,8 +148,8 @@
     "Baby Back",
     "Sprint Santana"
    ],
-   "net": -0.123,
-   "wins": 0,
+   "net": -0.1215,
+   "wins": 1,
    "losses": 1,
    "crown": false,
    "crippled": false,
@@ -207,7 +200,7 @@
    "wins": 1,
    "losses": 1,
    "crown": false,
-   "crippled": false,
+   "crippled": true,
    "vault": 0,
    "vaultSweeps": 0,
    "mood": "working"
@@ -217,6 +210,30 @@
   "house": 33.1523
  },
  "cracks": [
+  {
+   "name": "Trixie",
+   "tag": "sweep hunter",
+   "pimp": "Big Daddy Kane",
+   "net": 0.0355,
+   "wins": 1,
+   "losses": 0,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": 0.0097,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    0.0281,
+    0.0355
+   ],
+   "persona": {
+    "swagger": 0.67,
+    "tilt": 0.03,
+    "greed": 0.58,
+    "discipline": 0.56
+   }
+  },
   {
    "name": "Diamond Dust",
    "tag": "momentum fiend",
@@ -305,27 +322,6 @@
    "name": "Queen B",
    "tag": "blue-chip royalty",
    "pimp": "Cold Cash Cole",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Trixie",
-   "tag": "sweep hunter",
-   "pimp": "Big Daddy Kane",
    "net": 0,
    "wins": 0,
    "losses": 0,
@@ -452,23 +448,24 @@
    "name": "Sprint Santana",
    "tag": "bagrunner — alt bags",
    "pimp": "Fancy Red",
-   "net": -0.123,
-   "wins": 0,
+   "net": -0.1215,
+   "wins": 1,
    "losses": 1,
-   "closes": 1,
+   "closes": 2,
    "stolen": 0,
    "gen": 0,
-   "form": -0.0492,
+   "form": -0.0289,
    "mood": "working",
    "vault": 0,
    "hist": [
-    -0.123
+    -0.123,
+    -0.1215
    ],
    "persona": {
-    "swagger": 0.47,
-    "tilt": 0.17,
-    "greed": 0.49,
-    "discipline": 0.48
+    "swagger": 0.56,
+    "tilt": 0.09,
+    "greed": 0.53,
+    "discipline": 0.51
    }
   },
   {
@@ -502,7 +499,7 @@
    "wins": 0,
    "losses": 4,
    "closes": 4,
-   "stolen": 0,
+   "stolen": 4,
    "gen": 0,
    "form": -0.117,
    "mood": "tilt",
@@ -515,7 +512,7 @@
    ],
    "persona": {
     "swagger": 0.42,
-    "tilt": 0.31,
+    "tilt": 0.3,
     "greed": 0.48,
     "discipline": 0.44
    }
@@ -541,28 +538,13 @@
    "persona": {
     "swagger": 0.55,
     "tilt": 0.08,
-    "greed": 0.53,
+    "greed": 0.52,
     "discipline": 0.51
    }
   }
  ],
  "retired": [],
  "intents": [
-  {
-   "symbol": "LDOUSDT",
-   "direction": "LONG",
-   "ts": 1793550020584,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793549940131LDOUSDT",
-   "live": true,
-   "filledAt": 1793550024486,
-   "orderId": "b9656433-9034-4512-909e-26a4dc9f07cf",
-   "closedAt": 1793550095480,
-   "epNet": -0.18546,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "XCNUSDT",
    "direction": "SHORT",
@@ -643,7 +625,11 @@
    "coid": "s1793556434917USUSDT",
    "live": true,
    "filledAt": 1793556529831,
-   "orderId": "097e24e7-b9ad-4d23-8ec8-3ba4c157683d"
+   "orderId": "097e24e7-b9ad-4d23-8ec8-3ba4c157683d",
+   "closedAt": 1793557538350,
+   "epNet": 0.00146,
+   "epCounted": true,
+   "epVerdict": 1
   },
   {
    "symbol": "LDOUSDT",
@@ -674,9 +660,13 @@
    "pimp": "Big Daddy Kane",
    "crack": "Trixie",
    "coid": "s1793557124971NEARUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793557208195,
-   "orderId": "4230a3c0-8b77-49ee-9313-8117c10b289e"
+   "orderId": "4230a3c0-8b77-49ee-9313-8117c10b289e",
+   "closedAt": 1793557626655,
+   "epNet": 0.035539,
+   "epCounted": true,
+   "epVerdict": 1
   },
   {
    "symbol": "AVAXUSDT",
@@ -699,9 +689,42 @@
    "live": true,
    "filledAt": 1793557306604,
    "orderId": "30b2c1d8-ac6b-432d-a179-1a21b527d272"
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1793557629687,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1793557508170SOXLUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793557895535,
+   "text": "🧬 Sprint Santana tweaked her reads — alt downweighted (street R&D)"
+  },
+  {
+   "ts": 1793557790560,
+   "text": "🧬 Sprint Santana tweaked her reads — score upweighted (street R&D)"
+  },
+  {
+   "ts": 1793557790558,
+   "text": "💰 Trixie (working for Big Daddy Kane) banked +$0.01 on NEARUSDT"
+  },
+  {
+   "ts": 1793557611661,
+   "text": "📓 Solana Sadie stole Fastlane Faye's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793557611659,
+   "text": "💰 Sprint Santana (working for Fancy Red) banked +$0.00 on USUSDT incl $0.046 entry fees"
+  },
+  {
+   "ts": 1793557611659,
+   "text": "💰 Trixie (working for Big Daddy Kane) banked +$0.03 on NEARUSDT incl $0.027 entry fees"
+  },
   {
    "ts": 1793554546638,
    "text": "💰 Neon Nicki (working for Madam Razor) banked $-0.21 on LUMIAUSDT incl $0.020 entry fees — docked her pay"
@@ -752,18 +775,6 @@
   }
  ],
  "attrib": {
-  "acabb7fd-0623-4f8d-9ca1-8c2d37cb7d57": {
-   "pimp": null,
-   "crack": null
-  },
-  "152103ce-0b8a-4f77-b23b-16166f37b204": {
-   "pimp": null,
-   "crack": null
-  },
-  "d4296a50-8e7c-4dfc-8e2d-50927da79401": {
-   "pimp": null,
-   "crack": null
-  },
   "d03256c0-54d6-4279-9f5a-8b290f039b24": {
    "pimp": null,
    "crack": null
@@ -1351,6 +1362,18 @@
   "e48b440e-5de7-497b-b9b2-5479be31eadb": {
    "pimp": "Madam Razor",
    "crack": "Neon Nicki"
+  },
+  "a891624a-4897-49f3-9e8a-4a1a680acd17": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie"
+  },
+  "a2e1c051-fed5-4438-a965-62216809f0f3": {
+   "pimp": "Fancy Red",
+   "crack": "Sprint Santana"
+  },
+  "5211678e-d3f2-478f-8ce9-b6e18c712077": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie"
   }
  }
 }
