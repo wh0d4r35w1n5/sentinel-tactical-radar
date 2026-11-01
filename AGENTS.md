@@ -77,7 +77,7 @@ gross-positive and still printed red. These rules prevent the repeat.
 
 - Repo: `C:\Users\beaue\sentinel-clone` (git, pushes to GitHub).
 - Live dir: `C:\Users\beaue\sentinel-live` (not a repo — sync to clone to commit).
-- VPS: `ssh -i ~/.ssh/sentinel_vm_key ubuntu@54.66.217.111`
+- VPS: `ssh -i ~/.ssh/sentinel_vm_key ubuntu@52.65.5.228`
 - Deploy file: `scp` to `~`, then `sudo mv` into `/opt/sentinel/` (root-owned),
   `node --check`, `sudo systemctl restart sentinel-rapid`.
 - Pushbot (`/opt/pushbot`): Pages api mirror on `sentinel-push.timer` (5 min).

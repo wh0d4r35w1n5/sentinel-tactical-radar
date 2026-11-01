@@ -57,7 +57,7 @@ def sig_text(f, plan):
             f"{plan.get('leverage')}x" if plan.get("leverage") else None] if x)
         if meta:
             lines.append(f"<i>{meta}</i>")
-    lines.append(f"<i>{time.strftime('%H:%M UTC', time.gmtime(f['ts'] / 1000))} · evidence gallery: 54-66-217-111.sslip.io/gallery.html</i>")
+    lines.append(f"<i>{time.strftime('%H:%M UTC', time.gmtime(f['ts'] / 1000))} · evidence gallery: 52-65-5-228.sslip.io/gallery.html</i>")
     return "\n".join(lines)
 
 def close_text(f, pos_entry):
@@ -171,7 +171,7 @@ async def main():
                         f"WR(last20) {cb.get('winRate20','?')}% · breaker: <i>{'🔴 ' + str(cb.get('tripped'))[:80] if cb.get('tripped') else '🟢 clear'}</i>\n"
                         f"Open book:\n{posl}\n"
                         + (f"Exit quality: med 60s post-exit drift {med:+.2f}% over {len(d60s)} fills\n" if med is not None else "")
-                        + "\n<i>Every fill auditable: 54-66-217-111.sslip.io/gallery.html</i>"
+                        + "\n<i>Every fill auditable: 52-65-5-228.sslip.io/gallery.html</i>"
                     )
                     await send(ch, msg)
                 except Exception as e:

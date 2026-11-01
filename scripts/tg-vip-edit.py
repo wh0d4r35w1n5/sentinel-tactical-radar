@@ -15,7 +15,7 @@ WELCOME = (
     "• Signals with pre-committed SL / TP geometry\n"
     "• Auto profit-lock — green trades can't round-trip to red\n"
     "• Crash brake + scaled trims on every position\n"
-    "• Full forensic audit: <a href='https://54-66-217-111.sslip.io/gallery.html'>live evidence gallery</a>\n\n"
+    "• Full forensic audit: <a href='https://52-65-5-228.sslip.io/gallery.html'>live evidence gallery</a>\n\n"
     "💎 <b>VIP access — $50 USDT</b> (or equivalent in BTC / ETH / SOL)\n"
     "Pay → DM @wh0d4r35w1n55 your txid → confirmed on-chain → access.\n"
     "Funds go straight into the trading stack."

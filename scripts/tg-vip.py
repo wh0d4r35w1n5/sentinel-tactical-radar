@@ -22,7 +22,7 @@ DONATE = {
     "SOL": "6hz3Lh9xogWNqkWBGAQPyK2b3vBwot3jJ5rrW7pFAiv3",
 }
 
-GALLERY = "https://54-66-217-111.sslip.io/gallery.html"
+GALLERY = "https://52-65-5-228.sslip.io/gallery.html"
 
 WELCOME = (
     "\U0001f6e1\ufe0f SENTINEL VIP SIGNALS\n\n"
