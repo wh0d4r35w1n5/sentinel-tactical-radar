@@ -1,65 +1,65 @@
 {
- "at": "2026-11-01T19:52:39.501Z",
+ "at": "2026-11-01T19:57:00.341Z",
  "wallets": {
   "futures": {
    "equityUsd": 53.96,
-   "marginFreeUsd": 50036.63,
+   "marginFreeUsd": 50035.68,
    "epochNetUsd": -11.04,
-   "fills": 153,
+   "fills": 156,
    "positions": [
     {
      "symbol": "1000CATUSDT",
      "side": "long",
-     "upl": 0.11,
+     "upl": 0.14,
      "lev": 10,
      "margin": 1.4
     },
     {
      "symbol": "SUNUSDT",
      "side": "long",
-     "upl": -0.01,
+     "upl": 0,
      "lev": 10,
      "margin": 1.66
     },
     {
      "symbol": "1000BTTUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": 0,
      "lev": 10,
      "margin": 1.8
     },
     {
      "symbol": "RENDERUSDT",
      "side": "long",
-     "upl": 0.01,
+     "upl": 0,
      "lev": 10,
      "margin": 1.85
     },
     {
      "symbol": "ATOMUSDT",
      "side": "long",
-     "upl": 0.03,
+     "upl": 0.07,
      "lev": 10,
-     "margin": 2.21
+     "margin": 2.22
     },
     {
      "symbol": "PENDLEUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": -0.01,
      "lev": 10,
      "margin": 1.65
     },
     {
      "symbol": "JUPUSDT",
      "side": "long",
-     "upl": -0.06,
+     "upl": -0.07,
      "lev": 10,
      "margin": 2.13
     },
     {
      "symbol": "MAGICUSDT",
      "side": "long",
-     "upl": -0.11,
+     "upl": -0.1,
      "lev": 10,
      "margin": 2.21
     },
@@ -153,10 +153,10 @@
     "Foxy",
     "Bolt Betsy"
    ],
-   "net": 0.0414,
+   "net": -0.0483,
    "wins": 2,
-   "losses": 0,
-   "crown": true,
+   "losses": 1,
+   "crown": false,
    "crippled": false,
    "vault": 0,
    "vaultSweeps": 0,
@@ -185,9 +185,9 @@
     "Crystal Meth",
     "Solana Sadie"
    ],
-   "net": -0.4747,
+   "net": -0.5949,
    "wins": 0,
-   "losses": 4,
+   "losses": 5,
    "crown": false,
    "crippled": false,
    "vault": 0,
@@ -217,9 +217,9 @@
     "Gold Teeth",
     "Chrome Cherry"
    ],
-   "net": -1.0553,
+   "net": -1.0779,
    "wins": 1,
-   "losses": 6,
+   "losses": 7,
    "crown": false,
    "crippled": true,
    "vault": 0,
@@ -275,7 +275,7 @@
    "persona": {
     "swagger": 0.58,
     "tilt": 0.07,
-    "greed": 0.54,
+    "greed": 0.53,
     "discipline": 0.53
    }
   },
@@ -324,27 +324,6 @@
    }
   },
   {
-   "name": "Crystal Meth",
-   "tag": "pure speed",
-   "pimp": "Silky Slim",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
    "name": "Velvet Vice",
    "tag": "mean-rev seductress",
    "pimp": "Madam Razor",
@@ -369,27 +348,6 @@
    "name": "Sugar Tits",
    "tag": "majors only",
    "pimp": "Cold Cash Cole",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Foxy",
-   "tag": "level rat",
-   "pimp": "Big Daddy Kane",
    "net": 0,
    "wins": 0,
    "losses": 0,
@@ -464,7 +422,7 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.66,
+    "swagger": 0.65,
     "tilt": 0.12,
     "greed": 0.43,
     "discipline": 0.46
@@ -488,7 +446,7 @@
     "swagger": 0.45,
     "tilt": 0.15,
     "greed": 0.64,
-    "discipline": 0.62
+    "discipline": 0.61
    }
   },
   {
@@ -511,9 +469,55 @@
    ],
    "persona": {
     "swagger": 0.37,
-    "tilt": 0.45,
+    "tilt": 0.43,
     "greed": 0.46,
-    "discipline": 0.4
+    "discipline": 0.41
+   }
+  },
+  {
+   "name": "Foxy",
+   "tag": "level rat",
+   "pimp": "Big Daddy Kane",
+   "net": -0.0897,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0359,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.0897
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
+   "name": "Crystal Meth",
+   "tag": "pure speed",
+   "pimp": "Silky Slim",
+   "net": -0.1202,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0481,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.1202
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   },
   {
@@ -524,7 +528,7 @@
    "wins": 0,
    "losses": 4,
    "closes": 4,
-   "stolen": 14,
+   "stolen": 17,
    "gen": 0,
    "form": -0.117,
    "mood": "tilt",
@@ -586,13 +590,13 @@
    "name": "Neon Nicki",
    "tag": "alt-coin junkie",
    "pimp": "Madam Razor",
-   "net": -0.9666,
+   "net": -0.9892,
    "wins": 1,
-   "losses": 4,
-   "closes": 5,
+   "losses": 5,
+   "closes": 6,
    "stolen": 4,
    "gen": 0,
-   "form": -0.1758,
+   "form": -0.1145,
    "mood": "working"
   }
  ],
@@ -647,7 +651,11 @@
    "coid": "s1793560053531MAGICUSDT",
    "filledAt": 1793560151623,
    "orderId": "253864ee-a275-43f8-9a0b-91f4c6ef98d3",
-   "live": true
+   "live": false,
+   "closedAt": 1793562932511,
+   "epNet": -0.120188,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "JUPUSDT",
@@ -658,7 +666,11 @@
    "coid": "s1793560053531JUPUSDT",
    "filledAt": 1793560159982,
    "orderId": "d15cbc4f-daec-4465-b4f6-7bb6153401e0",
-   "live": true
+   "live": false,
+   "closedAt": 1793562931784,
+   "epNet": -0.089709,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "LINKUSDT",
@@ -684,7 +696,11 @@
    "coid": "s1793560053531PENDLEUSDT",
    "filledAt": 1793560175054,
    "orderId": "9e167d07-74d8-4483-a950-bd138d6d89be",
-   "live": true
+   "live": false,
+   "closedAt": 1793562931050,
+   "epNet": -0.022598,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "ATOMUSDT",
@@ -747,6 +763,26 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1793563020337,
+   "text": "💰 Neon Nicki (working for Madam Razor) banked $-0.02 on PENDLEUSDT incl $0.009 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793563020337,
+   "text": "💰 Foxy (working for Big Daddy Kane) banked $-0.09 on JUPUSDT incl $0.012 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793563020337,
+   "text": "💰 Crystal Meth (working for Silky Slim) banked $-0.12 on MAGICUSDT incl $0.012 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793562928109,
+   "text": "🧬 Gold Teeth tweaked her reads — mom downweighted (street R&D)"
+  },
+  {
+   "ts": 1793562841468,
+   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
+  },
   {
    "ts": 1793562759498,
    "text": "🧬 Gold Teeth tweaked her reads — stratW upweighted (street R&D)"
@@ -846,41 +882,9 @@
   {
    "ts": 1793560032558,
    "text": "💰 Neon Nicki (working for Madam Razor) banked +$0.09 on BIOUSDT"
-  },
-  {
-   "ts": 1793559946270,
-   "text": "💰 Neon Nicki (working for Madam Razor) banked +$0.01 on BIOUSDT incl $0.012 entry fees"
-  },
-  {
-   "ts": 1793559759835,
-   "text": "🧬 Neon Nicki tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793559643727,
-   "text": "🧬 Fastlane Faye tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793559528752,
-   "text": "🧬 Solana Sadie tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793559354615,
-   "text": "💰 Queen B (working for Cold Cash Cole) banked +$0.14 on FLOCKUSDT"
   }
  ],
  "attrib": {
-  "ed532950-9111-420f-ae39-3a4fe4cb614e": {
-   "pimp": null,
-   "crack": null
-  },
-  "372c33c8-b446-4a39-a0ee-6b406181e893": {
-   "pimp": null,
-   "crack": null
-  },
-  "c8e68eb8-6681-4eba-afef-779271596a66": {
-   "pimp": null,
-   "crack": null
-  },
   "dedf0200-fbd9-4f0f-98d1-69cc581a3f49": {
    "pimp": null,
    "crack": null
@@ -1468,6 +1472,18 @@
   "9ae2fba5-3556-46be-8deb-1ba2d438b8e2": {
    "pimp": "Fancy Red",
    "crack": "Sprint Santana"
+  },
+  "63179d5b-33c0-4295-92ef-c3563ea9d6a3": {
+   "pimp": "Silky Slim",
+   "crack": "Crystal Meth"
+  },
+  "8d8c2f73-84a0-4137-b55c-97f85b528b3d": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Foxy"
+  },
+  "81ba59a3-da38-4626-a6b7-e22727b0145f": {
+   "pimp": "Madam Razor",
+   "crack": "Neon Nicki"
   }
  }
 }
