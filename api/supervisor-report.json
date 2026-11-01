@@ -1,39 +1,44 @@
 {
-  "refreshedAt": "2026-11-01T14:07:45.498Z",
+  "refreshedAt": "2026-11-01T14:17:45.812Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 60.52
+    "equityUsd": 64.32
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-01T14:07:45.498Z"
+    "at": "2026-11-01T14:17:45.812Z"
   },
   "sweep": {
-    "scanned": 15,
-    "cancelled": 0,
-    "at": "2026-11-01T14:07:45.498Z"
+    "scanned": 24,
+    "cancelled": 5,
+    "at": "2026-11-01T14:17:45.812Z"
   },
   "journals": {
     "realFills": 400,
-    "demoFillsBybit": 34
+    "demoFillsBybit": 41
   },
   "evidence": {
-    "demoEpisodes": 14,
-    "demoNetUsd": -5.6076,
-    "demoWinRate": 14.3,
-    "demoSqN": -2.45,
+    "demoEpisodes": 16,
+    "demoNetUsd": -0.4262,
+    "demoWinRate": 18.8,
+    "demoSqN": -0.28,
     "excluded": 0,
-    "cellCount": 4
+    "cellCount": 5
   },
   "positions": [
-    "TRUMPUSDT:4.9914",
-    "IMXUSDT:-0.18226",
-    "TRBUSDT:-0.4704"
+    "WLFIUSDT:0.00099",
+    "DASHUSDT:0.0066",
+    "SOLUSDT:0.0121",
+    "ZECUSDT:0.018",
+    "IMXUSDT:-0.36452",
+    "TRBUSDT:-0.34944"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+  ]
 }
