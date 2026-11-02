@@ -1,12 +1,48 @@
 {
- "at": "2026-11-02T07:48:28.365Z",
+ "at": "2026-11-02T07:53:50.695Z",
  "wallets": {
   "futures": {
-   "equityUsd": 51.75,
-   "marginFreeUsd": 50044.76,
-   "epochNetUsd": -12.32,
-   "fills": 216,
-   "positions": []
+   "equityUsd": 24.03,
+   "marginFreeUsd": 13.84,
+   "epochNetUsd": -83.21,
+   "fills": 88,
+   "positions": [
+    {
+     "symbol": "COWUSDT",
+     "side": "long",
+     "upl": 0.37,
+     "lev": 5,
+     "margin": 2.35
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": -0.23,
+     "lev": 5,
+     "margin": 2.04
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": -0.19,
+     "lev": 5,
+     "margin": 2.01
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": -0.22,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.09,
+     "lev": 5,
+     "margin": 2
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -200,9 +236,9 @@
     0.1842
    ],
    "persona": {
-    "swagger": 0.67,
+    "swagger": 0.65,
     "tilt": 0.05,
-    "greed": 0.58,
+    "greed": 0.57,
     "discipline": 0.55
    }
   },
@@ -489,7 +525,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 312,
+   "stolen": 319,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -563,7 +599,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 175,
+   "stolen": 182,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -623,6 +659,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "SUSHIUSDT",
+   "direction": "LONG",
+   "ts": 1793584475843,
+   "pimp": "Cold Cash Cole",
+   "crack": "Sugar Tits",
+   "coid": "s1793584396299SUSHIUSDT",
+   "live": false,
+   "filledAt": 1793584479998,
+   "orderId": "83a4aa85-9c9c-4919-aff4-1f142d9a904e",
+   "closedAt": 1793584643664,
+   "epNet": -0.086983,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "BLENDUSDT",
    "direction": "LONG",
@@ -787,18 +838,13 @@
    "epNet": 0.070016,
    "epCounted": true,
    "epVerdict": 1
-  },
-  {
-   "symbol": "UNITREEUSDT",
-   "direction": "LONG",
-   "ts": 1793604986260,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793604908472UNITREEUSDT",
-   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793605901260,
+   "text": "🧬 Queen B tweaked her reads — major upweighted (street R&D)"
+  },
   {
    "ts": 1793605698784,
    "text": "🧬 Velvet Vice tweaked her reads — mom upweighted (street R&D)"
@@ -914,10 +960,6 @@
   {
    "ts": 1793602419735,
    "text": "🧬 Velvet Vice tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793602374327,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
   }
  ],
  "attrib": {
