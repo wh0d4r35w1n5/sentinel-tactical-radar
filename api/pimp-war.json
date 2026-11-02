@@ -1,46 +1,25 @@
 {
- "at": "2026-11-02T03:15:12.143Z",
+ "at": "2026-11-02T03:20:56.246Z",
  "wallets": {
   "futures": {
-   "equityUsd": 19.73,
-   "marginFreeUsd": 8.67,
-   "epochNetUsd": -83.24,
-   "fills": 87,
+   "equityUsd": 52.84,
+   "marginFreeUsd": 50040.84,
+   "epochNetUsd": -11.67,
+   "fills": 181,
    "positions": [
     {
-     "symbol": "COWUSDT",
+     "symbol": "ZRXUSDT",
      "side": "long",
-     "upl": 0.16,
-     "lev": 5,
-     "margin": 2.56
+     "upl": 0,
+     "lev": 10,
+     "margin": 3.28
     },
     {
-     "symbol": "POWRUSDT",
+     "symbol": "IOSTUSDT",
      "side": "long",
-     "upl": -0.03,
-     "lev": 5,
-     "margin": 2
-    },
-    {
-     "symbol": "GUSDT",
-     "side": "long",
-     "upl": 0.16,
-     "lev": 5,
-     "margin": 2
-    },
-    {
-     "symbol": "STEEMUSDT",
-     "side": "long",
-     "upl": 0.1,
-     "lev": 5,
-     "margin": 2
-    },
-    {
-     "symbol": "HOTUSDT",
-     "side": "long",
-     "upl": 0.15,
-     "lev": 5,
-     "margin": 2
+     "upl": 0.19,
+     "lev": 10,
+     "margin": 2.74
     }
    ]
   },
@@ -330,7 +309,7 @@
     "swagger": 0.53,
     "tilt": 0.12,
     "greed": 0.54,
-    "discipline": 0.53
+    "discipline": 0.52
    }
   },
   {
@@ -396,8 +375,8 @@
    ],
    "persona": {
     "swagger": 0.48,
-    "tilt": 0.15,
-    "greed": 0.49,
+    "tilt": 0.14,
+    "greed": 0.5,
     "discipline": 0.49
    }
   },
@@ -419,8 +398,8 @@
    ],
    "persona": {
     "swagger": 0.48,
-    "tilt": 0.15,
-    "greed": 0.49,
+    "tilt": 0.14,
+    "greed": 0.5,
     "discipline": 0.49
    }
   },
@@ -442,8 +421,8 @@
    ],
    "persona": {
     "swagger": 0.48,
-    "tilt": 0.15,
-    "greed": 0.49,
+    "tilt": 0.14,
+    "greed": 0.5,
     "discipline": 0.49
    }
   },
@@ -491,7 +470,7 @@
    ],
    "persona": {
     "swagger": 0.49,
-    "tilt": 0.14,
+    "tilt": 0.13,
     "greed": 0.5,
     "discipline": 0.49
    }
@@ -543,7 +522,7 @@
     -0.1784
    ],
    "persona": {
-    "swagger": 0.57,
+    "swagger": 0.56,
     "tilt": 0.08,
     "greed": 0.53,
     "discipline": 0.52
@@ -617,21 +596,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "1000BTTUSDT",
-   "direction": "LONG",
-   "ts": 1793560193053,
-   "pimp": "Madam Razor",
-   "crack": "Gold Teeth",
-   "coid": "s17935600535311000BTTUSDT",
-   "live": false,
-   "filledAt": 1793560197594,
-   "orderId": "2facb914-d054-4bb2-8763-34b93cf3c9b0",
-   "closedAt": 1793564174156,
-   "epNet": -0.014774,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "1000CATUSDT",
    "direction": "LONG",
@@ -774,7 +738,7 @@
    "pimp": "Big Daddy Kane",
    "crack": "Gold Teeth",
    "coid": "s1793588067642IOSTUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793588146439,
    "orderId": "4b0fa01f-c945-42d3-a871-a4f362ebedc5",
    "closedAt": 1793588868074,
@@ -788,10 +752,30 @@
    "ts": 1793589307201,
    "pimp": "Silky Slim",
    "crack": "Diamond Dust",
-   "coid": "s1793589226064ZRXUSDT"
+   "coid": "s1793589226064ZRXUSDT",
+   "live": false,
+   "filledAt": 1793589311601,
+   "orderId": "d04e19df-6f41-4917-9d61-937c8fa9565e"
+  },
+  {
+   "symbol": "1000CATUSDT",
+   "direction": "LONG",
+   "ts": 1793589626965,
+   "pimp": "Madam Razor",
+   "crack": "Chrome Cherry",
+   "coid": "s17935895530061000CATUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793589554020,
+   "text": "🧬 Queen B tweaked her reads — stratW downweighted (street R&D)"
+  },
+  {
+   "ts": 1793589377367,
+   "text": "🧬 Gold Teeth tweaked her reads — chg upweighted (street R&D)"
+  },
   {
    "ts": 1793589205306,
    "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
@@ -903,14 +887,6 @@
   {
    "ts": 1793583671908,
    "text": "🧬 Queen B tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793583527099,
-   "text": "🌫 Solana Sadie let QOMPUTE go — left the wallet off-book, proceeds unverifiable"
-  },
-  {
-   "ts": 1793583496336,
-   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
   }
  ],
  "attrib": {
