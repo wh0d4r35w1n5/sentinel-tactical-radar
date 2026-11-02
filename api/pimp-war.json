@@ -1,18 +1,46 @@
 {
- "at": "2026-11-02T05:02:11.750Z",
+ "at": "2026-11-02T05:07:45.797Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.35,
-   "marginFreeUsd": 50045.97,
-   "epochNetUsd": -10.79,
-   "fills": 204,
+   "equityUsd": 19.68,
+   "marginFreeUsd": 8.92,
+   "epochNetUsd": -83.21,
+   "fills": 88,
    "positions": [
     {
-     "symbol": "GASUSDT",
+     "symbol": "COWUSDT",
      "side": "long",
-     "upl": -0.01,
-     "lev": 20,
-     "margin": 1.66
+     "upl": 0.36,
+     "lev": 5,
+     "margin": 2.35
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": -0.14,
+     "lev": 5,
+     "margin": 2.04
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": 0.08,
+     "lev": 5,
+     "margin": 2.01
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": 0.04,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.05,
+     "lev": 5,
+     "margin": 2
     }
    ]
   },
@@ -227,9 +255,9 @@
     0.0823
    ],
    "persona": {
-    "swagger": 0.56,
+    "swagger": 0.55,
     "tilt": 0.08,
-    "greed": 0.53,
+    "greed": 0.52,
     "discipline": 0.52
    }
   },
@@ -389,7 +417,7 @@
     "swagger": 0.51,
     "tilt": 0.1,
     "greed": 0.51,
-    "discipline": 0.51
+    "discipline": 0.5
    }
   },
   {
@@ -407,7 +435,7 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.54,
+    "swagger": 0.53,
     "tilt": 0.09,
     "greed": 0.5,
     "discipline": 0.46
@@ -431,8 +459,8 @@
    ],
    "persona": {
     "swagger": 0.48,
-    "tilt": 0.15,
-    "greed": 0.49,
+    "tilt": 0.14,
+    "greed": 0.5,
     "discipline": 0.49
    }
   },
@@ -514,7 +542,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 122,
+   "stolen": 128,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -563,7 +591,7 @@
    "wins": 1,
    "losses": 1,
    "closes": 2,
-   "stolen": 80,
+   "stolen": 86,
    "gen": 0,
    "form": -0.0209,
    "mood": "working",
@@ -623,21 +651,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "HYPEUSDT",
-   "direction": "LONG",
-   "ts": 1793582605022,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793582535295HYPEUSDT",
-   "live": false,
-   "filledAt": 1793582609249,
-   "orderId": "509e2a0e-b863-4d3b-a393-cc6c9b43841c",
-   "closedAt": 1793582922009,
-   "epNet": -0.248419,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "DGAIUSDT",
    "direction": "LONG",
@@ -792,9 +805,26 @@
    "crack": "Gold Teeth",
    "coid": "s1793595563435METISUSDT",
    "live": false
+  },
+  {
+   "symbol": "HOODUSDT",
+   "direction": "LONG",
+   "ts": 1793595900954,
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy",
+   "coid": "s1793595820256HOODUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793595968775,
+   "text": "🧬 Gold Teeth tweaked her reads — chg downweighted (street R&D)"
+  },
+  {
+   "ts": 1793595907078,
+   "text": "🧬 Queen B tweaked her reads — stratW downweighted (street R&D)"
+  },
   {
    "ts": 1793595714246,
    "text": "🧬 Bolt Betsy tweaked her reads — chg downweighted (street R&D)"
@@ -906,14 +936,6 @@
   {
    "ts": 1793592801414,
    "text": "🧬 Bolt Betsy tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793592715213,
-   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793592629066,
-   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
   }
  ],
  "attrib": {
