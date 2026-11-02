@@ -1,40 +1,40 @@
 {
-  "refreshedAt": "2026-11-02T03:31:39.329Z",
+  "refreshedAt": "2026-11-02T03:41:44.759Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 53.05
+    "equityUsd": 53.03
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T03:31:39.329Z"
+    "at": "2026-11-02T03:41:44.759Z"
   },
   "sweep": {
-    "scanned": 21,
-    "cancelled": 4,
-    "at": "2026-11-02T03:31:39.329Z"
+    "scanned": 17,
+    "cancelled": 0,
+    "at": "2026-11-02T03:41:44.759Z"
   },
   "journals": {
-    "realFills": 87,
-    "demoFillsBybit": 186
+    "realFills": 88,
+    "demoFillsBybit": 189
   },
   "evidence": {
-    "demoEpisodes": 84,
-    "demoNetUsd": -11.3642,
-    "demoWinRate": 23.8,
+    "demoEpisodes": 85,
+    "demoNetUsd": -11.3205,
+    "demoWinRate": 24.7,
     "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
   },
   "positions": [
-    "HYPEUSDT:-0.03774",
-    "ZRXUSDT:0.00668"
+    "PEOPLEUSDT:0.723155",
+    "ZRXUSDT:0.04008"
   ],
-  "problems": [],
-  "notes": [
-    "orphan sweep — cancelled 4 untriggered legs on dead seats"
-  ]
+  "problems": [
+    "real-fills grew while MODE=demo — demo fills may be contaminating the live rail"
+  ],
+  "notes": []
 }
