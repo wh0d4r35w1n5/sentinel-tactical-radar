@@ -1,150 +1,193 @@
 {
- "ts": "2026-11-02T00:13:52.680Z",
- "ageMs": 1790,
+ "ts": "2026-11-02T00:18:57.738Z",
+ "ageMs": 2798,
  "src": "ws",
  "futures": {
-  "equityUsd": 24.9469,
-  "availableUsd": 24.9469,
+  "equityUsd": 25.1862,
+  "availableUsd": 14.2021,
   "grantUsd": 0,
-  "equityOwnUsd": 24.9469,
-  "marginUsedUsd": 0,
-  "uplUsd": 0,
-  "positions": []
+  "equityOwnUsd": 25.1862,
+  "marginUsedUsd": 10.7601,
+  "uplUsd": 0.2285,
+  "positions": [
+   {
+    "k": "COWUSDT:long",
+    "size": 88,
+    "marginUsd": 1.9853,
+    "uplUsd": -0.0088
+   },
+   {
+    "k": "POWRUSDT:long",
+    "size": 140,
+    "marginUsd": 1.5841,
+    "uplUsd": 0.0378
+   },
+   {
+    "k": "GUSDT:long",
+    "size": 1680,
+    "marginUsd": 1.2098,
+    "uplUsd": 0.0185
+   },
+   {
+    "k": "LSKUSDT:long",
+    "size": 35,
+    "marginUsd": 1.4289,
+    "uplUsd": 0.119
+   },
+   {
+    "k": "STEEMUSDT:long",
+    "size": 199,
+    "marginUsd": 1.9876,
+    "uplUsd": 0.0299
+   },
+   {
+    "k": "AKEUSDT:long",
+    "size": 1181,
+    "marginUsd": 2.0007,
+    "uplUsd": 0.0084
+   },
+   {
+    "k": "HOTUSDT:long",
+    "size": 7426,
+    "marginUsd": 0.5637,
+    "uplUsd": 0.0238
+   }
+  ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2276,
+  "solUsd": 0.2267,
   "stableUsd": 0,
   "bagsUsd": 0.0587,
-  "totalUsd": 0.2863,
+  "totalUsd": 0.2854,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0577
   },
-  "staleMs": 1790
+  "staleMs": 6802
  },
- "totalUsd": 25.2332,
+ "totalUsd": 25.4717,
  "deltas": [
   {
-   "ts": 1793564418752,
-   "kind": "position-closed",
-   "detail": "ZECUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1793564407394,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.6755
-  },
-  {
-   "ts": 1793564407384,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -20.2898
-  },
-  {
-   "ts": 1793564407381,
+   "ts": 1793578705101,
    "kind": "size-reduced",
-   "detail": "ZECUSDT:long Δ-1.3279999999999998",
+   "detail": "HOTUSDT:long Δ-1",
    "amt": 0
   },
   {
-   "ts": 1793561971904,
+   "ts": 1793578705100,
    "kind": "balance-move",
    "detail": "account push",
-   "amt": -0.9953
+   "amt": 0.0612
   },
   {
-   "ts": 1793561858394,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -4.7467
-  },
-  {
-   "ts": 1793561115233,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.0527
-  },
-  {
-   "ts": 1793561050522,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.3207
-  },
-  {
-   "ts": 1793561032107,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.3637
-  },
-  {
-   "ts": 1793561014532,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.5551
-  },
-  {
-   "ts": 1793560996260,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.091
-  },
-  {
-   "ts": 1793560977194,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 5.1869
-  },
-  {
-   "ts": 1793560500605,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 1.7417
-  },
-  {
-   "ts": 1793560419101,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.3062
-  },
-  {
-   "ts": 1793560409793,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -14.886
-  },
-  {
-   "ts": 1793560409791,
+   "ts": 1793578694818,
    "kind": "size-reduced",
-   "detail": "ZECUSDT:long Δ-0.639",
+   "detail": "LSKUSDT:long Δ-1",
    "amt": 0
   },
   {
-   "ts": 1793560176048,
+   "ts": 1793578694817,
    "kind": "balance-move",
    "detail": "account push",
-   "amt": -7.0463
+   "amt": 0.054
   },
   {
-   "ts": 1793560001858,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 6.842
+   "ts": 1793578684753,
+   "kind": "size-reduced",
+   "detail": "GUSDT:long Δ-550",
+   "amt": 0
   },
   {
-   "ts": 1793559718176,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -3.6253
+   "ts": 1793578684491,
+   "kind": "size-reduced",
+   "detail": "GUSDT:long Δ-550",
+   "amt": 0
   },
   {
-   "ts": 1793559687620,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -1.8892
+   "ts": 1793578680017,
+   "kind": "size-reduced",
+   "detail": "POWRUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578676762,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-4244",
+   "amt": 0
+  },
+  {
+   "ts": 1793578669770,
+   "kind": "size-reduced",
+   "detail": "LSKUSDT:long Δ-3",
+   "amt": 0
+  },
+  {
+   "ts": 1793578668627,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-4244",
+   "amt": 0
+  },
+  {
+   "ts": 1793578668312,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-5305",
+   "amt": 0
+  },
+  {
+   "ts": 1793578658047,
+   "kind": "size-reduced",
+   "detail": "POWRUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578639660,
+   "kind": "size-reduced",
+   "detail": "LSKUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578626664,
+   "kind": "size-reduced",
+   "detail": "LSKUSDT:long Δ-9",
+   "amt": 0
+  },
+  {
+   "ts": 1793578620635,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-5305",
+   "amt": 0
+  },
+  {
+   "ts": 1793578616133,
+   "kind": "position-opened",
+   "detail": "STEEMUSDT:long",
+   "amt": 1.9876
+  },
+  {
+   "ts": 1793578616020,
+   "kind": "size-reduced",
+   "detail": "POWRUSDT:long Δ-35",
+   "amt": 0
+  },
+  {
+   "ts": 1793578613139,
+   "kind": "position-opened",
+   "detail": "GUSDT:long",
+   "amt": 1.9994
+  },
+  {
+   "ts": 1793578610387,
+   "kind": "position-opened",
+   "detail": "AKEUSDT:long",
+   "amt": 2.0007
+  },
+  {
+   "ts": 1793578607591,
+   "kind": "position-opened",
+   "detail": "COWUSDT:long",
+   "amt": 1.9853
   }
  ]
 }

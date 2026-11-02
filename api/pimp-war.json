@@ -1,12 +1,62 @@
 {
- "at": "2026-11-02T00:13:13.908Z",
+ "at": "2026-11-02T00:18:05.547Z",
  "wallets": {
   "futures": {
-   "equityUsd": 24.95,
-   "marginFreeUsd": 24.95,
-   "epochNetUsd": 0,
-   "fills": 29,
-   "positions": []
+   "equityUsd": 25.02,
+   "marginFreeUsd": 12.15,
+   "epochNetUsd": -82.52,
+   "fills": 40,
+   "positions": [
+    {
+     "symbol": "COWUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 5,
+     "margin": 1.99
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": 0.03,
+     "lev": 5,
+     "margin": 1.61
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": 0,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "LSKUSDT",
+     "side": "long",
+     "upl": 0.05,
+     "lev": 5,
+     "margin": 1.59
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": -0.01,
+     "lev": 5,
+     "margin": 1.99
+    },
+    {
+     "symbol": "AKEUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 5,
+     "margin": 1.6
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -466,7 +516,7 @@
    "wins": 1,
    "losses": 4,
    "closes": 5,
-   "stolen": 212,
+   "stolen": 218,
    "gen": 0,
    "form": -0.0558,
    "mood": "working",
@@ -540,21 +590,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "STEEMUSDT",
-   "direction": "LONG",
-   "ts": 1793559424577,
-   "pimp": "Madam Razor",
-   "crack": "Gold Teeth",
-   "coid": "s1793559289278STEEMUSDT",
-   "filledAt": 1793559428440,
-   "orderId": "bc4456a7-ac74-4c69-9a49-2b79e84eef27",
-   "live": false,
-   "closedAt": 1793562198475,
-   "epNet": -0.061396,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "ONDOUSDT",
    "direction": "LONG",
@@ -713,9 +748,30 @@
    "crack": "Lucky Lucy",
    "coid": "s1793578244664EVAAUSDT",
    "live": false
+  },
+  {
+   "symbol": "PEPEUSDT",
+   "direction": "LONG",
+   "ts": 1793578459172,
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B",
+   "coid": "s1793578313287PEPEUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793578640870,
+   "text": "🧬 Solana Sadie tweaked her reads — stratW downweighted (street R&D)"
+  },
+  {
+   "ts": 1793578615130,
+   "text": "🧬 Bolt Betsy tweaked her reads — mom downweighted (street R&D)"
+  },
+  {
+   "ts": 1793578449738,
+   "text": "🧬 Solana Sadie tweaked her reads — score downweighted (street R&D)"
+  },
   {
    "ts": 1793578393903,
    "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
@@ -823,101 +879,9 @@
   {
    "ts": 1793572043627,
    "text": "🧬 Solana Sadie tweaked her reads — mom upweighted (street R&D)"
-  },
-  {
-   "ts": 1793571936130,
-   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793571856620,
-   "text": "🧬 Solana Sadie tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793571711784,
-   "text": "🧬 Bolt Betsy tweaked her reads — chg upweighted (street R&D)"
   }
  ],
  "attrib": {
-  "97368405-a6d6-4ab4-ab2f-af6332efec5f": {
-   "pimp": null,
-   "crack": null
-  },
-  "a0c27272-5d7f-4f6c-8814-493718524c87": {
-   "pimp": null,
-   "crack": null
-  },
-  "013f71cb-3ca5-454c-b6bd-2e45f16e2d25": {
-   "pimp": null,
-   "crack": null
-  },
-  "b072369c-0f00-4f9e-a094-b9307716385c": {
-   "pimp": null,
-   "crack": null
-  },
-  "2fffedc8-8c6e-4697-9209-5ca09d550a1e": {
-   "pimp": null,
-   "crack": null
-  },
-  "3d3bf168-cf4c-4d6a-9f71-7f5fa23513b8": {
-   "pimp": null,
-   "crack": null
-  },
-  "867bebeb-921b-49d8-9790-518513ec8582": {
-   "pimp": null,
-   "crack": null
-  },
-  "648f58f7-0be0-4126-88c2-474fdae66df4": {
-   "pimp": null,
-   "crack": null
-  },
-  "ec37c65c-91be-4942-b784-d0868730e4f8": {
-   "pimp": null,
-   "crack": null
-  },
-  "7cf4c249-a724-4bc1-97f2-015993311a09": {
-   "pimp": null,
-   "crack": null
-  },
-  "e8d576d7-d4a3-43c1-9f58-30367934ae20": {
-   "pimp": null,
-   "crack": null
-  },
-  "be93e0b1-4488-4643-bd29-d7f2d5e5fe2e": {
-   "pimp": null,
-   "crack": null
-  },
-  "7d1210e1-0464-4d58-9d31-e29a566b89a9": {
-   "pimp": null,
-   "crack": null
-  },
-  "6ad5be98-43fc-42d0-935c-a703f1509296": {
-   "pimp": null,
-   "crack": null
-  },
-  "6d0eefa6-6f37-4cc5-9f1e-36b00da73872": {
-   "pimp": null,
-   "crack": null
-  },
-  "b1c5f539-9cf3-45d3-840c-f2b29277fbd9": {
-   "pimp": null,
-   "crack": null
-  },
-  "a7f67b05-88b3-4196-8ee2-f1bdb9ef2a9b": {
-   "pimp": null,
-   "crack": null
-  },
-  "0bb43aec-ed62-43ad-a5cc-be4b9e1a655e": {
-   "pimp": null,
-   "crack": null
-  },
-  "fdc14db0-7e63-4b47-b4d6-768cae92184d": {
-   "pimp": null,
-   "crack": null
-  },
-  "23669dab-5141-4d65-ac0b-aee149e2a5d4": {
-   "pimp": null,
-   "crack": null
-  },
   "06100498-5c6b-4849-b18e-62a78e70a747": {
    "pimp": null,
    "crack": null
@@ -1435,6 +1399,86 @@
    "crack": "Gold Teeth"
   },
   "9247bb8a-c5fc-46f6-a9bd-33b5829fcda0": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699264": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699266": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699268": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699270": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699272": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699274": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699276": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699278": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699280": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699282": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699284": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699286": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699288": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699290": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699292": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500883395778699294": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500866628691943424": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500866628691943426": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500866628691943428": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500866628691943430": {
    "pimp": null,
    "crack": null
   }

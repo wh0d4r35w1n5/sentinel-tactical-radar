@@ -1,12 +1,15 @@
 {
- "ts": "2026-11-02T00:12:50.002Z",
- "windowStart": null,
+ "ts": "2026-11-02T00:17:54.262Z",
+ "windowStart": "2026-11-02T00:15:14.403Z",
  "episodes": {
-  "total": 0,
+  "total": 4,
   "independent": 0,
-  "clustered": 0,
+  "clustered": 4,
   "dip": {
-   "n": 0
+   "n": 4,
+   "netUsd": 0.0164,
+   "wrPct": 100,
+   "meanPct": 0.369
   },
   "pump": {
    "n": 0
@@ -19,8 +22,25 @@
   }
  },
  "realized": {
-  "netUsd": 0,
-  "equityCurve": [],
+  "netUsd": 0.0164,
+  "equityCurve": [
+   {
+    "t": 1793578615908,
+    "eq": 0.0048
+   },
+   {
+    "t": 1793578620529,
+    "eq": 0.0102
+   },
+   {
+    "t": 1793578626500,
+    "eq": 0.0154
+   },
+   {
+    "t": 1793578639564,
+    "eq": 0.0164
+   }
+  ],
   "maxDrawdownUsd": 0
  },
  "claims": {
@@ -31,7 +51,10 @@
     "note": "dip>=2%/2h -> 1.2% stop +2% TP, held-out"
    },
    "live": {
-    "n": 0
+    "n": 4,
+    "netUsd": 0.0164,
+    "wrPct": 100,
+    "meanPct": 0.369
    }
   },
   "pump": {
