@@ -1,18 +1,18 @@
 {
- "at": "2026-11-02T10:05:45.955Z",
+ "at": "2026-11-02T10:10:37.156Z",
  "wallets": {
   "futures": {
    "equityUsd": 51.55,
-   "marginFreeUsd": 50043.1,
+   "marginFreeUsd": 50044.38,
    "epochNetUsd": -12.49,
-   "fills": 221,
+   "fills": 222,
    "positions": [
     {
      "symbol": "CPUSDT",
      "side": "long",
-     "upl": 0.04,
+     "upl": 0.07,
      "lev": 10,
-     "margin": 3.24
+     "margin": 2.6
     }
    ]
   },
@@ -174,7 +174,7 @@
   }
  ],
  "vault": {
-  "house": 33.5207
+  "house": 33.5859
  },
  "cracks": [
   {
@@ -208,8 +208,8 @@
     0.1842
    ],
    "persona": {
-    "swagger": 0.52,
-    "tilt": 0.09,
+    "swagger": 0.51,
+    "tilt": 0.1,
     "greed": 0.51,
     "discipline": 0.5
    }
@@ -498,7 +498,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 469,
+   "stolen": 474,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -572,7 +572,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 332,
+   "stolen": 337,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -632,6 +632,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "HYPEUSDT",
+   "direction": "LONG",
+   "ts": 1793590155775,
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy",
+   "coid": "s1793590078717HYPEUSDT",
+   "live": false,
+   "filledAt": 1793590159394,
+   "orderId": "1ccfcfd9-1ac5-4881-b31d-358e15359e82",
+   "closedAt": 1793590542653,
+   "epNet": 0.043708,
+   "epCounted": true,
+   "epVerdict": 1
+  },
   {
    "symbol": "PEOPLEUSDT",
    "direction": "LONG",
@@ -753,24 +768,6 @@
    "epVerdict": 1
   },
   {
-   "symbol": "BNCUSDT",
-   "direction": "LONG",
-   "ts": 1793613095233,
-   "pimp": "Madam Razor",
-   "crack": "Chrome Cherry",
-   "coid": "s1793613030294BNCUSDT",
-   "live": false
-  },
-  {
-   "symbol": "GEUSDT",
-   "direction": "LONG",
-   "ts": 1793613097399,
-   "pimp": "Silky Slim",
-   "crack": "Diamond Dust",
-   "coid": "s1793613030294GEUSDT",
-   "live": false
-  },
-  {
    "symbol": "BARDUSDT",
    "direction": "LONG",
    "ts": 1793613690282,
@@ -786,12 +783,24 @@
    "pimp": "Big Daddy Kane",
    "crack": "Vandal Vicky",
    "coid": "s1793613602935CPUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793613695801,
    "orderId": "314142e0-eab0-49bf-8ec3-ef501d369ed6"
+  },
+  {
+   "symbol": "IDOLUSDT",
+   "direction": "LONG",
+   "ts": 1793614237021,
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy",
+   "coid": "s1793614125513IDOLUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1793614040393,
+   "text": "🧬 Bolt Betsy tweaked her reads — mom upweighted (street R&D)"
+  },
   {
    "ts": 1793613845638,
    "text": "🧬 Fastlane Faye tweaked her reads — score upweighted (street R&D)"
@@ -907,17 +916,9 @@
   {
    "ts": 1793609338163,
    "text": "🧬 Queen B tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793609263520,
-   "text": "🧬 Bolt Betsy tweaked her reads — score upweighted (street R&D)"
   }
  ],
  "attrib": {
-  "15aae2d3-f1e5-4805-82f1-080a992a7967": {
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie"
-  },
   "d1adc4fe-175b-4225-ab1b-8a07f753dcaa": {
    "pimp": "Silky Slim",
    "crack": "Solana Sadie"
@@ -1511,6 +1512,10 @@
    "crack": null
   },
   "1501088451538968576": {
+   "pimp": null,
+   "crack": null
+  },
+  "1501091681442467840": {
    "pimp": null,
    "crack": null
   }
