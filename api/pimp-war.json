@@ -1,16 +1,23 @@
 {
- "at": "2026-11-02T00:48:32.704Z",
+ "at": "2026-11-02T00:53:47.509Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.34,
-   "marginFreeUsd": 50044.77,
-   "epochNetUsd": -11.26,
+   "equityUsd": 53.32,
+   "marginFreeUsd": 50037.38,
+   "epochNetUsd": -11.28,
    "fills": 166,
    "positions": [
     {
+     "symbol": "ETHUSDT",
+     "side": "long",
+     "upl": 0.08,
+     "lev": 10,
+     "margin": 9.13
+    },
+    {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": -0.02,
+     "upl": 0.04,
      "lev": 10,
      "margin": 7.85
     }
@@ -172,7 +179,7 @@
   }
  ],
  "vault": {
-  "house": 33.3178
+  "house": 33.3235
  },
  "cracks": [
   {
@@ -389,7 +396,7 @@
    ],
    "persona": {
     "swagger": 0.5,
-    "tilt": 0.11,
+    "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
    }
@@ -412,7 +419,7 @@
    ],
    "persona": {
     "swagger": 0.5,
-    "tilt": 0.11,
+    "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
    }
@@ -435,7 +442,7 @@
    ],
    "persona": {
     "swagger": 0.5,
-    "tilt": 0.11,
+    "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
    }
@@ -463,10 +470,10 @@
     -0.1911
    ],
    "persona": {
-    "swagger": 0.34,
-    "tilt": 0.5,
+    "swagger": 0.36,
+    "tilt": 0.47,
     "greed": 0.46,
-    "discipline": 0.39
+    "discipline": 0.4
    }
   },
   {
@@ -477,7 +484,7 @@
    "wins": 1,
    "losses": 4,
    "closes": 5,
-   "stolen": 249,
+   "stolen": 255,
    "gen": 0,
    "form": -0.0558,
    "mood": "working",
@@ -551,6 +558,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "LINKUSDT",
+   "direction": "LONG",
+   "ts": 1793560164360,
+   "pimp": "Big Daddy Kane",
+   "crack": "Bolt Betsy",
+   "coid": "s1793560053531LINKUSDT",
+   "filledAt": 1793560167838,
+   "orderId": "6e1c88b4-b63e-41d4-a167-c3bd7a6d64e0",
+   "live": false,
+   "closedAt": 1793560289089,
+   "epNet": 0.005852,
+   "epCounted": true,
+   "epVerdict": 1
+  },
   {
    "symbol": "PENDLEUSDT",
    "direction": "LONG",
@@ -642,24 +664,6 @@
    "epVerdict": -1
   },
   {
-   "symbol": "AAPLUSDT",
-   "direction": "LONG",
-   "ts": 1793579681911,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793579573945AAPLUSDT",
-   "live": false
-  },
-  {
-   "symbol": "SPYUSDT",
-   "direction": "LONG",
-   "ts": 1793579684063,
-   "pimp": "Big Daddy Kane",
-   "crack": "Gold Teeth",
-   "coid": "s1793579573945SPYUSDT",
-   "live": false
-  },
-  {
    "symbol": "AVGOUSDT",
    "direction": "LONG",
    "ts": 1793580089558,
@@ -696,9 +700,30 @@
    "filledAt": 1793580430978,
    "orderId": "f93b8c8c-722d-4a12-99d4-ea0c281a016c",
    "live": true
+  },
+  {
+   "symbol": "SPYUSDT",
+   "direction": "LONG",
+   "ts": 1793580593801,
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy",
+   "coid": "s1793580516809SPYUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793580810660,
+   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
+  },
+  {
+   "ts": 1793580734595,
+   "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
+  },
+  {
+   "ts": 1793580573972,
+   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
+  },
   {
    "ts": 1793580409524,
    "text": "🧬 Solana Sadie tweaked her reads — chg downweighted (street R&D)"
@@ -806,29 +831,9 @@
   {
    "ts": 1793577029715,
    "text": "🧬 Solana Sadie tweaked her reads — alt upweighted (street R&D)"
-  },
-  {
-   "ts": 1793576826330,
-   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793576757719,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793576555218,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
   }
  ],
  "attrib": {
-  "9dcaa0aa-9f33-4c65-b84a-4e0ffefd2559": {
-   "pimp": null,
-   "crack": null
-  },
-  "f1c00774-9710-433d-ad9f-6a5a67178cd8": {
-   "pimp": null,
-   "crack": null
-  },
   "135b54c7-a4d9-4c0e-b851-7c595d4b9c7c": {
    "pimp": null,
    "crack": null
@@ -1418,6 +1423,14 @@
    "crack": null
   },
   "1500947631976480769": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500950740639416320": {
+   "pimp": null,
+   "crack": null
+  },
+  "1500949578842374144": {
    "pimp": null,
    "crack": null
   }

@@ -1,25 +1,25 @@
 {
-  "refreshedAt": "2026-11-02T00:40:45.131Z",
+  "refreshedAt": "2026-11-02T00:50:49.098Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 53.74
+    "equityUsd": 20.17
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T00:40:45.131Z"
+    "at": "2026-11-02T00:50:49.098Z"
   },
   "sweep": {
-    "scanned": 3,
-    "cancelled": 1,
-    "at": "2026-11-02T00:40:45.131Z"
+    "scanned": 12,
+    "cancelled": 6,
+    "at": "2026-11-02T00:50:49.098Z"
   },
   "journals": {
-    "realFills": 77,
-    "demoFillsBybit": 165
+    "realFills": 79,
+    "demoFillsBybit": 166
   },
   "evidence": {
     "demoEpisodes": 75,
@@ -27,15 +27,23 @@
     "demoWinRate": 22.7,
     "demoSqN": -3.87,
     "excluded": 0,
-    "cellCount": 1
+    "cellCount": 0
   },
   "positions": [
-    "BTCUSDT:-0.03646"
+    "COWUSDT:-0.123600000045",
+    "POWRUSDT:-0.05696",
+    "GUSDT:0.04496",
+    "LSKUSDT:0.0624",
+    "STEEMUSDT:0.06231",
+    "AKEUSDT:0.158445430705",
+    "HOTUSDT:-0.0211248"
   ],
   "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip",
     "real-fills grew while MODE=demo — demo fills may be contaminating the live rail"
   ],
   "notes": [
-    "orphan sweep — cancelled 1 untriggered legs on dead seats"
+    "orphan sweep — cancelled 6 untriggered legs on dead seats"
   ]
 }
