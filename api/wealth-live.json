@@ -1,74 +1,86 @@
 {
- "ts": "2026-11-02T00:44:12.982Z",
- "ageMs": 7231,
+ "ts": "2026-11-02T00:49:23.023Z",
+ "ageMs": 2077,
  "src": "ws",
  "futures": {
-  "equityUsd": 20.0087,
-  "availableUsd": 3.5927,
+  "equityUsd": 20.1827,
+  "availableUsd": 3.795,
   "grantUsd": 0,
-  "equityOwnUsd": 20.0087,
-  "marginUsedUsd": 16.4891,
-  "uplUsd": -0.0863,
+  "equityOwnUsd": 20.1827,
+  "marginUsedUsd": 16.3,
+  "uplUsd": 0.0574,
   "positions": [
    {
     "k": "COWUSDT:long",
     "size": 177,
     "marginUsd": 3.9824,
-    "uplUsd": -0.0705
+    "uplUsd": -0.1236
    },
    {
     "k": "POWRUSDT:long",
     "size": 178,
     "marginUsd": 2.0007,
-    "uplUsd": -0.0837
+    "uplUsd": -0.057
    },
    {
     "k": "GUSDT:long",
     "size": 2810,
     "marginUsd": 2.0018,
-    "uplUsd": -0.0674
+    "uplUsd": 0.0169
    },
    {
     "k": "LSKUSDT:long",
     "size": 48,
     "marginUsd": 1.9642,
-    "uplUsd": 0.0432
+    "uplUsd": 0.048
    },
    {
     "k": "STEEMUSDT:long",
     "size": 201,
     "marginUsd": 1.9963,
-    "uplUsd": 0.0382
+    "uplUsd": 0.0623
    },
    {
     "k": "AKEUSDT:long",
-    "size": 1498,
-    "marginUsd": 2.5436,
-    "uplUsd": 0.1173
+    "size": 1385,
+    "marginUsd": 2.3545,
+    "uplUsd": 0.1609
    },
    {
     "k": "HOTUSDT:long",
     "size": 26406,
     "marginUsd": 2,
-    "uplUsd": -0.0634
+    "uplUsd": -0.0502
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2269,
+  "solUsd": 0.2271,
   "stableUsd": 0,
   "bagsUsd": 0.0583,
-  "totalUsd": 0.2852,
+  "totalUsd": 0.2854,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0573
   },
-  "staleMs": 7231
+  "staleMs": 2077
  },
- "totalUsd": 20.2939,
+ "totalUsd": 20.4681,
  "deltas": [
+  {
+   "ts": 1793580463648,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1324
+  },
+  {
+   "ts": 1793580463647,
+   "kind": "size-reduced",
+   "detail": "AKEUSDT:long Δ-113",
+   "amt": 0
+  },
   {
    "ts": 1793580186653,
    "kind": "balance-move",
@@ -175,18 +187,6 @@
    "ts": 1793579145240,
    "kind": "size-reduced",
    "detail": "AKEUSDT:long Δ-189",
-   "amt": 0
-  },
-  {
-   "ts": 1793579112037,
-   "kind": "size-reduced",
-   "detail": "AKEUSDT:long Δ-236",
-   "amt": 0
-  },
-  {
-   "ts": 1793578819051,
-   "kind": "position-closed",
-   "detail": "HOTUSDT:long",
    "amt": 0
   }
  ]
