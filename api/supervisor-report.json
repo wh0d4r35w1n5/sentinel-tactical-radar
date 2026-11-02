@@ -1,5 +1,5 @@
 {
-  "refreshedAt": "2026-11-02T11:25:44.902Z",
+  "refreshedAt": "2026-11-02T11:35:56.237Z",
   "mode": {
     "ledgerMode": "live",
     "ledgerExchange": "bitget",
@@ -10,23 +10,24 @@
   "units": {
     "checked": 6,
     "dead": [
-      "sentinel-rapid:active"
+      "sentinel-rapid:active",
+      "sentinel-liq-guard:active"
     ],
-    "at": "2026-11-02T11:25:44.902Z"
+    "at": "2026-11-02T11:35:56.237Z"
   },
   "sweep": {
-    "scanned": 34,
-    "cancelled": 8,
-    "at": "2026-11-02T11:25:44.902Z"
+    "scanned": 24,
+    "cancelled": 0,
+    "at": "2026-11-02T11:35:56.237Z"
   },
   "journals": {
     "realFills": 93,
-    "demoFillsBybit": 246
+    "demoFillsBybit": 249
   },
   "evidence": {
-    "demoEpisodes": 107,
-    "demoNetUsd": -11.7159,
-    "demoWinRate": 31.8,
+    "demoEpisodes": 110,
+    "demoNetUsd": -11.705,
+    "demoWinRate": 33.6,
     "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
@@ -38,7 +39,7 @@
   ],
   "notes": [
     "restarted sentinel-rapid (was inactive)",
-    "started sentinel-watchdog.timer (was inactive)",
-    "orphan sweep — cancelled 8 untriggered legs on dead seats"
+    "restarted sentinel-liq-guard (was inactive)",
+    "started sentinel-watchdog.timer (was inactive)"
   ]
 }
