@@ -1,20 +1,12 @@
 {
- "at": "2026-11-02T08:29:53.431Z",
+ "at": "2026-11-02T08:34:57.258Z",
  "wallets": {
   "futures": {
-   "equityUsd": 51.73,
-   "marginFreeUsd": 50042.1,
-   "epochNetUsd": -12.34,
-   "fills": 217,
-   "positions": [
-    {
-     "symbol": "CVCUSDT",
-     "side": "long",
-     "upl": 0.03,
-     "lev": 10,
-     "margin": 3.23
-    }
-   ]
+   "equityUsd": 51.82,
+   "marginFreeUsd": 50045.61,
+   "epochNetUsd": -12.23,
+   "fills": 218,
+   "positions": []
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -91,6 +83,22 @@
  },
  "pimps": [
   {
+   "name": "Fancy Red",
+   "roster": [
+    "Lucky Lucy",
+    "Baby Back",
+    "Plastic Poppy"
+   ],
+   "net": -0.4079,
+   "wins": 5,
+   "losses": 4,
+   "crown": false,
+   "crippled": false,
+   "vault": 0.1524,
+   "vaultSweeps": 10,
+   "mood": "working"
+  },
+  {
    "name": "Big Daddy Kane",
    "roster": [
     "Trixie",
@@ -107,22 +115,6 @@
    "crippled": false,
    "vault": 0.1674,
    "vaultSweeps": 10,
-   "mood": "working"
-  },
-  {
-   "name": "Fancy Red",
-   "roster": [
-    "Lucky Lucy",
-    "Baby Back",
-    "Plastic Poppy"
-   ],
-   "net": -0.5049,
-   "wins": 4,
-   "losses": 4,
-   "crown": false,
-   "crippled": false,
-   "vault": 0.1237,
-   "vaultSweeps": 9,
    "mood": "working"
   },
   {
@@ -208,9 +200,9 @@
     0.1842
    ],
    "persona": {
-    "swagger": 0.58,
-    "tilt": 0.07,
-    "greed": 0.54,
+    "swagger": 0.57,
+    "tilt": 0.08,
+    "greed": 0.53,
     "discipline": 0.52
    }
   },
@@ -218,28 +210,29 @@
    "name": "Lucky Lucy",
    "tag": "raw score slut",
    "pimp": "Fancy Red",
-   "net": 0.081,
-   "wins": 2,
+   "net": 0.178,
+   "wins": 3,
    "losses": 2,
-   "closes": 4,
+   "closes": 5,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0216,
+   "form": 0.0518,
    "mood": "working",
-   "vault": 0.0753,
+   "vault": 0.104,
    "hist": [
     -0.085,
     -0.0565,
     -0.0413,
     0.0367,
     0.0837,
-    0.081
+    0.081,
+    0.178
    ],
    "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
+    "swagger": 0.59,
+    "tilt": 0.06,
+    "greed": 0.54,
+    "discipline": 0.53
    }
   },
   {
@@ -437,7 +430,7 @@
     -0.0716
    ],
    "persona": {
-    "swagger": 0.49,
+    "swagger": 0.5,
     "tilt": 0.11,
     "greed": 0.5,
     "discipline": 0.5
@@ -497,7 +490,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 360,
+   "stolen": 366,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -571,7 +564,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 223,
+   "stolen": 229,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -631,6 +624,36 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "BLENDUSDT",
+   "direction": "LONG",
+   "ts": 1793584482666,
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy",
+   "coid": "s1793584396299BLENDUSDT",
+   "live": false,
+   "filledAt": 1793584486890,
+   "orderId": "344b862e-268a-4196-b181-f352a432a201",
+   "closedAt": 1793584642903,
+   "epNet": -0.084976,
+   "epCounted": true,
+   "epVerdict": -1
+  },
+  {
+   "symbol": "IOSTUSDT",
+   "direction": "LONG",
+   "ts": 1793588142528,
+   "pimp": "Big Daddy Kane",
+   "crack": "Gold Teeth",
+   "coid": "s1793588067642IOSTUSDT",
+   "live": false,
+   "filledAt": 1793588146439,
+   "orderId": "4b0fa01f-c945-42d3-a871-a4f362ebedc5",
+   "closedAt": 1793590021940,
+   "epNet": 0.273361,
+   "epCounted": true,
+   "epVerdict": 1
+  },
   {
    "symbol": "1000CATUSDT",
    "direction": "LONG",
@@ -767,24 +790,6 @@
    "epVerdict": 1
   },
   {
-   "symbol": "CXMTUSDT",
-   "direction": "LONG",
-   "ts": 1793607380197,
-   "pimp": "Big Daddy Kane",
-   "crack": "Gold Teeth",
-   "coid": "s1793607300593CXMTUSDT",
-   "live": false
-  },
-  {
-   "symbol": "YBUSDT",
-   "direction": "LONG",
-   "ts": 1793607381791,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1793607300593YBUSDT",
-   "live": false
-  },
-  {
    "symbol": "CVCUSDT",
    "direction": "LONG",
    "ts": 1793607955263,
@@ -793,10 +798,26 @@
    "coid": "s1793607874998CVCUSDT",
    "live": false,
    "filledAt": 1793607958694,
-   "orderId": "92dd2a35-c421-4944-8301-989fc6cf1558"
+   "orderId": "92dd2a35-c421-4944-8301-989fc6cf1558",
+   "closedAt": 1793608317497,
+   "epNet": 0.09701,
+   "epCounted": true,
+   "epVerdict": 1
   }
  ],
  "drama": [
+  {
+   "ts": 1793608404041,
+   "text": "🏦 Fancy Red kicked $0.03 upstairs — Lucky Lucy's trick on CVCUSDT (lifetime vault $0.15)"
+  },
+  {
+   "ts": 1793608404040,
+   "text": "💰 Lucky Lucy (working for Fancy Red) banked +$0.10 on CVCUSDT incl $0.018 entry fees"
+  },
+  {
+   "ts": 1793608215181,
+   "text": "🧬 Velvet Vice tweaked her reads — score downweighted (street R&D)"
+  },
   {
    "ts": 1793608184784,
    "text": "📓 Queen B stole Gold Teeth's playbook — third time this week the corner talks about it"
@@ -904,25 +925,9 @@
   {
    "ts": 1793604556235,
    "text": "📓 Queen B stole Lucky Lucy's playbook — third time this week the corner talks about it"
-  },
-  {
-   "ts": 1793604473214,
-   "text": "🧬 Bolt Betsy tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793604394416,
-   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793604201699,
-   "text": "🧬 Velvet Vice tweaked her reads — score downweighted (street R&D)"
   }
  ],
  "attrib": {
-  "f9dca6a5-f935-4c38-ae04-02bcc9d9adaf": {
-   "pimp": null,
-   "crack": null
-  },
   "a9d6a4e1-1c3e-4197-a529-49b41efaea75": {
    "pimp": "Silky Slim",
    "crack": "Solana Sadie"
@@ -1518,6 +1523,10 @@
   "5ddfa8a5-1955-452c-ae09-f2d39c12856d": {
    "pimp": "Big Daddy Kane",
    "crack": "Gold Teeth"
+  },
+  "46747723-37b4-4899-9832-cbb01800364f": {
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy"
   }
  }
 }
