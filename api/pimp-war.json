@@ -1,18 +1,18 @@
 {
- "at": "2026-11-02T00:39:14.958Z",
+ "at": "2026-11-02T00:44:04.137Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.74,
-   "marginFreeUsd": 50046.46,
+   "equityUsd": 53.34,
+   "marginFreeUsd": 50045.28,
    "epochNetUsd": -11.26,
    "fills": 165,
    "positions": [
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": -0.04,
+     "upl": -0.02,
      "lev": 10,
-     "margin": 7.84
+     "margin": 7.85
     }
    ]
   },
@@ -103,8 +103,8 @@
    "losses": 3,
    "crown": false,
    "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
+   "vault": 0.0197,
+   "vaultSweeps": 3,
    "mood": "working"
   },
   {
@@ -119,8 +119,8 @@
    "losses": 1,
    "crown": false,
    "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
+   "vault": 0.1274,
+   "vaultSweeps": 4,
    "mood": "working"
   },
   {
@@ -135,8 +135,8 @@
    "losses": 5,
    "crown": false,
    "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
+   "vault": 0.012,
+   "vaultSweeps": 1,
    "mood": "working"
   },
   {
@@ -151,8 +151,8 @@
    "losses": 2,
    "crown": false,
    "crippled": false,
-   "vault": 0,
-   "vaultSweeps": 0,
+   "vault": 0.0484,
+   "vaultSweeps": 4,
    "mood": "working"
   },
   {
@@ -166,13 +166,13 @@
    "losses": 9,
    "crown": false,
    "crippled": true,
-   "vault": 0,
-   "vaultSweeps": 0,
+   "vault": 0.0296,
+   "vaultSweeps": 3,
    "mood": "working"
   }
  ],
  "vault": {
-  "house": 33.1523
+  "house": 33.3178
  },
  "cracks": [
   {
@@ -187,7 +187,7 @@
    "gen": 0,
    "form": 0.0537,
    "mood": "working",
-   "vault": 0,
+   "vault": 0.0435,
    "hist": [
     -0.0147,
     0.1284
@@ -211,7 +211,7 @@
    "gen": 0,
    "form": 0.0097,
    "mood": "working",
-   "vault": 0,
+   "vault": 0.0156,
    "hist": [
     0.0281,
     0.0355
@@ -343,7 +343,7 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.51,
+    "swagger": 0.5,
     "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
@@ -382,7 +382,7 @@
    "gen": 0,
    "form": -0.0189,
    "mood": "working",
-   "vault": 0,
+   "vault": 0.0041,
    "hist": [
     0.0059,
     -0.0447
@@ -452,7 +452,7 @@
    "gen": 0,
    "form": -0.0393,
    "mood": "working",
-   "vault": 0,
+   "vault": 0.0011,
    "hist": [
     -0.0161,
     -0.0273,
@@ -463,10 +463,10 @@
     -0.1911
    ],
    "persona": {
-    "swagger": 0.32,
-    "tilt": 0.55,
+    "swagger": 0.34,
+    "tilt": 0.52,
     "greed": 0.45,
-    "discipline": 0.37
+    "discipline": 0.38
    }
   },
   {
@@ -477,11 +477,11 @@
    "wins": 1,
    "losses": 4,
    "closes": 5,
-   "stolen": 241,
+   "stolen": 246,
    "gen": 0,
    "form": -0.0558,
    "mood": "working",
-   "vault": 0.5029,
+   "vault": 0.5149,
    "hist": [
     -0.0057,
     -0.1674,
@@ -508,7 +508,7 @@
    "gen": 0,
    "form": -0.0209,
    "mood": "working",
-   "vault": 0,
+   "vault": 0.0839,
    "hist": [
     -0.8796,
     -0.8117,
@@ -551,6 +551,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "JUPUSDT",
+   "direction": "LONG",
+   "ts": 1793560156047,
+   "pimp": "Big Daddy Kane",
+   "crack": "Foxy",
+   "coid": "s1793560053531JUPUSDT",
+   "filledAt": 1793560159982,
+   "orderId": "d15cbc4f-daec-4465-b4f6-7bb6153401e0",
+   "live": false,
+   "closedAt": 1793562931784,
+   "epNet": -0.089709,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "LINKUSDT",
    "direction": "LONG",
@@ -657,35 +672,6 @@
    "epVerdict": -1
   },
   {
-   "symbol": "BTCUSDT",
-   "direction": "LONG",
-   "ts": 1793579136550,
-   "pimp": "Madam Razor",
-   "crack": "Chrome Cherry",
-   "coid": "s1793579024569BTCUSDT",
-   "live": false,
-   "filledAt": 1793579140623,
-   "orderId": "67d67ab0-322e-4ff9-90ed-1df6a9b005cc"
-  },
-  {
-   "symbol": "SOXLUSDT",
-   "direction": "LONG",
-   "ts": 1793579226481,
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie",
-   "coid": "s1793579144080SOXLUSDT",
-   "live": false
-  },
-  {
-   "symbol": "XAGUSDT",
-   "direction": "LONG",
-   "ts": 1793579228873,
-   "pimp": "Cold Cash Cole",
-   "crack": "Fastlane Faye",
-   "coid": "s1793579144080XAGUSDT",
-   "live": false
-  },
-  {
    "symbol": "AAPLUSDT",
    "direction": "LONG",
    "ts": 1793579681911,
@@ -702,9 +688,42 @@
    "crack": "Gold Teeth",
    "coid": "s1793579573945SPYUSDT",
    "live": false
+  },
+  {
+   "symbol": "AVGOUSDT",
+   "direction": "LONG",
+   "ts": 1793580089558,
+   "pimp": "Madam Razor",
+   "crack": "Chrome Cherry",
+   "coid": "s1793579991159AVGOUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XAGUSDT",
+   "direction": "LONG",
+   "ts": 1793580244136,
+   "pimp": "Cold Cash Cole",
+   "crack": "Fastlane Faye",
+   "coid": "s1793580169556XAGUSDT"
   }
  ],
  "drama": [
+  {
+   "ts": 1793580149091,
+   "text": "🏦 Cold Cash Cole kicked $0.03 upstairs — Fastlane Faye's trick on XCNUSDT (lifetime vault $0.13)"
+  },
+  {
+   "ts": 1793580149091,
+   "text": "🏦 Cold Cash Cole kicked $0.06 upstairs — Fastlane Faye's trick on XCNUSDT (lifetime vault $0.10)"
+  },
+  {
+   "ts": 1793580149091,
+   "text": "🏦 Fancy Red kicked $0.01 upstairs — Sprint Santana's trick on USUSDT (lifetime vault $0.05)"
+  },
+  {
+   "ts": 1793579971005,
+   "text": "🧬 Fastlane Faye tweaked her reads — stratW upweighted (street R&D)"
+  },
   {
    "ts": 1793579943732,
    "text": "🧬 Solana Sadie tweaked her reads — mom downweighted (street R&D)"
@@ -807,22 +826,6 @@
   },
   {
    "ts": 1793576384797,
-   "text": "🧬 Fastlane Faye tweaked her reads — chg downweighted (street R&D)"
-  },
-  {
-   "ts": 1793575922975,
-   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793575296633,
-   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793575093311,
-   "text": "🧬 Gold Teeth tweaked her reads — chg downweighted (street R&D)"
-  },
-  {
-   "ts": 1793575025357,
    "text": "🧬 Fastlane Faye tweaked her reads — chg downweighted (street R&D)"
   }
  ],
