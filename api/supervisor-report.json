@@ -1,5 +1,5 @@
 {
-  "refreshedAt": "2026-11-02T11:35:56.237Z",
+  "refreshedAt": "2026-11-02T11:45:56.661Z",
   "mode": {
     "ledgerMode": "live",
     "ledgerExchange": "bitget",
@@ -9,25 +9,22 @@
   },
   "units": {
     "checked": 6,
-    "dead": [
-      "sentinel-rapid:active",
-      "sentinel-liq-guard:active"
-    ],
-    "at": "2026-11-02T11:35:56.237Z"
+    "dead": 0,
+    "at": "2026-11-02T11:45:56.661Z"
   },
   "sweep": {
-    "scanned": 24,
+    "scanned": 36,
     "cancelled": 0,
-    "at": "2026-11-02T11:35:56.237Z"
+    "at": "2026-11-02T11:45:56.661Z"
   },
   "journals": {
     "realFills": 93,
-    "demoFillsBybit": 249
+    "demoFillsBybit": 254
   },
   "evidence": {
-    "demoEpisodes": 110,
-    "demoNetUsd": -11.705,
-    "demoWinRate": 33.6,
+    "demoEpisodes": 111,
+    "demoNetUsd": -11.7106,
+    "demoWinRate": 33.3,
     "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
@@ -37,9 +34,5 @@
     "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
     "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "notes": [
-    "restarted sentinel-rapid (was inactive)",
-    "restarted sentinel-liq-guard (was inactive)",
-    "started sentinel-watchdog.timer (was inactive)"
-  ]
+  "notes": []
 }
