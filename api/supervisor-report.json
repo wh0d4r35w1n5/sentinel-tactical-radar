@@ -1,21 +1,21 @@
 {
-  "refreshedAt": "2026-11-02T06:53:30.363Z",
+  "refreshedAt": "2026-11-02T07:03:34.888Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 51.7
+    "equityUsd": 19.26
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T06:53:30.363Z"
+    "at": "2026-11-02T07:03:34.888Z"
   },
   "sweep": {
     "scanned": 0,
     "cancelled": 0,
-    "at": "2026-11-02T06:53:30.363Z"
+    "at": "2026-11-02T07:03:34.888Z"
   },
   "journals": {
     "realFills": 88,
@@ -27,9 +27,18 @@
     "demoWinRate": 25.8,
     "demoSqN": -3.87,
     "excluded": 0,
-    "cellCount": 1
+    "cellCount": 0
   },
-  "positions": [],
-  "problems": [],
+  "positions": [
+    "COWUSDT:0.350374576245",
+    "POWRUSDT:-0.18156",
+    "GUSDT:-0.06744",
+    "STEEMUSDT:-0.17085",
+    "HOTUSDT:0.0343278"
+  ],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
+  ],
   "notes": []
 }
