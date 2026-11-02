@@ -1,62 +1,68 @@
 {
- "ts": "2026-11-02T12:32:38.385Z",
- "ageMs": 1323,
+ "ts": "2026-11-02T12:37:43.435Z",
+ "ageMs": 6451,
  "src": "ws",
  "futures": {
-  "equityUsd": 26.9208,
-  "availableUsd": 5.4234,
+  "equityUsd": 26.7313,
+  "availableUsd": 11.277,
   "grantUsd": 0,
-  "equityOwnUsd": 26.9208,
-  "marginUsedUsd": 21.4881,
-  "uplUsd": -0.0933,
+  "equityOwnUsd": 26.7313,
+  "marginUsedUsd": 15.5661,
+  "uplUsd": -0.0991,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.1,
     "marginUsd": 4.7236,
-    "uplUsd": -0.0264
-   },
-   {
-    "k": "TRUMPUSDT:long",
-    "size": 3.6,
-    "marginUsd": 5.922,
-    "uplUsd": -0.0396
+    "uplUsd": -0.031
    },
    {
     "k": "APTUSDT:long",
     "size": 17.967,
     "marginUsd": 5.7,
-    "uplUsd": -0.0287
+    "uplUsd": -0.0575
    },
    {
     "k": "JSTUSDT:long",
     "size": 80,
     "marginUsd": 3.7331,
-    "uplUsd": 0.0168
+    "uplUsd": 0.02
    },
    {
     "k": "AZTECUSDT:long",
     "size": 766,
     "marginUsd": 1.4094,
-    "uplUsd": -0.0153
+    "uplUsd": -0.0306
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2273,
+  "solUsd": 0.2272,
   "stableUsd": 0,
   "bagsUsd": 0.0572,
-  "totalUsd": 0.2845,
+  "totalUsd": 0.2844,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0562
   },
-  "staleMs": 1323
+  "staleMs": 6451
  },
- "totalUsd": 27.2053,
+ "totalUsd": 27.0157,
  "deltas": [
+  {
+   "ts": 1793622950314,
+   "kind": "position-closed",
+   "detail": "TRUMPUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793622943687,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1895
+  },
   {
    "ts": 1793622377972,
    "kind": "position-opened",
@@ -164,18 +170,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 3.4987
-  },
-  {
-   "ts": 1793606405185,
-   "kind": "margin-added",
-   "detail": "HOTUSDT:long",
-   "amt": 0.075
-  },
-  {
-   "ts": 1793604321183,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 4.911
   }
  ]
 }
