@@ -1,18 +1,18 @@
 {
- "ts": "2026-11-02T03:21:01.283Z",
+ "ts": "2026-11-02T03:26:01.319Z",
  "src": "bybit-allLiq + okx-liqOrders + bitget/bybit-trade",
  "global": {
   "liq5m": {
-   "long": 0,
-   "short": 1594.63569
+   "long": 1198347.5942100005,
+   "short": 584640.7787500003
   },
   "liq15m": {
-   "long": 0,
-   "short": 1594.63569
+   "long": 1198347.5942100005,
+   "short": 586235.4144400004
   },
   "liq60m": {
-   "long": 4579.703816,
-   "short": 46666.158709999996
+   "long": 1202927.2980260004,
+   "short": 631306.9374600004
   },
   "cascade": null,
   "cascadeUsd": 0
@@ -20,56 +20,71 @@
  "symbols": {
   "BTCUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 0
+    "long": 515348.9102,
+    "short": 134504.10987000001
    },
    "liq60m": {
-    "long": 227.418,
-    "short": 541.13932
+    "long": 515576.32819999993,
+    "short": 135045.24919
    },
    "flow15m": {
-    "buy": 6070530,
-    "sell": 3306592,
-    "delta": 2763938
+    "buy": 24110820,
+    "sell": 11945964,
+    "delta": 12164856
    }
   },
   "ETHUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 1594.63569
+    "long": 671808.7061500001,
+    "short": 211451.79606999998
    },
    "liq60m": {
-    "long": 0,
-    "short": 21587.406269999996
+    "long": 671808.7061500001,
+    "short": 231444.56664999996
    },
    "flow15m": {
-    "buy": 3344380,
-    "sell": 1503268,
-    "delta": 1841112
+    "buy": 37835036,
+    "sell": 22744054,
+    "delta": 15090982
    }
   },
   "SOLUSDT": {
    "liq15m": {
-    "long": 0,
-    "short": 0
+    "long": 1066.259,
+    "short": 225962.0146
    },
    "liq60m": {
-    "long": 316.3756,
-    "short": 389.418
+    "long": 1382.6346,
+    "short": 226351.4326
    },
    "flow15m": {
-    "buy": 1394926,
-    "sell": 701651,
-    "delta": 693274
+    "buy": 3494568,
+    "sell": 1837635,
+    "delta": 1656932
+   }
+  },
+  "DOGEUSDT": {
+   "liq15m": {
+    "long": 2604.8194599999997,
+    "short": 2391.2062
+   },
+   "liq60m": {
+    "long": 2604.8194599999997,
+    "short": 2391.2062
+   },
+   "flow15m": {
+    "buy": 0,
+    "sell": 0,
+    "delta": 0
    }
   },
   "XRPUSDT": {
    "liq15m": {
-    "long": 0,
+    "long": 64.8256,
     "short": 0
    },
    "liq60m": {
-    "long": 0,
+    "long": 64.8256,
     "short": 15487.109619999997
    },
    "flow15m": {
@@ -81,11 +96,11 @@
   "NEARUSDT": {
    "liq15m": {
     "long": 0,
-    "short": 0
+    "short": 11926.287699999999
    },
    "liq60m": {
     "long": 3271.688,
-    "short": 8661.0855
+    "short": 20587.373199999995
    },
    "flow15m": {
     "buy": 0,
@@ -95,11 +110,11 @@
   },
   "LINKUSDT": {
    "liq15m": {
-    "long": 0,
+    "long": 79.94,
     "short": 0
    },
    "liq60m": {
-    "long": 628.1109,
+    "long": 708.0509,
     "short": 0
    },
    "flow15m": {
@@ -123,13 +138,28 @@
     "delta": 0
    }
   },
-  "INJUSDT": {
+  "SUIUSDT": {
    "liq15m": {
-    "long": 0,
+    "long": 24.478199999999998,
     "short": 0
    },
    "liq60m": {
-    "long": 115.9758,
+    "long": 24.478199999999998,
+    "short": 0
+   },
+   "flow15m": {
+    "buy": 0,
+    "sell": 0,
+    "delta": 0
+   }
+  },
+  "INJUSDT": {
+   "liq15m": {
+    "long": 7349.6556,
+    "short": 0
+   },
+   "liq60m": {
+    "long": 7465.6314,
     "short": 0
    },
    "flow15m": {
@@ -139,6 +169,31 @@
    }
   }
  },
- "biggestPrints60m": [],
- "liqCount2h": 209
+ "biggestPrints60m": [
+  {
+   "ts": 1793589924669,
+   "sym": "SOLUSDT",
+   "side": "short",
+   "usd": 160251.56579999998,
+   "px": 95.46,
+   "venue": "okx"
+  },
+  {
+   "ts": 1793589914400,
+   "sym": "ETHUSDT",
+   "side": "long",
+   "usd": 223012.543,
+   "px": 2320.63,
+   "venue": "bybit"
+  },
+  {
+   "ts": 1793589887302,
+   "sym": "ETHUSDT",
+   "side": "short",
+   "usd": 118452.18039,
+   "px": 2301.07,
+   "venue": "okx"
+  }
+ ],
+ "liqCount2h": 260
 }
