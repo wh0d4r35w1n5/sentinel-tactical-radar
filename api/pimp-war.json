@@ -1,8 +1,8 @@
 {
- "at": "2026-11-02T05:13:04.133Z",
+ "at": "2026-11-02T05:17:27.904Z",
  "wallets": {
   "futures": {
-   "equityUsd": 19.54,
+   "equityUsd": 19.29,
    "marginFreeUsd": 8.92,
    "epochNetUsd": -83.21,
    "fills": 88,
@@ -10,35 +10,35 @@
     {
      "symbol": "COWUSDT",
      "side": "long",
-     "upl": 0.36,
+     "upl": 0.35,
      "lev": 5,
      "margin": 2.35
     },
     {
      "symbol": "POWRUSDT",
      "side": "long",
-     "upl": -0.17,
+     "upl": -0.27,
      "lev": 5,
      "margin": 2.04
     },
     {
      "symbol": "GUSDT",
      "side": "long",
-     "upl": 0.02,
+     "upl": -0.02,
      "lev": 5,
      "margin": 2.01
     },
     {
      "symbol": "STEEMUSDT",
      "side": "long",
-     "upl": 0.04,
+     "upl": -0.04,
      "lev": 5,
      "margin": 2
     },
     {
      "symbol": "HOTUSDT",
      "side": "long",
-     "upl": 0,
+     "upl": -0.02,
      "lev": 5,
      "margin": 2
     }
@@ -144,28 +144,13 @@
     "Vandal Vicky",
     "Solana Sadie"
    ],
-   "net": -0.5281,
-   "wins": 3,
-   "losses": 8,
-   "crown": false,
-   "crippled": false,
-   "vault": 0.0926,
-   "vaultSweeps": 6,
-   "mood": "working"
-  },
-  {
-   "name": "Madam Razor",
-   "roster": [
-    "Velvet Vice",
-    "Chrome Cherry"
-   ],
-   "net": -0.7314,
+   "net": -0.5691,
    "wins": 3,
    "losses": 10,
    "crown": false,
    "crippled": false,
-   "vault": 0.1656,
-   "vaultSweeps": 5,
+   "vault": 0.0926,
+   "vaultSweeps": 6,
    "mood": "working"
   },
   {
@@ -195,9 +180,24 @@
    "wins": 1,
    "losses": 6,
    "crown": false,
-   "crippled": true,
+   "crippled": false,
    "vault": 0.012,
    "vaultSweeps": 1,
+   "mood": "working"
+  },
+  {
+   "name": "Madam Razor",
+   "roster": [
+    "Velvet Vice",
+    "Chrome Cherry"
+   ],
+   "net": -2.191,
+   "wins": 3,
+   "losses": 11,
+   "crown": false,
+   "crippled": true,
+   "vault": 0.1656,
+   "vaultSweeps": 5,
    "mood": "working"
   }
  ],
@@ -205,30 +205,6 @@
   "house": 33.5207
  },
  "cracks": [
-  {
-   "name": "Velvet Vice",
-   "tag": "mean-rev seductress",
-   "pimp": "Madam Razor",
-   "net": 0.3734,
-   "wins": 1,
-   "losses": 1,
-   "closes": 2,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0.1627,
-   "mood": "working",
-   "vault": 0.1252,
-   "hist": [
-    -0.0833,
-    0.3734
-   ],
-   "persona": {
-    "swagger": 0.52,
-    "tilt": 0.09,
-    "greed": 0.51,
-    "discipline": 0.51
-   }
-  },
   {
    "name": "Gold Teeth",
    "tag": "carry queen",
@@ -255,7 +231,7 @@
     0.0823
    ],
    "persona": {
-    "swagger": 0.55,
+    "swagger": 0.54,
     "tilt": 0.09,
     "greed": 0.52,
     "discipline": 0.51
@@ -284,7 +260,7 @@
    ],
    "persona": {
     "swagger": 0.56,
-    "tilt": 0.16,
+    "tilt": 0.15,
     "greed": 0.53,
     "discipline": 0.51
    }
@@ -414,7 +390,7 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.51,
+    "swagger": 0.5,
     "tilt": 0.1,
     "greed": 0.51,
     "discipline": 0.5
@@ -438,30 +414,7 @@
     "swagger": 0.53,
     "tilt": 0.09,
     "greed": 0.5,
-    "discipline": 0.46
-   }
-  },
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": "Big Daddy Kane",
-   "net": -0.0306,
-   "wins": 0,
-   "losses": 1,
-   "closes": 1,
-   "stolen": 0,
-   "gen": 0,
-   "form": -0.0122,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    -0.0306
-   ],
-   "persona": {
-    "swagger": 0.48,
-    "tilt": 0.14,
-    "greed": 0.5,
-    "discipline": 0.49
+    "discipline": 0.47
    }
   },
   {
@@ -486,6 +439,31 @@
     "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
+   }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": "Big Daddy Kane",
+   "net": -0.0716,
+   "wins": 0,
+   "losses": 3,
+   "closes": 3,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0153,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.0306,
+    -0.0646,
+    -0.0716
+   ],
+   "persona": {
+    "swagger": 0.35,
+    "tilt": 0.49,
+    "greed": 0.46,
+    "discipline": 0.39
    }
   },
   {
@@ -542,7 +520,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 134,
+   "stolen": 140,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -591,7 +569,7 @@
    "wins": 1,
    "losses": 1,
    "closes": 2,
-   "stolen": 92,
+   "stolen": 95,
    "gen": 0,
    "form": -0.0209,
    "mood": "working",
@@ -606,6 +584,31 @@
     "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
+   }
+  },
+  {
+   "name": "Velvet Vice",
+   "tag": "mean-rev seductress",
+   "pimp": "Madam Razor",
+   "net": -1.0862,
+   "wins": 1,
+   "losses": 2,
+   "closes": 3,
+   "stolen": 3,
+   "gen": 0,
+   "form": -0.4862,
+   "mood": "cold",
+   "vault": 0.1252,
+   "hist": [
+    -0.0833,
+    0.3734,
+    -1.0862
+   ],
+   "persona": {
+    "swagger": 0.45,
+    "tilt": 0.27,
+    "greed": 0.49,
+    "discipline": 0.46
    }
   }
  ],
@@ -651,6 +654,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "HYPEUSDT",
+   "direction": "LONG",
+   "ts": 1793582605022,
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie",
+   "coid": "s1793582535295HYPEUSDT",
+   "live": false,
+   "filledAt": 1793582609249,
+   "orderId": "509e2a0e-b863-4d3b-a393-cc6c9b43841c",
+   "closedAt": 1793582922009,
+   "epNet": -0.248419,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "DGAIUSDT",
    "direction": "LONG",
@@ -787,26 +805,6 @@
    "epVerdict": -1
   },
   {
-   "symbol": "MANTAUSDT",
-   "direction": "LONG",
-   "ts": 1793595645174,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1793595563435MANTAUSDT",
-   "filledAt": 1793595649098,
-   "orderId": "bf12769a-103d-41c1-8bb8-fa865e88778d",
-   "live": true
-  },
-  {
-   "symbol": "METISUSDT",
-   "direction": "LONG",
-   "ts": 1793595652140,
-   "pimp": "Big Daddy Kane",
-   "crack": "Gold Teeth",
-   "coid": "s1793595563435METISUSDT",
-   "live": false
-  },
-  {
    "symbol": "HOODUSDT",
    "direction": "LONG",
    "ts": 1793595900954,
@@ -814,9 +812,60 @@
    "crack": "Lucky Lucy",
    "coid": "s1793595820256HOODUSDT",
    "live": false
+  },
+  {
+   "symbol": "BEAMUSDT",
+   "direction": "LONG",
+   "ts": 1793596403314,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1793596320858BEAMUSDT",
+   "live": false,
+   "filledAt": 1793596404759,
+   "orderId": "d7fab73b-1079-4af7-a7ae-b29c80c5aec1",
+   "closedAt": 1793596428230,
+   "epNet": -1.45964,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793596633141,
+   "text": "🧬 Fastlane Faye tweaked her reads — score upweighted (street R&D)"
+  },
+  {
+   "ts": 1793596633137,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.01 on MOIN — docked her pay"
+  },
+  {
+   "ts": 1793596621529,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.03 on QOMPUTE — docked her pay"
+  },
+  {
+   "ts": 1793596551193,
+   "text": "📓 Velvet Vice stole Gold Teeth's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793596551191,
+   "text": "💰 Velvet Vice (working for Madam Razor) banked $-1.46 on BEAMUSDT incl $0.020 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793596551191,
+   "text": "🧊 Velvet Vice can't buy a trick — cold streak, the bench is watching"
+  },
+  {
+   "ts": 1793596518807,
+   "text": "🧬 Queen B tweaked her reads — score upweighted (street R&D)"
+  },
+  {
+   "ts": 1793596470411,
+   "text": "🧬 Lucky Lucy tweaked her reads — chg upweighted (street R&D)"
+  },
+  {
+   "ts": 1793596417220,
+   "text": "🧬 Velvet Vice tweaked her reads — score downweighted (street R&D)"
+  },
   {
    "ts": 1793596384131,
    "text": "🧬 Queen B tweaked her reads — mom downweighted (street R&D)"
@@ -900,53 +949,9 @@
   {
    "ts": 1793593735161,
    "text": "🧬 Lucky Lucy tweaked her reads — score upweighted (street R&D)"
-  },
-  {
-   "ts": 1793593649884,
-   "text": "🧬 Velvet Vice tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793593617233,
-   "text": "📓 Queen B stole Velvet Vice's playbook — third time this week the corner talks about it"
-  },
-  {
-   "ts": 1793593551845,
-   "text": "🏦 Fancy Red kicked $0.01 upstairs — Lucky Lucy's trick on OPGUSDT (lifetime vault $0.12)"
-  },
-  {
-   "ts": 1793593551844,
-   "text": "💰 Lucky Lucy (working for Fancy Red) banked $-0.00 on OPGUSDT incl $0.036 entry fees — docked her pay"
-  },
-  {
-   "ts": 1793593516487,
-   "text": "🧬 Gold Teeth tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793593312589,
-   "text": "🧬 Lucky Lucy tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793593230841,
-   "text": "🧬 Queen B tweaked her reads — major upweighted (street R&D)"
-  },
-  {
-   "ts": 1793593135233,
-   "text": "🧬 Lucky Lucy tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793593034606,
-   "text": "🧬 Queen B tweaked her reads — chg downweighted (street R&D)"
   }
  ],
  "attrib": {
-  "4ff2205c-a724-4458-b77d-72cd21f651d5": {
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie"
-  },
-  "f6da1708-de18-485d-b959-652a604abe6d": {
-   "pimp": null,
-   "crack": null
-  },
   "661976cf-2755-41e1-8cc0-3ba438fefe63": {
    "pimp": "Silky Slim",
    "crack": "Solana Sadie"
@@ -1536,6 +1541,14 @@
    "crack": null
   },
   "3bbf54d4-fa36-4456-b83f-692f4102a915": {
+   "pimp": null,
+   "crack": null
+  },
+  "ffa7d585-1eb8-42be-b3f7-29e327c10da1": {
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice"
+  },
+  "7ca107a1-d9ff-4a39-9466-eccd4f81f628": {
    "pimp": null,
    "crack": null
   }
