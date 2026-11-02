@@ -1,74 +1,92 @@
 {
- "ts": "2026-11-02T01:59:53.667Z",
- "ageMs": 2447,
+ "ts": "2026-11-02T02:04:53.714Z",
+ "ageMs": 2590,
  "src": "ws",
  "futures": {
-  "equityUsd": 20.37,
-  "availableUsd": 4.7711,
+  "equityUsd": 20.393,
+  "availableUsd": 5.1477,
   "grantUsd": 0,
-  "equityOwnUsd": 20.37,
-  "marginUsedUsd": 15.3661,
-  "uplUsd": 0.3798,
+  "equityOwnUsd": 20.393,
+  "marginUsedUsd": 15.0099,
+  "uplUsd": 0.212,
   "positions": [
    {
     "k": "COWUSDT:long",
-    "size": 142,
-    "marginUsd": 3.1998,
-    "uplUsd": 0.128
+    "size": 126,
+    "marginUsd": 2.8436,
+    "uplUsd": 0.164
    },
    {
     "k": "POWRUSDT:long",
     "size": 178,
     "marginUsd": 2.0007,
-    "uplUsd": -0.1157
+    "uplUsd": -0.1299
    },
    {
     "k": "GUSDT:long",
     "size": 2810,
     "marginUsd": 2.0018,
-    "uplUsd": 0.1489
+    "uplUsd": 0.1517
    },
    {
     "k": "LSKUSDT:long",
     "size": 48,
     "marginUsd": 1.9642,
-    "uplUsd": -0.1968
+    "uplUsd": -0.3552
    },
    {
     "k": "STEEMUSDT:long",
     "size": 201,
     "marginUsd": 1.9963,
-    "uplUsd": 0.004
+    "uplUsd": 0.0241
    },
    {
     "k": "AKEUSDT:long",
     "size": 1294,
     "marginUsd": 2.2033,
-    "uplUsd": 0.2978
+    "uplUsd": 0.2754
    },
    {
     "k": "HOTUSDT:long",
     "size": 26406,
     "marginUsd": 2,
-    "uplUsd": 0.1135
+    "uplUsd": 0.0819
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.229,
+  "solUsd": 0.2288,
   "stableUsd": 0,
-  "bagsUsd": 0.058,
-  "totalUsd": 0.287,
+  "bagsUsd": 0.0578,
+  "totalUsd": 0.2866,
   "tokens": {
    "BQAeeSow": 0.001,
-   "8PGyHCKv": 0.057
+   "8PGyHCKv": 0.0568
   },
-  "staleMs": 2447
+  "staleMs": 2590
  },
- "totalUsd": 20.6569,
+ "totalUsd": 20.6796,
  "deltas": [
+  {
+   "ts": 1793585050217,
+   "kind": "size-reduced",
+   "detail": "COWUSDT:long Δ-16",
+   "amt": 0
+  },
+  {
+   "ts": 1793585047445,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0809
+  },
+  {
+   "ts": 1793584926239,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0677
+  },
   {
    "ts": 1793583145891,
    "kind": "size-reduced",
@@ -170,24 +188,6 @@
    "kind": "size-reduced",
    "detail": "AKEUSDT:long Δ-151",
    "amt": 0
-  },
-  {
-   "ts": 1793579623900,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1257
-  },
-  {
-   "ts": 1793579557688,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.3836
-  },
-  {
-   "ts": 1793579393473,
-   "kind": "position-opened",
-   "detail": "HOTUSDT:long",
-   "amt": 2
   }
  ]
 }
