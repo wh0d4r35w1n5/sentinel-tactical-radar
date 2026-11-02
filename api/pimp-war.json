@@ -1,8 +1,8 @@
 {
- "at": "2026-11-02T05:22:46.504Z",
+ "at": "2026-11-02T05:27:54.512Z",
  "wallets": {
   "futures": {
-   "equityUsd": 19.32,
+   "equityUsd": 19.37,
    "marginFreeUsd": 8.92,
    "epochNetUsd": -83.21,
    "fills": 88,
@@ -10,28 +10,28 @@
     {
      "symbol": "COWUSDT",
      "side": "long",
-     "upl": 0.35,
+     "upl": 0.4,
      "lev": 5,
      "margin": 2.35
     },
     {
      "symbol": "POWRUSDT",
      "side": "long",
-     "upl": -0.28,
+     "upl": -0.31,
      "lev": 5,
      "margin": 2.04
     },
     {
      "symbol": "GUSDT",
      "side": "long",
-     "upl": -0.05,
+     "upl": -0.03,
      "lev": 5,
      "margin": 2.01
     },
     {
      "symbol": "STEEMUSDT",
      "side": "long",
-     "upl": -0.04,
+     "upl": -0.03,
      "lev": 5,
      "margin": 2
     },
@@ -119,6 +119,25 @@
  },
  "pimps": [
   {
+   "name": "Big Daddy Kane",
+   "roster": [
+    "Trixie",
+    "Foxy",
+    "Bolt Betsy",
+    "Gold Teeth",
+    "Vandal Vicky",
+    "Solana Sadie"
+   ],
+   "net": -0.4394,
+   "wins": 4,
+   "losses": 10,
+   "crown": false,
+   "crippled": false,
+   "vault": 0.1455,
+   "vaultSweeps": 8,
+   "mood": "working"
+  },
+  {
    "name": "Fancy Red",
    "roster": [
     "Lucky Lucy",
@@ -132,25 +151,6 @@
    "crippled": false,
    "vault": 0.1237,
    "vaultSweeps": 9,
-   "mood": "working"
-  },
-  {
-   "name": "Big Daddy Kane",
-   "roster": [
-    "Trixie",
-    "Foxy",
-    "Bolt Betsy",
-    "Gold Teeth",
-    "Vandal Vicky",
-    "Solana Sadie"
-   ],
-   "net": -0.5691,
-   "wins": 3,
-   "losses": 10,
-   "crown": false,
-   "crippled": false,
-   "vault": 0.0926,
-   "vaultSweeps": 6,
    "mood": "working"
   },
   {
@@ -209,15 +209,15 @@
    "name": "Gold Teeth",
    "tag": "carry queen",
    "pimp": "Big Daddy Kane",
-   "net": 0.0823,
-   "wins": 1,
+   "net": 0.212,
+   "wins": 2,
    "losses": 4,
-   "closes": 5,
+   "closes": 6,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0859,
+   "form": 0.0707,
    "mood": "working",
-   "vault": 0.074,
+   "vault": 0.1269,
    "hist": [
     -0.0161,
     -0.0273,
@@ -228,13 +228,15 @@
     -0.1911,
     -0.1784,
     -0.1054,
-    0.0823
+    0.0823,
+    0.1578,
+    0.212
    ],
    "persona": {
-    "swagger": 0.54,
-    "tilt": 0.09,
-    "greed": 0.52,
-    "discipline": 0.51
+    "swagger": 0.7,
+    "tilt": 0.03,
+    "greed": 0.59,
+    "discipline": 0.57
    }
   },
   {
@@ -262,7 +264,7 @@
     "swagger": 0.55,
     "tilt": 0.15,
     "greed": 0.53,
-    "discipline": 0.51
+    "discipline": 0.5
    }
   },
   {
@@ -392,7 +394,7 @@
    "persona": {
     "swagger": 0.5,
     "tilt": 0.1,
-    "greed": 0.51,
+    "greed": 0.5,
     "discipline": 0.5
    }
   },
@@ -411,7 +413,7 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.53,
+    "swagger": 0.52,
     "tilt": 0.09,
     "greed": 0.5,
     "discipline": 0.47
@@ -460,10 +462,10 @@
     -0.0716
    ],
    "persona": {
-    "swagger": 0.36,
-    "tilt": 0.46,
+    "swagger": 0.37,
+    "tilt": 0.43,
     "greed": 0.46,
-    "discipline": 0.4
+    "discipline": 0.41
    }
   },
   {
@@ -520,7 +522,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 145,
+   "stolen": 151,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -533,7 +535,7 @@
    ],
    "persona": {
     "swagger": 0.5,
-    "tilt": 0.11,
+    "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
    }
@@ -594,7 +596,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 8,
+   "stolen": 14,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -605,8 +607,8 @@
     -1.0862
    ],
    "persona": {
-    "swagger": 0.45,
-    "tilt": 0.25,
+    "swagger": 0.46,
+    "tilt": 0.24,
     "greed": 0.49,
     "discipline": 0.46
    }
@@ -826,10 +828,36 @@
    "pimp": "Big Daddy Kane",
    "crack": "Gold Teeth",
    "coid": "s1793596812482TRUMPUSDT",
-   "live": false
+   "live": false,
+   "filledAt": 1793596897269,
+   "orderId": "2d621a63-0f66-4065-8e26-e4ad7f502087",
+   "closedAt": 1793596987272,
+   "epNet": 0.12975,
+   "epCounted": true,
+   "epVerdict": 1
   }
  ],
  "drama": [
+  {
+   "ts": 1793597260847,
+   "text": "📓 Queen B stole Gold Teeth's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793597104572,
+   "text": "🏦 Big Daddy Kane kicked $0.01 upstairs — Gold Teeth's trick on TRUMPUSDT (lifetime vault $0.15)"
+  },
+  {
+   "ts": 1793597104571,
+   "text": "💰 Gold Teeth (working for Big Daddy Kane) banked +$0.05 on TRUMPUSDT"
+  },
+  {
+   "ts": 1793597029661,
+   "text": "🏦 Big Daddy Kane kicked $0.04 upstairs — Gold Teeth's trick on TRUMPUSDT (lifetime vault $0.13)"
+  },
+  {
+   "ts": 1793597029658,
+   "text": "💰 Gold Teeth (working for Big Daddy Kane) banked +$0.08 on TRUMPUSDT incl $0.082 entry fees"
+  },
   {
    "ts": 1793596914521,
    "text": "🧬 Lucky Lucy tweaked her reads — stratW downweighted (street R&D)"
@@ -929,37 +957,9 @@
   {
    "ts": 1793594799211,
    "text": "🧬 Fastlane Faye tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793594717458,
-   "text": "📓 Fastlane Faye stole Velvet Vice's playbook — third time this week the corner talks about it"
-  },
-  {
-   "ts": 1793594629200,
-   "text": "🧬 Gold Teeth tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793594199452,
-   "text": "🧬 Bolt Betsy tweaked her reads — score upweighted (street R&D)"
-  },
-  {
-   "ts": 1793594132698,
-   "text": "🧬 Gold Teeth tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793594050496,
-   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
   }
  ],
  "attrib": {
-  "661976cf-2755-41e1-8cc0-3ba438fefe63": {
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie"
-  },
-  "1040eb78-b0c5-4b3a-bc82-f68f3dbb7b32": {
-   "pimp": null,
-   "crack": null
-  },
   "38f531f8-df7b-4eb8-b765-503a4a123f2f": {
    "pimp": "Fancy Red",
    "crack": "Lucky Lucy"
@@ -1551,6 +1551,14 @@
   "7ca107a1-d9ff-4a39-9466-eccd4f81f628": {
    "pimp": null,
    "crack": null
+  },
+  "ef900d7d-64b7-465b-8205-16544d345b0b": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Gold Teeth"
+  },
+  "d14d892a-3f0c-42cc-8ead-56dd61aac4f0": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Gold Teeth"
   }
  }
 }
