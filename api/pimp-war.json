@@ -1,18 +1,18 @@
 {
- "at": "2026-11-02T10:10:37.156Z",
+ "at": "2026-11-02T10:15:43.207Z",
  "wallets": {
   "futures": {
-   "equityUsd": 51.55,
-   "marginFreeUsd": 50044.38,
-   "epochNetUsd": -12.49,
+   "equityUsd": 51.56,
+   "marginFreeUsd": 50043.71,
+   "epochNetUsd": -12.47,
    "fills": 222,
    "positions": [
     {
      "symbol": "CPUSDT",
      "side": "long",
-     "upl": 0.07,
+     "upl": 0.1,
      "lev": 10,
-     "margin": 2.6
+     "margin": 2.61
     }
    ]
   },
@@ -116,13 +116,13 @@
     "Vandal Vicky",
     "Solana Sadie"
    ],
-   "net": -0.4672,
+   "net": -0.5126,
    "wins": 5,
-   "losses": 11,
+   "losses": 13,
    "crown": false,
    "crippled": false,
-   "vault": 0.1674,
-   "vaultSweeps": 10,
+   "vault": 0.171,
+   "vaultSweeps": 11,
    "mood": "working"
   },
   {
@@ -378,21 +378,23 @@
    "name": "Vandal Vicky",
    "tag": "spawn of Solana Sadie",
    "pimp": "Big Daddy Kane",
-   "net": 0,
+   "net": -0.021,
    "wins": 0,
-   "losses": 0,
-   "closes": 0,
+   "losses": 1,
+   "closes": 1,
    "stolen": 0,
    "gen": 4,
-   "form": 0,
+   "form": -0.0084,
    "mood": "working",
-   "vault": 0,
-   "hist": [],
+   "vault": 0.0036,
+   "hist": [
+    -0.021
+   ],
    "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
+    "swagger": 0.44,
+    "tilt": 0.26,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   },
   {
@@ -411,31 +413,6 @@
    "hist": [
     0.0059,
     -0.0447
-   ],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": "Big Daddy Kane",
-   "net": -0.0716,
-   "wins": 0,
-   "losses": 3,
-   "closes": 3,
-   "stolen": 0,
-   "gen": 0,
-   "form": -0.0153,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    -0.0306,
-    -0.0646,
-    -0.0716
    ],
    "persona": {
     "swagger": 0.5,
@@ -491,6 +468,32 @@
    }
   },
   {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": "Big Daddy Kane",
+   "net": -0.0959,
+   "wins": 0,
+   "losses": 4,
+   "closes": 4,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0189,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.0306,
+    -0.0646,
+    -0.0716,
+    -0.0959
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.27,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
    "name": "Queen B",
    "tag": "blue-chip royalty",
    "pimp": "Cold Cash Cole",
@@ -498,7 +501,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 474,
+   "stolen": 480,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -572,7 +575,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 337,
+   "stolen": 343,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -632,21 +635,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "HYPEUSDT",
-   "direction": "LONG",
-   "ts": 1793590155775,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793590078717HYPEUSDT",
-   "live": false,
-   "filledAt": 1793590159394,
-   "orderId": "1ccfcfd9-1ac5-4881-b31d-358e15359e82",
-   "closedAt": 1793590542653,
-   "epNet": 0.043708,
-   "epCounted": true,
-   "epVerdict": 1
-  },
   {
    "symbol": "PEOPLEUSDT",
    "direction": "LONG",
@@ -785,7 +773,11 @@
    "coid": "s1793613602935CPUSDT",
    "live": false,
    "filledAt": 1793613695801,
-   "orderId": "314142e0-eab0-49bf-8ec3-ef501d369ed6"
+   "orderId": "314142e0-eab0-49bf-8ec3-ef501d369ed6",
+   "closedAt": 1793614147896,
+   "epNet": -0.021023,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "IDOLUSDT",
@@ -793,10 +785,40 @@
    "ts": 1793614237021,
    "pimp": "Fancy Red",
    "crack": "Lucky Lucy",
-   "coid": "s1793614125513IDOLUSDT"
+   "coid": "s1793614125513IDOLUSDT",
+   "live": false
+  },
+  {
+   "symbol": "XAGUSDT",
+   "direction": "LONG",
+   "ts": 1793614516595,
+   "pimp": "Madam Razor",
+   "crack": "Chrome Cherry",
+   "coid": "s1793614435802XAGUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793614496205,
+   "text": "🧬 Gold Teeth tweaked her reads — mom upweighted (street R&D)"
+  },
+  {
+   "ts": 1793614350928,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.02 on MOIN — docked her pay"
+  },
+  {
+   "ts": 1793614328909,
+   "text": "🧬 Gold Teeth tweaked her reads — mom upweighted (street R&D)"
+  },
+  {
+   "ts": 1793614263109,
+   "text": "🏦 Big Daddy Kane kicked $0.00 upstairs — Vandal Vicky's trick on CPUSDT (lifetime vault $0.17)"
+  },
+  {
+   "ts": 1793614263095,
+   "text": "💰 Vandal Vicky (working for Big Daddy Kane) banked $-0.02 on CPUSDT incl $0.035 entry fees — docked her pay"
+  },
   {
    "ts": 1793614040393,
    "text": "🧬 Bolt Betsy tweaked her reads — mom upweighted (street R&D)"
@@ -896,45 +918,9 @@
   {
    "ts": 1793609975567,
    "text": "🧬 Lucky Lucy tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793609918871,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793609615421,
-   "text": "🧬 Bolt Betsy tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793609505917,
-   "text": "🧬 Lucky Lucy tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793609422200,
-   "text": "🧬 Gold Teeth tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793609338163,
-   "text": "🧬 Queen B tweaked her reads — stratW upweighted (street R&D)"
   }
  ],
  "attrib": {
-  "d1adc4fe-175b-4225-ab1b-8a07f753dcaa": {
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie"
-  },
-  "3faa33dd-b4bc-46d1-a1af-136e397995ca": {
-   "pimp": "Silky Slim",
-   "crack": "Solana Sadie"
-  },
-  "46432cb5-0dbc-401e-998c-197f016ed1af": {
-   "pimp": "Fancy Red",
-   "crack": "Sprint Santana"
-  },
-  "cfd2b020-1d56-4582-99dd-673041cc4f93": {
-   "pimp": "Cold Cash Cole",
-   "crack": "Fastlane Faye"
-  },
   "22d82056-2604-4df6-9f7e-c80bdf728d18": {
    "pimp": "Cold Cash Cole",
    "crack": "Fastlane Faye"
@@ -1516,6 +1502,22 @@
    "crack": null
   },
   "1501091681442467840": {
+   "pimp": null,
+   "crack": null
+  },
+  "8c9074a4-c5c0-454b-9a92-6b8e46c0596a": {
+   "pimp": "Big Daddy Kane",
+   "crack": "Vandal Vicky"
+  },
+  "1501092355651657728": {
+   "pimp": null,
+   "crack": null
+  },
+  "1501092355077038080": {
+   "pimp": null,
+   "crack": null
+  },
+  "1501092354456281088": {
    "pimp": null,
    "crack": null
   }
