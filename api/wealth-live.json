@@ -1,62 +1,74 @@
 {
- "ts": "2026-11-02T07:23:51.551Z",
- "ageMs": 0,
+ "ts": "2026-11-02T07:28:55.863Z",
+ "ageMs": 4133,
  "src": "ws",
  "futures": {
-  "equityUsd": 19.0408,
-  "availableUsd": 8.9175,
+  "equityUsd": 24.2256,
+  "availableUsd": 13.8385,
   "grantUsd": 0,
-  "equityOwnUsd": 19.0408,
+  "equityOwnUsd": 24.2256,
   "marginUsedUsd": 10.408,
-  "uplUsd": 0.0353,
+  "uplUsd": -0.0234,
   "positions": [
    {
     "k": "COWUSDT:long",
     "size": 103,
     "marginUsd": 2.3508,
-    "uplUsd": 0.4122
+    "uplUsd": 0.4431
    },
    {
     "k": "POWRUSDT:long",
     "size": 178,
     "marginUsd": 2.0436,
-    "uplUsd": -0.267
+    "uplUsd": -0.2545
    },
    {
     "k": "GUSDT:long",
     "size": 2810,
     "marginUsd": 2.0117,
-    "uplUsd": -0.1545
+    "uplUsd": -0.1883
    },
    {
     "k": "STEEMUSDT:long",
     "size": 201,
     "marginUsd": 2.002,
-    "uplUsd": -0.193
+    "uplUsd": -0.2191
    },
    {
     "k": "HOTUSDT:long",
     "size": 26406,
     "marginUsd": 2,
-    "uplUsd": 0.2377
+    "uplUsd": 0.1954
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2274,
+  "solUsd": 0.2275,
   "stableUsd": 0,
   "bagsUsd": 0.0574,
-  "totalUsd": 0.2848,
+  "totalUsd": 0.2849,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0564
   },
-  "staleMs": 0
+  "staleMs": 4133
  },
- "totalUsd": 19.3257,
+ "totalUsd": 24.5105,
  "deltas": [
+  {
+   "ts": 1793604321183,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 4.911
+  },
+  {
+   "ts": 1793604294959,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.2738
+  },
   {
    "ts": 1793601333378,
    "kind": "balance-move",
@@ -164,18 +176,6 @@
    "kind": "size-reduced",
    "detail": "COWUSDT:long Δ-18",
    "amt": 0
-  },
-  {
-   "ts": 1793582599143,
-   "kind": "size-reduced",
-   "detail": "COWUSDT:long Δ-17",
-   "amt": 0
-  },
-  {
-   "ts": 1793582599142,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.1772
   }
  ]
 }
