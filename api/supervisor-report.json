@@ -1,54 +1,46 @@
 {
-  "refreshedAt": "2026-11-02T11:05:36.796Z",
+  "refreshedAt": "2026-11-02T11:15:36.798Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 51.56
+    "equityUsd": 52.17
   },
   "units": {
     "checked": 6,
-    "dead": [
-      "sentinel-rapid:active",
-      "sentinel-bitget-watch:active",
-      "sentinel-liq-guard:active"
-    ],
-    "at": "2026-11-02T11:05:36.796Z"
+    "dead": 0,
+    "at": "2026-11-02T11:15:36.798Z"
   },
   "sweep": {
-    "scanned": 37,
+    "scanned": 33,
     "cancelled": 2,
-    "at": "2026-11-02T11:05:36.796Z"
+    "at": "2026-11-02T11:15:36.798Z"
   },
   "journals": {
     "realFills": 93,
-    "demoFillsBybit": 241
+    "demoFillsBybit": 243
   },
   "evidence": {
-    "demoEpisodes": 105,
-    "demoNetUsd": -12.2666,
-    "demoWinRate": 30.5,
+    "demoEpisodes": 106,
+    "demoNetUsd": -11.8565,
+    "demoWinRate": 31.1,
     "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
   },
   "positions": [
-    "POWRUSDT:0.14184",
-    "HYPEUSDT:-0.0006",
-    "TRUSTUSDT:-0.03179",
-    "SPXUSDT:-0.006",
-    "XAUTUSDT:0.00928",
-    "AVAXUSDT:0.0096",
-    "LTCUSDT:-0.007",
-    "DOGEUSDT:0.00201",
-    "XRPUSDT:0"
+    "POWRUSDT:0.21758",
+    "HYPEUSDT:-0.0081",
+    "SPXUSDT:0.003",
+    "XAUTUSDT:0.01068",
+    "AVAXUSDT:0.0144",
+    "LTCUSDT:0.003",
+    "DOGEUSDT:0.00603",
+    "XRPUSDT:0.00492"
   ],
   "problems": [],
   "notes": [
-    "restarted sentinel-rapid (was inactive)",
-    "restarted sentinel-bitget-watch (was inactive)",
-    "restarted sentinel-liq-guard (was inactive)",
     "orphan sweep — cancelled 2 untriggered legs on dead seats"
   ]
 }
