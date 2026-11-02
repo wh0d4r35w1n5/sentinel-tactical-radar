@@ -1,25 +1,60 @@
 {
- "at": "2026-11-02T00:53:47.509Z",
+ "at": "2026-11-02T00:58:50.035Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.32,
-   "marginFreeUsd": 50037.38,
-   "epochNetUsd": -11.28,
-   "fills": 166,
+   "equityUsd": 20.18,
+   "marginFreeUsd": 3.79,
+   "epochNetUsd": -82.37,
+   "fills": 79,
    "positions": [
     {
-     "symbol": "ETHUSDT",
+     "symbol": "COWUSDT",
      "side": "long",
-     "upl": 0.08,
-     "lev": 10,
-     "margin": 9.13
+     "upl": -0.18,
+     "lev": 5,
+     "margin": 3.98
     },
     {
-     "symbol": "BTCUSDT",
+     "symbol": "POWRUSDT",
      "side": "long",
-     "upl": 0.04,
-     "lev": 10,
-     "margin": 7.85
+     "upl": -0.08,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": 0.1,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "LSKUSDT",
+     "side": "long",
+     "upl": 0.1,
+     "lev": 5,
+     "margin": 1.96
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": 0.05,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "AKEUSDT",
+     "side": "long",
+     "upl": 0.13,
+     "lev": 5,
+     "margin": 2.35
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": -0.02,
+     "lev": 5,
+     "margin": 2
     }
    ]
   },
@@ -121,9 +156,9 @@
     "Queen B",
     "Fastlane Faye"
    ],
-   "net": -0.4595,
+   "net": -0.5468,
    "wins": 2,
-   "losses": 1,
+   "losses": 2,
    "crown": false,
    "crippled": false,
    "vault": 0.1274,
@@ -186,24 +221,25 @@
    "name": "Queen B",
    "tag": "blue-chip royalty",
    "pimp": "Cold Cash Cole",
-   "net": 0.1284,
+   "net": 0.0412,
    "wins": 1,
-   "losses": 0,
-   "closes": 1,
+   "losses": 1,
+   "closes": 2,
    "stolen": 0,
    "gen": 0,
-   "form": 0.0537,
+   "form": -0.0027,
    "mood": "working",
    "vault": 0.0435,
    "hist": [
     -0.0147,
-    0.1284
+    0.1284,
+    0.0412
    ],
    "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
+    "swagger": 0.43,
+    "tilt": 0.27,
+    "greed": 0.48,
+    "discipline": 0.45
    }
   },
   {
@@ -470,10 +506,10 @@
     -0.1911
    ],
    "persona": {
-    "swagger": 0.36,
-    "tilt": 0.47,
+    "swagger": 0.37,
+    "tilt": 0.44,
     "greed": 0.46,
-    "discipline": 0.4
+    "discipline": 0.41
    }
   },
   {
@@ -484,7 +520,7 @@
    "wins": 1,
    "losses": 4,
    "closes": 5,
-   "stolen": 255,
+   "stolen": 260,
    "gen": 0,
    "form": -0.0558,
    "mood": "working",
@@ -559,36 +595,6 @@
  ],
  "intents": [
   {
-   "symbol": "LINKUSDT",
-   "direction": "LONG",
-   "ts": 1793560164360,
-   "pimp": "Big Daddy Kane",
-   "crack": "Bolt Betsy",
-   "coid": "s1793560053531LINKUSDT",
-   "filledAt": 1793560167838,
-   "orderId": "6e1c88b4-b63e-41d4-a167-c3bd7a6d64e0",
-   "live": false,
-   "closedAt": 1793560289089,
-   "epNet": 0.005852,
-   "epCounted": true,
-   "epVerdict": 1
-  },
-  {
-   "symbol": "PENDLEUSDT",
-   "direction": "LONG",
-   "ts": 1793560171856,
-   "pimp": "Madam Razor",
-   "crack": "Neon Nicki",
-   "coid": "s1793560053531PENDLEUSDT",
-   "filledAt": 1793560175054,
-   "orderId": "9e167d07-74d8-4483-a950-bd138d6d89be",
-   "live": false,
-   "closedAt": 1793562931050,
-   "epNet": -0.022598,
-   "epCounted": true,
-   "epVerdict": -1
-  },
-  {
    "symbol": "RENDERUSDT",
    "direction": "LONG",
    "ts": 1793560184990,
@@ -657,20 +663,11 @@
    "coid": "s1793579024569ETHUSDT",
    "filledAt": 1793579132448,
    "orderId": "f3364063-e83e-41ec-bd6b-47b90d275ffa",
-   "live": true,
+   "live": false,
    "closedAt": 1793579472947,
    "epNet": -0.082313,
    "epCounted": true,
    "epVerdict": -1
-  },
-  {
-   "symbol": "AVGOUSDT",
-   "direction": "LONG",
-   "ts": 1793580089558,
-   "pimp": "Madam Razor",
-   "crack": "Chrome Cherry",
-   "coid": "s1793579991159AVGOUSDT",
-   "live": false
   },
   {
    "symbol": "XAGUSDT",
@@ -699,7 +696,11 @@
    "coid": "s1793580348521ETHUSDT",
    "filledAt": 1793580430978,
    "orderId": "f93b8c8c-722d-4a12-99d4-ea0c281a016c",
-   "live": true
+   "live": false,
+   "closedAt": 1793580896878,
+   "epNet": -0.087274,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "SPYUSDT",
@@ -709,9 +710,48 @@
    "crack": "Lucky Lucy",
    "coid": "s1793580516809SPYUSDT",
    "live": false
+  },
+  {
+   "symbol": "HOODUSDT",
+   "direction": "LONG",
+   "ts": 1793580914567,
+   "pimp": "Silky Slim",
+   "crack": "Solana Sadie",
+   "coid": "s1793580830725HOODUSDT",
+   "live": false
+  },
+  {
+   "symbol": "BXUSDT",
+   "direction": "LONG",
+   "ts": 1793580916002,
+   "pimp": "Big Daddy Kane",
+   "crack": "Trixie",
+   "coid": "s1793580830725BXUSDT",
+   "live": false
+  },
+  {
+   "symbol": "SOXLUSDT",
+   "direction": "LONG",
+   "ts": 1793581045517,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1793580918474SOXLUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793581024801,
+   "text": "💰 Queen B (working for Cold Cash Cole) banked $-0.09 on ETHUSDT incl $0.018 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793580991648,
+   "text": "🧬 Bolt Betsy tweaked her reads — mom upweighted (street R&D)"
+  },
+  {
+   "ts": 1793580991648,
+   "text": "📓 Solana Sadie stole Bolt Betsy's playbook — third time this week the corner talks about it"
+  },
   {
    "ts": 1793580810660,
    "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
@@ -819,25 +859,9 @@
   {
    "ts": 1793577527084,
    "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793577373818,
-   "text": "🧬 Fastlane Faye tweaked her reads — chg downweighted (street R&D)"
-  },
-  {
-   "ts": 1793577298453,
-   "text": "📓 Solana Sadie stole Bolt Betsy's playbook — third time this week the corner talks about it"
-  },
-  {
-   "ts": 1793577029715,
-   "text": "🧬 Solana Sadie tweaked her reads — alt upweighted (street R&D)"
   }
  ],
  "attrib": {
-  "135b54c7-a4d9-4c0e-b851-7c595d4b9c7c": {
-   "pimp": null,
-   "crack": null
-  },
   "7d04396c-899d-4792-936b-d9b5a44885aa": {
    "pimp": null,
    "crack": null
@@ -1433,6 +1457,10 @@
   "1500949578842374144": {
    "pimp": null,
    "crack": null
+  },
+  "d437d630-a323-48d7-b415-772e217c0e8b": {
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B"
   }
  }
 }
