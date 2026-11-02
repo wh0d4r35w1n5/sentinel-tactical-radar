@@ -1,46 +1,18 @@
 {
- "at": "2026-11-02T04:06:37.804Z",
+ "at": "2026-11-02T04:11:55.216Z",
  "wallets": {
   "futures": {
-   "equityUsd": 20.19,
-   "marginFreeUsd": 8.92,
-   "epochNetUsd": -83.21,
-   "fills": 88,
+   "equityUsd": 53.37,
+   "marginFreeUsd": 50046.31,
+   "epochNetUsd": -10.87,
+   "fills": 195,
    "positions": [
     {
-     "symbol": "COWUSDT",
+     "symbol": "ROBOUSDT",
      "side": "long",
-     "upl": 0.41,
-     "lev": 5,
-     "margin": 2.35
-    },
-    {
-     "symbol": "POWRUSDT",
-     "side": "long",
-     "upl": -0.09,
-     "lev": 5,
-     "margin": 2.04
-    },
-    {
-     "symbol": "GUSDT",
-     "side": "long",
-     "upl": 0.15,
-     "lev": 5,
-     "margin": 2.01
-    },
-    {
-     "symbol": "STEEMUSDT",
-     "side": "long",
-     "upl": 0.05,
-     "lev": 5,
-     "margin": 2
-    },
-    {
-     "symbol": "HOTUSDT",
-     "side": "long",
-     "upl": 0.37,
-     "lev": 5,
-     "margin": 2
+     "upl": -0.06,
+     "lev": 20,
+     "margin": 1.65
     }
    ]
   },
@@ -225,7 +197,7 @@
    "persona": {
     "swagger": 0.55,
     "tilt": 0.08,
-    "greed": 0.53,
+    "greed": 0.52,
     "discipline": 0.51
    }
   },
@@ -250,9 +222,9 @@
     0.0837
    ],
    "persona": {
-    "swagger": 0.76,
+    "swagger": 0.75,
     "tilt": 0.03,
-    "greed": 0.62,
+    "greed": 0.61,
     "discipline": 0.58
    }
   },
@@ -282,7 +254,7 @@
     0.0823
    ],
    "persona": {
-    "swagger": 0.63,
+    "swagger": 0.62,
     "tilt": 0.06,
     "greed": 0.56,
     "discipline": 0.54
@@ -434,10 +406,10 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.59,
+    "swagger": 0.58,
     "tilt": 0.08,
     "greed": 0.5,
-    "discipline": 0.4
+    "discipline": 0.41
    }
   },
   {
@@ -458,7 +430,7 @@
    ],
    "persona": {
     "swagger": 0.46,
-    "tilt": 0.21,
+    "tilt": 0.2,
     "greed": 0.49,
     "discipline": 0.47
    }
@@ -541,7 +513,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 66,
+   "stolen": 70,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -590,7 +562,7 @@
    "wins": 1,
    "losses": 1,
    "closes": 2,
-   "stolen": 24,
+   "stolen": 28,
    "gen": 0,
    "form": -0.0209,
    "mood": "working",
@@ -650,21 +622,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "ETHUSDT",
-   "direction": "LONG",
-   "ts": 1793580429854,
-   "pimp": "Cold Cash Cole",
-   "crack": "Queen B",
-   "coid": "s1793580348521ETHUSDT",
-   "filledAt": 1793580430978,
-   "orderId": "f93b8c8c-722d-4a12-99d4-ea0c281a016c",
-   "live": false,
-   "closedAt": 1793580896878,
-   "epNet": -0.087274,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "HYPEUSDT",
    "direction": "LONG",
@@ -821,10 +778,34 @@
    "ts": 1793592393394,
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
-   "coid": "s1793592291172ROBOUSDT"
+   "coid": "s1793592291172ROBOUSDT",
+   "live": true,
+   "filledAt": 1793592397268,
+   "orderId": "cfbc330e-6ee4-40db-9310-00d7af40dd29"
+  },
+  {
+   "symbol": "HOMEUSDT",
+   "direction": "LONG",
+   "ts": 1793592646952,
+   "pimp": "Big Daddy Kane",
+   "crack": "Gold Teeth",
+   "coid": "s1793592567396HOMEUSDT",
+   "live": false
   }
  ],
  "drama": [
+  {
+   "ts": 1793592715213,
+   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
+  },
+  {
+   "ts": 1793592629066,
+   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
+  },
+  {
+   "ts": 1793592466036,
+   "text": "🧬 Queen B tweaked her reads — stratW downweighted (street R&D)"
+  },
   {
    "ts": 1793592376415,
    "text": "🧬 Velvet Vice tweaked her reads — chg downweighted (street R&D)"
@@ -932,18 +913,6 @@
   {
    "ts": 1793590579503,
    "text": "💰 Lucky Lucy (working for Fancy Red) banked +$0.03 on HYPEUSDT incl $0.049 entry fees"
-  },
-  {
-   "ts": 1793590526934,
-   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.03 on GOMO — docked her pay"
-  },
-  {
-   "ts": 1793590490133,
-   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793590490133,
-   "text": "⚰️ Solana Sadie got retired — $-0.59 net, 9 tricks. Big Daddy Kane brings in Vandal Vicky (gen 4, carrying Gold Teeth's playbook with street mutations)"
   }
  ],
  "attrib": {
