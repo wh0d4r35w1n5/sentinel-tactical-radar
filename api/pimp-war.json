@@ -1,25 +1,25 @@
 {
- "at": "2026-11-02T01:04:29.294Z",
+ "at": "2026-11-02T01:09:13.813Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.25,
-   "marginFreeUsd": 50038.13,
-   "epochNetUsd": -11.35,
-   "fills": 168,
+   "equityUsd": 53.2,
+   "marginFreeUsd": 50037.59,
+   "epochNetUsd": -11.39,
+   "fills": 169,
    "positions": [
     {
      "symbol": "HYPEUSDT",
      "side": "long",
-     "upl": -0.07,
+     "upl": -0.08,
      "lev": 10,
      "margin": 8.84
     },
     {
      "symbol": "BTCUSDT",
      "side": "long",
-     "upl": 0.06,
+     "upl": 0.14,
      "lev": 10,
-     "margin": 7.85
+     "margin": 7.86
     }
    ]
   },
@@ -115,22 +115,6 @@
    "mood": "working"
   },
   {
-   "name": "Cold Cash Cole",
-   "roster": [
-    "Sugar Tits",
-    "Queen B",
-    "Fastlane Faye"
-   ],
-   "net": -0.5468,
-   "wins": 2,
-   "losses": 2,
-   "crown": false,
-   "crippled": false,
-   "vault": 0.1274,
-   "vaultSweeps": 4,
-   "mood": "working"
-  },
-  {
    "name": "Silky Slim",
    "roster": [
     "Diamond Dust",
@@ -163,6 +147,22 @@
    "mood": "working"
   },
   {
+   "name": "Cold Cash Cole",
+   "roster": [
+    "Sugar Tits",
+    "Queen B",
+    "Fastlane Faye"
+   ],
+   "net": -0.6866,
+   "wins": 2,
+   "losses": 3,
+   "crown": false,
+   "crippled": false,
+   "vault": 0.1274,
+   "vaultSweeps": 4,
+   "mood": "working"
+  },
+  {
    "name": "Madam Razor",
    "roster": [
     "Velvet Vice",
@@ -182,31 +182,6 @@
   "house": 33.3235
  },
  "cracks": [
-  {
-   "name": "Queen B",
-   "tag": "blue-chip royalty",
-   "pimp": "Cold Cash Cole",
-   "net": 0.0412,
-   "wins": 1,
-   "losses": 1,
-   "closes": 2,
-   "stolen": 0,
-   "gen": 0,
-   "form": -0.0027,
-   "mood": "working",
-   "vault": 0.0435,
-   "hist": [
-    -0.0147,
-    0.1284,
-    0.0412
-   ],
-   "persona": {
-    "swagger": 0.44,
-    "tilt": 0.26,
-    "greed": 0.48,
-    "discipline": 0.45
-   }
-  },
   {
    "name": "Trixie",
    "tag": "sweep hunter",
@@ -426,6 +401,32 @@
    }
   },
   {
+   "name": "Queen B",
+   "tag": "blue-chip royalty",
+   "pimp": "Cold Cash Cole",
+   "net": -0.0986,
+   "wins": 1,
+   "losses": 2,
+   "closes": 3,
+   "stolen": 1,
+   "gen": 0,
+   "form": -0.0575,
+   "mood": "working",
+   "vault": 0.0435,
+   "hist": [
+    -0.0147,
+    0.1284,
+    0.0412,
+    -0.0986
+   ],
+   "persona": {
+    "swagger": 0.37,
+    "tilt": 0.43,
+    "greed": 0.46,
+    "discipline": 0.41
+   }
+  },
+  {
    "name": "Crystal Meth",
    "tag": "pure speed",
    "pimp": "Silky Slim",
@@ -472,9 +473,9 @@
    ],
    "persona": {
     "swagger": 0.38,
-    "tilt": 0.42,
-    "greed": 0.46,
-    "discipline": 0.41
+    "tilt": 0.4,
+    "greed": 0.47,
+    "discipline": 0.42
    }
   },
   {
@@ -485,7 +486,7 @@
    "wins": 1,
    "losses": 4,
    "closes": 5,
-   "stolen": 264,
+   "stolen": 267,
    "gen": 0,
    "form": -0.0558,
    "mood": "working",
@@ -559,6 +560,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "PENDLEUSDT",
+   "direction": "LONG",
+   "ts": 1793560171856,
+   "pimp": "Madam Razor",
+   "crack": "Neon Nicki",
+   "coid": "s1793560053531PENDLEUSDT",
+   "filledAt": 1793560175054,
+   "orderId": "9e167d07-74d8-4483-a950-bd138d6d89be",
+   "live": false,
+   "closedAt": 1793562931050,
+   "epNet": -0.022598,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "RENDERUSDT",
    "direction": "LONG",
@@ -650,15 +666,6 @@
    "epVerdict": -1
   },
   {
-   "symbol": "SPYUSDT",
-   "direction": "LONG",
-   "ts": 1793580593801,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793580516809SPYUSDT",
-   "live": false
-  },
-  {
    "symbol": "HOODUSDT",
    "direction": "LONG",
    "ts": 1793580914567,
@@ -701,12 +708,36 @@
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
    "coid": "s1793581215465HYPEUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793581300173,
-   "orderId": "ca605cf8-d027-4840-b78f-af98a548659c"
+   "orderId": "ca605cf8-d027-4840-b78f-af98a548659c",
+   "closedAt": 1793581652924,
+   "epNet": -0.139776,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793581736843,
+   "text": "🧬 Solana Sadie tweaked her reads — major downweighted (street R&D)"
+  },
+  {
+   "ts": 1793581736843,
+   "text": "📓 Queen B stole Bolt Betsy's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793581736841,
+   "text": "💰 Queen B (working for Cold Cash Cole) banked $-0.14 on HYPEUSDT incl $0.048 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793581561077,
+   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
+  },
+  {
+   "ts": 1793581538066,
+   "text": "🧬 Solana Sadie tweaked her reads — major downweighted (street R&D)"
+  },
   {
    "ts": 1793581024801,
    "text": "💰 Queen B (working for Cold Cash Cole) banked $-0.09 on ETHUSDT incl $0.018 entry fees — docked her pay"
@@ -806,33 +837,9 @@
   {
    "ts": 1793578348586,
    "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793578091517,
-   "text": "🧬 Solana Sadie tweaked her reads — chg upweighted (street R&D)"
-  },
-  {
-   "ts": 1793577930651,
-   "text": "🧬 Gold Teeth tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793577681741,
-   "text": "🧬 Solana Sadie tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793577596009,
-   "text": "🧬 Solana Sadie tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793577527084,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
   }
  ],
  "attrib": {
-  "7d04396c-899d-4792-936b-d9b5a44885aa": {
-   "pimp": null,
-   "crack": null
-  },
   "04a8ece1-17e0-42f3-a945-51573a23656e": {
    "pimp": null,
    "crack": null
@@ -1426,6 +1433,10 @@
    "crack": null
   },
   "d437d630-a323-48d7-b415-772e217c0e8b": {
+   "pimp": "Cold Cash Cole",
+   "crack": "Queen B"
+  },
+  "06719eb4-73ee-4c30-88a7-3216aceb4335": {
    "pimp": "Cold Cash Cole",
    "crack": "Queen B"
   }
