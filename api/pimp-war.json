@@ -1,16 +1,30 @@
 {
- "at": "2026-11-02T03:30:44.278Z",
+ "at": "2026-11-02T03:35:35.738Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.05,
-   "marginFreeUsd": 50044.72,
-   "epochNetUsd": -11.38,
-   "fills": 185,
+   "equityUsd": 52.96,
+   "marginFreeUsd": 50035.18,
+   "epochNetUsd": -11.48,
+   "fills": 188,
    "positions": [
+    {
+     "symbol": "HYPEUSDT",
+     "side": "long",
+     "upl": 0.02,
+     "lev": 10,
+     "margin": 1.33
+    },
+    {
+     "symbol": "PEOPLEUSDT",
+     "side": "long",
+     "upl": 0.3,
+     "lev": 10,
+     "margin": 8.1
+    },
     {
      "symbol": "ZRXUSDT",
      "side": "long",
-     "upl": 0.06,
+     "upl": 0.03,
      "lev": 10,
      "margin": 3.29
     }
@@ -97,11 +111,11 @@
     "Foxy",
     "Bolt Betsy",
     "Gold Teeth",
-    "Solana Sadie"
+    "Vandal Vicky"
    ],
-   "net": -0.3262,
+   "net": -0.5281,
    "wins": 3,
-   "losses": 4,
+   "losses": 8,
    "crown": false,
    "crippled": false,
    "vault": 0.0926,
@@ -202,7 +216,7 @@
     0.0823
    ],
    "persona": {
-    "swagger": 0.72,
+    "swagger": 0.71,
     "tilt": 0.03,
     "greed": 0.6,
     "discipline": 0.57
@@ -249,7 +263,7 @@
     0.025
    ],
    "persona": {
-    "swagger": 0.59,
+    "swagger": 0.58,
     "tilt": 0.06,
     "greed": 0.54,
     "discipline": 0.53
@@ -340,6 +354,50 @@
    }
   },
   {
+   "name": "Vandal Vicky",
+   "tag": "spawn of Solana Sadie",
+   "pimp": "Big Daddy Kane",
+   "net": 0,
+   "wins": 0,
+   "losses": 0,
+   "closes": 0,
+   "stolen": 0,
+   "gen": 4,
+   "form": 0,
+   "mood": "working",
+   "vault": 0,
+   "hist": [],
+   "persona": {
+    "swagger": 0.64,
+    "tilt": 0.06,
+    "greed": 0.5,
+    "discipline": 0.34
+   }
+  },
+  {
+   "name": "Solana Sadie",
+   "tag": "onchain runner — DEX bags",
+   "pimp": "Big Daddy Kane",
+   "net": -0.0306,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0122,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.0306
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
    "name": "Bolt Betsy",
    "tag": "bagrunner — pure speed",
    "pimp": "Big Daddy Kane",
@@ -381,7 +439,7 @@
    ],
    "persona": {
     "swagger": 0.49,
-    "tilt": 0.14,
+    "tilt": 0.13,
     "greed": 0.5,
     "discipline": 0.49
    }
@@ -463,7 +521,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 33,
+   "stolen": 34,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -502,29 +560,6 @@
     "tilt": 0.1,
     "greed": 0.5,
     "discipline": 0.5
-   }
-  },
-  {
-   "name": "Solana Sadie",
-   "tag": "onchain runner — DEX bags",
-   "pimp": "Big Daddy Kane",
-   "net": -0.4184,
-   "wins": 0,
-   "losses": 1,
-   "closes": 6,
-   "stolen": 1,
-   "gen": 0,
-   "form": -0.1673,
-   "mood": "working",
-   "vault": 0,
-   "hist": [
-    -0.4184
-   ],
-   "persona": {
-    "swagger": 0.43,
-    "tilt": 0.28,
-    "greed": 0.48,
-    "discipline": 0.45
    }
   },
   {
@@ -570,15 +605,15 @@
   {
    "name": "Solana Sadie",
    "tag": "onchain runner — DEX bags",
-   "pimp": "Silky Slim",
-   "net": -0.687,
-   "wins": 1,
-   "losses": 5,
-   "closes": 6,
-   "stolen": 268,
+   "pimp": "Big Daddy Kane",
+   "net": -0.5897,
+   "wins": 0,
+   "losses": 4,
+   "closes": 9,
+   "stolen": 1,
    "gen": 0,
-   "form": -0.1328,
-   "mood": "working"
+   "form": -0.091,
+   "mood": "tilt"
   },
   {
    "name": "Neon Nicki",
@@ -647,7 +682,7 @@
    "pimp": "Cold Cash Cole",
    "crack": "Queen B",
    "coid": "s1793581215465HYPEUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793581300173,
    "orderId": "ca605cf8-d027-4840-b78f-af98a548659c",
    "closedAt": 1793581652924,
@@ -662,7 +697,7 @@
    "pimp": "Silky Slim",
    "crack": "Solana Sadie",
    "coid": "s1793582535295HYPEUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793582609249,
    "orderId": "509e2a0e-b863-4d3b-a393-cc6c9b43841c",
    "closedAt": 1793582922009,
@@ -731,17 +766,6 @@
    "epVerdict": 1
   },
   {
-   "symbol": "ZRXUSDT",
-   "direction": "LONG",
-   "ts": 1793589307201,
-   "pimp": "Silky Slim",
-   "crack": "Diamond Dust",
-   "coid": "s1793589226064ZRXUSDT",
-   "live": true,
-   "filledAt": 1793589311601,
-   "orderId": "d04e19df-6f41-4917-9d61-937c8fa9565e"
-  },
-  {
    "symbol": "1000CATUSDT",
    "direction": "LONG",
    "ts": 1793589626965,
@@ -763,10 +787,51 @@
    "pimp": "Fancy Red",
    "crack": "Lucky Lucy",
    "coid": "s1793590078717HYPEUSDT",
-   "live": false
+   "live": false,
+   "filledAt": 1793590159394,
+   "orderId": "1ccfcfd9-1ac5-4881-b31d-358e15359e82"
+  },
+  {
+   "symbol": "PEOPLEUSDT",
+   "direction": "LONG",
+   "ts": 1793590329052,
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice",
+   "coid": "s1793590249131PEOPLEUSDT",
+   "live": false,
+   "filledAt": 1793590332257,
+   "orderId": "609149f3-bc21-4d88-b5e3-7a4b0f4e75d8"
   }
  ],
  "drama": [
+  {
+   "ts": 1793590526934,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.03 on GOMO — docked her pay"
+  },
+  {
+   "ts": 1793590490133,
+   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
+  },
+  {
+   "ts": 1793590490133,
+   "text": "⚰️ Solana Sadie got retired — $-0.59 net, 9 tricks. Big Daddy Kane brings in Vandal Vicky (gen 4, carrying Gold Teeth's playbook with street mutations)"
+  },
+  {
+   "ts": 1793590490128,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.11 on QOMPUTE — docked her pay"
+  },
+  {
+   "ts": 1793590425767,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.03 on MOIN — docked her pay"
+  },
+  {
+   "ts": 1793590425767,
+   "text": "🌋 Solana Sadie is ON TILT — chasing anything that moves, corner's getting nervous"
+  },
+  {
+   "ts": 1793590312439,
+   "text": "💰 Solana Sadie (working for Big Daddy Kane) banked $-0.04 on QOMPUTE — docked her pay"
+  },
   {
    "ts": 1793590229064,
    "text": "📓 Solana Sadie stole Gold Teeth's playbook — third time this week the corner talks about it"
@@ -858,34 +923,6 @@
   {
    "ts": 1793587665145,
    "text": "🧬 Fastlane Faye tweaked her reads — score upweighted (street R&D)"
-  },
-  {
-   "ts": 1793587561010,
-   "text": "🧬 Gold Teeth tweaked her reads — chg downweighted (street R&D)"
-  },
-  {
-   "ts": 1793587344359,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793586938323,
-   "text": "🧬 Bolt Betsy tweaked her reads — mom downweighted (street R&D)"
-  },
-  {
-   "ts": 1793586390239,
-   "text": "🧬 Queen B tweaked her reads — major upweighted (street R&D)"
-  },
-  {
-   "ts": 1793586370684,
-   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793586221510,
-   "text": "🧬 Gold Teeth tweaked her reads — mom upweighted (street R&D)"
-  },
-  {
-   "ts": 1793586150393,
-   "text": "🧬 Gold Teeth tweaked her reads — mom downweighted (street R&D)"
   }
  ],
  "attrib": {
