@@ -1,12 +1,62 @@
 {
- "at": "2026-11-02T01:34:46.381Z",
+ "at": "2026-11-02T01:39:02.610Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.11,
-   "marginFreeUsd": 50051.28,
-   "epochNetUsd": -11.41,
-   "fills": 172,
-   "positions": []
+   "equityUsd": 20.44,
+   "marginFreeUsd": 4.77,
+   "epochNetUsd": -82.33,
+   "fills": 82,
+   "positions": [
+    {
+     "symbol": "COWUSDT",
+     "side": "long",
+     "upl": 0.14,
+     "lev": 5,
+     "margin": 3.2
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": -0.08,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": 0.21,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "LSKUSDT",
+     "side": "long",
+     "upl": -0.13,
+     "lev": 5,
+     "margin": 1.96
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": 0.03,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "AKEUSDT",
+     "side": "long",
+     "upl": 0.14,
+     "lev": 5,
+     "margin": 2.2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 5,
+     "margin": 2
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -354,10 +404,10 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.67,
-    "tilt": 0.23,
-    "greed": 0.72,
-    "discipline": 0.65
+    "swagger": 0.66,
+    "tilt": 0.22,
+    "greed": 0.71,
+    "discipline": 0.64
    }
   },
   {
@@ -367,7 +417,7 @@
    "net": 0,
    "wins": 0,
    "losses": 0,
-   "closes": 0,
+   "closes": 5,
    "stolen": 0,
    "gen": 0,
    "form": 0,
@@ -436,7 +486,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 29,
+   "stolen": 30,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -449,9 +499,9 @@
    ],
    "persona": {
     "swagger": 0.42,
-    "tilt": 0.31,
+    "tilt": 0.3,
     "greed": 0.48,
-    "discipline": 0.44
+    "discipline": 0.45
    }
   },
   {
@@ -500,8 +550,8 @@
     -0.1911
    ],
    "persona": {
-    "swagger": 0.42,
-    "tilt": 0.29,
+    "swagger": 0.43,
+    "tilt": 0.28,
     "greed": 0.48,
     "discipline": 0.45
    }
@@ -574,6 +624,21 @@
   }
  ],
  "intents": [
+  {
+   "symbol": "MAGICUSDT",
+   "direction": "LONG",
+   "ts": 1793560147148,
+   "pimp": "Silky Slim",
+   "crack": "Crystal Meth",
+   "coid": "s1793560053531MAGICUSDT",
+   "filledAt": 1793560151623,
+   "orderId": "253864ee-a275-43f8-9a0b-91f4c6ef98d3",
+   "live": false,
+   "closedAt": 1793562932511,
+   "epNet": -0.120188,
+   "epCounted": true,
+   "epVerdict": -1
+  },
   {
    "symbol": "JUPUSDT",
    "direction": "LONG",
@@ -725,15 +790,6 @@
    "epVerdict": -1
   },
   {
-   "symbol": "TEMUSDT",
-   "direction": "LONG",
-   "ts": 1793582532336,
-   "pimp": "Fancy Red",
-   "crack": "Lucky Lucy",
-   "coid": "s1793582455785TEMUSDT",
-   "live": false
-  },
-  {
    "symbol": "HYPEUSDT",
    "direction": "LONG",
    "ts": 1793582605022,
@@ -750,6 +806,26 @@
   }
  ],
  "drama": [
+  {
+   "ts": 1793583527099,
+   "text": "🌫 Solana Sadie let QOMPUTE go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1793583496336,
+   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1793583416922,
+   "text": "🌫 Solana Sadie let GOMO go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1793583391543,
+   "text": "🌫 Solana Sadie let QOMPUTE go — left the wallet off-book, proceeds unverifiable"
+  },
+  {
+   "ts": 1793583333756,
+   "text": "🌫 Solana Sadie let JEANPHIL go — left the wallet off-book, proceeds unverifiable"
+  },
   {
    "ts": 1793583251955,
    "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
@@ -849,26 +925,6 @@
   {
    "ts": 1793580810660,
    "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793580734595,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793580573972,
-   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793580409524,
-   "text": "🧬 Solana Sadie tweaked her reads — chg downweighted (street R&D)"
-  },
-  {
-   "ts": 1793580149091,
-   "text": "🏦 Cold Cash Cole kicked $0.03 upstairs — Fastlane Faye's trick on XCNUSDT (lifetime vault $0.13)"
-  },
-  {
-   "ts": 1793580149091,
-   "text": "🏦 Cold Cash Cole kicked $0.06 upstairs — Fastlane Faye's trick on XCNUSDT (lifetime vault $0.10)"
   }
  ],
  "attrib": {
