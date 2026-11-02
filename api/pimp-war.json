@@ -1,12 +1,48 @@
 {
- "at": "2026-11-02T07:28:25.351Z",
+ "at": "2026-11-02T07:33:47.979Z",
  "wallets": {
   "futures": {
-   "equityUsd": 51.7,
-   "marginFreeUsd": 50047.34,
-   "epochNetUsd": -12.39,
-   "fills": 213,
-   "positions": []
+   "equityUsd": 24.15,
+   "marginFreeUsd": 13.84,
+   "epochNetUsd": -83.21,
+   "fills": 88,
+   "positions": [
+    {
+     "symbol": "COWUSDT",
+     "side": "long",
+     "upl": 0.43,
+     "lev": 5,
+     "margin": 2.35
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": -0.23,
+     "lev": 5,
+     "margin": 2.04
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": -0.21,
+     "lev": 5,
+     "margin": 2.01
+    },
+    {
+     "symbol": "STEEMUSDT",
+     "side": "long",
+     "upl": -0.24,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.19,
+     "lev": 5,
+     "margin": 2
+    }
+   ]
   },
   "onchain": {
    "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
@@ -201,7 +237,7 @@
     "swagger": 0.51,
     "tilt": 0.14,
     "greed": 0.51,
-    "discipline": 0.49
+    "discipline": 0.5
    }
   },
   {
@@ -427,7 +463,7 @@
     -0.0716
    ],
    "persona": {
-    "swagger": 0.48,
+    "swagger": 0.49,
     "tilt": 0.14,
     "greed": 0.5,
     "discipline": 0.49
@@ -487,7 +523,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 289,
+   "stolen": 296,
    "gen": 0,
    "form": -0.0575,
    "mood": "working",
@@ -561,7 +597,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 152,
+   "stolen": 159,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -572,7 +608,7 @@
     -1.0862
    ],
    "persona": {
-    "swagger": 0.49,
+    "swagger": 0.5,
     "tilt": 0.12,
     "greed": 0.5,
     "discipline": 0.5
@@ -621,21 +657,6 @@
   }
  ],
  "intents": [
-  {
-   "symbol": "DGAIUSDT",
-   "direction": "LONG",
-   "ts": 1793584240104,
-   "pimp": "Madam Razor",
-   "crack": "Velvet Vice",
-   "coid": "s1793584162127DGAIUSDT",
-   "live": false,
-   "filledAt": 1793584244343,
-   "orderId": "4e50c8b8-3213-4db5-afa1-900aa1a0f112",
-   "closedAt": 1793584560354,
-   "epNet": -0.083288,
-   "epCounted": true,
-   "epVerdict": -1
-  },
   {
    "symbol": "SUSHIUSDT",
    "direction": "LONG",
@@ -800,9 +821,28 @@
    "epNet": -0.09784,
    "epCounted": true,
    "epVerdict": -1
+  },
+  {
+   "symbol": "BLURUSDT",
+   "direction": "LONG",
+   "ts": 1793604668936,
+   "pimp": "Big Daddy Kane",
+   "crack": "Gold Teeth",
+   "coid": "s1793604577464BLURUSDT",
+   "live": true,
+   "filledAt": 1793604673326,
+   "orderId": "8459dffd-3302-4e34-b3de-ecf34d28bc20"
   }
  ],
  "drama": [
+  {
+   "ts": 1793604597931,
+   "text": "🧬 Fastlane Faye tweaked her reads — score downweighted (street R&D)"
+  },
+  {
+   "ts": 1793604556235,
+   "text": "📓 Queen B stole Lucky Lucy's playbook — third time this week the corner talks about it"
+  },
   {
    "ts": 1793604473214,
    "text": "🧬 Bolt Betsy tweaked her reads — mom downweighted (street R&D)"
@@ -914,14 +954,6 @@
   {
    "ts": 1793599774627,
    "text": "🧬 Velvet Vice tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793599694054,
-   "text": "🧬 Velvet Vice tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793599682744,
-   "text": "🧬 Fastlane Faye tweaked her reads — score upweighted (street R&D)"
   }
  ],
  "attrib": {
