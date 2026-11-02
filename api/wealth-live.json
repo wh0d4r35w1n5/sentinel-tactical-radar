@@ -1,74 +1,86 @@
 {
- "ts": "2026-11-02T01:09:38.216Z",
- "ageMs": 1906,
+ "ts": "2026-11-02T01:14:43.266Z",
+ "ageMs": 6992,
  "src": "ws",
  "futures": {
-  "equityUsd": 20.1322,
-  "availableUsd": 3.795,
+  "equityUsd": 20.2045,
+  "availableUsd": 3.9627,
   "grantUsd": 0,
-  "equityOwnUsd": 20.1322,
-  "marginUsedUsd": 16.3,
-  "uplUsd": 0.1757,
+  "equityOwnUsd": 20.2045,
+  "marginUsedUsd": 16.1488,
+  "uplUsd": 0.4001,
   "positions": [
    {
     "k": "COWUSDT:long",
     "size": 177,
     "marginUsd": 3.9824,
-    "uplUsd": 0.0003
+    "uplUsd": -0.0174
    },
    {
     "k": "POWRUSDT:long",
     "size": 178,
     "marginUsd": 2.0007,
-    "uplUsd": -0.0926
+    "uplUsd": -0.0979
    },
    {
     "k": "GUSDT:long",
     "size": 2810,
     "marginUsd": 2.0018,
-    "uplUsd": 0.1489
+    "uplUsd": 0.2164
    },
    {
     "k": "LSKUSDT:long",
     "size": 48,
     "marginUsd": 1.9642,
-    "uplUsd": -0.1152
+    "uplUsd": -0.1296
    },
    {
     "k": "STEEMUSDT:long",
     "size": 201,
     "marginUsd": 1.9963,
-    "uplUsd": 0.1166
+    "uplUsd": 0.0442
    },
    {
     "k": "AKEUSDT:long",
-    "size": 1385,
-    "marginUsd": 2.3545,
-    "uplUsd": 0.1705
+    "size": 1294,
+    "marginUsd": 2.2033,
+    "uplUsd": 0.2761
    },
    {
     "k": "HOTUSDT:long",
     "size": 26406,
     "marginUsd": 2,
-    "uplUsd": -0.0528
+    "uplUsd": 0.1083
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2289,
+  "solUsd": 0.2293,
   "stableUsd": 0,
-  "bagsUsd": 0.0583,
-  "totalUsd": 0.2872,
+  "bagsUsd": 0.0586,
+  "totalUsd": 0.2879,
   "tokens": {
    "BQAeeSow": 0.001,
-   "8PGyHCKv": 0.0573
+   "8PGyHCKv": 0.0576
   },
-  "staleMs": 1906
+  "staleMs": 6992
  },
- "totalUsd": 20.4195,
+ "totalUsd": 20.4925,
  "deltas": [
+  {
+   "ts": 1793581870451,
+   "kind": "size-reduced",
+   "detail": "AKEUSDT:long Δ-91",
+   "amt": 0
+  },
+  {
+   "ts": 1793581870450,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0723
+  },
   {
    "ts": 1793580589770,
    "kind": "balance-move",
@@ -176,18 +188,6 @@
    "kind": "size-added",
    "detail": "COWUSDT:long Δ89",
    "amt": 0
-  },
-  {
-   "ts": 1793579346696,
-   "kind": "position-opened",
-   "detail": "LSKUSDT:long",
-   "amt": 1.9642
-  },
-  {
-   "ts": 1793579344556,
-   "kind": "position-opened",
-   "detail": "POWRUSDT:long",
-   "amt": 2.0007
   }
  ]
 }
