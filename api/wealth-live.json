@@ -1,74 +1,110 @@
 {
- "ts": "2026-11-02T00:18:57.738Z",
- "ageMs": 2798,
+ "ts": "2026-11-02T00:24:02.784Z",
+ "ageMs": 11373,
  "src": "ws",
  "futures": {
-  "equityUsd": 25.1862,
-  "availableUsd": 14.2021,
+  "equityUsd": 25.0355,
+  "availableUsd": 21.1078,
   "grantUsd": 0,
-  "equityOwnUsd": 25.1862,
-  "marginUsedUsd": 10.7601,
-  "uplUsd": 0.2285,
+  "equityOwnUsd": 25.0355,
+  "marginUsedUsd": 3.986,
+  "uplUsd": -0.0818,
   "positions": [
    {
     "k": "COWUSDT:long",
     "size": 88,
     "marginUsd": 1.9853,
-    "uplUsd": -0.0088
-   },
-   {
-    "k": "POWRUSDT:long",
-    "size": 140,
-    "marginUsd": 1.5841,
-    "uplUsd": 0.0378
-   },
-   {
-    "k": "GUSDT:long",
-    "size": 1680,
-    "marginUsd": 1.2098,
-    "uplUsd": 0.0185
-   },
-   {
-    "k": "LSKUSDT:long",
-    "size": 35,
-    "marginUsd": 1.4289,
-    "uplUsd": 0.119
-   },
-   {
-    "k": "STEEMUSDT:long",
-    "size": 199,
-    "marginUsd": 1.9876,
-    "uplUsd": 0.0299
+    "uplUsd": -0.0616
    },
    {
     "k": "AKEUSDT:long",
     "size": 1181,
     "marginUsd": 2.0007,
-    "uplUsd": 0.0084
-   },
-   {
-    "k": "HOTUSDT:long",
-    "size": 7426,
-    "marginUsd": 0.5637,
-    "uplUsd": 0.0238
+    "uplUsd": -0.0202
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2267,
+  "solUsd": 0.2265,
   "stableUsd": 0,
-  "bagsUsd": 0.0587,
-  "totalUsd": 0.2854,
+  "bagsUsd": 0.0575,
+  "totalUsd": 0.284,
   "tokens": {
    "BQAeeSow": 0.001,
-   "8PGyHCKv": 0.0577
+   "8PGyHCKv": 0.0565
   },
-  "staleMs": 6802
+  "staleMs": 11373
  },
- "totalUsd": 25.4717,
+ "totalUsd": 25.3195,
  "deltas": [
+  {
+   "ts": 1793578819051,
+   "kind": "position-closed",
+   "detail": "HOTUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793578819051,
+   "kind": "position-closed",
+   "detail": "STEEMUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793578819051,
+   "kind": "position-closed",
+   "detail": "LSKUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793578789068,
+   "kind": "position-closed",
+   "detail": "POWRUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793578783149,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578779603,
+   "kind": "size-reduced",
+   "detail": "LSKUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578777865,
+   "kind": "size-reduced",
+   "detail": "LSKUSDT:long Δ-2",
+   "amt": 0
+  },
+  {
+   "ts": 1793578770629,
+   "kind": "size-reduced",
+   "detail": "HOTUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578759047,
+   "kind": "position-closed",
+   "detail": "GUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793578742094,
+   "kind": "size-reduced",
+   "detail": "POWRUSDT:long Δ-1",
+   "amt": 0
+  },
+  {
+   "ts": 1793578740606,
+   "kind": "size-reduced",
+   "detail": "STEEMUSDT:long Δ-39",
+   "amt": 0
+  },
   {
    "ts": 1793578705101,
    "kind": "size-reduced",
@@ -122,72 +158,6 @@
    "kind": "size-reduced",
    "detail": "LSKUSDT:long Δ-3",
    "amt": 0
-  },
-  {
-   "ts": 1793578668627,
-   "kind": "size-reduced",
-   "detail": "HOTUSDT:long Δ-4244",
-   "amt": 0
-  },
-  {
-   "ts": 1793578668312,
-   "kind": "size-reduced",
-   "detail": "HOTUSDT:long Δ-5305",
-   "amt": 0
-  },
-  {
-   "ts": 1793578658047,
-   "kind": "size-reduced",
-   "detail": "POWRUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578639660,
-   "kind": "size-reduced",
-   "detail": "LSKUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578626664,
-   "kind": "size-reduced",
-   "detail": "LSKUSDT:long Δ-9",
-   "amt": 0
-  },
-  {
-   "ts": 1793578620635,
-   "kind": "size-reduced",
-   "detail": "HOTUSDT:long Δ-5305",
-   "amt": 0
-  },
-  {
-   "ts": 1793578616133,
-   "kind": "position-opened",
-   "detail": "STEEMUSDT:long",
-   "amt": 1.9876
-  },
-  {
-   "ts": 1793578616020,
-   "kind": "size-reduced",
-   "detail": "POWRUSDT:long Δ-35",
-   "amt": 0
-  },
-  {
-   "ts": 1793578613139,
-   "kind": "position-opened",
-   "detail": "GUSDT:long",
-   "amt": 1.9994
-  },
-  {
-   "ts": 1793578610387,
-   "kind": "position-opened",
-   "detail": "AKEUSDT:long",
-   "amt": 2.0007
-  },
-  {
-   "ts": 1793578607591,
-   "kind": "position-opened",
-   "detail": "COWUSDT:long",
-   "amt": 1.9853
   }
  ]
 }

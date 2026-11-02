@@ -1,5 +1,5 @@
 {
-  "refreshedAt": "2026-11-02T00:10:19.962Z",
+  "refreshedAt": "2026-11-02T00:20:30.093Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
@@ -10,15 +10,15 @@
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T00:10:19.962Z"
+    "at": "2026-11-02T00:20:30.093Z"
   },
   "sweep": {
     "scanned": 0,
     "cancelled": 0,
-    "at": "2026-11-02T00:10:19.962Z"
+    "at": "2026-11-02T00:20:30.093Z"
   },
   "journals": {
-    "realFills": 400,
+    "realFills": 55,
     "demoFillsBybit": 162
   },
   "evidence": {
@@ -27,9 +27,11 @@
     "demoWinRate": 23,
     "demoSqN": -3.87,
     "excluded": 0,
-    "cellCount": 9
+    "cellCount": 1
   },
   "positions": [],
-  "problems": [],
+  "problems": [
+    "real-fills grew while MODE=demo — demo fills may be contaminating the live rail"
+  ],
   "notes": []
 }
