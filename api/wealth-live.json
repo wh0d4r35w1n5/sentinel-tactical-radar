@@ -1,44 +1,140 @@
 {
- "ts": "2026-11-02T00:29:02.829Z",
- "ageMs": 12022,
+ "ts": "2026-11-02T00:34:05.890Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 25.0341,
-  "availableUsd": 21.8373,
+  "equityUsd": 25.3236,
+  "availableUsd": 8.0934,
   "grantUsd": 0,
-  "equityOwnUsd": 25.0341,
-  "marginUsedUsd": 3.2674,
-  "uplUsd": -0.0627,
+  "equityOwnUsd": 25.3236,
+  "marginUsedUsd": 16.9725,
+  "uplUsd": 0.2576,
   "positions": [
    {
     "k": "COWUSDT:long",
-    "size": 88,
-    "marginUsd": 1.9853,
-    "uplUsd": -0.0616
+    "size": 177,
+    "marginUsd": 3.9824,
+    "uplUsd": -0.0174
+   },
+   {
+    "k": "POWRUSDT:long",
+    "size": 178,
+    "marginUsd": 2.0007,
+    "uplUsd": 0.0196
+   },
+   {
+    "k": "GUSDT:long",
+    "size": 2810,
+    "marginUsd": 2.0018,
+    "uplUsd": 0.0337
+   },
+   {
+    "k": "LSKUSDT:long",
+    "size": 48,
+    "marginUsd": 1.9642,
+    "uplUsd": 0.1296
+   },
+   {
+    "k": "STEEMUSDT:long",
+    "size": 201,
+    "marginUsd": 1.9963,
+    "uplUsd": -0.0402
    },
    {
     "k": "AKEUSDT:long",
-    "size": 756,
-    "marginUsd": 1.2821,
-    "uplUsd": -0.0011
+    "size": 1785,
+    "marginUsd": 3.0271,
+    "uplUsd": 0.0584
+   },
+   {
+    "k": "HOTUSDT:long",
+    "size": 26406,
+    "marginUsd": 2,
+    "uplUsd": 0.0739
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2271,
+  "solUsd": 0.2273,
   "stableUsd": 0,
   "bagsUsd": 0.0583,
-  "totalUsd": 0.2854,
+  "totalUsd": 0.2856,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0573
   },
-  "staleMs": 12022
+  "staleMs": 0
  },
- "totalUsd": 25.3194,
+ "totalUsd": 25.6092,
  "deltas": [
+  {
+   "ts": 1793579637214,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0529
+  },
+  {
+   "ts": 1793579637212,
+   "kind": "size-reduced",
+   "detail": "AKEUSDT:long Δ-151",
+   "amt": 0
+  },
+  {
+   "ts": 1793579623900,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1257
+  },
+  {
+   "ts": 1793579557688,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.3836
+  },
+  {
+   "ts": 1793579393473,
+   "kind": "position-opened",
+   "detail": "HOTUSDT:long",
+   "amt": 2
+  },
+  {
+   "ts": 1793579355822,
+   "kind": "position-opened",
+   "detail": "STEEMUSDT:long",
+   "amt": 1.9963
+  },
+  {
+   "ts": 1793579353306,
+   "kind": "position-opened",
+   "detail": "GUSDT:long",
+   "amt": 2.0018
+  },
+  {
+   "ts": 1793579350988,
+   "kind": "size-added",
+   "detail": "AKEUSDT:long Δ1180",
+   "amt": 0
+  },
+  {
+   "ts": 1793579348806,
+   "kind": "size-added",
+   "detail": "COWUSDT:long Δ89",
+   "amt": 0
+  },
+  {
+   "ts": 1793579346696,
+   "kind": "position-opened",
+   "detail": "LSKUSDT:long",
+   "amt": 1.9642
+  },
+  {
+   "ts": 1793579344556,
+   "kind": "position-opened",
+   "detail": "POWRUSDT:long",
+   "amt": 2.0007
+  },
   {
    "ts": 1793579145240,
    "kind": "size-reduced",
@@ -91,72 +187,6 @@
    "ts": 1793578777865,
    "kind": "size-reduced",
    "detail": "LSKUSDT:long Δ-2",
-   "amt": 0
-  },
-  {
-   "ts": 1793578770629,
-   "kind": "size-reduced",
-   "detail": "HOTUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578759047,
-   "kind": "position-closed",
-   "detail": "GUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1793578742094,
-   "kind": "size-reduced",
-   "detail": "POWRUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578740606,
-   "kind": "size-reduced",
-   "detail": "STEEMUSDT:long Δ-39",
-   "amt": 0
-  },
-  {
-   "ts": 1793578705101,
-   "kind": "size-reduced",
-   "detail": "HOTUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578705100,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0612
-  },
-  {
-   "ts": 1793578694818,
-   "kind": "size-reduced",
-   "detail": "LSKUSDT:long Δ-1",
-   "amt": 0
-  },
-  {
-   "ts": 1793578694817,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.054
-  },
-  {
-   "ts": 1793578684753,
-   "kind": "size-reduced",
-   "detail": "GUSDT:long Δ-550",
-   "amt": 0
-  },
-  {
-   "ts": 1793578684491,
-   "kind": "size-reduced",
-   "detail": "GUSDT:long Δ-550",
-   "amt": 0
-  },
-  {
-   "ts": 1793578680017,
-   "kind": "size-reduced",
-   "detail": "POWRUSDT:long Δ-1",
    "amt": 0
   }
  ]
