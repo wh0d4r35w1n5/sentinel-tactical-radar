@@ -1,74 +1,80 @@
 {
- "ts": "2026-11-02T01:29:53.397Z",
- "ageMs": 2312,
+ "ts": "2026-11-02T01:34:53.429Z",
+ "ageMs": 2570,
  "src": "ws",
  "futures": {
-  "equityUsd": 20.3832,
-  "availableUsd": 4.353,
+  "equityUsd": 20.4154,
+  "availableUsd": 4.7711,
   "grantUsd": 0,
-  "equityOwnUsd": 20.3832,
-  "marginUsedUsd": 15.7684,
-  "uplUsd": 0.3784,
+  "equityOwnUsd": 20.4154,
+  "marginUsedUsd": 15.3661,
+  "uplUsd": 0.2901,
   "positions": [
    {
     "k": "COWUSDT:long",
-    "size": 160,
-    "marginUsd": 3.602,
-    "uplUsd": 0.0963
+    "size": 142,
+    "marginUsd": 3.1998,
+    "uplUsd": 0.128
    },
    {
     "k": "POWRUSDT:long",
     "size": 178,
     "marginUsd": 2.0007,
-    "uplUsd": -0.0854
+    "uplUsd": -0.105
    },
    {
     "k": "GUSDT:long",
     "size": 2810,
     "marginUsd": 2.0018,
-    "uplUsd": 0.2445
+    "uplUsd": 0.2079
    },
    {
     "k": "LSKUSDT:long",
     "size": 48,
     "marginUsd": 1.9642,
-    "uplUsd": -0.1488
+    "uplUsd": -0.0912
    },
    {
     "k": "STEEMUSDT:long",
     "size": 201,
     "marginUsd": 1.9963,
-    "uplUsd": 0.0563
+    "uplUsd": 0.0402
    },
    {
     "k": "AKEUSDT:long",
     "size": 1294,
     "marginUsd": 2.2033,
-    "uplUsd": 0.1364
+    "uplUsd": 0.0969
    },
    {
     "k": "HOTUSDT:long",
     "size": 26406,
     "marginUsd": 2,
-    "uplUsd": 0.0792
+    "uplUsd": 0.0132
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2297,
+  "solUsd": 0.2295,
   "stableUsd": 0,
   "bagsUsd": 0.0591,
-  "totalUsd": 0.2888,
+  "totalUsd": 0.2886,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0581
   },
-  "staleMs": 2312
+  "staleMs": 2570
  },
- "totalUsd": 20.672,
+ "totalUsd": 20.704,
  "deltas": [
+  {
+   "ts": 1793583145891,
+   "kind": "size-reduced",
+   "detail": "COWUSDT:long Δ-18",
+   "amt": 0
+  },
   {
    "ts": 1793582599143,
    "kind": "size-reduced",
@@ -182,12 +188,6 @@
    "kind": "position-opened",
    "detail": "HOTUSDT:long",
    "amt": 2
-  },
-  {
-   "ts": 1793579355822,
-   "kind": "position-opened",
-   "detail": "STEEMUSDT:long",
-   "amt": 1.9963
   }
  ]
 }
