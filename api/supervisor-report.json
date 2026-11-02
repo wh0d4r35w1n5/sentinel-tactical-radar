@@ -1,48 +1,38 @@
 {
-  "refreshedAt": "2026-11-02T10:45:20.550Z",
+  "refreshedAt": "2026-11-02T10:55:34.481Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 51.63
+    "equityUsd": 26.88
   },
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T10:45:20.550Z"
+    "at": "2026-11-02T10:55:34.481Z"
   },
   "sweep": {
-    "scanned": 47,
-    "cancelled": 4,
-    "at": "2026-11-02T10:45:20.550Z"
+    "scanned": 35,
+    "cancelled": 0,
+    "at": "2026-11-02T10:55:34.481Z"
   },
   "journals": {
     "realFills": 93,
-    "demoFillsBybit": 236
+    "demoFillsBybit": 239
   },
   "evidence": {
-    "demoEpisodes": 124,
-    "demoNetUsd": -8.0581,
-    "demoWinRate": 41.9,
-    "demoSqN": -3.4,
+    "demoEpisodes": 104,
+    "demoNetUsd": -12.2713,
+    "demoWinRate": 29.8,
+    "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
   },
-  "positions": [
-    "POWRUSDT:0.08274",
-    "SPXUSDT:-0.0045",
-    "XAUTUSDT:0.00218",
-    "AVAXUSDT:-0.0012",
-    "LINKUSDT:-0.001",
-    "LTCUSDT:-0.003",
-    "ADAUSDT:0.0027",
-    "DOGEUSDT:0",
-    "XRPUSDT:0",
-    "SOLUSDT:-0.0028"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
-  "notes": [
-    "orphan sweep — cancelled 4 untriggered legs on dead seats"
-  ]
+  "notes": []
 }
