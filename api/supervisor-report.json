@@ -1,5 +1,5 @@
 {
-  "refreshedAt": "2026-11-02T01:10:56.103Z",
+  "refreshedAt": "2026-11-02T01:20:59.705Z",
   "mode": {
     "ledgerMode": "demo",
     "ledgerExchange": "bybit",
@@ -10,15 +10,15 @@
   "units": {
     "checked": 6,
     "dead": 0,
-    "at": "2026-11-02T01:10:56.103Z"
+    "at": "2026-11-02T01:20:59.705Z"
   },
   "sweep": {
     "scanned": 2,
     "cancelled": 0,
-    "at": "2026-11-02T01:10:56.103Z"
+    "at": "2026-11-02T01:20:59.705Z"
   },
   "journals": {
-    "realFills": 79,
+    "realFills": 80,
     "demoFillsBybit": 169
   },
   "evidence": {
@@ -30,8 +30,10 @@
     "cellCount": 0
   },
   "positions": [
-    "BTCUSDT:0.23729"
+    "BTCUSDT:0.25975"
   ],
-  "problems": [],
+  "problems": [
+    "real-fills grew while MODE=demo — demo fills may be contaminating the live rail"
+  ],
   "notes": []
 }
