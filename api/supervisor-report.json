@@ -1,38 +1,54 @@
 {
-  "refreshedAt": "2026-11-02T10:55:34.481Z",
+  "refreshedAt": "2026-11-02T11:05:36.796Z",
   "mode": {
-    "ledgerMode": "live",
-    "ledgerExchange": "bitget",
+    "ledgerMode": "demo",
+    "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 26.88
+    "equityUsd": 51.56
   },
   "units": {
     "checked": 6,
-    "dead": 0,
-    "at": "2026-11-02T10:55:34.481Z"
+    "dead": [
+      "sentinel-rapid:active",
+      "sentinel-bitget-watch:active",
+      "sentinel-liq-guard:active"
+    ],
+    "at": "2026-11-02T11:05:36.796Z"
   },
   "sweep": {
-    "scanned": 35,
-    "cancelled": 0,
-    "at": "2026-11-02T10:55:34.481Z"
+    "scanned": 37,
+    "cancelled": 2,
+    "at": "2026-11-02T11:05:36.796Z"
   },
   "journals": {
     "realFills": 93,
-    "demoFillsBybit": 239
+    "demoFillsBybit": 241
   },
   "evidence": {
-    "demoEpisodes": 104,
-    "demoNetUsd": -12.2713,
-    "demoWinRate": 29.8,
+    "demoEpisodes": 105,
+    "demoNetUsd": -12.2666,
+    "demoWinRate": 30.5,
     "demoSqN": -3.87,
     "excluded": 0,
     "cellCount": 1
   },
-  "positions": [],
-  "problems": [
-    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
-    "LIVE ledger while .env is demo — possible unauthorized live flip"
+  "positions": [
+    "POWRUSDT:0.14184",
+    "HYPEUSDT:-0.0006",
+    "TRUSTUSDT:-0.03179",
+    "SPXUSDT:-0.006",
+    "XAUTUSDT:0.00928",
+    "AVAXUSDT:0.0096",
+    "LTCUSDT:-0.007",
+    "DOGEUSDT:0.00201",
+    "XRPUSDT:0"
   ],
-  "notes": []
+  "problems": [],
+  "notes": [
+    "restarted sentinel-rapid (was inactive)",
+    "restarted sentinel-bitget-watch (was inactive)",
+    "restarted sentinel-liq-guard (was inactive)",
+    "orphan sweep — cancelled 2 untriggered legs on dead seats"
+  ]
 }
