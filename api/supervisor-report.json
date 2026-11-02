@@ -1,23 +1,21 @@
 {
-  "refreshedAt": "2026-11-02T15:27:06.348Z",
+  "refreshedAt": "2026-11-02T15:37:12.674Z",
   "mode": {
     "ledgerMode": "live",
     "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 26.08
+    "equityUsd": 26.06
   },
   "units": {
     "checked": 5,
-    "dead": [
-      "sentinel-live-exec:active"
-    ],
-    "at": "2026-11-02T15:27:06.348Z"
+    "dead": 0,
+    "at": "2026-11-02T15:37:12.674Z"
   },
   "sweep": {
     "scanned": 28,
     "cancelled": 0,
-    "at": "2026-11-02T15:27:06.348Z"
+    "at": "2026-11-02T15:37:12.674Z"
   },
   "journals": {
     "realFills": 109,
@@ -32,14 +30,12 @@
     "cellCount": 2
   },
   "positions": [
-    "SOLUSDT:-0.0106",
-    "JSTUSDT:-0.0496"
+    "SOLUSDT:-0.0406",
+    "JSTUSDT:-0.0408"
   ],
   "problems": [
     "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
     "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "notes": [
-    "restarted sentinel-live-exec (was inactive)"
-  ]
+  "notes": []
 }
