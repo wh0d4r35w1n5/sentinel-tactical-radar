@@ -1,18 +1,60 @@
 {
- "at": "2026-11-02T01:54:47.405Z",
+ "at": "2026-11-02T01:59:24.581Z",
  "wallets": {
   "futures": {
-   "equityUsd": 53.08,
-   "marginFreeUsd": 50047.13,
-   "epochNetUsd": -11.44,
-   "fills": 0,
+   "equityUsd": 20.42,
+   "marginFreeUsd": 4.77,
+   "epochNetUsd": -82.33,
+   "fills": 82,
    "positions": [
     {
-     "symbol": "DGAIUSDT",
+     "symbol": "COWUSDT",
+     "side": "long",
+     "upl": 0.13,
+     "lev": 5,
+     "margin": 3.2
+    },
+    {
+     "symbol": "POWRUSDT",
+     "side": "long",
+     "upl": -0.13,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "GUSDT",
+     "side": "long",
+     "upl": 0.04,
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "LSKUSDT",
+     "side": "long",
+     "upl": -0.16,
+     "lev": 5,
+     "margin": 1.96
+    },
+    {
+     "symbol": "STEEMUSDT",
      "side": "long",
      "upl": 0.01,
-     "lev": 10,
-     "margin": 3.04
+     "lev": 5,
+     "margin": 2
+    },
+    {
+     "symbol": "AKEUSDT",
+     "side": "long",
+     "upl": 0.31,
+     "lev": 5,
+     "margin": 2.2
+    },
+    {
+     "symbol": "HOTUSDT",
+     "side": "long",
+     "upl": 0.12,
+     "lev": 5,
+     "margin": 2
     }
    ]
   },
@@ -115,9 +157,9 @@
     "Baby Back",
     "Plastic Poppy"
    ],
-   "net": -0.5859,
+   "net": -0.6709,
    "wins": 2,
-   "losses": 2,
+   "losses": 3,
    "crown": false,
    "crippled": false,
    "vault": 0.0484,
@@ -131,9 +173,9 @@
     "Queen B",
     "Fastlane Faye"
    ],
-   "net": -0.6866,
+   "net": -0.7736,
    "wins": 2,
-   "losses": 3,
+   "losses": 4,
    "crown": false,
    "crippled": false,
    "vault": 0.1274,
@@ -162,9 +204,9 @@
     "Velvet Vice",
     "Chrome Cherry"
    ],
-   "net": -1.1299,
+   "net": -1.2131,
    "wins": 1,
-   "losses": 9,
+   "losses": 10,
    "crown": false,
    "crippled": true,
    "vault": 0.0296,
@@ -204,69 +246,6 @@
    "name": "Diamond Dust",
    "tag": "momentum fiend",
    "pimp": "Silky Slim",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Velvet Vice",
-   "tag": "mean-rev seductress",
-   "pimp": "Madam Razor",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Sugar Tits",
-   "tag": "majors only",
-   "pimp": "Cold Cash Cole",
-   "net": 0,
-   "wins": 0,
-   "losses": 0,
-   "closes": 0,
-   "stolen": 0,
-   "gen": 0,
-   "form": 0,
-   "mood": "working",
-   "vault": 0,
-   "hist": [],
-   "persona": {
-    "swagger": 0.5,
-    "tilt": 0.1,
-    "greed": 0.5,
-    "discipline": 0.5
-   }
-  },
-  {
-   "name": "Lucky Lucy",
-   "tag": "raw score slut",
-   "pimp": "Fancy Red",
    "net": 0,
    "wins": 0,
    "losses": 0,
@@ -362,10 +341,10 @@
    "vault": 0,
    "hist": [],
    "persona": {
-    "swagger": 0.62,
+    "swagger": 0.61,
     "tilt": 0.19,
-    "greed": 0.66,
-    "discipline": 0.61
+    "greed": 0.65,
+    "discipline": 0.6
    }
   },
   {
@@ -414,6 +393,75 @@
    }
   },
   {
+   "name": "Velvet Vice",
+   "tag": "mean-rev seductress",
+   "pimp": "Madam Razor",
+   "net": -0.0833,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0333,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.0833
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.27,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
+   "name": "Lucky Lucy",
+   "tag": "raw score slut",
+   "pimp": "Fancy Red",
+   "net": -0.085,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.034,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.085
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
+   "name": "Sugar Tits",
+   "tag": "majors only",
+   "pimp": "Cold Cash Cole",
+   "net": -0.087,
+   "wins": 0,
+   "losses": 1,
+   "closes": 1,
+   "stolen": 0,
+   "gen": 0,
+   "form": -0.0348,
+   "mood": "working",
+   "vault": 0,
+   "hist": [
+    -0.087
+   ],
+   "persona": {
+    "swagger": 0.43,
+    "tilt": 0.28,
+    "greed": 0.48,
+    "discipline": 0.45
+   }
+  },
+  {
    "name": "Foxy",
    "tag": "level rat",
    "pimp": "Big Daddy Kane",
@@ -456,8 +504,8 @@
     -0.0986
    ],
    "persona": {
-    "swagger": 0.44,
-    "tilt": 0.25,
+    "swagger": 0.45,
+    "tilt": 0.24,
     "greed": 0.48,
     "discipline": 0.46
    }
@@ -509,8 +557,8 @@
    ],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.24,
-    "greed": 0.48,
+    "tilt": 0.23,
+    "greed": 0.49,
     "discipline": 0.46
    }
   },
@@ -712,9 +760,13 @@
    "pimp": "Madam Razor",
    "crack": "Velvet Vice",
    "coid": "s1793584162127DGAIUSDT",
-   "live": true,
+   "live": false,
    "filledAt": 1793584244343,
-   "orderId": "4e50c8b8-3213-4db5-afa1-900aa1a0f112"
+   "orderId": "4e50c8b8-3213-4db5-afa1-900aa1a0f112",
+   "closedAt": 1793584560354,
+   "epNet": -0.083288,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "SUSHIUSDT",
@@ -722,7 +774,14 @@
    "ts": 1793584475843,
    "pimp": "Cold Cash Cole",
    "crack": "Sugar Tits",
-   "coid": "s1793584396299SUSHIUSDT"
+   "coid": "s1793584396299SUSHIUSDT",
+   "live": false,
+   "filledAt": 1793584479998,
+   "orderId": "83a4aa85-9c9c-4919-aff4-1f142d9a904e",
+   "closedAt": 1793584643664,
+   "epNet": -0.086983,
+   "epCounted": true,
+   "epVerdict": -1
   },
   {
    "symbol": "BLENDUSDT",
@@ -730,10 +789,29 @@
    "ts": 1793584482666,
    "pimp": "Fancy Red",
    "crack": "Lucky Lucy",
-   "coid": "s1793584396299BLENDUSDT"
+   "coid": "s1793584396299BLENDUSDT",
+   "live": false,
+   "filledAt": 1793584486890,
+   "orderId": "344b862e-268a-4196-b181-f352a432a201",
+   "closedAt": 1793584642903,
+   "epNet": -0.084976,
+   "epCounted": true,
+   "epVerdict": -1
   }
  ],
  "drama": [
+  {
+   "ts": 1793584750921,
+   "text": "💰 Lucky Lucy (working for Fancy Red) banked $-0.08 on BLENDUSDT incl $0.036 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793584750921,
+   "text": "💰 Sugar Tits (working for Cold Cash Cole) banked $-0.09 on SUSHIUSDT incl $0.018 entry fees — docked her pay"
+  },
+  {
+   "ts": 1793584640419,
+   "text": "💰 Velvet Vice (working for Madam Razor) banked $-0.08 on DGAIUSDT incl $0.033 entry fees — docked her pay"
+  },
   {
    "ts": 1793584050789,
    "text": "🧬 Gold Teeth tweaked her reads — stratW downweighted (street R&D)"
@@ -841,33 +919,9 @@
   {
    "ts": 1793581736841,
    "text": "💰 Queen B (working for Cold Cash Cole) banked $-0.14 on HYPEUSDT incl $0.048 entry fees — docked her pay"
-  },
-  {
-   "ts": 1793581561077,
-   "text": "🧬 Gold Teeth tweaked her reads — score downweighted (street R&D)"
-  },
-  {
-   "ts": 1793581538066,
-   "text": "🧬 Solana Sadie tweaked her reads — major downweighted (street R&D)"
-  },
-  {
-   "ts": 1793581024801,
-   "text": "💰 Queen B (working for Cold Cash Cole) banked $-0.09 on ETHUSDT incl $0.018 entry fees — docked her pay"
   }
  ],
  "attrib": {
-  "59f8e070-4fe2-4808-8f1f-4c2f0cf342ee": {
-   "pimp": null,
-   "crack": null
-  },
-  "3ff9c27c-61ee-43a0-8799-c64fef102612": {
-   "pimp": null,
-   "crack": null
-  },
-  "3fbec928-7bf5-4c48-b179-d5dfccd33fe5": {
-   "pimp": null,
-   "crack": null
-  },
   "82a9e4cb-73dd-4add-80d1-fb64f3c24044": {
    "pimp": null,
    "crack": null
@@ -1455,6 +1509,18 @@
   "1500961990781964293": {
    "pimp": null,
    "crack": null
+  },
+  "7c441ef7-5036-4aca-91dd-faa68db4460b": {
+   "pimp": "Madam Razor",
+   "crack": "Velvet Vice"
+  },
+  "eedc97c7-9dac-418c-97e7-726553e28d7f": {
+   "pimp": "Cold Cash Cole",
+   "crack": "Sugar Tits"
+  },
+  "852ba2e8-a839-481f-8333-70e2f4718712": {
+   "pimp": "Fancy Red",
+   "crack": "Lucky Lucy"
   }
  }
 }
