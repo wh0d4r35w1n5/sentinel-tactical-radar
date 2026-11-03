@@ -1,21 +1,21 @@
 {
-  "refreshedAt": "2026-11-03T19:56:39.027Z",
+  "refreshedAt": "2026-11-03T20:06:42.779Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 44.63
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T19:56:39.027Z"
+    "at": "2026-11-03T20:06:42.779Z"
   },
   "sweep": {
-    "scanned": 410,
+    "scanned": 434,
     "cancelled": 0,
-    "at": "2026-11-03T19:56:39.027Z"
+    "at": "2026-11-03T20:06:42.779Z"
   },
   "journals": {
     "realFills": 125,
@@ -27,53 +27,12 @@
     "demoWinRate": null,
     "demoSqN": null,
     "excluded": 0,
-    "cellCount": 0
+    "cellCount": 1
   },
-  "positions": [
-    "KIIUSDT:0",
-    "VVVUSDT:0.19548",
-    "JSTUSDT:0.16814",
-    "MONUSDT:0.341406",
-    "DOTUSDT:0.3632",
-    "HAJIMIUSDT:0.2916",
-    "1000CATUSDT:-0.071204",
-    "ALTUSDT:0.6834",
-    "ZBCNUSDT:-0.04125",
-    "TUSDT:-0.08463",
-    "B3USDT:-0.23664",
-    "AEVOUSDT:-0.039108",
-    "MOVEUSDT:-0.061243",
-    "XAUTUSDT:0.05052",
-    "XRPUSDT:0.0705",
-    "COMPUSDT:0.2727",
-    "SOPHUSDT:-0.37502",
-    "BNBUSDT:-0.988",
-    "SOLUSDT:-0.899",
-    "BCHUSDT:-1.7904",
-    "ADAUSDT:-1.3077",
-    "AVAXUSDT:0.5508",
-    "ARUSDT:-1.80868",
-    "TAOUSDT:-0.7503",
-    "ORDIUSDT:-0.8018",
-    "MIRAUSDT:-1.19",
-    "XVGUSDT:-0.41705503",
-    "TRXUSDT:0.774",
-    "ATHUSDT:-0.76946993",
-    "LINKUSDT:-2.4651",
-    "ERAUSDT:-0.31878",
-    "BOBAUSDT:-0.155631",
-    "PUFFERUSDT:0.00692",
-    "COWUSDT:-0.2583",
-    "BANDUSDT:-0.05576",
-    "BELUSDT:-0.11037",
-    "NEOUSDT:-0.12213",
-    "GMTUSDT:-0.881276",
-    "DGAIUSDT:-0.069",
-    "DOGEUSDT:-0.01742",
-    "LINEAUSDT:-0.4914",
-    "1000LUNCUSDT:-0.18928",
-    "LTCUSDT:-0.08"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
   "notes": []
 }
