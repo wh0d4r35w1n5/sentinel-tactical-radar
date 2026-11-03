@@ -1,21 +1,21 @@
 {
-  "refreshedAt": "2026-11-03T18:55:56.294Z",
+  "refreshedAt": "2026-11-03T19:05:56.217Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 36.75
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T18:55:56.294Z"
+    "at": "2026-11-03T19:05:56.217Z"
   },
   "sweep": {
-    "scanned": 460,
-    "cancelled": 4,
-    "at": "2026-11-03T18:55:56.294Z"
+    "scanned": 453,
+    "cancelled": 18,
+    "at": "2026-11-03T19:05:56.217Z"
   },
   "journals": {
     "realFills": 125,
@@ -29,55 +29,12 @@
     "excluded": 0,
     "cellCount": 1
   },
-  "positions": [
-    "HAJIMIUSDT:0.144",
-    "JSTUSDT:0.15092",
-    "ALTUSDT:-0.06834",
-    "VVVUSDT:0.152075",
-    "ZBCNUSDT:0.01125",
-    "1000BTTUSDT:0.23328",
-    "TUSDT:-0.04557",
-    "1000CATUSDT:-0.15258",
-    "B3USDT:-0.15283",
-    "XMRUSDT:0.465",
-    "AEVOUSDT:-0.104288",
-    "MOVEUSDT:0.004711",
-    "PENDLEUSDT:0.70823029",
-    "MORPHOUSDT:2.0053",
-    "XAUTUSDT:0.0607",
-    "XRPUSDT:0.08225",
-    "COMPUSDT:-0.2417",
-    "SOPHUSDT:-0.15442",
-    "BNBUSDT:-0.798",
-    "SOLUSDT:-0.406",
-    "BCHUSDT:-0.7728",
-    "ADAUSDT:-1.3077",
-    "AVAXUSDT:-1.3284",
-    "ARUSDT:-1.26871",
-    "TAOUSDT:-0.1281",
-    "ORDIUSDT:-0.92207",
-    "DOTUSDT:0.25075",
-    "MIRAUSDT:-1.575",
-    "XVGUSDT:-0.28433503",
-    "TRXUSDT:0.5504",
-    "ATHUSDT:-0.68600993",
-    "LINKUSDT:-1.2948",
-    "ERAUSDT:-0.14076",
-    "BOBAUSDT:-0.155631",
-    "PUFFERUSDT:-0.02768",
-    "COWUSDT:-0.1869",
-    "BANDUSDT:-0.04182",
-    "BELUSDT:-0.13018",
-    "NEOUSDT:0",
-    "GMTUSDT:-0.901305",
-    "DGAIUSDT:-0.1564",
-    "DOGEUSDT:-0.00402",
-    "LINEAUSDT:-0.546",
-    "1000LUNCUSDT:-0.20384",
-    "LTCUSDT:-0.071"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
   "notes": [
-    "orphan sweep — cancelled 4 untriggered legs on dead seats"
+    "orphan sweep — cancelled 18 untriggered legs on dead seats"
   ]
 }
