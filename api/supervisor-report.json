@@ -1,25 +1,25 @@
 {
-  "refreshedAt": "2026-11-03T15:13:28.243Z",
+  "refreshedAt": "2026-11-03T15:23:28.966Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 50.53
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T15:13:28.243Z"
+    "at": "2026-11-03T15:23:28.966Z"
   },
   "sweep": {
-    "scanned": 161,
-    "cancelled": 5,
-    "at": "2026-11-03T15:13:28.243Z"
+    "scanned": 158,
+    "cancelled": 4,
+    "at": "2026-11-03T15:23:28.966Z"
   },
   "journals": {
     "realFills": 125,
-    "demoFillsBybit": 295
+    "demoFillsBybit": 299
   },
   "evidence": {
     "demoEpisodes": 0,
@@ -27,43 +27,14 @@
     "demoWinRate": null,
     "demoSqN": null,
     "excluded": 0,
-    "cellCount": 0
+    "cellCount": 1
   },
-  "positions": [
-    "DGAIUSDT:0.023",
-    "1000LUNCUSDT:0",
-    "UAIUSDT:-0.17296",
-    "AKTUSDT:0.02632",
-    "DOTUSDT:0.187",
-    "APTUSDT:-0.946497",
-    "TRXUSDT:0.099",
-    "LINEAUSDT:0.3276",
-    "BCHUSDT:0.3591",
-    "TAOUSDT:-0.35853",
-    "MIRAUSDT:-0.161364",
-    "PUFFERUSDT:-0.03456",
-    "OPENUSDT:0.11058",
-    "MELANIAUSDT:0.2493",
-    "ARUSDT:-0.6084",
-    "ZENUSDT:0",
-    "MYXUSDT:-0.58527",
-    "ORDIUSDT:-0.41625",
-    "GMTUSDT:0.200288",
-    "HYPEUSDT:-0.85827",
-    "NEARUSDT:-0.62472",
-    "BNBUSDT:0.414",
-    "ADAUSDT:-0.1677",
-    "SOLUSDT:-0.2856",
-    "TUSDT:-0.02439",
-    "ZECUSDT:0.0247",
-    "XRPUSDT:0.07025",
-    "AVAXUSDT:0.022",
-    "XAUTUSDT:0.08304",
-    "LTCUSDT:-0.053",
-    "DOGEUSDT:-0.00067"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
   "notes": [
-    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+    "orphan sweep — cancelled 4 untriggered legs on dead seats"
   ]
 }
