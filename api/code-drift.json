@@ -1,10 +1,7 @@
 {
- "at": "2026-11-03T15:16:03Z",
- "ok": false,
+ "at": "2026-11-03T15:21:33Z",
+ "ok": true,
  "drifted": [],
- "notInRepo": [
-  "scripts/code-drift.py",
-  "scripts/deploy-from-repo.py"
- ],
+ "notInRepo": [],
  "rule": "code changes go to GitHub main, then: sudo python3 /opt/sentinel/scripts/deploy-from-repo.py"
 }
