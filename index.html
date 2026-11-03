@@ -1022,7 +1022,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
       const rs=ce.map(e=>e.pnlPct||0);
       const rm=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;
       const rsd=rs.length>1?Math.sqrt(rs.reduce((a,b)=>a+(b-rm)**2,0)/(rs.length-1)):null;
-      const sqn=(rsd>0)?+(rm/rsd*Math.sqrt(rs.length)).toFixed(2):null;
+      const sqn=(rs.length>=30&&rsd>1e-9*Math.max(1,Math.abs(rm)))?+(rm/rsd*Math.sqrt(Math.min(rs.length,100))).toFixed(2):null;/* sqn-guard */
       const es=(evals&&evals.stats)||{};
       const acc=k=>es[k]!=null?es[k]+'%':'—';
       const status=closedN<30?'INSUFFICIENT SAMPLE':closedN<100?'DEVELOPING — preliminary':(es.medAlpha24h!=null&&es.medAlpha24h>0)?'EDGE EVIDENCE EMERGING':'SAMPLE MATURE — NO EDGE EVIDENCE YET';
@@ -1034,7 +1034,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
         ['1h / 4h / 24h accuracy',`${acc('dirAcc1h')} / ${acc('dirAcc4h')} / ${acc('dirAcc24h')}`,'direction correct vs forward move'],
         ['TP before SL',es.hitRate24h!=null?es.hitRate24h+'%':'—','24h window · all signals'],
         ['Median alpha',es.medAlpha24h!=null?(es.medAlpha24h>=0?'+':'')+es.medAlpha24h+'%':'—','vs market basket · 24h'],
-        ...(()=>{const c=(allT&&allT.combined)||null,bk=(allT&&allT.books)||{},lv=bk['bitget-live'];return [['All-time PF / SQN',c?`${c.profitFactor??'—'} / ${c.sqn??'—'}`:'— / —',c?`n=${c.episodes} episodes · ${c.winRatePct}% win · live+demo since ${c.firstTs?new Date(c.firstTs).toISOString().slice(5,10):'?'} · live-book SQN ${lv&&lv.sqn!=null?lv.sqn:'—'} (n=${lv?lv.sqnN:0})`:'no fill journals yet']];})(),
+        ...(()=>{const c=(allT&&allT.combined)||null,bk=(allT&&allT.books)||{},lv=bk['bitget-live'];return [['All-time PF / SQN',c?`${c.profitFactor??'—'} / ${(c.sqnN||0)>=30&&c.sqn!=null?c.sqn:'—'}`:'— / —',c?`n=${c.episodes} episodes · ${c.winRatePct}% win · live+demo since ${c.firstTs?new Date(c.firstTs).toISOString().slice(5,10):'?'} · live-book SQN ${lv&&lv.sqn!=null&&(lv.sqnN||0)>=30?lv.sqn:'—'} (n=${lv?lv.sqnN:0})`:'no fill journals yet']];})(),
         ['Sortino-SQN',st.sqnSortino??'—','downside σ only — moon-bag upside not penalized'],
         ['Deflated SR',st.deflatedSqn?`${st.deflatedSqn.dsr} (${st.deflatedSqn.trials} trials)`:'—','P(edge real) after the config-search haircut'],
       ].map(([k,v,s2])=>`<div class="stat"><div class="v num">${v}</div><div class="k">${k} <span class="sub">${s2}</span></div></div>`).join('');
@@ -1529,7 +1529,7 @@ const [scan,detail,ledger,prices,health,funding,sent,evals,newsWire,hypo,corr,be
     {
       const ps=(sqnR&&sqnR.perStrategy)||[];
       if(ps.length)rows.push(`<div class="sub" style="font-size:9px;letter-spacing:.14em;font-weight:700;margin:10px 0 4px">STRATEGY SQN · R-multiple report card (${sqnR.model?.paths||0} path sim · R=$1 risk)</div><div class="ftab">${ps.slice(0,10).map(s=>`<div class="frow"><span class="fk">${esc(s.strategy)}</span><span class="fd ${s.sqn100>0?'up':s.sqn100<0?'dn':'sub'}">SQN ${s.sqn100!=null?(s.sqn100>=0?'+':'')+(+s.sqn100).toFixed(2):'—'}</span><span class="fv">n=${s.n} · hit ${s.hit!=null?(+s.hit).toFixed(0):'—'}% · E ${s.E!=null?(+s.E).toFixed(2):'—'}R${s.shrunkSqn!=null?' · shrunk '+(+s.shrunkSqn).toFixed(2):''}</span></div>`).join('')}</div>`);
-      if(sqnR&&sqnR.chain&&sqnR.chain.members&&sqnR.chain.members.length)rows.push(`<div class="sub" style="font-size:9px;margin-top:4px">SQN chain (only members passing the chain filter trade): <b>${sqnR.chain.members.map(esc).join(', ')}</b> · n=${sqnR.chain.n} · SQN ${sqnR.chain.sqn100!=null?(+sqnR.chain.sqn100).toFixed(2):'—'}</div>`);
+      if(sqnR&&sqnR.chain&&sqnR.chain.members&&sqnR.chain.members.length)rows.push(`<div class="sub" style="font-size:9px;margin-top:4px">SQN chain (only members passing the chain filter trade): <b>${sqnR.chain.members.map(esc).join(', ')}</b> · n=${sqnR.chain.n} · SQN ${sqnR.chain.sqn100!=null&&(sqnR.chain.n||0)>=30?(+sqnR.chain.sqn100).toFixed(2):'—'}</div>`);
     }
     $('einBody').innerHTML=rows.join('')||`<div class="sub">lab warming up — needs graded signals carrying factor ledgers (confl snapshots accrue from new emissions)</div>`;
     if($('einSub'))$('einSub').textContent=ein&&ein.refreshedAt?`${ein.scanned||0} pairs · ${ein.evalPool||0} graded signals · ${ago(Date.parse(ein.refreshedAt))}`:'';
