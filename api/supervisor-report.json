@@ -1,5 +1,5 @@
 {
-  "refreshedAt": "2026-11-03T22:07:45.768Z",
+  "refreshedAt": "2026-11-03T22:17:45.997Z",
   "mode": {
     "ledgerMode": "live",
     "ledgerExchange": "bitget",
@@ -10,12 +10,12 @@
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T22:07:45.768Z"
+    "at": "2026-11-03T22:17:45.997Z"
   },
   "sweep": {
-    "scanned": 481,
-    "cancelled": 0,
-    "at": "2026-11-03T22:07:45.768Z"
+    "scanned": 513,
+    "cancelled": 22,
+    "at": "2026-11-03T22:17:45.997Z"
   },
   "journals": {
     "realFills": 125,
@@ -34,5 +34,7 @@
     "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
     "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 22 untriggered legs on dead seats"
+  ]
 }
