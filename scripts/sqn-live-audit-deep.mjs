@@ -2,7 +2,7 @@ import fs from 'fs';
 const eps=JSON.parse(fs.readFileSync('/opt/sentinel/state/mae-mfe.json','utf8')).episodes;
 const FEE=0.12;
 const ret=e=>((e.side==='short'?(e.entry-e.exit):(e.exit-e.entry))/e.entry*100)-FEE;
-const sqn=rs=>{const n=rs.length;if(n<30)return null;const m=rs.reduce((a,b)=>a+b,0)/n;const sd=Math.sqrt(rs.reduce((a,b)=>a+(b-m)**2,0)/(n-1));return sd>0?{n,mean:m,sd,sqn100:m/sd*10,wr:rs.filter(r=>r>0).length/n,sum:rs.reduce((a,b)=>a+b,0)}:null}; /* sqn-guard */
+const sqn=rs=>{const n=rs.length;if(n<30)return null;const m=rs.reduce((a,b)=>a+b,0)/n;const sd=Math.sqrt(rs.reduce((a,b)=>a+(b-m)**2,0)/(n-1));return sd>1e-9*Math.max(1,Math.abs(m))?{n,mean:m,sd,sqn100:m/sd*Math.sqrt(Math.min(n,100)),wr:rs.filter(r=>r>0).length/n,sum:rs.reduce((a,b)=>a+b,0)}:null}; /* sqn-guard */
 const fmt=o=>o?`n=${String(o.n).padStart(3)} mean=${o.mean.toFixed(3).padStart(7)}% SQN100=${o.sqn100.toFixed(2).padStart(6)} WR=${(o.wr*100).toFixed(0)}% sum=${o.sum.toFixed(1)}%`:'n<2';
 const hb=e=>{const h=new Date(e.ts).getUTCHours();return `${String(Math.floor(h/4)*4).padStart(2,'0')}-${Math.floor(h/4)*4+4}h`};
 console.log('== losers that had mfe>=0.18 — their MFE distribution ==');
