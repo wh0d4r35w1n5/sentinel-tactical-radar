@@ -11,6 +11,8 @@ import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
 import '../ta-engine.js';  // sets globalThis.TAEngine
 import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
 import { integrityNote } from './crc32.mjs';
+import * as sf from './signal-fusion.mjs';
+import { getLibEdge, OUR_FAMILY, familyTilt } from './libedge-scan.mjs';
 
 const Harmonics = globalThis.Harmonics;
 const TAEngine = globalThis.TAEngine;
@@ -36,8 +38,23 @@ const TICKERS_URL =
   'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
 const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
 // every public fetch gets a hard timeout — one stalled kline request used
-// to freeze the whole cycle with the book unprotected on the exchange
+// to freeze the whole cycle with the book unprotected on the exchange.
+// AbortSignal alone is NOT enough on node20/undici: an abort that races
+// the response can leave the fetch (or its .json() body read) pending
+// FOREVER — zero sockets, event loop asleep, main() parked mid-run until
+// the watchdog kills the service (the dead-pipeline bug). Racing a real
+// reject guarantees resolution.
 const TF = () => AbortSignal.timeout(12000);
+const hardRace = (p, ms = 12000) => {
+  let timer;
+  return Promise.race([
+    p,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('hard-timeout')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
+const tfetch = (url, ms) => hardRace(fetch(url, { signal: TF() }), ms ?? 12000);
 const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
 const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: skips third-party intel feeds + RSS
@@ -114,10 +131,11 @@ async function mdGet(kind, p = {}) {
       case 'fundNow':   url = `${FUND_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
       case 'fundHist':  url = `${FUND_HIST_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&pageSize=${p.limit || 8}`; break;
       case 'oi':        url = `${OI_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+      case 'book':      url = `https://api.bitget.com/api/v2/mix/market/orderbook?symbol=${p.symbol}&productType=USDT-FUTURES&limit=${p.limit || 5}&type=step0`; break;
       default: throw new Error('mdGet unknown kind ' + kind);
     }
-    const res = await fetch(url, { signal: TF() });
-    const data = await res.json().then((j) => j.data).catch(() => null);
+    const res = await tfetch(url);
+    const data = await hardRace(res.json().then((j) => j.data), 12000).catch(() => null);
     return { ok: res.ok && data != null, status: res.status, json: async () => ({ data }) };
   }
   const q = new URLSearchParams({ category: 'linear' });
@@ -168,10 +186,17 @@ async function mdGet(kind, p = {}) {
       q.set('intervalTime', '5min'); q.set('limit', '1');
       norm = (list) => ({ openInterestList: [{ size: list[0]?.openInterest }] });
       break;
+    case 'book':
+      ep = '/v5/market/orderbook'; q.set('symbol', p.symbol);
+      q.set('limit', String(p.limit || 5));
+      // v5 returns the object (not a list): {b:[[px,sz]], a:[[px,sz]]} —
+      // normalize onto the Bitget wire shape {bids, asks}
+      norm = (o) => ({ bids: o?.b || [], asks: o?.a || [] });
+      break;
     default: throw new Error('mdGet unknown kind ' + kind);
   }
-  const res = await fetch(`${MD_HOST}${ep}?${q}`, { signal: TF() });
-  const j = await res.json().catch(() => ({}));
+  const res = await tfetch(`${MD_HOST}${ep}?${q}`);
+  const j = await hardRace(res.json(), 12000).catch(() => ({}));
   const ok = res.ok && (j.retCode === 0 || j.retCode === '0');
   const data = ok ? norm(j.result?.list ?? j.result ?? []) : null;
   return { ok, status: res.status, json: async () => ({ data }) };
@@ -428,7 +453,9 @@ async function fetchKlines(symbol, light = false) {
     regimeMas && Number.isFinite(regimeMas.ema50) && Number.isFinite(regimeMas.ema200) && rows.length > 200
       ? { tf: '1H', bars: rows.length, ema50: regimeMas.ema50, ema200: regimeMas.ema200, px: rows[rows.length - 1].c }
       : null;
-  if (rows.length > 120) rows.length = 120;
+  // Keep the newest 141 CLOSED hours (the backtest's WIN=140 + signal bar).
+  // Assigning rows.length=120 kept the oldest half of the 240-hour fetch.
+  if (rows.length > 141) rows.splice(0, rows.length - 141);
   // a single malformed candle field (null/undefined/NaN) poisons the whole
   // sparkline — Math.min(...vals) → NaN → every path coord "NaN" → SVG
   // renders blank with no error. Filter non-finite at the source.
@@ -455,7 +482,7 @@ async function fetchKlines(symbol, light = false) {
     closes: closes.slice(-48), // sparkline stays 48h
     candles,
     harmonic: Harmonics.active(candles, 8),
-    ta: TAEngine.analyze(candles, candles5m),
+    ta: TAEngine.analyze(candles, null, {}),
     regime,
   };
   // light fetches cache too — without it the board pass refetches ~10
@@ -467,9 +494,96 @@ async function fetchKlines(symbol, light = false) {
   return payload;
 }
 
+// ---- orderbook micro-structure (Stanford MSE448 "High Frequency Trading
+// Strategies", strat 1: the microprice). The microprice weights the mid by
+// the OPPOSING queue — a buy-heavy book lifts it above mid — the fairest
+// short-horizon estimate of the true price. microPos normalizes the
+// micro-vs-mid distance into half-spread units (−0.5..+0.5) so the read is
+// scale-free across majors and memes; imb is the 5-level queue imbalance.
+// The paper itself found it informative-but-weak alone — here it is a
+// bounded tilt + a fusion component the residual learner can re-weight.
+async function fetchBook(symbol) {
+  const res = await mdGet('book', { symbol, limit: 5 }).catch(() => null);
+  if (!res?.ok) return null;
+  const d = (await res.json())?.data;
+  const bids = (d?.bids || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  const asks = (d?.asks || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  if (!bids.length || !asks.length) return null;
+  const [bid, bidSz] = bids[0], [ask, askSz] = asks[0];
+  const mid = (bid + ask) / 2, spread = ask - bid;
+  const micro = (bid * askSz + ask * bidSz) / (bidSz + askSz);
+  const bsz = bids.reduce((a, x) => a + x[1], 0), asz = asks.reduce((a, x) => a + x[1], 0);
+  return {
+    micro,
+    microPos: spread > 0 ? Math.max(-0.5, Math.min(0.5, (micro - mid) / spread)) : 0,
+    imb: bsz + asz > 0 ? (bsz - asz) / (bsz + asz) : 0,
+    spreadPct: mid > 0 ? (spread / mid) * 100 : null,
+  };
+}
+
 // 5m candles from entry open -> now, for intraperiod settlement replay.
 // 600 bars ≈ 50h — comfortably covers the 24h TTL; the still-forming tail
 // candle is dropped (same rule as the TA klines).
+// ---- BTC-pair relative strength (operator rule): cross-reference the
+// asset-vs-BTC chart alongside USDT. Real XBTC spot candles where the pair
+// exists; synthetic XUSDT/BTCUSDT ratio everywhere else — assets without a
+// spot pair still score, they just run on synthetic RS.
+const SPOT_CANDLES_URL = 'https://api.bitget.com/api/v2/spot/market/candles';
+const SPOT_SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
+const BTC_PAIR_CACHE = path.join(API, 'spot-btc-pairs.json');
+const BTC_KLINES_FILE = path.join(API, '..', 'state', 'spot-btc-klines.json');
+let spotBtcCache = null;
+const btcKCache = () => {
+  if (!spotBtcCache) { try { spotBtcCache = JSON.parse(fs.readFileSync(BTC_KLINES_FILE, 'utf8')); } catch { spotBtcCache = {}; } }
+  return spotBtcCache;
+};
+
+async function spotBtcUniverse() {
+  let j = null;
+  try { j = JSON.parse(fs.readFileSync(BTC_PAIR_CACHE, 'utf8')); } catch {}
+  if (j?.ts && Date.now() - j.ts < 86400e3) return new Set(j.syms || []);
+  try {
+    const res = await fetch(SPOT_SYMBOLS_URL, { signal: TF() });
+    const data = (await res.json()).data || [];
+    const syms = data.filter((s) => s.quoteCoin === 'BTC' && s.status === 'online').map((s) => s.baseCoin);
+    writeJson(BTC_PAIR_CACHE, { ts: Date.now(), syms });
+    return new Set(syms);
+  } catch { return new Set(j?.syms || []); }
+}
+
+async function fetchSpotBtcKlines(asset) {
+  const cache = btcKCache(), key = asset + 'BTC';
+  const hit = cache[key];
+  if (hit?.rows && Date.now() - hit.at < 10 * 60e3) return hit.rows;
+  try {
+    const res = await fetch(`${SPOT_CANDLES_URL}?symbol=${key}&granularity=1h&limit=60`, { signal: TF() });
+    const data = (await res.json()).data;
+    if (!Array.isArray(data) || data.length < 24) return hit?.rows ?? null;
+    const rows = data
+      .map((c) => ({ t: +c[0], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    cache[key] = { at: Date.now(), rows };
+    // bound the cache, same discipline as the kline cache
+    const cutoff = Date.now() - 2 * 3600e3;
+    for (const k of Object.keys(cache)) if (!cache[k].at || cache[k].at < cutoff) delete cache[k];
+    writeJson(BTC_KLINES_FILE, cache);
+    return rows;
+  } catch { return hit?.rows ?? null; }
+}
+
+// RS metrics on a ratio series — XBTC closes or synthetic XUSDT/BTCUSDT.
+// rs24 = %-outperformance vs BTC over ~24h; rsRsi = RSI of the BTC chart;
+// rsBreak = the ratio pressing its own 24-bar extreme (RS breakout/fade).
+function rsMetrics(closes) {
+  if (!closes || closes.length < 30) return null;
+  const n = closes.length, now = closes[n - 1];
+  const rs24 = ((now - closes[n - 25]) / closes[n - 25]) * 100;
+  const rsRsi = rsi(closes);
+  const win = closes.slice(-24), hi = Math.max(...win), lo = Math.min(...win);
+  const rsBreak = now >= hi * 0.995 ? 'high' : now <= lo * 1.005 ? 'low' : null;
+  return { rs24: round(rs24, 2), rsRsi: Math.round(rsRsi), rsBreak };
+}
+
 async function fetchEntryCandles(e) {
   const out = [];
   let start = e.ts;
@@ -657,6 +771,43 @@ async function main() {
     .filter((r) => !enriched.has(r.asset))
     .map((r) => r.asset);
 
+  // ---- BTC-pair confluence data (operator rule: USDT chart + BTC chart
+  // together). Real XBTC spot candles for candidates whose pair exists —
+  // majors mostly; BTC's own 1h closes back the synthetic ratio for the
+  // pair-less memes so every asset still carries RS context.
+  const spotBtcSyms = await spotBtcUniverse().catch(() => new Set());
+  const btcPairKlines = {};
+  {
+    const have = candidates.filter((r) => r.asset !== 'BTC' && spotBtcSyms.has(r.asset));
+    for (let i = 0; i < have.length; i += 6) {
+      await Promise.all(
+        have.slice(i, i + 6).map(async (r) => {
+          const rows = await fetchSpotBtcKlines(r.asset).catch(() => null);
+          if (rows) btcPairKlines[r.asset] = rows;
+        })
+      );
+      if (i + 6 < have.length) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  const btcK = enriched.get('BTC') ?? (await fetchKlines('BTCUSDT', true).catch(() => null));
+  const btcCloses = btcK?.closes ?? btcK?.candles?.map((c) => c.c) ?? null;
+
+  // ---- top-of-book snapshot per scored candidate (microprice + queue
+  // imbalance). Best-effort: a missing book leaves the obi factor at 0.
+  const books = {};
+  {
+    const want = candidates.filter((r) => enriched.has(r.asset));
+    for (let i = 0; i < want.length; i += 6) {
+      await Promise.all(
+        want.slice(i, i + 6).map(async (r) => {
+          const b = await fetchBook(r.pair).catch(() => null);
+          if (b) books[r.asset] = b;
+        })
+      );
+      if (i + 6 < want.length) await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+
   // ---- multi-timeframe deep read: 15m/1H/4H/1D frames per enriched asset.
   // TTL caches make this near-free on steady-state cycles; each asset's
   // stack (agreement count + HTF-lead/pullback classification) feeds the
@@ -688,7 +839,7 @@ async function main() {
     const m = mtfFrames.get(asset) || {};
     k.mtf = TAEngine.mtfDeep({ '15m': m['15m'], '1H': k.candles, '4H': m['4H'], '1D': m['1D'] });
     // recompute TA with the MTF ledger rows folded in — pure CPU, ~ms/asset
-    if (k.mtf && k.candles)
+    if (k.mtf && k.candles && !k.ta?.reasons?.[0]?.startsWith('wyckoff-'))
       k.ta = TAEngine.analyze(k.candles, k.candles5m, { mtf: k.mtf });
   }
   writeJson(path.join(API, 'mtf.json'), {
@@ -1413,12 +1564,13 @@ async function main() {
   // earn a bounded score lift. Bayesian n/(n+10) shrinkage damps small
   // samples. (The ledger-fed stratAdj above is legacy reporting — the
   // ledger entries array is empty post-purge, so it outputs zeros.)
-  let evalByStrat = {};
+  let evalStatsFull = {};
   try {
-    evalByStrat =
+    evalStatsFull =
       JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
-        .stats?.byStrategy || {};
+        .stats || {};
   } catch {}
+  const evalByStrat = evalStatsFull.byStrategy || {};
   const EVAL_MIN_N = 20;
   const stratBlock = new Set();
   const stratBoost = {};
@@ -1445,6 +1597,43 @@ async function main() {
       stratBoost[k] = Math.min(6, Math.round(clamp(shrunkAlpha * 3, -4, 6) * 10) / 10);
     }
   }
+  // ---- regime-conditional strategy ratings: "switch strategy per regime"
+  // done by measurement, not rule-of-thumb. Each strategy's alpha IN the
+  // current mktType overrides its global rating once the cell has depth
+  // (n>=15); a strategy globally-fine but measured-negative IN this tape is
+  // blocked for this regime only — it re-earns entry when the tape turns
+  // or its record recovers. The eval engine already tags every sealed
+  // record with mktType — this is the consumption side.
+  const evalByStratMkt = evalStatsFull.byStrategyMkt || {};
+  const stratRegBlock = new Set();
+  const stratRegBoost = {};
+  {
+    const strats = new Set([
+      ...Object.keys(stratBoost),
+      ...Object.keys(evalByStratMkt).map((x) => x.split('|')[0]),
+    ]);
+    for (const k of strats) {
+      const reg = evalByStratMkt[`${k}|${mktType}`];
+      if (!reg || (reg.n || 0) < 15) continue;
+      const regAlpha = (reg.avgAlpha24h ?? 0) * (reg.n / (reg.n + 10));
+      if (regAlpha < -0.3) stratRegBlock.add(k);
+      else stratRegBoost[k] = Math.min(6, Math.round(clamp(regAlpha * 3, -4, 6) * 10) / 10);
+    }
+  }
+  // REHAB lane — state/trail-strategies.json (shared by exec + liq-guard):
+  // cells whose edge was MEASURED under ATR-trail exits (90d full-backtest:
+  // SFP LONG +2.28 SQN n=1708, Liquidity Sweep LONG +1.75 n=1923 under
+  // K=2.5 trail vs buried under the ladder) bypass the eval-alpha block for
+  // LONG signals only — their live seats ride the trail profile they were
+  // proven on, and forward episodes grade THAT geometry, not the ladder's.
+  // Not a pardon — the block still owns every non-trail seat.
+  let rehabSet = new Set();
+  try {
+    const ts = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'trail-strategies.json'), 'utf8'));
+    rehabSet = new Set(ts.strategies || []);
+  } catch {}
+  const stratBlockedNow = (s) => (stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) && !(s.direction === 'LONG' && rehabSet.has(s.strategy));
+  const stratEff = (k) => stratRegBoost[k] ?? (stratBoost[k] || 0);
 
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
@@ -1461,19 +1650,22 @@ async function main() {
       if (ta.sfp) return 'Key Level SFP';
       if (ta.reasons[0] === 'elliott-w5')
         return ta.elliott.shortTop ? 'Elliott W5 Short' : 'Elliott W5 Bottom';
-      if (ta.reasons[0] === 'wyckoff-spring' || ta.reasons[0] === 'wyckoff-test')
-        return 'Wyckoff Spring';
-      if (ta.reasons[0] === 'wyckoff-jtc' || ta.reasons[0] === 'wyckoff-lps')
-        return 'Wyckoff JTC';
-      if (ta.reasons[0] === 'wyckoff-utad') return 'Wyckoff Upthrust';
-      if (ta.reasons[0] === 'wyckoff-fti' || ta.reasons[0] === 'wyckoff-lpsy')
-        return 'Wyckoff Ice Break';
+      // Backtest evidence (api/full-backtest.json): the pooled Wyckoff event
+      // family LONG cell (spring/test/jtc/lps) is the strongest edge in the
+      // system — SQN +2.13, WR 48.3% at 2R payoff, n=145 over 90d/25 syms.
+      // Episode attribution pools into ONE name so the forward track judges
+      // the family the backtest proved, not slow fragments. The event tag
+      // stays in ta.reasons for per-event forensics.
+      if (ta.reasons[0]?.startsWith('wyckoff-')) return 'Wyckoff Event';
       if (ta.reasons[0] === 'smc-choch') return 'SMC CHoCH';
       if (ta.reasons[0] === 'smc-bos') return 'SMC BOS';
       if (ta.reasons[0] === 'ignition') return 'Momentum Ignition';
       if (ta.reasons[0] === 'vwap-reversion') return 'VWAP Reversion';
       if (ta.reasons[0] === 'eq-edge') return 'PA Quartile';
       if (ta.reasons[0] === 'tsmom') return 'TS Momentum';
+      if (ta.reasons[0] === 'capitulation') return 'Capitulation Reclaim';
+      if (ta.reasons[0] === 'exhaust-short') return 'Exhaustion Short';
+      if (ta.reasons[0] === 'breakout-cont') return 'Breakout Continuation';
     }
     return strategyFor(r, k);
   };
@@ -1481,6 +1673,12 @@ async function main() {
   // signals need momentum metrics; pairs whose kline fetch failed get a
   // neutral profile instead of being dropped from the board entirely
   const neutral = { rsi14: 50, volRatio: 1, closes: null };
+  // trader.dev library edge — public KPI mass per pair. Cached 12h; a
+  // failed refresh returns whatever the last good pull had (never blocks)
+  let libEdge = {};
+  try {
+    libEdge = (await getLibEdge(candidates.map((r) => r.asset), { log: (m) => console.log(m) })).map || {};
+  } catch (e) { console.warn('libedge refresh failed — scoring without it: ' + e.message); }
   const ranked = candidates
     .map((r) => {
       const k = enriched.get(r.asset) ?? neutral;
@@ -1570,13 +1768,58 @@ async function main() {
       const fundBoost = fr != null && Math.abs(fr) >= 0.05
         ? (dir0 === 'LONG' ? (fr < 0 ? 2 : -2) : (fr > 0 ? 2 : -2))
         : 0;
+      // BTC-pair cross-read (operator rule): an asset up on USDT AND up on
+      // BTC is real strength; up on USDT but down on BTC is pure beta.
+      // Real XBTC candles where the pair exists, synthetic XUSDT/BTCUSDT
+      // ratio otherwise — pair-less assets still score on synth RS.
+      let btcPair = null;
+      {
+        let ratio = null, src = null;
+        if (btcPairKlines[r.asset]?.length) {
+          ratio = btcPairKlines[r.asset].map((c) => c.c); src = 'pair';
+        } else if (k.closes && btcCloses && k.closes.length >= 30 && btcCloses.length >= 30) {
+          const m = Math.min(k.closes.length, btcCloses.length);
+          ratio = k.closes.slice(-m).map((c, i) => c / btcCloses[btcCloses.length - m + i]);
+          src = 'synth';
+        }
+        if (ratio) {
+          const m = rsMetrics(ratio);
+          if (m) btcPair = { pair: src === 'pair' ? r.asset + 'BTC' : 'XUSDT/BTC', src, ...m };
+        }
+      }
+      const rsBoost = !btcPair ? 0 : (dir0 === 'LONG' ? 1 : -1) * clamp(
+        (btcPair.rs24 > 2 ? 2 : btcPair.rs24 > 0.5 ? 1 : btcPair.rs24 < -2 ? -2 : btcPair.rs24 < -0.5 ? -1 : 0) +
+        (btcPair.rsBreak === 'high' ? 1.5 : btcPair.rsBreak === 'low' ? -1.5 : 0) +
+        (btcPair.rsRsi > 60 ? 0.5 : btcPair.rsRsi < 40 ? -0.5 : 0),
+        -4, 4
+      );
+      // microprice + queue imbalance (MSE448 strat 1): microPos is the
+      // signed micro-vs-mid distance in half-spread units, imb the 5-level
+      // queue split — a LONG whose book is bid-heavy with micro above mid
+      // has flow confluence; sellers absorbing pays negative. Bounded
+      // ±3.5 — the paper graded it informative-but-weak alone.
+      const book = books[r.asset] || null;
+      const obiBoost = book
+        ? (dir0 === 'LONG' ? 1 : -1) * clamp(book.microPos * 3 + book.imb * 2, -3.5, 3.5)
+        : 0;
+      // library edge density (trader.dev public backtest mass): pairs with
+      // many independently-profitable strategies are empirically easier
+      // tape; pairs where the whole library failed pay a small tax.
+      // Archetype agreement (+1) when OUR strategy family matches the
+      // library's dominant archetype for this symbol — unsigned prior,
+      // tape quality isn't directional.
+      const le = libEdge[r.asset];
+      const famTilt = familyTilt(le, strategy);
+      const libBoost = !le || !le.n
+        ? 0
+        : clamp(le.edge + famTilt, -2, 3.5);
       const score = Math.round(
         clamp(
           momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
-            (stratBoost[strategy] || 0) +
+            stratEff(strategy) +
             derivBoost +
             newsBoost +
             mcapBoost +
@@ -1585,16 +1828,37 @@ async function main() {
             socialPenalty +
             icAdj +
             fundBoost +
+            rsBoost +
+            obiBoost +
+            libBoost +
             (climax ? -10 : 0),
           0,
           100
         )
       );
-      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score,
+      // raw fusion components — the four-step combiner consumes these;
+      // the emitted z-map is journaled so the residual-weight learner can
+      // join it to realized alpha later
+      const fz = {
+        mom: momentumScore, vol: volumeScore, liq: liquidityScore, surg: surgeScore,
+        confl: Math.min((k.ta?.confluence || 0) * 3, 12),
+        ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy),
+        deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
+        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, lib: libBoost, clim: climax ? -10 : 0,
+      };
+      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
+        btcPair, rsBoost, book, obiBoost, libBoost,
+        libedge: le && le.n ? { density: le.density, topSharpe: le.topSharpe, domArch: le.domArch, domTf: le.domTf, famTilt, famEdge: OUR_FAMILY(strategy) ? le.archEdge?.[OUR_FAMILY(strategy)] ?? null : null } : null,
         icAdj, icSponsor,
         vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
     })
     .sort((a, b) => b.score - a.score);
+  // ---- Stanford fusion pass: serial-demean each component vs its rolling
+  // EMA, z-score cross-sectionally across this board, combine by the
+  // ridge-learned residual weights (shrunk to priors until evidence is
+  // deep), blend into score by evidence weight, then re-rank.
+  try { sf.fuseBoard(ranked, path.join(API, '..', 'state')); } catch {}
+  ranked.sort((a, b) => b.score - a.score);
   // fillable-first emission: the active environment's contract catalog
   // (exec-catalog.json) is authoritative — a signal that can't route is
   // board intel, not a candidate. Demo lists ~45 contracts vs the ~435
@@ -1634,6 +1898,18 @@ async function main() {
             clamp((Math.abs(r.lastPrice - liq.setup.wickPx) / r.lastPrice) * 115, 1.5, 4)
           );
       }
+      // R-max pass: where the detector itself declares invalidation, the
+      // seat trades THAT stop — Wyckoff measured +3.91 SQN on the spring/
+      // UTAD extreme vs the flat grid (n=164, net +375%); exhaustion shorts
+      // sit above the climax high. Buffer 5% for wick room.
+      if (stopPct == null && /wyckoff/i.test(strategy)) {
+        const inv = ta?.wyckoff?.invalid;
+        if (inv && ((direction === 'LONG' && inv < r.lastPrice) || (direction === 'SHORT' && inv > r.lastPrice)))
+          stopPct = pct(clamp((Math.abs(r.lastPrice - inv) / r.lastPrice) * 105, 1.5, 8));
+      }
+      const exsStop = ta?.exhaustShort?.stop;
+      if (stopPct == null && exsStop && direction === 'SHORT' && exsStop > r.lastPrice)
+        stopPct = pct(clamp(((exsStop - r.lastPrice) / r.lastPrice) * 100, 1.5, 8));
       const hasK = enriched.has(r.asset);
       const drivers = [
         liq && liq.setup
@@ -1654,6 +1930,12 @@ async function main() {
         boardRank: boardIdx + 1, // position on the emitted board this run
         grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
         score: r.score,
+        fusedScore: r.fusedScore ?? null,
+        fusedZ: r.fusedZ ?? null,
+        fusion: r.fusion ?? null,
+        btcPair: r.btcPair ?? null,
+        book: r.book ?? null,
+        libedge: r.libedge ?? null,
         vip: r.vip || undefined,
         symbol: r.symbol,
         thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
@@ -2590,7 +2872,16 @@ async function main() {
   // When dirN rides the allowlist the gate checks the DIRECTION cell's sample
   // size: <EVAL_MIN_N graded trades in that direction is unproven — probe
   // routing, not a ban (same courtesy blended-unproven strategies already get).
-  const sqnAllows = (s) => {
+  const sqnAllows = (s, score) => {
+    // policy deference (operator order 2026-10-10): the lifecycle board is
+    // the authority on who may trade. sqn-chain is at most as strict as the
+    // strat-blocked gate it defers to — same condition, same override: a
+    // strategy the board hasn't condemned, or a score strong enough to
+    // clear STRAT_OVERRIDE, probes through. The chain's refusal is reserved
+    // for cells the eval system also measured negative. Without this the
+    // two evidence systems disagreed — and a stale allowlist failing
+    // CLOSED vetoed every proven-name candidate — the book starved.
+    if (!stratBlockedNow(s) || score >= STRAT_OVERRIDE) return true;
     // missing/stale allowlist fails CLOSED for proven strategies — a dead
     // optimizer must never re-open measured-negative cells
     if (!sqnAllowed)
@@ -2814,7 +3105,7 @@ async function main() {
     // families under water). Capital follows measured edge, not the
     // inverted composite: high score + negative alpha now sizes SMALL.
     const conv = Math.round(
-      clamp(0.35 + (stratBoost[s.strategy] || 0) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
+      clamp(0.35 + stratEff(s.strategy) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
     ) / 100;
     // strategy circuit-breaker — a doctrine that has already bled on ≥3
     // closed trades gets half-size until its record clears. Risk control,
@@ -2903,7 +3194,7 @@ async function main() {
     // plus the two exempt sweep strategies and any risk-off regime.
     gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
-    gate(!LONG_ONLY || s.direction !== 'SHORT', 'shorts-banned');
+    gate(!LONG_ONLY || s.direction !== 'SHORT' || SHORT_STRATS.has(s.strategy) || (sqnAllowed && (sqnAllowed.set.has(s.strategy) || sqnAllowed.set.has(s.strategy + ':SHORT'))), 'shorts-banned');
     // operator mandate: shorts are mean-reversion scalps ONLY — fade
     // families that short the overextension back to mean (sweep/SFP/
     // quartile), never trend-followed breakdowns. Bar is higher than the
@@ -2911,7 +3202,7 @@ async function main() {
     // capped at SHORT_MAX_TGT so exits are quick, and a high score floor
     // — "extreme sense" entries only. RELAX does not soften this block.
     if (s.direction === 'SHORT') {
-      gate(SHORT_STRATS.has(s.strategy), 'short-strat (mean-rev only)');
+      gate(SHORT_STRATS.has(s.strategy) || (sqnAllowed && sqnAllowed.set.has(s.strategy + ':SHORT')), 'short-strat (mean-rev only)');
       const shortNetRR = (s.targetPct - rrCostPct) / (stopPct + rrCostPct);
       gate(shortNetRR >= SHORT_MIN_RR, `short-rr<${SHORT_MIN_RR}:1 net`);
       gate((s.targetPct ?? 99) <= SHORT_MAX_TGT, `short-tgt>${SHORT_MAX_TGT}% (scalp-only)`);
@@ -2922,14 +3213,14 @@ async function main() {
     // the eval block — the strategy's record stays on the board for
     // evidence, but exceptional confluence may still route. Default 75;
     // set high to restore the strict block.
-    gate(RELAX || !stratBlock.has(s.strategy) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
+    gate(RELAX || !stratBlockedNow(s) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
     gate(RELAX || !recentClosed(s.asset, s.direction), 'recent-closed');
     gate(RELAX || !recentReversed(s.asset), 'recent-reversed');
     gate(RELAX || !lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
-    gate(RELAX || sqnAllows(s), 'sqn-chain');
+    gate(RELAX || sqnAllows(s, tradeScore), 'sqn-chain');
     // measured-evidence gates — the IC table is the engine's own record of
     // which votes predict. Net-negative factor evidence (icAdj < IC_VETO)
     // is a veto; so is a signal with no measured-predictive sponsor. Hard
@@ -2957,6 +3248,9 @@ async function main() {
         targetPct: s.targetPct, gates: gateFails,
         rangePosition: s.rangePosition ?? null, changePct: s.changePct ?? null,
         mktType: s.mktType ?? null,
+        // markout ledger: reject-time stamp+price so the veto scoreboard can
+        // measure what would have happened to every refused candidate
+        px: s.entryPrice ?? s.lastPrice ?? null, ts: Date.now(),
       });
       continue;
     }
@@ -2974,6 +3268,10 @@ async function main() {
         symbol: s.asset + 'USDT',
         asset: s.asset,
         direction: s.direction,
+        signalTimeframe: enriched.get(s.asset)?.candles?.length >= 141 ? '1H' : null,
+        signalClosedAt: enriched.get(s.asset)?.candles?.at(-1)?.t != null
+          ? enriched.get(s.asset).candles.at(-1).t + 3600000 : null,
+        signalReason: s.ta?.reasons?.[0] || null,
         notionalUsd: notional,
         leverage: lev,
         refEntry: fillPx,
@@ -3023,6 +3321,7 @@ async function main() {
         structInvalid: s.ta?.ewProj?.live && s.ta.ewProj.dir === (s.direction === 'LONG' ? 'bull' : 'bear')
           ? s.ta.ewProj.invalid
           : s.ta?.wyckoff?.invalid ?? null,
+        wyckInvalid: s.ta?.wyckoff?.invalid ?? null,
         ewTarget: s.ta?.ewProj?.live ? { lo: s.ta.ewProj.targetLo, hi: s.ta.ewProj.targetHi } : null,
         wyckTarget: s.ta?.wyckoff?.target ?? null,
         effortDir: s.ta?.effort?.dir ?? null,
@@ -3046,7 +3345,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!stratBlock.has(s.strategy) || tradeScoreOf(s) >= STRAT_OVERRIDE))
+      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!stratBlockedNow(s) || tradeScoreOf(s) >= STRAT_OVERRIDE))
       .map((s) => [s.asset, s.direction])
   );
 
@@ -3345,6 +3644,30 @@ async function main() {
       livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
     // trails intentionally not emitted — stops stay at the entry-set level
   }
+  // Emit the execution plan BEFORE the eval/research tail: the tail is the
+  // heaviest part of the cycle (multi-MB archive parse — it OOM-killed the
+  // scanner for ~3h on 2026-10-09 and every cycle died before the late write
+  // while market-scanner.json kept refreshing). Executor health must never
+  // depend on the R&D tail completing. The write repeats at the end so a
+  // healthy run still refreshes ts.
+  try {
+    writeJson(path.join(API, 'live-plan.json'), {
+      refreshedAt: snap.refreshedAt,
+      ts: now,
+      ttlMs: 15 * 60e3,
+      engine: ENGINE_VERSION,
+      killSwitch: ddNow >= ddKillPct,
+      ddPct: pct(ddNow),
+      ...livePlan,
+    });
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan early write: ${e.message}\n`
+      );
+    } catch {}
+  }
   const closed = ledger.entries.filter((e) => e.status !== 'open');
   // money truth: a profitable exit is a win regardless of which rule closed it
   const wins = closed.filter((e) => (e.pnlPct ?? 0) > 0).length;
@@ -3487,7 +3810,7 @@ async function main() {
     Rs.length > 1
       ? Math.sqrt(Rs.reduce((a, b) => a + (b - avgR) ** 2, 0) / (Rs.length - 1))
       : null;
-  const sqn = stdR ? (avgR / stdR) * Math.sqrt(Rs.length) : null;
+  const sqn = Rs.length >= 30 && stdR > 1e-9 * Math.max(1, Math.abs(avgR)) ? (avgR / stdR) * Math.sqrt(Math.min(Rs.length, 100)) : null; /* sqn-guard */
   ledger.stats.avgR = avgR != null ? round(avgR, 2) : null;
   ledger.stats.expectancyR = ledger.stats.avgR;
   ledger.stats.sharpeR = stdR ? round(avgR / stdR, 2) : null; // per-trade Sharpe — SQN is this × √N
@@ -3523,7 +3846,7 @@ async function main() {
   // SQN gives them credit for.
   if (Rs.length > 1 && avgR != null) {
     const dsd = Math.sqrt(Rs.reduce((a, r) => a + Math.min(0, r) ** 2, 0) / Rs.length);
-    ledger.stats.sqnSortino = dsd > 0 ? round((avgR / dsd) * Math.sqrt(Rs.length), 2) : null;
+    ledger.stats.sqnSortino = Rs.length >= 30 && dsd > 1e-9 ? round((avgR / dsd) * Math.sqrt(Math.min(Rs.length, 100)), 2) : null; /* sqn-guard */
     ledger.stats.downsideDevR = round(dsd, 3);
   }
   // Deflated SQN (Bailey–López de Prado DSR): a SQN picked from a grid of
@@ -3648,6 +3971,9 @@ async function main() {
       source: 'signal-eval.json byStrategy · min n=20',
       blocked: [...stratBlock],
       boosts: stratBoost,
+      mktType,
+      regimeBlocked: [...stratRegBlock],
+      regimeBoosts: stratRegBoost,
       hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
       shortGate: 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape',
       atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
@@ -3983,6 +4309,7 @@ async function main() {
         rsi: s.rsi ?? null,
         volRatio: s.volRatio ?? null,
         momScore: s.momScore ?? null,
+        fusion: s.fusion ?? null,
         boardRank: s.boardRank ?? null,
         entry,
         // bracket the signal designed — journal charts need it to draw the
@@ -4072,6 +4399,17 @@ async function main() {
       for (const r of eh.records || []) allComplete.push(r);
     } catch {}
   }
+  // Stanford step 3 — residual weighting: ridge-fit every sealed signal's
+  // emitted fusion z-map onto its realized 24h alpha, shrunk toward priors.
+  // fuseBoard consumes the persisted weights next cycle.
+  try {
+    const fitRows = [];
+    for (const r of allComplete)
+      if (r.alpha24h != null && r.fusion)
+        fitRows.push({ c: r.fusion, a: Math.max(-8, Math.min(8, +r.alpha24h)) });
+    const fit = sf.fitWeights(fitRows.slice(-6000));
+    if (fit) sf.saveWeights(path.join(API, '..', 'state'), fit);
+  } catch {}
   // predictive-power stats. Per-horizon metrics (dirAcc, avgFwd, alpha)
   // use every record that has that field — a signal labeled at +1h counts
   // for 1h accuracy immediately instead of waiting 24h. Outcome-dependent
@@ -4162,6 +4500,9 @@ async function main() {
   );
   evStats.byRegime = group((r) => r.regime ?? 'unknown');
   evStats.byMktType = group((r) => r.mktType ?? 'unknown');
+  // regime-conditional strategy table — the scorer's regime-switch input:
+  // strategy alpha measured PER mktType, not just globally
+  evStats.byStrategyMkt = group((r) => (r.strategy ?? '?') + '|' + (r.mktType ?? 'unknown'));
   // calibration: does the score ORDER predict? Monotone hit rate across
   // deciles = a ranking that means something; flat/inverted = decoration.
   evStats.calibration = group((r) =>
@@ -4407,7 +4748,14 @@ async function main() {
         ddPct: pct(ddNow),
         ...livePlan,
       });
-  } catch {}
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan late write: ${e.message}\n`
+      );
+    } catch {}
+  }
 
   // ---- boring benchmark (review ask #3): does the intelligence add value
   // beyond doing something trivial? Track BTC buy&hold, an equal-weight
@@ -4531,7 +4879,7 @@ async function main() {
   // (Bulkowski via the eval gate), and treasury guards (Clason).
   try {
     const GATE_BOOK = [
-      [/rr<|net-edge|dd-kill|heat-cap|cluster-heat|deployed-cap|^score |equity-floor/, 'tharp'],
+      [/rr<|net-edge|dd-kill|heat-cap|cluster-heat|deployed-cap|^score |equity-floor|shorts-banned|short-strat|sqn-chain|longs-only/, 'tharp'],
       [/fake-move|noise-cap|spread|mkt-type|carry|below-ema50\/200/, 'murphy'],
       [/strat-blocked/, 'bulkowski'],
       [/low-profit-pair|recent-closed|recent-reversed|funding-drag|untradeable/, 'clason'],
@@ -4553,8 +4901,13 @@ async function main() {
     w.bulkowski += stratBlock.size;
     w.hill += Object.values(stratBoost).filter((b) => b > 0).length;
     w.clason += lowProfitPair.size;
-    w.kiyosaki += recentFills.filter(
-      (f) => (f.tradeSide || '').includes('close') && (f.profit || 0) - (f.fee || 0) > 0
+    // kiyosaki counts real banks, not dust: a fee-lock that books +$0.001 is
+    // not "retained profit" — weight by dollars banked (x5 keeps the scale
+    // beside the event-count books) plus a count of closes worth >=2 cents.
+    const bankedUsd = recentFills.reduce(
+      (a, f) => a + ((f.tradeSide || '').includes('close') ? Math.max(0, (f.profit || 0) - (f.fee || 0)) : 0), 0);
+    w.kiyosaki += Math.round(bankedUsd * 5) + recentFills.filter(
+      (f) => (f.tradeSide || '').includes('close') && (f.profit || 0) - (f.fee || 0) >= 0.02
     ).length;
     // barefoot floor: the safety net is always on (margin reserve + equity
     // floor armed) — a standing pulse, stronger when the floor is live.
@@ -4732,10 +5085,11 @@ async function main() {
       const poolStats = (rs) => {
         const R = rs.map(R_of).filter((x) => x != null);
         const n = R.length;
-        if (n < 20) return null;
+        if (n < 30) return null; /* sqn-guard: SQN means nothing under 30 trades */
         const E = R.reduce((a, b) => a + b, 0) / n;
-        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n) || 1e-9;
-        const sqn = (E / sd) * Math.sqrt(100);
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n);
+        if (!(sd > 1e-9 * Math.max(1, Math.abs(E)))) return null; /* sqn-guard: zero spread used to divide by 1e-9 */
+        const sqn = (E / sd) * Math.sqrt(Math.min(n, 100)); /* sqn-guard: N capped at 100, never projected up */
         return {
           n, E: pct(E * 100) / 100, sd: pct(sd * 100) / 100,
           sqn100: pct(sqn * 100) / 100,
@@ -4803,8 +5157,8 @@ async function main() {
       const jointStats = (R) => {
         const n = R.length;
         const E = R.reduce((a, b) => a + b, 0) / n;
-        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n) || 1e-9;
-        const sqn = (E / sd) * Math.sqrt(100);
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n);
+        const sqn = n >= 30 && sd > 1e-9 * Math.max(1, Math.abs(E)) ? (E / sd) * Math.sqrt(Math.min(n, 100)) : 0; /* sqn-guard */
         return { n, E, sd, sqn100: sqn, shrunkSqn: (sqn * n) / (n + 15), hit: R.filter((x) => x > 0).length / n };
       };
       const ranked = perStrategy.concat(dirPools).sort((a, b) => b.shrunkSqn - a.shrunkSqn);
@@ -4868,6 +5222,21 @@ async function main() {
   );
 }
 
-main().catch((e) => {
-  console.warn(`scanner build failed, keeping last snapshot: ${e.message}`);
-});
+// silent-exit guard — under socket pressure the event loop can empty while
+// main() still has a pending promise (a fetch whose handle died), and node
+// then exits code 0 mid-run: no output, no plan write, the loop flags the
+// cycle clean while live-plan.json rots for hours. A ref'd interval keeps
+// the loop alive until main() settles; a true hang still hits rapid's
+// 600s child cap and flags correctly.
+const keepAlive = setInterval(() => {}, 30_000);
+// main() deadline — if ANY await inside parks forever (the undici abort
+// edge, a lost timer, anything), the scan must still terminate LOUD so
+// rapid flags the failed cycle instead of a stale plan aging silently.
+// 540s sits under the 600s spawn cap so the catch — not the watchdog —
+// reports it.
+hardRace(main(), +(process.env.SENTINEL_SCAN_DEADLINE_MS || 540_000))
+  .catch((e) => {
+    console.warn(`scanner build failed, keeping last snapshot: ${e.message}`);
+    process.exitCode = 1;
+  })
+  .finally(() => clearInterval(keepAlive));

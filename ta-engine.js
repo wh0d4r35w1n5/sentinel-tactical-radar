@@ -1438,6 +1438,98 @@
                     ' · invalid <' + (up ? '>' : '') + ' W1 ' + W1.toPrecision(4) };
   }
 
+  // ---------- Capitulation Reclaim: climax flush -> absorption -> higher-low ----------
+  // Dead-cat bounce entry — the bounce family was the only positive cell in
+  // the pattern census (+0.6-1.3%/ep); this refines its best window into a
+  // named detector so the episode ledger can grade it by name.
+  // Three legs, all measurable on the hourly tape:
+  //   1. CLIMAX FLUSH  — a candle in the last ~12 bars with range >= 2.5x the
+  //      median, volume >= 2.5x average, closing >=5% under its own open.
+  //      The volume spike IS seller exhaustion.
+  //   2. ABSORPTION    — no bar after the flush takes out its low by >0.5%.
+  //      Sellers ran out of inventory.
+  //   3. HIGHER-LOW    — the current bar's low holds above the prior bar's,
+  //      and its close reclaims the flush candle's midpoint. That print is
+  //      the earliest defensible entry; stop sits under the flush low.
+  function capitulation(cs) {
+    var n = cs.length;
+    if (!cs || n < 16) return null;
+    var look = cs.slice(-14, -3);
+    var med = look.map(function (c) { return c.h - c.l; }).sort(function (a, b) { return a - b; })[Math.floor(look.length / 2)] || 1e-12;
+    var avgV = look.reduce(function (a, x) { return a + (x.qv || 0); }, 0) / look.length || 1;
+    var flush = -1;
+    for (var i = n - 3; i >= Math.max(1, n - 12); i--) {
+      var c = cs[i], rng = c.h - c.l, drop = (c.c / c.o - 1) * 100;
+      if (rng >= med * 2.5 && (c.qv || 0) >= avgV * 2.5 && drop <= -5) { flush = i; break; }
+    }
+    if (flush < 0) return null;
+    var fl = cs[flush], low = fl.l, mid = (fl.h + fl.l) / 2;
+    for (var j = flush + 1; j < n; j++) if (cs[j].l < low * 0.995) return null;
+    var last = cs[n - 1], prev = cs[n - 2];
+    var hiBase = Math.max.apply(null, cs.slice(Math.max(0, flush - 12), flush + 1).map(function (c) { return c.h; }));
+    var drawPct = (low / hiBase - 1) * 100;
+    if (drawPct > -8) return null;                 // not a real capitulation — too shallow
+    if (!(last.l > prev.l * 0.997 && last.c > mid)) return null;
+    return { dir: 'LONG', flushLow: +low.toFixed(8), stop: +(low * 0.995).toFixed(8),
+             drawPct: +drawPct.toFixed(1), bouncePct: +((last.c / low - 1) * 100).toFixed(2),
+             label: 'climax flush ' + drawPct.toFixed(0) + '% absorbed — higher-low reclaim of flush midpoint' };
+  }
+
+  // ---------- Exhaustion Short: parabolic pump -> climax -> divergence -> roll-over ----------
+  // The ONLY short structure with documented perp edge, built deliberately
+  // (NOT a long-mirror — the 90d backtest proved all 8 mirrored-short cells
+  // lose). Anatomy of every dead-cat collapse on this tape (Q 2026-10-18):
+  //   1. PARABOLIC RUN  — close >= +20% vs 48 bars back.
+  //   2. CLIMAX BAR     — vol >= 2.5x avg and range >= 2x median: the last
+  //      buyers exhausting themselves AT the top.
+  //   3. RSI DIVERGENCE — price higher-high vs prior swing, RSI lower-high:
+  //      momentum died while price still climbed.
+  //   4. THE ROLL       — most recent bar breaks under the prior bar's low:
+  //      the first structural break. Entry trigger, never anticipation.
+  // Stop rides above the climax high. Emits SHORT only; this is the real
+  // dead-cat short the mirror cells pretended to be.
+  function exhaustShort(cs, opts) {
+    var n = cs.length;
+    if (!cs || n < 60) return null;
+    opts = opts || {};
+    var E = (typeof process !== 'undefined' && process.env) || {};
+    var RUN_MIN = +(opts.runMin || E.SENTINEL_EXS_RUN || 20);
+    var VOL_X = +(opts.volX || E.SENTINEL_EXS_VOLX || 2.5);
+    var RNG_X = +(opts.rngX || E.SENTINEL_EXS_RNGX || 2);
+    var DIV_MIN = +(opts.divMin || E.SENTINEL_EXS_DIV || 3);
+    // RSI14 for divergence
+    var rsi = new Array(n).fill(null), ag = 0, al = 0;
+    for (var i = 1; i < n; i++) {
+      var d = cs[i].c - cs[i - 1].c;
+      ag = i <= 14 ? ag + Math.max(d, 0) / 14 : (ag * 13 + Math.max(d, 0)) / 14;
+      al = i <= 14 ? al + Math.max(-d, 0) / 14 : (al * 13 + Math.max(-d, 0)) / 14;
+      if (i >= 14) rsi[i] = 100 - 100 / (1 + (al > 1e-12 ? ag / al : 99));
+    }
+    var run = (cs[n - 1].c / cs[Math.max(0, n - 49)].c - 1) * 100;
+    if (run < RUN_MIN) return null;
+    var med = cs.slice(-30, -3).map(function (c) { return c.h - c.l; }).sort(function (a, b) { return a - b; })[13] || 1e-12;
+    var avgV = cs.slice(-30, -3).reduce(function (a, x) { return a + (x.qv || 0); }, 0) / 27 || 1;
+    var climax = -1;
+    for (var j = n - 2; j >= n - 14; j--) {
+      var cj = cs[j];
+      if ((cj.h - cj.l) >= med * RNG_X && (cj.qv || 0) >= avgV * VOL_X) { climax = j; break; }
+    }
+    if (climax < 0) return null;
+    // divergence: price hi at climax vs prior swing high 15-40 bars back
+    var hiNow = cs[climax].h, hiPrev = 0, hiPrevI = -1;
+    for (var p = climax - 10; p >= Math.max(0, climax - 40); p--) {
+      if (cs[p].h > hiPrev) { hiPrev = cs[p].h; hiPrevI = p; }
+    }
+    var div = hiPrevI >= 0 && hiNow > hiPrev && rsi[climax] != null && rsi[hiPrevI] != null && rsi[climax] < rsi[hiPrevI] - DIV_MIN;
+    if (!div) return null;
+    // the roll: current bar breaks under prior bar's low after the climax
+    if (!(n - 1 > climax && cs[n - 1].l < cs[n - 2].l * 0.999 && cs[n - 1].c < (cs[climax].h + cs[climax].l) / 2)) return null;
+    var STOP_BUF = +(opts.stopBuf || E.SENTINEL_EXS_STOPBUF || 1.005);
+    return { dir: 'SHORT', climaxHi: +hiNow.toFixed(8), stop: +(hiNow * STOP_BUF).toFixed(8),
+             runPct: +run.toFixed(1), rsiDiv: +(rsi[hiPrevI] - rsi[climax]).toFixed(1),
+             label: 'parabolic +' + run.toFixed(0) + '% -> climax + RSI div ' + (rsi[hiPrevI] - rsi[climax]).toFixed(0) + 'pts -> roll-over' };
+  }
+
   function analyze(cs, cs5m, extra) {
     if (!cs || cs.length < 20 || !zigzag) return null;
     var s = sfp(cs), f = fvgs(cs), e = elliott(cs), w = wyckoff(cs),
@@ -1445,6 +1537,7 @@
         mc = smc(cs), eq = eqLevels(cs), lq = liquidity(cs),
         ichi = ichimoku(cs), mas = maStack(cs), cps = chartPats(cs),
         brk = breakout(cs), er = effortResult(cs), ep = elliottProj(cs),
+        cap = capitulation(cs), ex = exhaustShort(cs),
         prz = H && H.project ? H.project(cs) : null, sk = sakata(cs),
         vw = vwap(cs5m && cs5m.length >= 24 ? cs5m : cs, cs5m && cs5m.length >= 24 ? 288 : 24);
     // TSMOM — time-series momentum, the strongest documented crypto
@@ -1462,11 +1555,16 @@
           min48 = +(typeof process !== 'undefined' && process.env && process.env.SENTINEL_TSMOM_MIN48) || 1;
       if (Math.abs(r48) >= min48 && Math.sign(r12) === Math.sign(r48)) tm = r48 > 0 ? 'LONG' : 'SHORT';
     }
-    // bias: a graded liquidity sweep leads (TTC — the pool raid IS the
-    // signal), then SFP, completed W5, wyckoff event, smc choch, then
-    // ignition — each lower rung only fires when the stronger ones are silent
+    // bias priority: the parabolic-exhaustion roll-over leads when present —
+    // it only fires in a >=20% run + climax + divergence context, so it can
+    // never muzzle anything else; misattributing dead-cat tops to liq-sweep
+    // is how the :SHORT cell earned its -11 SQN. Then a graded liquidity
+    // sweep leads (TTC — the pool raid IS the signal), then SFP, completed
+    // W5, wyckoff event, smc choch, then ignition — each lower rung only
+    // fires when the stronger ones are silent
     var bias = null, reasons = [];
-    if (lq && lq.setup && lq.setup.grade !== 'C') {
+    if (ex) { bias = ex.dir; reasons.push('exhaust-short'); }
+    else if (lq && lq.setup && lq.setup.grade !== 'C') {
       bias = lq.setup.dir; reasons.push('liq-sweep');
     }
     else if (s) { bias = s.type === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('sfp'); }
@@ -1475,10 +1573,19 @@
     } else if (w && w.event) { bias = w.bias; reasons.push('wyckoff-' + w.event.toLowerCase()); }
     else if (mc && mc.choch) { bias = mc.choch === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-choch'); }
     else if (mc && mc.bos) { bias = mc.bos === 'bullish' ? 'LONG' : 'SHORT'; reasons.push('smc-bos'); }
+    // breakout-continuation as a primary — the external libedge corpus makes
+    // Donchian break+retest the top-evidenced archetype on majors (SOL 19.5
+    // n=53, BTC 16.2 n=28, ETH 15.7 n=27). Only the confirmed leg counts:
+    // state must be RETEST (pull tagged the level), never raw BREAKOUT or
+    // FAILED, and the break candle needs >=1.2x volume sponsorship.
+    else if (brk && brk.state === 'RETEST' && !brk.failed && (brk.volX == null || brk.volX >= 1.2)) {
+      bias = brk.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('breakout-cont');
+    }
     else if (ig) { bias = ig.dir; reasons.push('ignition'); }
     else if (tm) { bias = tm; reasons.push('tsmom'); }
     else if (vw && vw.stretched) { bias = vw.fade; reasons.push('vwap-reversion'); }
     else if (ep && ep.live) { bias = ep.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('elliott-w5-proj'); }
+    else if (cap) { bias = cap.dir; reasons.push('capitulation'); }
     else if (er && er.dir && er.strength >= 0.5) { bias = er.dir === 'bull' ? 'LONG' : 'SHORT'; reasons.push('effort-result'); }
     else if (eq && eq.lean) { bias = eq.lean; reasons.push('eq-edge'); }
     // sub-engines: RSI/MACD/OBV/Dow/trends/reversal/MTF — confirmation layer
@@ -1507,6 +1614,9 @@
       if (L && w && w.springHold === true) confluence++; // spring holding above support
       if (!L && w && w.uthrHold === true) confluence++;  // upthrust holding below resist
       if (ep && ep.live && ep.dir === (L ? 'bull' : 'bear')) confluence++;
+      if (cap && L) confluence += 2;   // capitulation reclaim is its own structural setup
+      if (ex && !L) confluence += 2;   // exhaustion anatomy is its own short setup
+      if (brk && brk.state === 'RETEST' && brk.dir === (L ? 'bull' : 'bear')) confluence++; // confirmed break+retest agrees with bias
       if (er && er.dir === (L ? 'bull' : 'bear')) confluence++;
       if (mas && mas.fanning === (L ? 'bull' : 'bear')) confluence++;
       if (prz && prz.inZone && prz.dir === (L ? 'bullish' : 'bearish')) confluence += 2; // price sitting in the projected reversal zone
@@ -1603,7 +1713,7 @@
              smc: mc, eq: eq, eng: eng, liquidity: lq, atrPct: atrPct,
              ichi: ichi, mas: mas, cps: cps, brk: brk, factors: factors,
              effort: er, ewProj: ep, harmPrz: prz, sakata: sk,
-             mtf: mtd,
+             capitulation: cap, exhaustShort: ex, mtf: mtd,
              bias: bias, reasons: reasons, confluence: confluence };
   }
 
@@ -1614,6 +1724,7 @@
                  rsiEng: rsiEng, macdEng: macdEng, obvEng: obvEng, dowEng: dowEng,
                  mtfEng: mtfEng, mtfDeep: mtfDeep, revEng: revEng,
                  effortResult: effortResult, elliottProj: elliottProj,
+                 capitulation: capitulation, exhaustShort: exhaustShort,
                  sakata: sakata, maStack: maStack };
   if (typeof module !== 'undefined' && module.exports) module.exports = g.TAEngine;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

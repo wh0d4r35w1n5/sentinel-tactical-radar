@@ -354,7 +354,7 @@ const episodeStats = (epis) => {
     netUsd: round(closed.reduce((a, e) => a + e.netUsd, 0), 4),
     feesUsd: round(closed.reduce((a, e) => a + e.fees, 0), 4),
     profitFactor: gL > 0 ? round(gW / gL, 2) : null,
-    sqn: rs.length > 1 && sd > 0 ? round((m / sd) * Math.sqrt(rs.length), 2) : null,
+    sqn: rs.length >= 30 && sd > 1e-9 * Math.max(1, Math.abs(m)) ? round((m / sd) * Math.sqrt(Math.min(rs.length, 100)), 2) : null, /* sqn-guard */
     sqnN: rs.length, meanR: rs.length ? round(m, 3) : null,
     firstTs: epis.length ? Math.min(...epis.map((e) => e.openTs || Infinity)) : null,
     lastTs: epis.length ? Math.max(...epis.map((e) => e.closeTs || e.openTs || 0)) : null,
@@ -3544,7 +3544,7 @@ async function main() {
         n: rGroups.length,
         meanR: round(m, 3),
         sdR: round(sd, 3),
-        sqn: sd > 0 ? round((m / sd) * Math.sqrt(rGroups.length), 2) : null,
+        sqn: rGroups.length >= 30 && sd > 1e-9 * Math.max(1, Math.abs(m)) ? round((m / sd) * Math.sqrt(Math.min(rGroups.length, 100)), 2) : null, /* sqn-guard */
         winRatePct: round((rs.filter((x) => x > 0).length / rs.length) * 100, 1),
         avgWinR: (() => { const w = rs.filter((x) => x > 0); return w.length ? round(w.reduce((a, x) => a + x, 0) / w.length, 3) : null; })(),
         avgLossR: (() => { const l = rs.filter((x) => x <= 0); return l.length ? round(l.reduce((a, x) => a + x, 0) / l.length, 3) : null; })(),

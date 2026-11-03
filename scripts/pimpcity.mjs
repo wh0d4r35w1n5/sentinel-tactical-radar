@@ -18,8 +18,24 @@ import { fileURLToPath } from 'node:url';
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const WAR_PATH = path.join(DIR, '..', 'state', 'pimp-war.json');
 const API_PATH = path.join(DIR, '..', 'api', 'pimp-war.json');
+const ONCHAIN_FILLS_PATH = path.join(DIR, '..', 'state', 'onchain-fills.json');
+const CUSTODY_LEGS_PATH = path.join(DIR, '..', 'state', 'custody-legs.json');
+const LEDGER_PATH = path.join(DIR, '..', 'api', 'live-ledger.json');
+const LANE_PATH = path.join(DIR, '..', 'api', 'onchain-lane.json');
+const OCTRADES_PATH = path.join(DIR, '..', 'api', 'onchain-trades.json');
+const REALFILLS_PATH = path.join(DIR, '..', 'state', 'real-fills.json');
+const OC_VAULT_PATH = path.join(DIR, '..', 'state', 'onchain-vault.json');
+const ONCHAIN_CRACK = 'Solana Sadie';
 
 const PIMP_NAMES = ['Silky Slim', 'Madam Razor', 'Cold Cash Cole', 'Big Daddy Kane', 'Fancy Red'];
+const START_ROSTERS = {
+  'Silky Slim': ['Diamond Dust', 'Crystal Meth', 'Bolt Betsy'],
+  'Madam Razor': ['Velvet Vice', 'Neon Nicki', 'Sprint Santana'],
+  'Cold Cash Cole': ['Sugar Tits', 'Queen B', 'Gold Teeth'],
+  'Big Daddy Kane': ['Trixie', 'Foxy', 'Solana Sadie'],
+  'Fancy Red': ['Lucky Lucy', 'Baby Back', 'Fastlane Faye'],
+};
+const START_PIMP = new Map(Object.entries(START_ROSTERS).flatMap(([p, girls]) => girls.map((g) => [g, p])));
 
 // weights: score=static scanner score pull · chg=|24h change| pull (vol taste)
 // mom=signed-change pull (directional taste) · stratW=strategy affinity ·
@@ -35,7 +51,6 @@ const CRACK_STABLE = [
   { name: 'Foxy',          tag: 'level rat',           w: { score: 1.4, chg: 1,   mom: 0.3, stratW: 12, strat: 'Key Level|SFP' } },
   { name: 'Lucky Lucy',    tag: 'raw score slut',      w: { score: 3,   chg: 0.5, mom: 0,   stratW: 0 } },
   { name: 'Baby Back',     tag: 'dip buyer',           w: { score: 1.2, chg: 1,   mom: -2,  stratW: 6, strat: 'Quartile' } },
-  { name: 'Miss Behave',   tag: 'contrarian',          w: { score: 1,   chg: 1,   mom: -3,  stratW: 0 } },
   { name: 'Gold Teeth',    tag: 'carry queen',         w: { score: 1.5, chg: 0.5, mom: 0.5, stratW: 10, strat: 'Carry|Momentum' } },
   // the bagrunner crew — freelance sprinters, nobody's property. High
   // chg/mom pulls = they chase whatever's already moving and get off fast.
@@ -43,6 +58,11 @@ const CRACK_STABLE = [
   { name: 'Fastlane Faye', tag: 'bagrunner — chase & dump', w: { score: 1.2, chg: 5,   mom: 2,   stratW: 8,  strat: 'Momentum|Breakout|Ignition' } },
   { name: 'Bolt Betsy',    tag: 'bagrunner — pure speed',   w: { score: 0.4, chg: 6,   mom: 3,   stratW: 0 } },
   { name: 'Sprint Santana',tag: 'bagrunner — alt bags',     w: { score: 1,   chg: 4,   mom: 2.5, alt: 6 } },
+  // the DEX corner — the onchain lane's persona. Her tricks come from
+  // state/onchain-fills.json (Jupiter swaps), not the perp book: buys are
+  // injected as her intents, sells bank as her closes. Freelance — the
+  // lane doesn't take nominations and no pimp gets a cut.
+  { name: 'Solana Sadie',  tag: 'onchain runner — DEX bags', w: { score: 0.8, chg: 5, mom: 3, alt: 8 } },
 ];
 
 const BENCH_NAMES = ['Chrome Cherry', 'Plastic Poppy', 'Rusty Ruby', 'Vandal Vicky', 'Nylon Nina', 'Broke Betty', 'Static Stella', 'Lowdown Lola'];
@@ -71,27 +91,35 @@ const isMajor = (sym) => /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE)L?USDT$/i.test(sym);
 
 function freshWar() {
   const war = { pimps: {}, cracks: {}, retired: {}, intents: [], drama: [], gen: 0 };
-  const girls = CRACK_STABLE.map((c) => c.name);
-  PIMP_NAMES.forEach((p, i) => {
-    const roster = girls.slice(i * 2, i * 2 + 2);
-    war.pimps[p] = { roster, crown: false, crippled: false, net: 0, wins: 0, losses: 0 };
+  PIMP_NAMES.forEach((p) => {
+    war.pimps[p] = { roster: [...(START_ROSTERS[p] || [])], crown: false, crippled: false, net: 0, wins: 0, losses: 0 };
   });
   for (const c of CRACK_STABLE) {
-    war.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
+    war.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: START_PIMP.get(c.name) || null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
   }
-  for (const [p, st] of Object.entries(war.pimps)) for (const g of st.roster) war.cracks[g].pimp = p;
-  war.drama.push({ ts: Date.now(), text: '🌆 Pimpcity founded — 5 pimps, 10 girls, one $4 corner' });
+  war.drama.push({ ts: Date.now(), text: '🌆 Pimpcity founded — 5 pimps, every girl on a roster, one $4 corner' });
   return war;
+}
+
+function ensurePimpCoverage(w) {
+  for (const pname of PIMP_NAMES) {
+    if (!w.pimps[pname]) w.pimps[pname] = { roster: [], crown: false, crippled: false, net: 0, wins: 0, losses: 0 };
+    const seen = new Set();
+    w.pimps[pname].roster = (w.pimps[pname].roster || []).filter((g) => w.cracks[g] && !seen.has(g) && seen.add(g));
+  }
+  const leastRoster = () => PIMP_NAMES.reduce((a, b) => ((w.pimps[a].roster || []).length <= (w.pimps[b].roster || []).length ? a : b));
+  for (const [gname, crack] of Object.entries(w.cracks || {})) {
+    if (!crack.pimp || !w.pimps[crack.pimp]) crack.pimp = leastRoster();
+    const p = w.pimps[crack.pimp];
+    if (!(p.roster || (p.roster = [])).includes(gname)) p.roster.push(gname);
+  }
+  return w;
 }
 
 export function loadWar() {
   try {
     const w = JSON.parse(fs.readFileSync(WAR_PATH, 'utf8'));
     if (w && w.pimps && w.cracks) {
-      // stable additions land as free agents in saved wars — a redeploy
-      // can't leave new girls invisible just because the corner predates
-      // them. Retired names stay dead; a mutant wearing a retired girl's
-      // pimp doesn't resurrect her.
       for (const c of CRACK_STABLE) {
         if (!w.cracks[c.name] && !(w.retired || {})[c.name])
           w.cracks[c.name] = { w: { ...c.w }, tag: c.tag, pimp: null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
@@ -99,7 +127,7 @@ export function loadWar() {
       // saved wars predate personalities — backfill so the field exists
       // even on records written before this layer landed
       for (const c of Object.values(w.cracks)) if (!c.persona) { c.persona = freshPersona(); c.mood = 'working'; }
-      return w;
+      return ensurePimpCoverage(w);
     }
   } catch {}
   return freshWar();
@@ -112,20 +140,74 @@ const atomicWrite = (p, s) => {
   fs.writeFileSync(t, s);
   fs.renameSync(t, p);
 };
+// the corner's real books — every saveWar snapshots the two wallets the
+// personas trade out of, so PIMP CITY shows live money movement, not just
+// the economy narrative. Read-only, every source optional — a dead file
+// renders as nulls, never throws the tick.
+function streetLedger() {
+  const out = { futures: null, onchain: null, activity: [] };
+  const act = out.activity;
+  try {
+    const l = JSON.parse(fs.readFileSync(LEDGER_PATH, 'utf8'));
+    out.futures = {
+      equityUsd: +(+l.equityUsd || 0).toFixed(2),
+      marginFreeUsd: +(+l.marginFreeUsd || 0).toFixed(2),
+      epochNetUsd: +(+l.epochNetUsd || 0).toFixed(2),
+      fills: +l.realFillCount || 0,
+      positions: (l.positions || []).map((p) => ({ symbol: p.symbol, side: p.side, upl: +(+p.upl || 0).toFixed(2), lev: +p.lev || 0, margin: +(+p.margin || 0).toFixed(2) })),
+    };
+  } catch {}
+  try {
+    const rf = JSON.parse(fs.readFileSync(REALFILLS_PATH, 'utf8'));
+    const arr = Array.isArray(rf) ? rf : rf.fills || [];
+    for (const f of arr.slice(-12)) {
+      const net = (+f.profit || 0) - (+f.fee || 0);
+      act.push({ venue: 'bitget', ts: +f.ts || 0, symbol: f.symbol, text: `${f.tradeSide === 'open' ? 'OPEN' : 'CLOSE'} ${f.symbol} ${net ? (net >= 0 ? '+' : '') + '$' + net.toFixed(2) : ''}`.trim() });
+    }
+  } catch {}
+  try {
+    const o = JSON.parse(fs.readFileSync(LANE_PATH, 'utf8'));
+    const t = JSON.parse(fs.readFileSync(OCTRADES_PATH, 'utf8'));
+    out.onchain = {
+      address: o.address || null,
+      sol: +(+o.sol || 0).toFixed(4),
+      stableUsd: +(+o.stableUsd || 0).toFixed(2),
+      purseUsd: +(+o.purseUsd || 0).toFixed(2),
+      positions: (o.positions || []).length,
+      laneNet: t && t.stats ? +(+t.stats.net || 0).toFixed(2) : null,
+      laneTrades: t && t.stats ? +t.stats.n || 0 : null,
+      laneWins: t && t.stats ? +t.stats.wins || 0 : null,
+    };
+  } catch {}
+  try {
+    const oc = JSON.parse(fs.readFileSync(ONCHAIN_FILLS_PATH, 'utf8'));
+    if (Array.isArray(oc)) for (const f of oc.slice(-12)) {
+      act.push({ venue: 'solana', ts: +f.ts || 0, symbol: f.symbol || null, sig: f.sig || null,
+        text: `${String(f.side || '').toUpperCase()} ${f.symbol || 'boot'} ${+f.usd ? '$' + (+f.usd).toFixed(2) : ''}`.trim() });
+    }
+  } catch {}
+  out.activity = act.filter((a) => a.ts).sort((a, b) => b.ts - a.ts).slice(0, 10);
+  return out;
+}
+
 export function saveWar(w) {
   try { atomicWrite(WAR_PATH, JSON.stringify(w)); } catch {}
   try {
     atomicWrite(API_PATH, JSON.stringify({
       at: new Date().toISOString(),
+      wallets: streetLedger(),
       pimps: Object.entries(w.pimps).map(([name, p]) => ({
         name, roster: p.roster, net: +p.net.toFixed(4), wins: p.wins, losses: p.losses,
         crown: p.crown, crippled: p.crippled,
+        vault: +(p.vaultUsd || 0).toFixed(4), vaultSweeps: p.vaultSweeps || 0,
         mood: (p.roster || []).map((g) => w.cracks[g]).filter(Boolean).sort((a, b) => (b.form ?? 0) - (a.form ?? 0))[0]?.mood || 'working',
       })).sort((a, b) => b.net - a.net),
+      vault: { house: +(w.vaultHouse || 0).toFixed(4) },
       cracks: Object.entries(w.cracks).map(([name, c]) => ({
         name, tag: c.tag, pimp: c.pimp, net: +c.net.toFixed(4), wins: c.wins,
         losses: c.losses, closes: c.closes, stolen: c.stolen, gen: c.gen,
         form: +(c.form ?? 0).toFixed(4), mood: c.mood || 'working',
+        vault: +(c.vaultUsd || 0).toFixed(4),
         hist: (c.hist || []).slice(-24),
         persona: c.persona ? { swagger: +c.persona.swagger.toFixed(2), tilt: +c.persona.tilt.toFixed(2), greed: +c.persona.greed.toFixed(2), discipline: +c.persona.discipline.toFixed(2) } : null,
       })).sort((a, b) => b.net - a.net),
@@ -136,6 +218,10 @@ export function saveWar(w) {
       })).sort((a, b) => b.net - a.net),
       intents: (w.intents || []).slice(-12),
       drama: w.drama.slice(-30).reverse(),
+      // fill→persona join — every consumer (evidence, ATH cards, dashboards)
+      // can resolve who owned a close by tradeId without re-running the
+      // attribution heuristic
+      attrib: Object.fromEntries(Object.entries(w.closeOwner || {}).slice(-150)),
     }, null, 1));
   } catch {}
 }
@@ -184,28 +270,16 @@ export function nominate(war, cand, slotsAvail) {
   const noms = [];
   for (const [pname, p] of Object.entries(war.pimps)) {
     const girls = (p.roster || []).map((g) => (war.cracks[g] ? { name: g, ...war.cracks[g] } : null)).filter(Boolean);
+    let best = null, bestS = -1e9, bestCrack = null;
     for (const crack of girls) {
-      let best = null, bestS = -1e9;
       for (const c of cand) {
         // form rides the nomination too — a hot girl's read earns slot
         // priority over a cold one, not just post-hoc leaderboard rank
         const sc = crackScore(crack, c) + (pname === topPimp ? 4 : 0) - (pname === botPimp ? 4 : 0) + (crack.form ?? 0) * 2;
-        if (sc > bestS) { bestS = sc; best = c; }
+        if (sc > bestS) { bestS = sc; best = c; bestCrack = crack.name; }
       }
-      if (best) noms.push({ cand: best, sc: bestS, pimp: pname, crack: crack.name });
     }
-  }
-  // freelance pass: unowned girls (bagrunners, not-yet-recruited) nominate
-  // for themselves — no crown boost, no crippled dock, no pimp's cut. Raw
-  // scores only; if they outrun the stables they take the slot.
-  for (const [gname, crack] of Object.entries(war.cracks)) {
-    if (crack.pimp) continue;
-    let best = null, bestS = -1e9;
-    for (const c of cand) {
-      const sc = crackScore({ name: gname, ...crack }, c) + (crack.form ?? 0) * 2;
-      if (sc > bestS) { bestS = sc; best = c; }
-    }
-    if (best) noms.push({ cand: best, sc: bestS, pimp: null, crack: gname });
+    if (best) noms.push({ cand: best, sc: bestS, pimp: pname, crack: bestCrack });
   }
   noms.sort((a, b) => b.sc - a.sc);
   const seen = new Set(), out = [];
@@ -218,17 +292,104 @@ export function nominate(war, cand, slotsAvail) {
   return out;
 }
 
+export function claim(war, c, avoid = {}) {
+  const usedCracks = avoid.cracks || new Set();
+  const usedPimps = avoid.pimps || new Set();
+  const picks = [];
+  for (const [pname, p] of Object.entries(war.pimps || {})) {
+    for (const gname of p.roster || []) {
+      const crack = war.cracks[gname];
+      if (!crack) continue;
+      picks.push({ pimp: pname, crack: gname, sc: crackScore({ name: gname, ...crack }, c) + (crack.form ?? 0) * 2 });
+    }
+  }
+  picks.sort((a, b) => b.sc - a.sc);
+  return picks.find((p) => !usedCracks.has(p.crack) && !usedPimps.has(p.pimp))
+    || picks.find((p) => !usedCracks.has(p.crack))
+    || picks.find((p) => !usedPimps.has(p.pimp))
+    || picks[0] || null;
+}
+
 // attribute realized closes to the persona whose intent opened the symbol.
 // intents: [{symbol,direction,ts,pimp,crack}] journaled at order-queue time.
 export function attribute(war, fills, log = () => {}) {
   const lines = [];
   const intents = war.intents || (war.intents = []);
   const done = new Set(war.attributed || (war.attributed = []));
+  // ---- onchain lane joins the war: every 'buy' in the DEX fill journal
+  // becomes an intent on Solana Sadie, every 'sell' becomes a close she
+  // banks (net = sale proceeds - entry cost, swap fees ride inside the
+  // fill price). tradeIds are prefixed 'oc:' so a tx signature can never
+  // collide with an exchange fill id. Intents carry onchain:true so the
+  // reconcile pass uses the onchain book, not Bitget positions, for
+  // "on shift" truth.
+  const ocCloses = [];
+  try {
+    const oc = JSON.parse(fs.readFileSync(ONCHAIN_FILLS_PATH, 'utf8'));
+    // wallet-side exits journal two ways: 'sell' rows (lane-initiated
+    // Jupiter dumps with proceeds in the fill) and 'reconcile' rows —
+    // "wallet balance zero" sightings after tokens left off-trail. A
+    // reconcile only carries costUsd; proceeds are recovered by matching
+    // the custody-legs journal (kind:'sell', same mint, ±6h) and stay
+    // honestly unknown when no leg exists — never booked as a loss.
+    let legs = [];
+    try {
+      const lj = JSON.parse(fs.readFileSync(CUSTODY_LEGS_PATH, 'utf8'));
+      legs = (Array.isArray(lj) ? lj : lj.legs || []).filter((l) => l && l.kind === 'sell' && l.sig);
+    } catch {}
+    const legsSeen = new Set(war.custodySeen || (war.custodySeen = []));
+    if (Array.isArray(oc)) {
+      // global greedy pairing: every (reconcile, sell-leg) candidate pair
+      // sorted by |Δts| — the closest pair claims first, so a leg pays the
+      // bag it actually emptied (a sell zeroes the wallet seconds before
+      // the recon journals it), never the oldest unmatched recon
+      const legFor = new Map();
+      {
+        const pairs = [];
+        oc.forEach((f, i) => {
+          if (!(f.side === 'reconcile' && f.symbol && f.mint)) return;
+          for (const l of legs) if (l.asset === f.mint) pairs.push({ i, l, d: Math.abs((+l.ts || 0) - (+f.ts || 0)) });
+        });
+        pairs.sort((a, b) => a.d - b.d);
+        for (const p of pairs) {
+          if (p.d >= 6 * 3600e3) break;
+          if (legFor.has(p.i) || legsSeen.has(p.l.sig)) continue;
+          legFor.set(p.i, p.l); legsSeen.add(p.l.sig);
+        }
+      }
+      const seen = new Set(intents.filter((i) => i.onchain).map((i) => i.coid));
+      for (const [i, f] of oc.entries()) {
+        if (f.side === 'buy' && f.symbol && f.sig) {
+          const coid = 'oc:' + f.sig;
+          const ocPimp = war.cracks[ONCHAIN_CRACK]?.pimp || START_PIMP.get(ONCHAIN_CRACK) || null;
+          if (!seen.has(coid)) { intents.push({ symbol: f.symbol, direction: 'LONG', ts: f.ts || 0, pimp: ocPimp, crack: ONCHAIN_CRACK, coid, onchain: true }); seen.add(coid); }
+        } else if (f.side === 'sell' && f.symbol && f.sig) {
+          ocCloses.push({ tradeId: 'oc:' + f.sig, symbol: f.symbol, ts: f.ts || 0,
+            profit: (+f.estUsd || 0) - (+f.costUsd || 0), fee: 0, tradeSide: 'close', onchain: true });
+        } else if (f.side === 'reconcile' && f.symbol && f.mint) {
+          const tid = 'oc:recon:' + f.mint.slice(0, 8) + ':' + (f.ts || 0);
+          const leg = legFor.get(i);
+          if (leg) {
+            ocCloses.push({ tradeId: tid, symbol: f.symbol, ts: f.ts || 0,
+              profit: (+leg.amountUsd || 0) - (+f.costUsd || 0), fee: 0, tradeSide: 'close', sig: leg.sig, onchain: true });
+          } else {
+            ocCloses.push({ tradeId: tid, symbol: f.symbol, ts: f.ts || 0, tradeSide: 'close', pnlUnknown: true, onchain: true });
+          }
+        }
+      }
+    }
+    war.custodySeen = [...legsSeen].slice(-200);
+  } catch {}
+  // her record must exist even if the war predates the stable addition —
+  // loadWar's backfill covers saved wars; this guards hand-edited state
+  if (!war.cracks[ONCHAIN_CRACK])
+    war.cracks[ONCHAIN_CRACK] = { w: {}, tag: 'onchain runner — DEX bags', pimp: START_PIMP.get(ONCHAIN_CRACK) || null, net: 0, wins: 0, losses: 0, closes: 0, stolen: 0, gen: 0, form: 0, persona: freshPersona(), mood: 'working' };
   // entry fills charged already — a position closed in N clips must pay
   // its entry leg once, not once per clip
   const feeSeen = new Set(war.feeSeen || (war.feeSeen = []));
+  const owners = war.closeOwner || (war.closeOwner = {});
   let moved = false;
-  for (const f of fills) {
+  for (const f of fills.concat(ocCloses)) {
     // closes arrive two ways on Bitget: tradeSide 'close' or profit!=0
     // (same hedge the exec's episode builder uses — miss it and whole
     // trades go unattributed)
@@ -236,21 +397,53 @@ export function attribute(war, fills, log = () => {}) {
     if (!isClose || !f.tradeId || done.has(f.tradeId)) continue;
     // pass A: newest intent carrying a verified order binding (orderId
     // stamped at fill-confirm upstream — survives the live flag flipping
-    // off as the position dies). Pass B: timestamp heuristic for
-    // pre-binding intents. Never let a nominated-but-unfilled intent steal
-    // a real position's close.
+    // off as the position dies). Pass B: an intent that can be bound to an
+    // actual open fill through coid/orderMap or a bounded symbol+time join.
+    // A nomination that never filled must never steal a real close.
+    const openForIntent = (it, closeTs) => {
+      if (!it || it.symbol !== f.symbol || +it.ts > +f.ts) return null;
+      if (it.onchain || f.onchain) return it.onchain && f.onchain ? ((+it.filledAt ?? +it.ts) || closeTs) : null;
+      if (it.filledAt != null) return +it.filledAt <= closeTs ? +it.filledAt : null;
+      const keys = it.coid ? [it.coid, it.coid + 'r', it.coid + 'm'] : [];
+      const orderIds = new Set(keys.map((k) => war.orderMap?.[k]).filter(Boolean).map(String));
+      if (it.orderId) orderIds.add(String(it.orderId));
+      const of = it.coid
+        ? (orderIds.size ? [...fills].reverse().find((x) => x.tradeSide === 'open' && orderIds.has(String(x.orderId))) : null)
+        : [...fills].reverse().find((x) => x.tradeSide === 'open' && x.symbol === it.symbol
+            && !/ios|android|web/i.test(x.src || '') && (+x.ts || 0) >= +it.ts - 60e3 && (+x.ts || 0) <= closeTs);
+      if (of) {
+        it.filledAt = +of.ts || Date.now();
+        if (of.orderId) it.orderId = String(of.orderId);
+        return it.filledAt;
+      }
+      return it.orderId ? ((+it.filledAt ?? +it.ts) || closeTs) : null;
+    };
     let hit = null;
     for (let i = intents.length - 1; i >= 0; i--) {
       const it = intents[i];
-      if (it.symbol === f.symbol && it.ts <= f.ts && it.orderId) { hit = it; break; }
+      if (openForIntent(it, +f.ts || 0) != null) { hit = it; break; }
     }
-    if (!hit) for (let i = intents.length - 1; i >= 0; i--) {
-      const it = intents[i];
-      if (it.symbol === f.symbol && it.ts <= f.ts) { hit = it; break; }
-    }
-    if (!hit) { done.add(f.tradeId); continue; }
+    if (!hit) { done.add(f.tradeId); owners[f.tradeId] = { pimp: null, crack: null }; continue; }
     done.add(f.tradeId);
     moved = true;
+    // close→owner map: the vault sweep for this fill pays the pimp who
+    // owned the trick — recorded here so carry KPI survives intent expiry
+    owners[f.tradeId] = { pimp: hit.pimp || null, crack: hit.crack || null };
+    // the intent's episode is over either way — the shift board should say
+    // "clocked out", not "awaiting fill" for a bag that already left
+    hit.closedAt = f.ts;
+    // off-book exits: the trick happened (tokens left the wallet — that's a
+    // real close) but proceeds never hit a ledger we can read. Count the
+    // episode, keep net/wins/losses untouched — unknown ≠ a loss.
+    if (f.pnlUnknown) {
+      const cr0 = war.cracks[hit.crack] || (war.retired || {})[hit.crack];
+      if (cr0) {
+        cr0.closes++;
+        moved = true;
+        lines.push(`🌫 ${hit.crack} let ${f.symbol} go — left the wallet off-book, proceeds unverifiable`);
+      }
+      continue;
+    }
     // round-trip fee truth: the entry leg is journaled as an 'open' fill on
     // the same symbol+direction between the nomination and this close —
     // charge it, or the board scores every trick half-priced.
@@ -308,9 +501,63 @@ export function attribute(war, fills, log = () => {}) {
   }
   war.attributed = [...done].slice(-800);
   war.feeSeen = [...feeSeen].slice(-800);
+  const ownKeys = Object.keys(owners);
+  if (ownKeys.length > 1200) for (const k of ownKeys.slice(0, ownKeys.length - 1200)) delete owners[k];
   war.intents = intents.slice(-60);
   if (moved) for (const l of lines.slice(-3)) { say(war, l); log(l); }
   return lines;
+}
+
+// ---- vault carry distribution — the house take on every profitable close
+// is the pimp's money going upstairs: the sweep on a trick pays whoever
+// owned the girl that banked it. war.closeOwner (written by attribute())
+// maps close tradeId -> {pimp, crack}; sweeps without a claimable owner —
+// manual fills, pre-binding closes, retired-corner ghosts — land in
+// vaultHouse, the corner's anonymous pot. Sweeps dedupe by tradeId so a
+// recycled journal can never double-pay the KPI.
+export function vaultDistribute(war, vault, log = () => {}) {
+  const seen = new Set(war.vaultSeen || (war.vaultSeen = []));
+  const owners = war.closeOwner || {};
+  let paid = 0, lines = [];
+  // the DEX lane kicks upstairs too — onchain-vault.json journals its own
+  // sweeps keyed by sid (ot:<mint>:<ts>), not tradeId. Normalize upstream so
+  // dedupe + the intent-fallback owner heuristic resolve them like perp
+  // sweeps: an onchain close's owner is whoever's intent held the bag.
+  const sweeps = [...(vault.sweeps || [])];
+  try {
+    const ov = JSON.parse(fs.readFileSync(OC_VAULT_PATH, 'utf8'));
+    for (const s of ov.sweeps || []) sweeps.push({ ...s, tradeId: s.tradeId || s.sid });
+  } catch {}
+  for (const s of sweeps) {
+    if (!s || !(+s.amountUsd > 0) || !s.tradeId || seen.has(s.tradeId)) continue;
+    seen.add(s.tradeId);
+    paid += +s.amountUsd;
+    let own = owners[s.tradeId] || {};
+    // pre-closeOwner sweeps: fall back to the same newest-intent-before-ts
+    // heuristic attribute() uses — only sweeps whose intents still live
+    // resolve; the rest honestly land in the house pot
+    if (!own.pimp && !own.crack) {
+      for (let i = war.intents.length - 1; i >= 0; i--) {
+        const it = war.intents[i];
+        if (it.symbol === s.symbol && it.ts <= (+s.ts || 0)) { own = { pimp: it.pimp || null, crack: it.crack }; break; }
+      }
+    }
+    if (own.crack) {
+      const cr = war.cracks[own.crack] || (war.retired || {})[own.crack];
+      if (cr) cr.vaultUsd = +((cr.vaultUsd || 0) + s.amountUsd).toFixed(4);
+    }
+    if (own.pimp && war.pimps[own.pimp]) {
+      const p = war.pimps[own.pimp];
+      p.vaultUsd = +((p.vaultUsd || 0) + s.amountUsd).toFixed(4);
+      p.vaultSweeps = (p.vaultSweeps || 0) + 1;
+      lines.push(`🏦 ${own.pimp} kicked $${(+s.amountUsd).toFixed(2)} upstairs${own.crack ? ` — ${own.crack}'s trick on ${s.symbol}` : ` on ${s.symbol}`} (lifetime vault $${p.vaultUsd.toFixed(2)})`);
+    } else {
+      war.vaultHouse = +((war.vaultHouse || 0) + s.amountUsd).toFixed(4);
+    }
+  }
+  war.vaultSeen = [...seen].slice(-2000);
+  if (lines.length) for (const l of lines.slice(-3)) { say(war, l); log(l); }
+  return { paid, lines };
 }
 
 // the turf war — runs once per exec cycle after attribution.

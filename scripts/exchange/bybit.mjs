@@ -213,6 +213,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
   // ---------- orders ----------
   const marketOrder = (symbol, side, size, intent, extra = {}) => {
     const normalizedSide = normalizeOrderSide(side);
+    const { clientOid, ...fields } = extra;
     return api('POST', '/v5/order/create', {
       body: {
         category: CAT,
@@ -222,13 +223,15 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
         qty: String(size),
         positionIdx: idxFor(normalizedSide, intent),
         ...(intent === 'close' ? { reduceOnly: true } : {}),
-        ...extra,
+        ...(clientOid ? { orderLinkId: String(clientOid).slice(0, 36) } : {}),
+        ...fields,
       },
     });
   };
 
   const limitOrder = (symbol, side, size, price, extra = {}) => {
     const normalizedSide = normalizeOrderSide(side);
+    const { clientOid, ...fields } = extra;
     return api('POST', '/v5/order/create', {
       body: {
         category: CAT,
@@ -239,7 +242,8 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
         price: String(price),
         timeInForce: 'PostOnly',
         positionIdx: idxFor(normalizedSide, 'open'),
-        ...extra,
+        ...(clientOid ? { orderLinkId: String(clientOid).slice(0, 36) } : {}),
+        ...fields,
       },
     });
   };
@@ -259,6 +263,9 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
         side: (o.side || '').toLowerCase(),
         orderType: (o.orderType || '').toLowerCase(),
         state: o.orderStatus,
+        filledVolume: o.cumExecQty,
+        leavesQty: o.leavesQty,
+        reduceOnly: o.reduceOnly,
         cTime: o.createdTime,
       }));
   };
@@ -268,20 +275,51 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
       body: { category: CAT, symbol, orderId },
     });
 
+  const getOrder = async (symbol, { orderId, clientOid } = {}) => {
+    const params = new URLSearchParams({ category: CAT, symbol });
+    if (orderId) params.set('orderId', orderId);
+    else if (clientOid) params.set('orderLinkId', clientOid);
+    else throw new Error('getOrder requires an order identity');
+    for (const endpoint of ['/v5/order/realtime', '/v5/order/history']) {
+      const r = await api('GET', endpoint, { qs: params.toString() });
+      const row = (r?.list || []).find((o) => orderId ? o.orderId === orderId : o.orderLinkId === clientOid);
+      if (row) return row;
+    }
+    return null;
+  };
+
   // ---------- TP/SL plans ----------
   // Whole-position legs ride the position's trading-stop; sized legs are
   // conditional reduceOnly orders. getPlans merges both into Bitget plan rows.
   const TPSL_IDS = { pos_loss: 'sl', pos_profit: 'tp' };
 
-  const tradingStop = (symbol, fields, holdSide) =>
-    api('POST', '/v5/position/trading-stop', {
-      body: {
-        category: CAT, symbol, tpslMode: 'Full',
-        // positionIdx targets the POSITION: hedge long=1/short=2, oneway=0
-        positionIdx: POS_MODE === 'hedge' ? (holdSide === 'long' ? 1 : 2) : POS_IDX,
-        ...fields,
-      },
-    });
+  const tradingStop = async (symbol, fields, holdSide) => {
+    try {
+      return await api('POST', '/v5/position/trading-stop', {
+        body: {
+          category: CAT, symbol, tpslMode: 'Full',
+          // positionIdx targets the POSITION: hedge long=1/short=2, oneway=0
+          positionIdx: POS_MODE === 'hedge' ? (holdSide === 'long' ? 1 : 2) : POS_IDX,
+          ...fields,
+        },
+      });
+    } catch (e) {
+      // 34040 "not modified" = the value is already armed (entry orders now
+      // carry their own stopLoss, so the exec's re-arm is a no-op). Verify
+      // the armed value matches intent before accepting — otherwise it's a
+      // real protection failure, not idempotency.
+      if (/34040/.test(e.message)) {
+        const r = await api('GET', '/v5/position/list', { qs: `category=${CAT}&symbol=${symbol}` });
+        const p = (r?.list || []).find((row) => +row.size > 0);
+        const key = fields.stopLoss != null ? 'stopLoss' : fields.takeProfit != null ? 'takeProfit' : null;
+        const want = key ? +fields[key] : null, armed = key ? +p?.[key] : null;
+        if (want != null && armed != null && Math.abs(armed - want) <= Math.abs(want) * 2e-3)  // tick-rounding tolerant: exchange stores the stop at instrument granularity (armed 0.002067 vs want 0.0020672 killed a DOOD seat); 0.2% is immaterial to a 0.5-9% stop but still catches genuinely wrong values
+          return { retCode: 0, idempotent: true };
+        throw new Error(`${e.message} | verify key=${key} armed=${p?.[key]} want=${fields[key]} row=${JSON.stringify(p).slice(0, 240)}`);
+      }
+      throw e;
+    }
+  };
 
   const planOrder = async (symbol, planType, triggerPrice, size, holdSide, marginMode) => {
     if (planType === 'pos_loss' || planType === 'pos_profit') {
@@ -422,14 +460,27 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
   // fills → the exec's journal shape: tradeId/symbol/side/price/baseVolume/
   // quoteVolume/fee/profit/tradeSide/cTime/enterPointSource. execValue is the
   // USDT notional (quoteVolume); execFee arrives positive as a cost.
-  const getFills = async () => {
-    const r = await api('GET', '/v5/execution/list', {
-      qs: `category=${CAT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
-    });
+  const getFills = async ({ symbol, startTime, limit = 100 } = {}) => {
+    const list = [];
+    let cursor;
+    const seenCursors = new Set();
+    do {
+      const params = new URLSearchParams({
+        category: CAT, limit: String(Math.min(100, Math.max(1, limit))),
+        startTime: String(startTime ?? Date.now() - 48 * 3600e3),
+      });
+      if (symbol) params.set('symbol', symbol);
+      if (cursor) params.set('cursor', cursor);
+      const page = await api('GET', '/v5/execution/list', { qs: params.toString() });
+      list.push(...(page?.list || []));
+      cursor = page?.nextPageCursor;
+      if (cursor && seenCursors.has(cursor)) throw new Error('execution pagination repeated a cursor');
+      if (cursor) seenCursors.add(cursor);
+    } while (cursor);
     // execType filter is semantic, not cosmetic: Funding/Settle rows share the
     // endpoint and carry qty+price, but never touch the position — ingest one
     // and the journal books a phantom open that can never close.
-    const rows = (r?.list || [])
+    const rows = list
       .filter((f) => !f.execType || f.execType === 'Trade')
       .map((f) => {
         const orderSide = (f.side || '').toLowerCase(); // 'buy'|'sell' — order side
@@ -446,6 +497,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
           orderId: f.orderId,
           symbol: f.symbol,
           side: posSide,
+          positionSide: posSide === 'buy' ? 'long' : 'short',
           orderSide,
           tradeSide: isClose ? 'close' : 'open',
           price: f.execPrice,
@@ -453,6 +505,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
           quoteVolume: f.execValue,
           feeDetail: [{ totalFee: -(+f.execFee || 0) }], // Bitget convention: negative = charge
           profit: f.execPnl,
+          isMaker: f.isMaker,
           cTime: f.execTime,
           enterPointSource: 'api', // bot-routed — manual fills can't be distinguished on V5
         };
@@ -484,7 +537,10 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
           hit += take; h.qty -= take; left -= take;
           if (h.qty <= 1e-9) q.shift();
         }
-        if (hit > 0) f.profit = pnl;
+        if (hit > 0 && left <= Math.max(1e-9, qty * 1e-8)) {
+          f.profit = pnl;
+          f.pnlComplete = true;
+        }
       }
       books.set(key, q);
     }
@@ -552,6 +608,7 @@ export function makeBybit({ key, secret, mode, recvWindow = '5000', host } = {})
     marketOrder,
     limitOrder,
     pendingOrders,
+    getOrder,
     cancelOrder,
     planOrder,
     getPlans,

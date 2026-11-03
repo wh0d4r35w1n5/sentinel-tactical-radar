@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { integrityNote } from './crc32.mjs';
 import { makeExchange } from './exchange/index.mjs';
+import { executionSeat } from './risk-entry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 try {
@@ -46,6 +47,12 @@ const POLL_MS = +(process.env.LIQ_GUARD_POLL_MS || 300);
 // trigger and re-pin the stop deeper toward the liq edge — the position
 // bleeds through the dip instead of stopping out all at once.
 const STOP_TRIM = process.env.LIQ_GUARD_STOP_TRIM !== '0';
+// deepen killed 2026-10-19 (operator call): the stop is a precommitted R
+// boundary — pushing it deeper post-clip broke the cardinal rule and on a
+// leveraged book parks the trigger inside the wick-hunt zone (QUSDT was
+// deepened to a 21.52% band). STOP-TRIM shedding stays: size shrinks near
+// the stop, the stop itself never retreats. LIQ_GUARD_STOP_DEEPEN=1 revives.
+const STOP_DEEPEN = process.env.LIQ_GUARD_STOP_DEEPEN === '1';
 const STOP_ZONE = +(process.env.LIQ_GUARD_STOP_ZONE_PCT || 1.2); // % above stop = trim zone
 // tight stops ARE the cut — the shed-through-the-dip ladder needs room
 // to work. Below MIN_WIDTH every clip is a fee+loss donation racing a
@@ -70,6 +77,12 @@ const LIQ_GAP_MIN_PCT = +(process.env.LIQ_GUARD_LIQ_GAP_MIN_PCT || 0.25);
 // just stays where the operator put it.
 const NO_DEEPEN = new Set(
   (process.env.LIQ_GUARD_NO_DEEPEN_SYMS || '').split(',').map((s) => s.trim()).filter(Boolean)
+);
+// operator-declared hands-off symbols — NO guard action of any kind (no
+// trims, no crash brake, no bagrunner vanish, no stall-cut). For positions
+// that must ride untouched: coupon/boosted bags, operator-declared keeps.
+const EXEMPT = new Set(
+  (process.env.LIQ_GUARD_EXEMPT_SYMS || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
 );
 // degenerate-liq guard: on cross-margin accounts with collateral far bigger
 // than the position, the exchange's liqPrice sits hundreds of % from entry
@@ -137,10 +150,28 @@ const TRAIL_BAGRUN = [
   [0.28, 0.22], [0.4, 0.33], [0.55, 0.46], [0.75, 0.64],
   [1.0, 0.87], [1.3, 1.15], [1.7, 1.5], [2.2, 2.0], [3.0, 2.8],
 ];
+// proven-loser manual cells (state/manual-cell-verdicts.json — fills audit):
+// the operator's measured bleed cells get the fee-lock armed earlier and a
+// greedier ratchet — on a cell that keeps proving it can't run, the first
+// green tick is the exit you don't get twice. Machine seats unaffected.
+const TRAIL_BAGRUN_TIGHT = [
+  [0.14, 0.12],                     // fee-recovery arms sooner, still covers ~RT taker fees
+  [0.22, 0.17], [0.32, 0.26], [0.45, 0.37], [0.6, 0.5],
+  [0.8, 0.68], [1.05, 0.9], [1.4, 1.22], [1.85, 1.62], [2.4, 2.15], [3.0, 2.8],
+];
 // manual positions vanish faster too — a bagrunner doesn't ride a turn
 const BAGRUN_VANISH_MIN_PEAK = +(process.env.LIQ_GUARD_BAGRUN_VANISH_PEAK || 0.35);
 const BAGRUN_VANISH_FRAC = +(process.env.LIQ_GUARD_BAGRUN_VANISH_FRAC || 0.32);
 const BAGRUN_VANISH_MIN_FAV = +(process.env.LIQ_GUARD_BAGRUN_VANISH_FAV || 0.12);
+const BAGRUN_LOSER_VANISH_PEAK = +(process.env.LIQ_GUARD_BAGRUN_LOSER_PEAK || 0.25);
+const BAGRUN_LOSER_VANISH_FRAC = +(process.env.LIQ_GUARD_BAGRUN_LOSER_FRAC || 0.26);
+const BAGRUN_LOSER_VANISH_FAV = +(process.env.LIQ_GUARD_BAGRUN_LOSER_FAV || 0.10);
+// operator order 2026-10-15 ("WE MUST NOT LOSE MONEY"): a manual seat opened
+// at 77x sits ~1.3% from liq — a wick can jump past the fee-lock arm before
+// it exists. Normalize any operator-opened seat down to the cap once so the
+// lock has room to work. 0 disables.
+const MANUAL_LEV_CAP = +(process.env.LIQ_GUARD_MANUAL_LEV_CAP ?? 20);
+const TRIM_TO_CAP = process.env.LIQ_GUARD_TRIM_TO_CAP !== '0';
 // scalp stall-cut (NO_DEEPEN symbols): a mean-reversion scalp still deep
 // in the red after SCALP_STALL_MS is a failed thesis — closing early
 // banks ~30% of the stop distance instead of donating the whole stop.
@@ -149,9 +180,80 @@ const BAGRUN_VANISH_MIN_FAV = +(process.env.LIQ_GUARD_BAGRUN_VANISH_FAV || 0.12)
 // backstop if this never trips.
 const SCALP_STALL_MS = +(process.env.LIQ_GUARD_SCALP_STALL_MS || 30 * 60e3);
 const SCALP_STALL_FRAC = +(process.env.LIQ_GUARD_SCALP_STALL_FRAC || 0.7);
+// dead-seat cut (machine seats, all symbols): Will-audit measured the
+// asymmetry — avgLoss -$0.55 ran 1.9x avgWin +$0.29 because losers rode
+// to the full stop while winners fee-locked early. A machine seat that is
+// DEADSEAT_MS old, NEVER traded +DEADSEAT_PEAK favor, and sits past
+// DEADSEAT_ADV underwater is a failed deployment — cut it for the partial
+// loss instead of donating the rest of the stop. Operator/manual seats
+// exempt (his stops rule); engine seats included (the daemon's own 90s
+// dead-cut is faster — this is the backstop if the engine daemon dies).
+const DEADSEAT_MS = +(process.env.LIQ_GUARD_DEADSEAT_MS || 25 * 60e3);
+const DEADSEAT_ADV = +(process.env.LIQ_GUARD_DEADSEAT_ADV_PCT || 0.35);
+const DEADSEAT_PEAK = +(process.env.LIQ_GUARD_DEADSEAT_PEAK_PCT || 0.3);
+// pre-favor stop cap (mae-mfe audit, n=300 losers: median MFE 0.091% —
+// losing seats NEVER printed fee-lock favor; they were dead on arrival
+// and still rode the full stop). Until a seat proves +PREFAVOR_PEAK
+// favor it gets a PREFAVOR_ADV leash, not the full stopPct — converts
+// the −3.3% donation into a −0.8% scratch. Once favor prints, the normal
+// stop/trail owns it (the ratchet is already climbing by then anyway).
+const PREFAVOR_PEAK = +(process.env.LIQ_GUARD_PREFAVOR_PEAK_PCT || 0.15);
+const PREFAVOR_ADV = +(process.env.LIQ_GUARD_PREFAVOR_ADV_PCT || 0.8);
+// guard must have OBSERVED the seat long enough to know it never saw
+// favor — a restart can't see a peak that happened pre-boot.
+const DEADSEAT_SEEN_MS = +(process.env.LIQ_GUARD_DEADSEAT_SEEN_MS || 20 * 60e3);
 // software take-profit for scalp positions that can't hold a TP plan
 // (min-size overcover invalidation). 0 disables — sized legs carry it.
 const SCALP_TP_PCT = +(process.env.LIQ_GUARD_SCALP_TP_PCT || 1.5);
+// Forward-test of the >120min-hold discovery (mc-find: SQN_100 +7.70 on
+// episodes that survived 2h): voluntary exits (scalp-TP, giveback vanish,
+// stall-cut) may not fire before MIN_HOLD_MS. Hard/protective exits are
+// untouched — crash brake, liq-zone trims, margin-loss cap, naked-stop
+// synthesis, stop-approach trims and all tighten-only ratchets still run.
+const MIN_HOLD_MS = +(process.env.LIQ_GUARD_MIN_HOLD_MS || 0);
+const underMinHold = (p) => MIN_HOLD_MS > 0 && p.cTime > 0 && (Date.now() - p.cTime) < MIN_HOLD_MS;
+// ---- ATR-trail profile — state/trail-strategies.json (shared with the
+// scanner + exec): cells whose edge was MEASURED under trail exits ride
+// stop = peak − K·ATR14(15m) instead of the fee-lock tier ladder. The
+// exchange loss_plan stays the floor; this ratchet only ever TIGHTENS it.
+// Tier ladder, keep-ratchet, vanish and software scalp-TP all stand down
+// on these seats — each caps the runner tail the trail exists to harvest.
+// Hard protections (crash brake, liq-zone, margin-loss cap, dead-seat,
+// time-stop) still ride. Evidence: 90d full-backtest SFP/Sweep LONG
+// +2.28/+1.75 SQN at n≈1700-1900 under K=2.5 trail — buried under ladder.
+let trailCfg = { at: 0, set: new Set(), k: 2.5, rows: [] };
+const trailAtrFor = (sym) => {
+  if (Date.now() - trailCfg.at > 60e3) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'trail-strategies.json'), 'utf8'));
+      const rows = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'api', 'live-ledger.json'), 'utf8')).entriesLog || []).slice(-500);
+      trailCfg = { at: Date.now(), set: new Set(j.strategies || []), k: +(j.k || 2.5), kBy: j.kBy || {}, rows };
+    } catch { trailCfg.at = Date.now(); }
+  }
+  if (!trailCfg.set.size) return null;
+  const e = [...trailCfg.rows].reverse().find((x) => x.symbol === sym || x.symbol === sym.replace(/USDT$/, ''));
+  // per-cell K (2026-10-19): the 90d exit-variant matrix measured different
+  // optima — SFP K3 (SQN 2.55), Sweep K2 (2.05), TSMom K2 (1.38); kBy
+  // overrides the flat K so each cell rides its measured trail width.
+  return e && trailCfg.set.has(e.strategy) && e.direction === 'LONG' ? { strat: e.strategy, k: +(trailCfg.kBy[e.strategy] || trailCfg.k) } : null;
+};
+const atr15mPct = (sym) => {
+  try {
+    const rows = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'klines-15m.json'), 'utf8'))[sym]?.rows) || [];
+    if (rows.length < 16) return null;
+    let tr = 0;
+    for (let i = rows.length - 14; i < rows.length; i++) {
+      const r = rows[i], p2 = rows[i - 1];
+      tr += Math.max(r.h - r.l, Math.abs(r.h - p2.c), Math.abs(r.l - p2.c));
+    }
+    const px = rows[rows.length - 1].c;
+    return px > 0 ? (tr / 14 / px) * 100 : null;
+  } catch { return null; }
+};
+// machine-seat time-stop (mc-million exit grid: <=2h holds dominated —
+// a seat flat after 2h is dead margin; free it). Manual seats exempt.
+const TIMESTOP_MS = +(process.env.LIQ_GUARD_TIMESTOP_MS || 2 * 36e5);
+const TIMESTOP_MIN_FAV = +(process.env.LIQ_GUARD_TIMESTOP_MIN_FAV_PCT || 0.12); // must cover RT fees
 // crash brake: a mark that gaps adversely >= CRASH_PCT within CRASH_MS is a
 // wick the trim ladder cannot outrun — a 28% candle at 30x crosses the whole
 // band between polls, and the 0.8% zone arms too late by design. Fire a big
@@ -173,15 +275,33 @@ const DUST_USD = +(process.env.LIQ_GUARD_DUST_USD || 0.15);
 // on you". Each position's peak favor is tracked; a locked-green trade that
 // retraces >= VANISH_FRAC of its best run while still green gets market-
 // closed — bank the turn rather than riding it back through the stop.
-const VANISH_MIN_PEAK = +(process.env.LIQ_GUARD_VANISH_MIN_PEAK || 0.6);  // smallest peak worth protecting
-const VANISH_FRAC = +(process.env.LIQ_GUARD_VANISH_FRAC || 0.4);          // giveback fraction of peak
+// mc-million exit-grid + Will's audit: the early vanish was banking +$0.20
+// winners against -$1.4 stop losses — the measured asymmetry. Breathe more:
+// arm only on real runs (>=0.8%) and tolerate a wider giveback (55%) so
+// winners reach the TP rungs instead of dying micro-green.
+const VANISH_MIN_PEAK = +(process.env.LIQ_GUARD_VANISH_MIN_PEAK || 0.8);  // smallest peak worth protecting
+const VANISH_FRAC = +(process.env.LIQ_GUARD_VANISH_FRAC || 0.55);         // giveback fraction of peak
 const VANISH_MIN_FAV = +(process.env.LIQ_GUARD_VANISH_MIN_FAV || 0.15);   // below this the stop owns it
+// moon-runner (Liam thesis, fills-audit justified): machine seats' vanish
+// leaves the moon bag — the residual rides the already-locked-green stop and
+// the ratchet carries it toward runner targets if the tape delivers. Floor
+// is the locked stop (can't print red); manual/bagrunner seats keep
+// whole-close — bank the turn IS that profile.
+const MOON_RUNNER = process.env.LIQ_GUARD_MOON_RUNNER !== '0';
+const MOON_FRAC = +(process.env.LIQ_GUARD_MOON_FRAC || 0.15);
 // continuous ratchet: once the first tier arms, the lock additionally
 // follows KEEP_FRAC of peak favor — fills the gaps between rungs, never
 // looser than a rung, tighten-only so it composes with the tier ladder.
 const KEEP_FRAC = +(process.env.LIQ_GUARD_KEEP_FRAC || 0.75);
 // manual-book: exec writes the set of held symbols whose last open fill
 // was operator/app-originated (src != api). Cached 20s like plans.
+// MANUAL-CLIP-BAN (2026-10-19 operator order): every discretionary market
+// exit — VANISH, TRIM_TO_CAP, CRASH-BRAKE, MAXLOSS, SCALP_STALL,
+// STOP-TRIM, DANGER trim — checks this set before firing on a manual
+// seat. Armor (stop/TP plans, ratchets, be-locks) still applied by
+// bitget-watch; the resting stop is the only machine exit. Delegated
+// syms (cmd-machine-manage) leave the set and stay fully managed.
+const DEF_CLIP_ON = (process.env.LIQ_GUARD_DEF_CLIP || '0') === '1'; // 2026-10-19: defense clips banned
 const manualCache = { at: 0, syms: new Set() };
 const manualSyms = () => {
   if (Date.now() - manualCache.at < 20e3) return manualCache.syms;
@@ -189,8 +309,55 @@ const manualSyms = () => {
   try {
     const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'manual-book.json'), 'utf8'));
     manualCache.syms = new Set(d.syms || []);
+    // cmd-manual-hold.json is operator-declared hands-off (exec honors it,
+    // the guard did not — 2026-10-19 QUSDT vanish killed a held seat before
+    // the fill journal could flag it). Merge it: declared = detected.
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cmd-manual-hold.json'), 'utf8'));
+      for (const hs of h.symbols || []) manualCache.syms.add(String(hs).toUpperCase());
+    } catch {}
+    for (const ms of machineManageSyms()) manualCache.syms.delete(ms);
   } catch { manualCache.syms = new Set(); }
   return manualCache.syms;
+};
+// cmd-machine-manage.json (operator handover 2026-10-19): symbols the machine
+// owns outright - exits + future seats. Overrides every manual-detection path
+// so a hand-seated position can be DELEGATED to full machine management.
+const machineCache = { at: 0, syms: new Set() };
+const machineManageSyms = () => {
+  if (Date.now() - machineCache.at < 20e3) return machineCache.syms;
+  machineCache.at = Date.now();
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cmd-machine-manage.json'), 'utf8'));
+    machineCache.syms = new Set((d.syms || []).map((x) => String(x).toUpperCase()));
+  } catch { machineCache.syms = new Set(); }
+  return machineCache.syms;
+};
+// bagrunner-seats: engine-owned ignition seats (state/bagrunner-seats.json,
+// written by scripts/bagrunner.mjs). The crackwhore thesis applies to the
+// lightning engine identically — fee-lock first, greedy tiers, fast vanish.
+const bagrunCache = { at: 0, syms: new Set() };
+const bagrunSyms = () => {
+  if (Date.now() - bagrunCache.at < 20e3) return bagrunCache.syms;
+  bagrunCache.at = Date.now();
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'bagrunner-seats.json'), 'utf8'));
+    bagrunCache.syms = new Set(d.syms || Object.keys(d.seats || {}));
+  } catch { bagrunCache.syms = new Set(); }
+  return bagrunCache.syms;
+};
+// manual-cell-verdicts: symbols the operator's own fills proved negative on
+// (fills audit attribution). Tightens the bagrunner profile on manual opens
+// only — machine seats on the same symbol keep their own verdicts.
+const manualLoserCache = { at: 0, syms: new Set() };
+const manualLoserSyms = () => {
+  if (Date.now() - manualLoserCache.at < 20e3) return manualLoserCache.syms;
+  manualLoserCache.at = Date.now();
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'manual-cell-verdicts.json'), 'utf8'));
+    manualLoserCache.syms = new Set(d.loserSyms || []);
+  } catch { manualLoserCache.syms = new Set(); }
+  return manualLoserCache.syms;
 };
 const planCache = {}; // sym -> { at, rows } — plans change slowly, poll 20s
 // pc.at only advances on a successful fetch — a network blip used to freeze
@@ -592,9 +759,61 @@ async function tick() {
   const heldSyms = new Set([...posCache.map((p) => p.sym), SEED_SYM]);
   for (const s of [...subbed]) if (!heldSyms.has(s)) { subbed.delete(s); wsMarks.delete(s); delete markMeta[s]; restMarks.delete(s); }
 
+  // real-time manual-seat detection (2026-10-16): manual-book.json lags up to
+  // a full exec cycle (8min inside a scanner rebuild) — a hand-opened seat
+  // must read as manual THIS tick or the lev cap/cut-exemptions miss it.
+  // Fill-source is truth: held sym whose last opens are all non-api = his seat.
+  try {
+    const rf = await X.getFills({ limit: 50 });
+    // seat-scoped provenance (2026-10-19): a seat is machine-manageable ONLY
+    // when its own opens prove api src — non-api hand in the seat, or an
+    // unproven open, fails CLOSED to hands-off. machine-seats.json binds the
+    // proof to seat cTime so old seats keep status after fills roll off.
+    const seatsPath = path.join(__dirname, '..', 'state', 'machine-seats.json');
+    let seats = {}; try { seats = JSON.parse(fs.readFileSync(seatsPath, 'utf8')) || {}; } catch { }
+    let seatsDirty = false;
+    for (const p of posCache) {
+      if (machineManageSyms().has(p.sym)) continue;
+      const key = `${p.sym}:${p.side}`;
+      const opens = (rf || []).filter((f) => f.symbol === p.sym && f.tradeSide === "open")
+        .sort((a, b) => +b.cTime - +a.cTime);
+      const pCt = +p.cTime || 0;
+      const seatOpens = pCt > 0 ? opens.filter((f) => +f.cTime >= pCt - 2000) : opens.slice(0, 1);
+      const apiProven = seatOpens.length > 0 && seatOpens.every((f) => f.enterPointSource === 'api');
+      if (apiProven) {
+        if (seats[key] !== pCt) { seats[key] = pCt; seatsDirty = true; }
+        manualCache.syms.delete(p.sym);
+      } else if (seatOpens.length === 0 && pCt > 0 && seats[key] === pCt) {
+        manualCache.syms.delete(p.sym);
+      } else {
+        manualCache.syms.add(p.sym);
+      }
+    }
+    if (seatsDirty) try { fs.writeFileSync(seatsPath, JSON.stringify(seats)); } catch { }
+  } catch { }
+
+  // prefetch marks + tox in parallel — the per-position loop would otherwise
+  // serialize N × (REST timeout) on a starved box: 8 positions × ~23s worst
+  // case = a wedged tick and a protection outage right when the slide needs
+  // it. Fan-out makes the slowest call the floor, not the sum.
+  await Promise.all(
+    [...new Set(posCache.map((p) => p.sym))].flatMap((s) => [
+      pickMark(s).catch(() => 0),
+      toxFor(s).catch(() => null),
+      plansFor(s).catch(() => null),
+    ])
+  );
+
   const stOut = { at: Date.now(), positions: {}, trims };
   let dirty = false;
-  for (const p of posCache) {
+  // positions guarded in PARALLEL — the serial loop let N x REST-timeout stack
+  // past the 120s watchdog (wedged-tick FATALs = protection outages mid-slide).
+  // Per-position state (gates[key], stOut.positions[key]) is key-scoped; shared
+  // writes (dirty, trims, outbox) are single-threaded-safe.
+  await Promise.allSettled(posCache.map(async (p) => {
+    // operator hands-off: EXEMPT symbols get zero guard actions — the
+    // position rides untouched to whatever end the operator chose for it.
+    if (EXEMPT.has(p.sym) || manualSyms().has(p.sym)) return; // manual seats: zero guard contact (2026-10-18 — derisk re-fit clipped ICNT+Q -$12)
     const key = `${p.sym}:${p.side}`;
     const mark = await pickMark(p.sym);
     if (!mark) {
@@ -609,7 +828,7 @@ async function tick() {
         g.blindPaged = Date.now(); dirty = true;
         outbox(`🚨 BLIND MARK — ${p.sym} ${p.side} ${p.size}: no mark for ${Math.round((Date.now() - g.blindSince) / 1e3)}s — protections parked. Exchange-side stop still armed.`);
       }
-      continue;
+      return;
     }
     // flow toxicity for this symbol — adverse = the last minutes' volume is
     // dominated by trade AGAINST our side (a long staring at seller-driven tape)
@@ -621,13 +840,79 @@ async function tick() {
       ? (p.side === 'long' ? (mark - p.liq) / p.liq * 100 : (p.liq - mark) / p.liq * 100)
       : Infinity;
     const g = (gates[key] ||= { lastTrim: 0, lastTrimMark: null });
+    // seat identity (2026-10-19 QUSDT fix): gate state keyed by sym:side
+    // survives restarts AND seat lifecycles — a dead seat's peakFav
+    // poisoned the next seat's vanish math (closed a 1.5s-old manual open
+    // on an inherited +4.23% phantom peak). cTime is the position's real
+    // open timestamp — a different cTime is a different seat: wipe the
+    // per-seat memory before any exit math sees it.
+    if (p.cTime > 0 && g.seatCtime !== p.cTime) {
+      Object.assign(g, { seatCtime: p.cTime, peakFav: 0, vanishAt: 0, seen: false, seenAt: 0, beAt: 0, beDone: 0, lastStopTrim: 0, lastStopMark: null, lastCrash: 0, blindSince: 0, blindPaged: 0 });
+      dirty = true;
+    }
     if (g.blindSince) { g.blindSince = 0; g.blindPaged = 0; dirty = true; } // mark recovered — clear the blind flag
+    // MANUAL-ZERO-CONTACT (2026-10-19 operator order — "not allowed to touch my
+    // manual trades at all"): above this line is read-only tracking (mark,
+    // blind-mark alert, seat-identity state). Below it every action WRITES to
+    // the seat — setLeverage cap, stop planLoss, band-fix, be-lock ratchets,
+    // and the (already gated) market exits. Manual seats return here: ZERO
+    // machine contact — no armor, no ratchet, no leverage adjustment, no
+    // clip, no close. StOps/TPs/exits are 100% the operator's. Sym-level: a
+    // machine seat on the same sym also loses guard coverage while his manual
+    // seat lives (disclosed). The seen-ping is suppressed too — nothing is
+    // "armed" on a seat the machine may not touch.
+    if (manualSyms().has(p.sym)) return;
+    // These seats have a separately verified closed-hour exit contract.
+    // The watch maintains its stop; tick ratchets and legacy exits must not mix in.
+    if (executionSeat(p)) return;
     // new-arrival alert: a position the guard has never seen gets a
     // one-time "now watching" ping — silent arming meant the operator
     // couldn't tell a protected position from an untracked one.
     if (!g.seen) {
-      g.seen = true; dirty = true;
+      g.seen = true; g.seenAt = Date.now(); dirty = true;
       outbox(`👁 LIQ-GUARD armed — ${p.sym} ${p.side} ${p.size} @ ${p.entry} · ${distPct.toFixed(1)}% from liq ${p.liq} · ${p.marginMode || ''}`);
+    }
+    // LEV-NORM early (operator order 2026-10-15): manual seats run this before
+    // the heavy plan machinery — a hung getPlans must never freeze the cap.
+    {
+      const _isEngine = BAGRUN_ON && bagrunSyms().has(p.sym);
+      // 2026-10-16 fee-bleed fix: the lev cap protects manual seats even with
+      // the bagrunner trail OFF — a 90x app seat pays taker on 4-5x the
+      // notional a 20x seat would; detection must not die with BAGRUN_ON.
+      const _isManual = manualSyms().has(p.sym) || _isEngine;
+      const posLev = +(p.lev ?? p.leverage ?? 0);
+      if (Date.now() - (g.levEvalLog || 0) >= 120e3) { g.levEvalLog = Date.now(); dirty = true; log(`eval ${key}: manual=${_isManual} engine=${_isEngine} lev=${posLev} cap=${MANUAL_LEV_CAP} normed=${!!g.levNormed}`); }
+      if (_isManual && !_isEngine && MANUAL_LEV_CAP > 0 && posLev > MANUAL_LEV_CAP && !g.levNormed && Date.now() - (g.levNormAt || 0) >= 60e3) {
+        g.levNormAt = Date.now(); dirty = true;
+        try {
+          await X.setLeverage(p.sym, MANUAL_LEV_CAP);
+          g.levNormed = true;
+          log(`LEV-NORM ${key}: manual seat ${posLev}x -> ${MANUAL_LEV_CAP}x — liquidation band widened, fee-lock can't be jumped`);
+          outbox(`🛡️ LEV-NORM — ${p.sym}: app seat was ${posLev}x (~${(100/Math.max(1,posLev)).toFixed(1)}% from liq). Now ${MANUAL_LEV_CAP}x — the lock gets room to work, a wick can't skip it.`);
+        } catch (e) {
+          const msg = String(e.message || e).slice(0, 90);
+          log(`lev-norm fail ${key}: ${msg}`);
+          // trim-to-cap (operator order 2026-10-15, approved): when the exchange
+          // refuses the cap for margin, the seat itself is too big for the book —
+          // sell 25% and let the next cycle retry the cap. Iterative: converges
+          // to exactly the size where the cap holds without ever over-selling.
+          if (TRIM_TO_CAP && DEF_CLIP_ON && !manualSyms().has(p.sym) && /margin|40893/i.test(msg) && Date.now() - (g.trimCapAt || 0) >= 60e3) {
+            try {
+              const c = cm[p.sym] || {};
+              const sp = Math.pow(10, +c.sizePlace || 0);
+              const q = Math.floor(+p.size * 0.25 * sp) / sp;
+              const minQ = Math.max(+c.minTradeNum || 0, ((+c.minTradeUSDT || 5) * 1.02) / mark);
+              if (q >= minQ && q < +p.size) {
+                g.trimCapAt = Date.now(); dirty = true;
+                await closeSmart(p.sym, p.side, String(q), p.marginMode);
+                kickWatcher();
+                log(`TRIM-CAP ${key}: lev cap refused for margin — sold ${q}/${p.size} (25%) @ ${mark}; cap retries next cycle`);
+                outbox(`✂️ TRIM-CAP — ${p.sym} ${p.side}: ${posLev}x can't de-lever (not enough margin). Sold 25% @ ${mark} so the 20x cap can hold — repeats until it does.`);
+              }
+            } catch (e2) { log(`trim-cap fail ${key}: ${String(e2.message || e2).slice(0, 90)}`); }
+          }
+        }
+      }
     }
     // proximity ladder: alert on each tier crossed downward, re-arm above 4.5%
     const sev = ALERT_TIERS.filter((t) => distPct <= t).length;
@@ -652,7 +937,7 @@ async function tick() {
         }
       }
     } else if (distPct > ALERT_TIERS[0] + 0.5) g.tier = 0;
-    stOut.positions[key] = { size: p.size, liq: p.liq || null, mark, distPct: Number.isFinite(distPct) ? +distPct.toFixed(3) : null, lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark, tox: toxAdv ? 1 : 0, peakFav: g.peakFav ? +g.peakFav.toFixed(2) : null, markSrc: markMeta[p.sym]?.src || null, markAgeMs: markMeta[p.sym] ? Date.now() - markMeta[p.sym].at : null };
+    stOut.positions[key] = { size: p.size, liq: p.liq || null, mark, distPct: Number.isFinite(distPct) ? +distPct.toFixed(3) : null, lastTrim: g.lastTrim, lastTrimMark: g.lastTrimMark, tox: toxAdv ? 1 : 0, peakFav: g.peakFav ? +g.peakFav.toFixed(2) : null, seatCtime: +p.cTime || null, markSrc: markMeta[p.sym]?.src || null, markAgeMs: markMeta[p.sym] ? Date.now() - markMeta[p.sym].at : null };
 
     // ---- crash brake: wick velocity, not proximity. A mark that gapped
     // >=CRASH_PCT adverse within CRASH_MS is a cascade the 0.8% zone can't
@@ -669,7 +954,7 @@ async function tick() {
       // a 5x band (20%) needs a 2% gap — keeps low-lev noise out of it.
       const band0 = p.liq > 0 && p.entry > 0 ? Math.abs(p.entry - p.liq) / p.entry * 100 : Infinity;
       const crashTrig = Math.max(CRASH_PCT, band0 * 0.1);
-      if (gapPct >= crashTrig && Date.now() - (g.lastCrash || 0) >= SPACING_MS) {
+      if (DEF_CLIP_ON && gapPct >= crashTrig && !manualSyms().has(p.sym) && Date.now() - (g.lastCrash || 0) >= SPACING_MS) {
         const fresh = await getAllPos().catch(() => null);
         if (fresh) { posCache = fresh; posCacheAt = Date.now(); }
         const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
@@ -696,7 +981,7 @@ async function tick() {
     // ---- margin-loss circuit: close the whole position when mark-to-market
     // loss crosses -(MAXLOSS_PCT x posted margin). Fires BEFORE the deep
     // pos_loss band — converts tail stop-outs into bounded ~-0.6R losses.
-    if (MAXLOSS_PCT > 0 && p.margin > 0 && p.upl <= -(MAXLOSS_PCT * p.margin)) {
+    if (MAXLOSS_PCT > 0 && DEF_CLIP_ON && p.margin > 0 && !manualSyms().has(p.sym) && p.upl <= -(MAXLOSS_PCT * p.margin)) {
       const fresh = await getAllPos().catch(() => null);
       const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
       if (fp && fp.margin > 0 && fp.upl <= -(MAXLOSS_PCT * fp.margin)) {
@@ -708,7 +993,7 @@ async function tick() {
           outbox(`🛑 LOSS-CAP — ${fp.sym} ${fp.side}: upl $${fp.upl.toFixed(2)} breached -$${capUsd} floor (${(MAXLOSS_PCT * 100).toFixed(0)}% of margin). Full close @ ${mark} — bounded loss, not a band hit.`);
           g.capped = true; dirty = true;
         } catch (e) { log(`LOSS-CAP ${key} close failed: ${e.message}`); }
-        continue; // position flat or closing — nothing below applies
+        return; // position flat or closing — nothing below applies
       }
     }
 
@@ -734,8 +1019,19 @@ async function tick() {
         if (confirmedNaked && p.liq > 0 && p.entry > 0 && Date.now() - (g.nakedAt || 0) >= NAKED_COOLDOWN_MS) {
           const bandPct = Math.abs(p.entry - p.liq) / p.entry * 100;
           const pxDec = +(cm[p.sym]?.pricePlace ?? 6); // parens: +x ?? 6 yields NaN on a contract-map miss
-          const trig = bandStopTrig(p.entry, p.liq, p.side, pxDec);
-          const sane = bandPct <= BAND_CAP_PCT && trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
+          let trig = bandStopTrig(p.entry, p.liq, p.side, pxDec);
+          let sane = bandPct <= BAND_CAP_PCT && trig > 0 && (p.side === 'long' ? trig < mark : trig > mark);
+          // fast-bleed fallback: mark already dove past the band trigger —
+          // a stop that can't land (40917) leaves the seat naked. Park the
+          // synth just inside the live price instead: a degraded floor beats
+          // no floor, provided it still sits between mark and liq.
+          if (!sane && mark > 0) {
+            const fb = p.side === 'long' ? mark * (1 - 0.008) : mark * (1 + 0.008);
+            const ftrig = +fb.toFixed(pxDec);
+            if (p.side === 'long' ? (ftrig > p.liq && ftrig < mark) : (ftrig < p.liq && ftrig > mark)) {
+              trig = ftrig; sane = true;
+            }
+          }
           if (sane) {
             g.nakedAt = Date.now(); // cooldown even on success — no plan spam
             await planLoss(p.sym, p.side, trig, p.marginMode);
@@ -783,13 +1079,21 @@ async function tick() {
       } catch (e) { log(`${key} band-fix error: ${e.message}`); }
     }
 
+    // trail-rehab attribution must resolve BEFORE the software-TP gate —
+    // a trail seat on a NO_DEEPEN symbol would otherwise get clipped at
+    // +1.5%, killing exactly the runner tail the profile exists to catch.
+    const trailAtr = trailAtrFor(p.sym);
     // ---- scalp target close (NO_DEEPEN symbols): Bitget silently
     // invalidates pos_profit and full-size TP legs on minimum-size
     // positions (observed live on XAUUSDT — accepted, dead in <10s). For
     // those, the guard IS the take-profit: a run >= SCALP_TP_PCT in favor
     // closes the whole position at market. Fee-aware: only when the move
     // clearly covers round-trip costs.
-    if (NO_DEEPEN.has(p.sym) && p.entry > 0 && SCALP_TP_PCT > 0) {
+    if (!trailAtr && NO_DEEPEN.has(p.sym) && p.entry > 0 && SCALP_TP_PCT > 0 && !underMinHold(p)
+        && !manualSyms().has(p.sym) && !bagrunSyms().has(p.sym)) {
+      // 2026-10-15: manual/engine seats are exempt — the operator's contract is
+      // fee-lock floor + HIS exits, not a software TP firing at +0.18% (ETH
+      // manual open got scalped green-and-gone before the flag even landed).
       const favPct = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
       if (favPct >= SCALP_TP_PCT) {
         try {
@@ -810,7 +1114,7 @@ async function tick() {
             log(`SCALP-TP ${key}: +${favPct.toFixed(2)}% >= ${SCALP_TP_PCT}% — closed @ ${mark} (software TP; exchange plan unsupportable at this size)`);
             outbox(`🎯 SCALP-TP — ${p.sym} ${p.side} banked +${favPct.toFixed(2)}% @ ${mark} — target hit, position closed.`);
             dirty = true;
-            continue;
+            return;
           }
           }
         } catch (e) { log(`${key} scalp-tp error: ${e.message}`); }
@@ -822,29 +1126,52 @@ async function tick() {
     // tiers; scalp symbols (NO_DEEPEN) arm fast; swing keeps breathing
     // room. Tighten-only, so it composes with the exec's own ratchets on
     // managed positions (tighter wins) and never loosens an operator stop.
-    const isManual = BAGRUN_ON && manualSyms().has(p.sym);
-    const trail = isManual ? TRAIL_BAGRUN : NO_DEEPEN.has(p.sym) ? TRAIL_SCALP : TRAIL_SWING;
+    const isEngine = BAGRUN_ON && bagrunSyms().has(p.sym);
+    const isManual = BAGRUN_ON && (manualSyms().has(p.sym) || isEngine);
+    const manualLoser = isManual && !isEngine && manualLoserSyms().has(p.sym);
+    const trail = isManual ? (manualLoser ? TRAIL_BAGRUN_TIGHT : TRAIL_BAGRUN) : NO_DEEPEN.has(p.sym) ? TRAIL_SCALP : TRAIL_SWING;
+
     if (isManual && !g.bagrunTold) {
       g.bagrunTold = true; dirty = true;
-      outbox(`🏃‍♂️ BAGRUNNER armed — ${p.sym} ${p.side}: operator open detected. Fee-lock at +0.18%, greedy trail, fast vanish. Set your own stop and I'll only tighten it.`);
+      outbox(isEngine
+        ? `🏃‍♂️ BAGRUNNER armed — ${p.sym} ${p.side}: ignition-engine seat. Fee-lock at +0.18%, greedy trail, fast vanish.`
+        : manualLoser
+          ? `🏃‍♂️ BAGRUNNER armed — ${p.sym} ${p.side}: measured-loser cell, tight profile. Fee-lock at +0.14%, greedy trail, fast vanish.`
+          : `🏃‍♂️ BAGRUNNER armed — ${p.sym} ${p.side}: operator open detected. Fee-lock at +0.18%, greedy trail, fast vanish. Set your own stop and I'll only tighten it.`);
     }
     if (!isManual) g.bagrunTold = false;
+    const trailAtrNow = !isManual ? trailAtr : null;
+    if (trailAtrNow && !g.trailTold) {
+      g.trailTold = true; dirty = true;
+      outbox(`🏔 ATR-TRAIL armed — ${p.sym} ${p.side} (${trailAtrNow.strat}): stop follows peak − ${trailAtrNow.k}×ATR, no ladder rungs. The runner tail is the edge.`);
+    }
+    if (!trailAtrNow) g.trailTold = false;
     if (p.entry > 0) {
       try {
         const favPct = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
-        // highest tier armed — a run that skips tiers lands on the deepest lock
-        let lockPct = 0;
-        for (const [arm, lock] of trail) if (favPct >= arm) lockPct = lock;
-        // continuous peak ratchet: once the first tier's territory is
-        // reached the lock also trails KEEP_FRAC of the best favor seen —
-        // a run between rungs still drags the stop up behind it. Toxic tape
-        // (one-sided volume against us) tightens the keep to 85%.
         g.peakFav = Math.max(g.peakFav || 0, favPct);
-        const keepBase = gates.__tune?.keep ?? KEEP_FRAC;
-        const keepF = toxAdv ? Math.min(0.9, keepBase + 0.1) : keepBase;
-        const keepPct = g.peakFav >= trail[0][0] ? g.peakFav * keepF : 0;
-        if (keepPct > lockPct) lockPct = keepPct;
-        if (lockPct > 0) {
+        let lockPct = 0;
+        if (trailAtrNow) {
+          // pure trail: stop = peakFav − K·ATR% — the only ratchet. No fee
+          // lock tier, no keep-frac: the sim's edge lives in room to run.
+          const ap = atr15mPct(p.sym);
+          if (ap) lockPct = Math.max(0, g.peakFav - trailAtrNow.k * ap);
+        } else {
+          // highest tier armed — a run that skips tiers lands on the deepest lock
+          for (const [arm, lock] of trail) if (favPct >= arm) lockPct = lock;
+          // continuous peak ratchet: once the first tier's territory is
+          // reached the lock also trails KEEP_FRAC of the best favor seen —
+          // a run between rungs still drags the stop up behind it. Toxic tape
+          // (one-sided volume against us) tightens the keep to 85%.
+          const keepBase = gates.__tune?.keep ?? KEEP_FRAC;
+          const keepF = toxAdv ? Math.min(0.9, keepBase + 0.1) : keepBase;
+          const keepPct = g.peakFav >= trail[0][0] ? g.peakFav * keepF : 0;
+          if (keepPct > lockPct) lockPct = keepPct;
+        }
+        // trail seats ratchet below entry too — the sim's trail tightened
+        // from the flat stop the moment the move developed; the >0 gate
+        // only serves tier profiles (0 = no tier armed yet).
+        if (trailAtrNow ? lockPct !== 0 : lockPct > 0) {
           const sgn = p.side === 'long' ? 1 : -1;
           const pxDec = +(cm[p.sym]?.pricePlace ?? 6);
           const lockTrig = +(p.entry * (1 + (sgn * lockPct) / 100)).toFixed(pxDec);
@@ -864,8 +1191,10 @@ async function tick() {
               await cancelPlan(p.sym, x.planType, x.orderId).catch(() => {});
             pc.at = 0;
             kickWatcher();
-            log(`BE-LOCK ${key}: fav ${favPct.toFixed(2)}% — stop ${curTrig || 'none'} -> ${lockTrig} (entry+${lockPct}%)`);
-            outbox(`🔒 ${isManual ? 'BAGRUN-LOCK' : 'BE-LOCK'} — ${p.sym} ${p.side}: +${favPct.toFixed(2)}% favor, stop moved to entry+${lockPct}% (${lockTrig}) — worst case is now green after fees.`);
+            log(`${trailAtrNow ? 'ATR-TRAIL' : 'BE-LOCK'} ${key}: fav ${favPct.toFixed(2)}% — stop ${curTrig || 'none'} -> ${lockTrig} (entry${lockPct >= 0 ? '+' : ''}${lockPct.toFixed(2)}%)`);
+            outbox(trailAtrNow
+              ? `🏔 TRAIL — ${p.sym} ${p.side}: peak +${g.peakFav.toFixed(2)}%, stop → ${lockTrig} (peak−${trailAtrNow.k}×ATR = entry${lockPct >= 0 ? '+' : ''}${lockPct.toFixed(2)}%).`
+              : `🔒 ${isManual ? 'BAGRUN-LOCK' : 'BE-LOCK'} — ${p.sym} ${p.side}: +${favPct.toFixed(2)}% favor, stop moved to entry+${lockPct}% (${lockTrig}) — worst case is now green after fees.`);
             dirty = true;
           }
         }
@@ -876,27 +1205,42 @@ async function tick() {
     // turn NOW instead of donating the remaining giveback down to wherever
     // the ratcheted stop sits. Whole-position market close, like stall-cut;
     // re-verify on fresh signed truth so a stale mark can't fire it.
-    if ((g.peakFav || 0) >= (isManual ? BAGRUN_VANISH_MIN_PEAK : VANISH_MIN_PEAK) && VANISH_FRAC > 0) {
+    if (!trailAtrNow && !manualSyms().has(p.sym) && (g.peakFav || 0) >= (manualLoser ? BAGRUN_LOSER_VANISH_PEAK : isManual ? BAGRUN_VANISH_MIN_PEAK : VANISH_MIN_PEAK) && VANISH_FRAC > 0 && (isManual || !underMinHold(p))) {
       try {
         const favNow = (p.side === 'long' ? (mark - p.entry) / p.entry : (p.entry - mark) / p.entry) * 100;
         const gb = (g.peakFav - favNow) / g.peakFav;
         // toxic tape halves the patience — one-sided flow against us means
         // the giveback probably isn't noise, it's the turn. Manual bagrunners
-        // run tighter vanish params — bank the turn, don't ride it.
-        const vBase = (gates.__tune?.vanish ?? VANISH_FRAC) * (isManual ? BAGRUN_VANISH_FRAC / VANISH_FRAC : 1);
+        // run tighter vanish params — bank the turn, don't ride it. Measured-
+        // loser manual cells tighter still — the first green tick is the exit.
+        const vBase = (gates.__tune?.vanish ?? VANISH_FRAC) * (isManual ? (manualLoser ? BAGRUN_LOSER_VANISH_FRAC : BAGRUN_VANISH_FRAC) / VANISH_FRAC : 1);
         const vFrac = toxAdv ? vBase * 0.5 : vBase;
-        const vMinFav = isManual ? BAGRUN_VANISH_MIN_FAV : VANISH_MIN_FAV;
+        const vMinFav = manualLoser ? BAGRUN_LOSER_VANISH_FAV : isManual ? BAGRUN_VANISH_MIN_FAV : VANISH_MIN_FAV;
         if (favNow > vMinFav && gb >= vFrac && Date.now() - (g.vanishAt || 0) >= 60e3) {
           const fresh = await getAllPos().catch(() => null);
           const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
           if (fp && +fp.upl > 0) {
             g.vanishAt = Date.now();
-            await closeSmart(fp.sym, fp.side, String(fp.size), fp.marginMode);
+            // moon-runner: machine seats close only the non-moon portion —
+            // the residual keeps its locked stop (floor green by then) and
+            // rides for the tail Liam's RR thesis hunts. Both the closeable
+            // clip and the leftover must satisfy contract minimums.
+            const c = cm[fp.sym] || {};
+            const sp = Math.pow(10, +c.sizePlace || 0);
+            const minClip = Math.max(+c.minTradeNum || 0, ((+c.minTradeUSDT || 5) * 1.02) / mark);
+            let closeQty = +fp.size;
+            let moon = 0;
+            if (MOON_RUNNER && !isManual) {
+              const m = Math.floor(+fp.size * MOON_FRAC * sp) / sp;
+              const clip = Math.floor((+fp.size - m) * sp) / sp;
+              if (m >= minClip && clip >= minClip) { moon = m; closeQty = clip; }
+            }
+            await closeSmart(fp.sym, fp.side, String(closeQty), fp.marginMode);
             kickWatcher();
-            log(`VANISH ${key}: peak +${g.peakFav.toFixed(2)}% -> +${favNow.toFixed(2)}% (${(gb * 100).toFixed(0)}% giveback) — closed green @ ${mark}`);
-            outbox(`🏃 VANISH — ${fp.sym} ${fp.side}: gave back ${(gb * 100).toFixed(0)}% of a +${g.peakFav.toFixed(2)}% run — closed @ ${mark} still green (+$${(+fp.upl).toFixed(2)}). Banked the turn.`);
+            log(`VANISH ${key}: peak +${g.peakFav.toFixed(2)}% -> +${favNow.toFixed(2)}% (${(gb * 100).toFixed(0)}% giveback) — closed ${closeQty}/${fp.size}${moon ? ` (moon ${moon} rides)` : ''} green @ ${mark}`);
+            outbox(`🏃 VANISH — ${fp.sym} ${fp.side}: gave back ${(gb * 100).toFixed(0)}% of a +${g.peakFav.toFixed(2)}% run — closed @ ${mark} still green (+$${(+fp.upl).toFixed(2)}).${moon ? ` Moon bag ${moon} left running behind its locked stop.` : ''} Banked the turn.`);
             dirty = true;
-            continue;
+            return;
           }
         }
       } catch (e) { log(`${key} vanish error: ${e.message}`); }
@@ -908,7 +1252,7 @@ async function tick() {
     // of the stop. Plans are cancelled first so the fill can't straddle a
     // stale TP; the whole-position pos_loss stays as backstop until the
     // close lands (it auto-dies with the position).
-    if (NO_DEEPEN.has(p.sym) && p.entry > 0 && p.cTime > 0 && SCALP_STALL_MS > 0) {
+    if (NO_DEEPEN.has(p.sym) && p.entry > 0 && p.cTime > 0 && SCALP_STALL_MS > 0 && DEF_CLIP_ON && !manualSyms().has(p.sym)) {
       try {
         const ageMs = Date.now() - p.cTime;
         if (ageMs >= SCALP_STALL_MS && p.upl < 0) {
@@ -929,11 +1273,83 @@ async function tick() {
               log(`STALL-CUT ${key}: ${Math.round(ageMs / 6e4)}m old, ${advPct.toFixed(2)}% adverse (${(advPct / stopDistPct * 100).toFixed(0)}% of stop) — cut early @ ${mark}`);
               outbox(`✂️ STALL-CUT — ${p.sym} ${p.side}: ${Math.round(ageMs / 6e4)}m old and ${(advPct / stopDistPct * 100).toFixed(0)}% toward its stop — reversion thesis dead, closed @ ${mark} for the smaller loss.`);
               dirty = true;
-              continue;
+              return;
             }
           }
         }
       } catch (e) { log(`${key} stall-cut error: ${e.message}`); }
+    }
+
+    // ---- dead-seat cut (machine seats, every symbol): a seat DEADSEAT_MS
+    // old that NEVER saw +DEADSEAT_PEAK favor during our observation and now
+    // sits past DEADSEAT_ADV underwater is a failed deployment — cut it for
+    // the partial loss instead of donating the full stop. Will-audit fix
+    // for the measured asymmetry (avgLoss 1.9x avgWin from full-stop rides).
+    // Operator/manual seats exempt — his stops rule his trades; engine
+    // seats included (backstop for the engine's own 90s dead-cut).
+    if (p.entry > 0 && p.cTime > 0 && DEADSEAT_MS > 0 && DEF_CLIP_ON && !manualSyms().has(p.sym) && !underMinHold(p)) {
+      try {
+        const ageMs = Date.now() - p.cTime;
+        const seenMs = Date.now() - (g.seenAt || Date.now());
+        const advPct = (p.side === 'long' ? (p.entry - mark) / p.entry : (mark - p.entry) / p.entry) * 100;
+        if (ageMs >= DEADSEAT_MS && seenMs >= Math.min(DEADSEAT_MS, DEADSEAT_SEEN_MS)
+          && (g.peakFav || 0) < DEADSEAT_PEAK && advPct >= DEADSEAT_ADV) {
+          const fresh = await getAllPos().catch(() => null);
+          const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
+          if (fp && fp.upl < 0 && Date.now() - fp.cTime >= DEADSEAT_MS) {
+            await closeSmart(fp.sym, fp.side, String(fp.size), fp.marginMode);
+            kickWatcher();
+            log(`DEAD-SEAT ${key}: ${Math.round(ageMs / 6e4)}m old, peak favor only +${(g.peakFav || 0).toFixed(2)}%, now -${advPct.toFixed(2)}% — failed deployment cut early @ ${mark}`);
+            outbox(`✂️ DEAD-SEAT — ${p.sym} ${p.side}: ${Math.round(ageMs / 6e4)}m old, never saw +${DEADSEAT_PEAK}% favor, -${advPct.toFixed(2)}% down — failed deployment closed @ ${mark} for the smaller loss. (asymmetry fix: losers die cheap)`);
+            dirty = true;
+            return;
+          }
+        }
+      } catch (e) { log(`${key} dead-seat error: ${e.message}`); }
+    }
+
+    // ---- pre-favor cap: seat has never traded +PREFAVOR_PEAK in favor and
+    // is already -PREFAVOR_ADV underwater -> the excursion record says it's
+    // dead on arrival; take the small loss, not the full stop donation.
+    if (p.entry > 0 && PREFAVOR_ADV > 0 && DEF_CLIP_ON && !manualSyms().has(p.sym)) {
+      try {
+        const advPct = (p.side === 'long' ? (p.entry - mark) / p.entry : (mark - p.entry) / p.entry) * 100;
+        if (advPct >= PREFAVOR_ADV && (g.peakFav || 0) < PREFAVOR_PEAK) {
+          await closeSmart(p.sym, p.side, String(p.size), p.marginMode);
+          kickWatcher();
+          log(`PRE-FAVOR CUT ${key}: never saw +${PREFAVOR_PEAK}% favor, now -${advPct.toFixed(2)}% — dead on arrival, closed @ ${mark}`);
+          outbox(`🪦 PRE-FAVOR CUT — ${p.sym} ${p.side}: never traded +${PREFAVOR_PEAK}% favor, bled -${advPct.toFixed(2)}% — killed before the full stop. (losers' median MFE is 0.09% — this seat was never alive)`);
+          dirty = true;
+          return;
+        }
+      } catch (e) { log(`${key} pre-favor error: ${e.message}`); }
+    }
+
+    // ---- machine-seat TIME-STOP (mc-million sweep: the exit grid's top
+    // region was holds <=2h — every longer-hold policy lost more. A seat
+    // 2h old that still can't cover its own round-trip fee is dead margin
+    // — free it for the next deployment). Manual seats exempt (his stops
+    // rule); engine seats included (their own vanish/trail usually fires
+    // first — this is the backstop).
+    if (p.entry > 0 && p.cTime > 0 && TIMESTOP_MS > 0 && DEF_CLIP_ON && !manualSyms().has(p.sym) && !underMinHold(p)) {
+      try {
+        const ageMs = Date.now() - p.cTime;
+        if (ageMs >= TIMESTOP_MS) {
+          const fresh = await getAllPos().catch(() => null);
+          const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
+          if (fp) {
+            const favNow = (fp.side === 'long' ? (mark - fp.entry) / fp.entry : (fp.entry - mark) / fp.entry) * 100;
+            if (favNow < TIMESTOP_MIN_FAV) {
+              await closeSmart(fp.sym, fp.side, String(fp.size), fp.marginMode);
+              kickWatcher();
+              log(`TIME-STOP ${key}: ${Math.round(ageMs / 36e5 * 10) / 10}h old, favor ${favNow.toFixed(2)}% < +${TIMESTOP_MIN_FAV}% — dead margin freed @ ${mark}`);
+              outbox(`⏱ TIME-STOP — ${p.sym} ${p.side}: ${(ageMs / 36e5).toFixed(1)}h old and only ${favNow.toFixed(2)}% in favor — seat recycled for the next deployment. (mc exit-grid: <=2h holds win)`);
+              dirty = true;
+              return;
+            }
+          }
+        }
+      } catch (e) { log(`${key} time-stop error: ${e.message}`); }
     }
 
     // ---- stop-approach tier: mark nearing this position's OWN pos_loss —
@@ -952,7 +1368,7 @@ async function tick() {
         // that covered the position's entire life on tight stops)
         const stopWidthPct = trig > 0 && p.entry > 0 ? Math.abs(p.entry - trig) / p.entry * 100 : 0;
         const zonePct = Math.min(STOP_ZONE, stopWidthPct * STOP_ZONE_FRAC);
-        const ladderOn = STOP_TRIM && stopWidthPct >= STOP_TRIM_MIN_WIDTH;
+        const ladderOn = STOP_TRIM && DEF_CLIP_ON && stopWidthPct >= STOP_TRIM_MIN_WIDTH;
         const newLow = g.lastStopMark == null || (p.side === 'long' ? mark < g.lastStopMark : mark > g.lastStopMark);
         // sDist > 0.05 required — a mark already THROUGH the trigger means
         // the stop is mid-fire; clipping then races the exchange's close.
@@ -991,7 +1407,7 @@ async function tick() {
           const capQ = fp ? Math.floor(fp.size * 0.34 * prec) / prec : 0;
           if (q < needQ) q = Math.min(Math.ceil(needQ * prec) / prec, capQ);
           const clipValue = (q * mark * sDist) / 100;
-          if (fp && fp.size > minClip && q > 0 && q < fp.size && clipValue >= DUST_USD) {
+          if (fp && fp.size > minClip && q > 0 && q < fp.size && clipValue >= DUST_USD && !manualSyms().has(p.sym)) {
             await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
             g.lastStopTrim = Date.now(); g.lastStopMark = mark; g.stopClipN = (g.stopClipN || 0) + 1;
             kickWatcher();
@@ -1014,7 +1430,7 @@ async function tick() {
                 // release locked profit back to risk. Never touch those.
                 const armedLossSide = np.side === 'long' ? trig < np.entry : trig > np.entry;
                 const deeper = bandPct <= BAND_CAP_PCT && armedLossSide && (np.side === 'long' ? deepTrig < trig : deepTrig > trig);
-                if (deeper && deepTrig > 0 && !NO_DEEPEN.has(p.sym)) {
+                if (STOP_DEEPEN && deeper && deepTrig > 0 && !NO_DEEPEN.has(p.sym)) {
                   await planLoss(p.sym, p.side, deepTrig, np.marginMode || p.marginMode);
                   // loss-SIDE plans only — a profit-side loss-typed plan
                   // (a lock) must never be stripped by the reset sweep
@@ -1041,29 +1457,29 @@ async function tick() {
         // can see exactly how much room remains before trims wake, not just
         // the raw liq distance
         if (stOut.positions[key]) stOut.positions[key].zonePct = +zonePct.toFixed(3);
-        if (distPct > zonePct) continue;                                    // outside danger zone — dormant
+        if (distPct > zonePct) return;                                    // outside danger zone — dormant
     // shared clip clock — the stop-approach ladder and this path must not
     // alternate 4s clips down the same slide
-    if (Date.now() - g.lastTrim < SPACING_MS || Date.now() - (g.lastStopTrim || 0) < SPACING_MS) continue;
+    if (Date.now() - g.lastTrim < SPACING_MS || Date.now() - (g.lastStopTrim || 0) < SPACING_MS) return;
     // deterioration gate: re-arm only when price prints worse than at the
     // last trim. Waterfall => clips every ~4s; hovering in-zone => zero.
     const worse = g.lastTrimMark == null || (p.side === 'long' ? mark < g.lastTrimMark : mark > g.lastTrimMark);
-    if (!worse) continue;
+    if (!worse) return;
     const c = cm[p.sym] || {};
     const minFloor = Math.max(
       +c.minTradeNum || 0,
       ((+c.minTradeUSDT || 5) * 3) / mark,
       p.sym === SEED_SYM ? MIN_SIZE : 0,
     );
-    if (p.size <= minFloor) continue; // residual rides its stop — shavings are pointless here
+    if (p.size <= minFloor) return; // residual rides its stop — shavings are pointless here
 
     // FIRE PATH — re-verify on FRESH signed truth, never the cache
     const fresh = await getAllPos().catch(() => null);
     posCache = fresh || posCache; posCacheAt = Date.now();
     const fp = (fresh || []).find((x) => x.sym === p.sym && x.side === p.side);
-    if (!fp?.liq) continue;
+    if (!fp?.liq) return;
     const fdist = fp.side === 'long' ? (mark - fp.liq) / fp.liq * 100 : (fp.liq - mark) / fp.liq * 100;
-    if (fdist > zonePct || fp.size <= minFloor) continue;   // bounced / shrank between checks — stand down
+    if (!DEF_CLIP_ON || manualSyms().has(p.sym) || fdist > zonePct || fp.size <= minFloor) return;   // bounced / shrank between checks — stand down
     const prec = Math.pow(10, +c.sizePlace || 0);
     // floor the clip at the exchange minimum — a small-% clip of a <$100
     // position lands below minTradeUSDT and reject-loops instead of
@@ -1071,7 +1487,7 @@ async function tick() {
     // stop (guarded below) — a 'partial' must never equal the whole side.
     const minClip = Math.max(+c.minTradeNum || 0, ((+c.minTradeUSDT || 5) * 1.02) / mark);
     const q = Math.floor(Math.max((fp.size * TRIM_PCT) / 100, minClip) * prec) / prec;
-    if (!(q > 0) || q >= fp.size) continue;                 // never let a 'partial' equal the whole side
+    if (!(q > 0) || q >= fp.size) return;                 // never let a 'partial' equal the whole side
     log(`DANGER: ${key} mark ${mark} is ${fdist.toFixed(2)}% from liq ${fp.liq} — trimming ${q} of ${fp.size}`);
     await closeMarket(p.sym, p.side, String(q), posMode, fp.marginMode);
     kickWatcher();
@@ -1101,7 +1517,7 @@ async function tick() {
       }
     } catch (e) { log(`${key} stop-reset failed (exec clamp covers): ${e.message}`); }
     log(`${key} trimmed ${q} @ ${mark} — re-arms on a new low (spacing floor ${SPACING_MS / 1e3}s)`);
-  }
+  }));
   // post-exit grading + self-tuning run every cycle — cheap, additive
   await markoutSweep();
   await tuneNow();

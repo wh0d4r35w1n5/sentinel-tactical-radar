@@ -3,6 +3,8 @@
 // same paptrading demo header. The interface returned here is what the
 // executor consumes; bybit.mjs returns identical shapes.
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { createEntryGuard, readJson, ROOT, validateRiskPolicy } from '../execution-risk.mjs';
 
 export function makeBitget({ key, secret, pass, mode } = {}) {
   const HOST = 'https://api.bitget.com';
@@ -26,7 +28,8 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     if (MODE === 'demo') h.paptrading = '1'; // Bitget demo-trading header
     return h;
   }
-  async function api(method, reqPath, { qs = '', body = null } = {}) {
+  let entryGuard;
+  async function transport(method, reqPath, { qs = '', body = null } = {}) {
     const bodyStr = body ? JSON.stringify(body) : '';
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -34,7 +37,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
           method,
           headers: signHeaders(method, reqPath, qs, bodyStr),
           body: bodyStr || undefined,
-          signal: AbortSignal.timeout(15000), // a hung call must not stall the cycle
+          signal: AbortSignal.timeout(+(process.env.SENTINEL_API_TIMEOUT_MS || 15000)),
         });
         // 429 rate-limit on a GET is safe to retry after a pause — a throttled
         // read isn't an API rejection of the data, just the door closed briefly
@@ -55,6 +58,8 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
       }
     }
   }
+  const api = (method, reqPath, options = {}) =>
+    entryGuard.run(method, reqPath, options.body, () => transport(method, reqPath, options));
   const getPos = () =>
     api('GET', '/api/v2/mix/position/all-position', {
       qs: `productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
@@ -66,7 +71,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     const acc = (rows || []).find((a) => a.marginCoin === MARGIN_COIN) || {};
     return {
       equity: +(acc.usdtEquity ?? acc.equity ?? acc.available ?? 0),
-      available: +(acc.available ?? acc.usdtEquity ?? 0),
+      available: +(acc.available ?? 0),
       isoMax: +acc.isolatedMaxAvailable,
       crossMax: +acc.crossedMaxAvailable,
     };
@@ -75,26 +80,33 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
   // covers profit_plan/loss_plan/moving_plan/pos_profit/pos_loss
   const getPlans = (symbol) =>
     api('GET', '/api/v2/mix/order/orders-plan-pending', {
-      qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}&planType=profit_loss`,
+      qs: `productType=${PRODUCT}&marginCoin=${MARGIN_COIN}&planType=profit_loss${symbol ? `&symbol=${symbol}` : ''}`,
     }).then((d) => {
-      const l = d?.entrustedList || d?.orders || d;
-      return Array.isArray(l) ? l : []; // never hand callers a non-array
+      if (Array.isArray(d)) return d;
+      const l = d?.entrustedList ?? d?.orders ?? [];
+      return Array.isArray(l) ? l : []; // {entrustedList:null} = empty book, not an error
     });
   // position mode is account-wide per product type
   const getPosMode = (symbol) =>
     api('GET', '/api/v2/mix/account/account', {
       qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
     }).then((d) => (d?.posMode === 'hedge_mode' ? 'hedge' : 'oneway'));
+  const getMarginMode = (symbol) =>
+    api('GET', '/api/v2/mix/account/account', {
+      qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
+    }).then((d) => d?.marginMode || null);
 
   // ---------- order placement ----------
   const setIsolated = (symbol) =>
     api('POST', '/api/v2/mix/account/set-margin-mode', {
       body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, marginMode: 'isolated' },
-    }).catch(() => {}); // already-isolated errors are harmless
-  const setLeverage = (symbol, leverage) =>
-    api('POST', '/api/v2/mix/account/set-leverage', {
-      body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, leverage: String(leverage) },
+    }); // A failed margin-mode change is not permission to open in crossed mode.
+  const setLeverage = (symbol, leverage) => {
+    if (!Number.isFinite(+leverage) || +leverage < 1) throw new Error('invalid leverage');
+    return api('POST', '/api/v2/mix/account/set-leverage', {
+      body: { symbol, productType: PRODUCT, marginCoin: MARGIN_COIN, leverage: String(Math.floor(+leverage)) },
     });
+  };
   let POS_MODE = 'oneway'; // set by setPosMode before any order is placed
   const marketOrder = (symbol, side, size, intent, extra = {}) =>
     api('POST', '/api/v2/mix/order/place-order', {
@@ -131,8 +143,13 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
   const setPosMode = (m) => { POS_MODE = m === 'hedge' ? 'hedge' : 'oneway'; };
 
   const pendingOrders = (symbol) =>
-    api('GET', '/api/v2/mix/order/orders-pending', { qs: `symbol=${symbol}&productType=${PRODUCT}` })
-      .then((d) => { const l = d?.orders || d?.entrustedList || d; return Array.isArray(l) ? l : []; });
+    api('GET', '/api/v2/mix/order/orders-pending', { qs: `productType=${PRODUCT}${symbol ? `&symbol=${symbol}` : ''}` })
+      .then((d) => {
+        if (Array.isArray(d)) return d;
+        if (d && ('orders' in d || 'entrustedList' in d))
+          return d.orders ?? d.entrustedList ?? []; // {entrustedList:null} = documented empty book
+        throw new Error('unreadable pending orders');
+      });
 
   const cancelOrder = (symbol, orderId) =>
     api('POST', '/api/v2/mix/order/cancel-order', {
@@ -179,12 +196,13 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
   const spotAssets = () =>
     api('GET', '/api/v2/spot/account/assets', {})
       .then((d) => (Array.isArray(d) ? d : d?.assets || []));
-  const getFills = () =>
+  const getFills = ({ symbol, startTime, limit } = {}) =>
     api('GET', '/api/v2/mix/order/fills', {
-      qs: `productType=${PRODUCT}&limit=100&startTime=${Date.now() - 48 * 3600e3}`,
+      qs: `productType=${PRODUCT}&limit=${limit || 100}&startTime=${startTime || Date.now() - 48 * 3600e3}${symbol ? `&symbol=${symbol}` : ''}`,
     }).then((d) => {
       const l = d?.fillList || d?.fills || d;
-      return Array.isArray(l) ? l : [];
+      const rows = Array.isArray(l) ? l : [];
+      return symbol ? rows.filter((r) => r.symbol === symbol) : rows;
     });
   const closePosition = (symbol, holdSide) =>
     api('POST', '/api/v2/mix/order/close-positions', {
@@ -216,7 +234,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
       `${HOST}/api/v2/mix/market/contracts?productType=${PRODUCT}`,
       {
         headers: MODE === 'demo' ? { paptrading: '1' } : {},
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(+(process.env.SENTINEL_API_TIMEOUT_MS || 15000)),
       }
     );
     if (!res.ok) throw new Error(`contracts fetch -> HTTP ${res.status}`);
@@ -227,6 +245,7 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     for (const c of j.data || [])
       m[c.symbol] = {
         sizePlace: +c.volumePlace || 0, // volume rounding — field is volumePlace, NOT sizePlace
+        sizeMultiplier: +c.sizeMultiplier || 10 ** -(+c.volumePlace || 0),
         pricePlace: +c.pricePlace ?? 6,
         minTradeNum: +c.minTradeNum || 0,
         minTradeUSDT: +c.minTradeUSDT || 0,
@@ -235,16 +254,56 @@ export function makeBitget({ key, secret, pass, mode } = {}) {
     return m;
   }
 
+  let contractsCache = null, contractsAt = 0;
+  entryGuard = createEntryGuard({
+    mode: MODE,
+    snapshot: async (symbol) => {
+      const risk = validateRiskPolicy(readJson(path.join(ROOT, 'state', 'execution-risk.json')));
+      const wealth = readJson(path.join(ROOT, 'api', 'wealth-live.json'));
+      const age = Date.now() - Date.parse(wealth.ts);
+      if (!Number.isFinite(age) || age < 0 || age > risk.maxSnapshotAgeMs)
+        throw new Error('entry-risk: stale ownable-equity snapshot');
+      if (!contractsCache || Date.now() - contractsAt > 60000) {
+        contractsCache = await contractMap(); contractsAt = Date.now();
+      }
+      const [account, allPos, pending, settings, tick] = await Promise.all([
+        getAccount(), getPos(), pendingOrders(),
+        api('GET', '/api/v2/mix/account/account', {
+          qs: `symbol=${symbol}&productType=${PRODUCT}&marginCoin=${MARGIN_COIN}`,
+        }), ticker(symbol),
+      ]);
+      if (!Array.isArray(allPos)) throw new Error('entry-risk: unreadable positions');
+      const positions = allPos.filter(p => +p.total > 0);
+      const plans = {};
+      for (const p of positions) plans[p.symbol] = await getPlans(p.symbol);
+      const grant = +wealth.futures?.grantUsd;
+      const own = +wealth.futures?.equityOwnUsd;
+      if (!Number.isFinite(grant) || grant < 0 || !Number.isFinite(own) || own < 0)
+        throw new Error('entry-risk: unknown grant/ownable equity');
+      const vault = readJson(path.join(ROOT, 'state', 'wealth-vault.json'), true);
+      const reserved = Math.max(0, (+vault?.balanceUsd || 0) - (+vault?.transferredUsd || 0) - (+vault?.lostUsd || 0));
+      return { equityUsd: Math.max(0, Math.min(own, account.equity - grant) - reserved),
+        availableUsd: Math.min(account.available, own),
+        positions, pending, plans, contract: contractsCache[symbol],
+        price: +(Array.isArray(tick) ? tick[0]?.markPr || tick[0]?.lastPr : tick?.markPr || tick?.lastPr),
+        actualLeverage: +(settings.isolatedLongLever ?? settings.leverage),
+        marginMode: settings.marginMode };
+    },
+  });
+
   return {
     name: 'bitget',
     host: HOST,
     hasCreds: !!(key && secret && pass), // Bitget needs the passphrase too
     api,
+    prepareEntry: entryGuard.prepare,
+    completeEntry: entryGuard.complete,
     ticker,
     contractMap,
     getAccount,
     getPos,
     getPosMode,
+    getMarginMode,
     setPosMode,
     setIsolated,
     setLeverage,
