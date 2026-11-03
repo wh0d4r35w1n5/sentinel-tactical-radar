@@ -1,25 +1,25 @@
 {
-  "refreshedAt": "2026-11-03T16:04:19.252Z",
+  "refreshedAt": "2026-11-03T16:14:35.254Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 46.36
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T16:04:19.252Z"
+    "at": "2026-11-03T16:14:35.254Z"
   },
   "sweep": {
-    "scanned": 199,
+    "scanned": 238,
     "cancelled": 0,
-    "at": "2026-11-03T16:04:19.252Z"
+    "at": "2026-11-03T16:14:35.254Z"
   },
   "journals": {
     "realFills": 125,
-    "demoFillsBybit": 320
+    "demoFillsBybit": 327
   },
   "evidence": {
     "demoEpisodes": 0,
@@ -29,43 +29,10 @@
     "excluded": 0,
     "cellCount": 1
   },
-  "positions": [
-    "VVVUSDT:0",
-    "ATHUSDT:-0.34715958",
-    "ADAUSDT:-0.3354",
-    "BNBUSDT:0.6075",
-    "XAUTUSDT:0.0737",
-    "LINKUSDT:-0.287",
-    "BCHUSDT:-0.2337",
-    "BIRBUSDT:-0.50015",
-    "OPENUSDT:-1.17952",
-    "PUFFERUSDT:0.120408",
-    "TUSDT:-0.14634",
-    "DGAIUSDT:-0.3082",
-    "APTUSDT:-1.202307",
-    "STXUSDT:0.036009",
-    "TRXUSDT:0.1485",
-    "XVGUSDT:-0.47767444",
-    "MYXUSDT:1.20456",
-    "GMTUSDT:0.300435",
-    "LINEAUSDT:0.4368",
-    "DOGEUSDT:0.00536",
-    "ZECUSDT:0.4615",
-    "NEARUSDT:-1.19601",
-    "TAOUSDT:-0.23199",
-    "MELANIAUSDT:-0.1662",
-    "ZENUSDT:0.9424",
-    "MIRAUSDT:-0.564774",
-    "ORDIUSDT:0.2775",
-    "PENGUUSDT:-0.23127",
-    "1000LUNCUSDT:-0.01456",
-    "XRPUSDT:0.075",
-    "SOLUSDT:-0.0544",
-    "AVAXUSDT:-0.1865",
-    "LTCUSDT:-0.064",
-    "DOTUSDT:-0.085",
-    "ARUSDT:-0.1014"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
   "notes": []
 }
