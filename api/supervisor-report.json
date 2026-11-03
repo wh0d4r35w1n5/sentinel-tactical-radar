@@ -1,25 +1,25 @@
 {
-  "refreshedAt": "2026-11-03T17:45:41.243Z",
+  "refreshedAt": "2026-11-03T17:55:41.881Z",
   "mode": {
-    "ledgerMode": "live",
-    "ledgerExchange": "bitget",
+    "ledgerMode": "demo",
+    "ledgerExchange": "bybit",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 0.03
+    "equityUsd": 37.4
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T17:45:41.243Z"
+    "at": "2026-11-03T17:55:41.881Z"
   },
   "sweep": {
-    "scanned": 461,
-    "cancelled": 16,
-    "at": "2026-11-03T17:45:41.243Z"
+    "scanned": 451,
+    "cancelled": 0,
+    "at": "2026-11-03T17:55:41.881Z"
   },
   "journals": {
     "realFills": 125,
-    "demoFillsBybit": 384
+    "demoFillsBybit": 400
   },
   "evidence": {
     "demoEpisodes": 0,
@@ -27,14 +27,57 @@
     "demoWinRate": null,
     "demoSqN": null,
     "excluded": 0,
-    "cellCount": 0
+    "cellCount": 1
   },
-  "positions": [],
-  "problems": [
-    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
-    "LIVE ledger while .env is demo — possible unauthorized live flip"
+  "positions": [
+    "HAJIMIUSDT:0.036",
+    "MORPHOUSDT:1.5193",
+    "PENDLEUSDT:-0.37204122",
+    "NILUSDT:-0.20384",
+    "TRUSTUSDT:1.87572",
+    "1000BTTUSDT:0.25056",
+    "XAUTUSDT:0.06748",
+    "XRPUSDT:0.08925",
+    "COMPUSDT:-0.5632",
+    "SOPHUSDT:-0.15442",
+    "BNBUSDT:-0.8094",
+    "SOLUSDT:-0.348",
+    "BCHUSDT:-0.5568",
+    "ADAUSDT:-1.5983",
+    "AVAXUSDT:-1.6848",
+    "ARUSDT:-1.4048",
+    "TAOUSDT:-0.4758",
+    "ORDIUSDT:-1.00225",
+    "DOTUSDT:-0.81125",
+    "MIRAUSDT:-1.715",
+    "XVGUSDT:-0.85313503",
+    "TRXUSDT:0.473",
+    "ATHUSDT:-0.90856993",
+    "LINKUSDT:-0.1494",
+    "ERAUSDT:-0.09936",
+    "MOVEUSDT:-0.009422",
+    "LSKUSDT:0.131313",
+    "AEVOUSDT:-0.117324",
+    "B3USDT:-0.0493",
+    "BOBAUSDT:-0.133398",
+    "PUFFERUSDT:-0.08304",
+    "XMRUSDT:1.3884",
+    "BIRBUSDT:0.89446",
+    "JSTUSDT:0.0561",
+    "1000CATUSDT:-0.040688",
+    "COWUSDT:-0.0966",
+    "VVVUSDT:-0.1854",
+    "BANDUSDT:-0.05576",
+    "BELUSDT:-0.18395",
+    "NEOUSDT:-0.02714",
+    "TUSDT:-0.09756",
+    "GMTUSDT:-0.680986",
+    "DGAIUSDT:-0.2438",
+    "DOGEUSDT:-0.00469",
+    "LINEAUSDT:-0.4368",
+    "1000LUNCUSDT:-0.32032",
+    "LTCUSDT:-0.069"
   ],
-  "notes": [
-    "orphan sweep — cancelled 16 untriggered legs on dead seats"
-  ]
+  "problems": [],
+  "notes": []
 }
