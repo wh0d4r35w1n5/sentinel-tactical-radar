@@ -1,21 +1,21 @@
 {
-  "refreshedAt": "2026-11-03T20:46:58.870Z",
+  "refreshedAt": "2026-11-03T20:57:11.134Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 39.6
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T20:46:58.870Z"
+    "at": "2026-11-03T20:57:11.134Z"
   },
   "sweep": {
-    "scanned": 476,
-    "cancelled": 9,
-    "at": "2026-11-03T20:46:58.870Z"
+    "scanned": 477,
+    "cancelled": 13,
+    "at": "2026-11-03T20:57:11.134Z"
   },
   "journals": {
     "realFills": 125,
@@ -29,62 +29,12 @@
     "excluded": 0,
     "cellCount": 1
   },
-  "positions": [
-    "AKEUSDT:-0.036",
-    "KIIUSDT:-0.0188",
-    "MONUSDT:-0.52732105",
-    "DGAIUSDT:0.0576",
-    "VVVUSDT:0.05004",
-    "YBUSDT:0.109584",
-    "JSTUSDT:0.0902",
-    "ZETAUSDT:-0.21379119",
-    "POWRUSDT:0.12137",
-    "XAUTUSDT:0.04954",
-    "CYSUSDT:0.1364",
-    "BUSDT:0.07533",
-    "ALTUSDT:0.2278",
-    "ZORAUSDT:0.05334",
-    "REUSDT:0.0594",
-    "INITUSDT:-0.091",
-    "KERNELUSDT:-0.17625",
-    "TUTUSDT:0.006066",
-    "SUSHIUSDT:-0.00824292",
-    "XRPUSDT:0.0765",
-    "HAJIMIUSDT:0.152",
-    "ATHUSDT:0.09295007",
-    "B3USDT:-0.13311",
-    "ERAUSDT:-0.24426",
-    "TUSDT:0.00651",
-    "MIRAUSDT:-1.12",
-    "AEVOUSDT:0.091252",
-    "COWUSDT:-0.147",
-    "1000CATUSDT:0.05086",
-    "MOVEUSDT:-0.18844",
-    "LINEAUSDT:-0.1092",
-    "TAOUSDT:-0.5368",
-    "ORDIUSDT:-0.64144",
-    "DOTUSDT:0.3859",
-    "COMPUSDT:-0.1774",
-    "BNBUSDT:0.2052",
-    "SOLUSDT:0.0435",
-    "BCHUSDT:-1.1472",
-    "ADAUSDT:-0.5812",
-    "AVAXUSDT:-1.4256",
-    "XVGUSDT:0.09486497",
-    "TRXUSDT:0.4601",
-    "LINKUSDT:-1.6434",
-    "BOBAUSDT:-0.133398",
-    "PUFFERUSDT:0.1384",
-    "BANDUSDT:0",
-    "BELUSDT:-0.05377",
-    "NEOUSDT:-0.04071",
-    "GMTUSDT:-0.721044",
-    "DOGEUSDT:-0.00469",
-    "1000LUNCUSDT:-0.11648",
-    "LTCUSDT:-0.051"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
   "notes": [
-    "orphan sweep — cancelled 9 untriggered legs on dead seats"
+    "orphan sweep — cancelled 13 untriggered legs on dead seats"
   ]
 }
