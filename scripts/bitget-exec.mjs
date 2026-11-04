@@ -4011,7 +4011,7 @@ async function main() {
         const h4 = htfTrend(o.symbol, '4H'), h1 = htfTrend(o.symbol, '1h');
         const fr2 = fundMap?.[o.symbol];
         const sWhy = h4 != null && h4 !== 'down' ? `short-no-4H-downtrend (${h4})`
-          : h1 != null && h1 !== 'down' ? `short-no-1h-downtrend (${h1})`
+          : h1 === 'up' ? 'short-into-1h-uptrend'
           : (h4 === 'down' && h1 === 'down') ? null
           : 'short-trend-unproven (no HTF data)';
         if (sWhy || (fr2 != null && fr2 < 0)) {
