@@ -3959,7 +3959,11 @@ async function main() {
         // fading strength is how shorts die; a mean-rev short is only
         // allowed when the tape is NOT trending up on the day.
         const upMax = +(process.env.SENTINEL_SHORT_UPTREND_VETO_PCT || 3);
-        const why = (o.changePct ?? 0) >= upMax ? `short-into-uptrend +${round(o.changePct,1)}%/24h`
+        // MAJORS-ONLY for mean-rev shorts (research 2026-11-04: mean-rev
+        // tests lose on alt futures, ~-20%/yr; only BTC/majors revert).
+        const SHORT_MAJORS = (process.env.SENTINEL_SHORT_MAJORS || 'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,BNBUSDT,LTCUSDT,LINKUSDT,ADAUSDT,AVAXUSDT').split(',').map((x) => x.trim());
+        const why = !SHORT_MAJORS.includes(o.symbol) ? 'short non-major (mean-rev dies on alts)'
+          : (o.changePct ?? 0) >= upMax ? `short-into-uptrend +${round(o.changePct,1)}%/24h`
           : !o.strategy || !ok.includes(o.strategy) ? 'short-strat (mean-rev only)'
           : (o.score ?? 0) < sMin ? `short-score<${sMin}`
           : (o.targetPct ?? 99) > sTgt ? `short-tgt>${sTgt}% (scalp-only)`
