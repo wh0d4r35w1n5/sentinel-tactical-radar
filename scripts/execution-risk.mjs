@@ -285,12 +285,15 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
     }
     try {
       const fresh = await calculate(intent, intent.result.leverage);
-      const qty = +body.size;
+      const askQty = +body.size;
       if (body.symbol !== intent.symbol || body.side !== (intent.direction === 'LONG' ? 'buy' : 'sell') ||
           body.marginMode !== 'isolated' || body.orderType !== 'market' ||
-          +body.presetStopLossPrice !== intent.stopPrice ||
-          !positive(qty) || qty > intent.result.size || qty > fresh.size)
-        fail('order differs from its approved risk budget');
+          +body.presetStopLossPrice !== intent.stopPrice)
+        fail(`order differs from its approved risk budget (sym=${body.symbol} side=${body.side} sl=${body.presetStopLossPrice} vs intent ${intent.symbol} sl=${intent.stopPrice})`);
+      // Budget shrank between prepare and place? The seat takes
+      // min(ask, approved, fresh) — never more than the budget allows.
+      const qty = Math.min(askQty, intent.result.size, fresh.size);
+      if (!positive(qty)) fail('order size not positive');
       if (fresh.marginMode !== 'isolated' || fresh.actualLeverage !== intent.result.leverage)
         fail('exchange leverage/margin mode not verified');
       // Consume before transport. An uncertain POST must never be retried as a new entry.
