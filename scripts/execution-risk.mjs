@@ -190,8 +190,14 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
     if (state('execution-maintenance.json', true)?.active === true) fail('execution maintenance');
     if (state('cmd-halt.json', true)?.halted === true) fail('operator halt');
     const risk = validateRiskPolicy(state('execution-risk.json'));
+    const env = state('deploy-envelope.json');
+    // operator override is the documented authority over genius austerity —
+    // entries:true inside its window releases the envelope brake (convicted
+    // cells, losers and never-paths still refuse).
+    const ovr = state('cmd-override.json', true);
+    if (env && ovr && ovr.entries === true && +ovr.until > now()) env.brake = false;
     return { risk, allowlist: state('live-cell-allowlist.json'),
-      admission: state('cell-admission.json'), envelope: state('deploy-envelope.json'), now: now() };
+      admission: state('cell-admission.json'), envelope: env, now: now() };
   };
   // A pending record means an earlier submitted order was never reconciled.
   // Self-heal when the outcome is provable: no position = nothing to protect;

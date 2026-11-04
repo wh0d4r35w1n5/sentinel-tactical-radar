@@ -3384,6 +3384,12 @@ async function main() {
         const e = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'deploy-envelope.json'), 'utf8'));
         if (Date.now() - +e.at < 180e3) env = e;
       } catch { }
+      // operator override releases genius austerity on the mandate lane:
+      // brake off, seat caps to slot width, score floor + margin mult to open
+      // policy. Convicted cells/losers still refuse via assertAdmission.
+      if (env && cmdOverride) env = { ...env, brake: false,
+        deploy: { ...(env.deploy || {}), probeFrac: 0.5, engineMinScore: 62,
+                  marginMult: 1, seatCap: 12, mandateSeatCap: 12 } };
       let feeBrakeOn = false, wifeDoc = null;
       try { feeBrakeOn = env ? !!env.brake : !!JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'fee-brake.json'), 'utf8')).brake; } catch { }
       try { wifeDoc = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'wife.json'), 'utf8')); } catch { }
