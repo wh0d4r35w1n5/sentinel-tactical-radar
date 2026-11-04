@@ -3711,7 +3711,7 @@ async function main() {
     writeJson(path.join(API, 'live-plan.json'), {
       refreshedAt: snap.refreshedAt,
       ts: now,
-      ttlMs: 15 * 60e3,
+      ttlMs: 20 * 60e3,
       engine: ENGINE_VERSION,
       killSwitch: ddNow >= ddKillPct,
       ddPct: pct(ddNow),
@@ -4812,7 +4812,7 @@ async function main() {
     writeJson(path.join(API, 'live-plan.json'), {
         refreshedAt: snap.refreshedAt,
         ts: now,
-        ttlMs: 15 * 60e3,
+        ttlMs: 20 * 60e3,
         engine: ENGINE_VERSION,
         killSwitch: ddNow >= ddKillPct,
         ddPct: pct(ddNow),
