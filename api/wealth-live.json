@@ -1,98 +1,116 @@
 {
- "ts": "2026-11-04T16:20:48.703Z",
- "ageMs": 6422,
+ "ts": "2026-11-04T16:24:56.627Z",
+ "ageMs": 6459,
  "src": "ws",
  "futures": {
-  "equityUsd": 39.14,
-  "availableUsd": 2.6308,
+  "equityUsd": 37.8877,
+  "availableUsd": 0.1239,
   "grantUsd": 0,
-  "equityOwnUsd": 39.14,
-  "marginUsedUsd": 35.88,
-  "uplUsd": 0.3522,
+  "equityOwnUsd": 37.8877,
+  "marginUsedUsd": 38.3498,
+  "uplUsd": -1.7066,
   "positions": [
    {
     "k": "SOLUSDT:long",
     "size": 0.6,
     "marginUsd": 2.3291,
-    "uplUsd": 0.033
+    "uplUsd": -0.2832
    },
    {
     "k": "GOOGLUSDT:long",
     "size": 0.2,
     "marginUsd": 5.8682,
-    "uplUsd": -0.29
+    "uplUsd": -0.574
    },
    {
     "k": "BABAUSDT:long",
     "size": 0.02,
     "marginUsd": 0.2696,
-    "uplUsd": -0.0036
+    "uplUsd": -0.0116
    },
    {
     "k": "XRPUSDT:long",
     "size": 51,
     "marginUsd": 5.6007,
-    "uplUsd": 0.0153
+    "uplUsd": -0.4233
+   },
+   {
+    "k": "ZECUSDT:long",
+    "size": 0.047,
+    "marginUsd": 2.4699,
+    "uplUsd": -0.1885
    },
    {
     "k": "TRXUSDT:long",
     "size": 180,
     "marginUsd": 5.7642,
-    "uplUsd": 0.186
+    "uplUsd": 0.1374
    },
    {
     "k": "AMDUSDT:long",
     "size": 0.03,
     "marginUsd": 1.4667,
-    "uplUsd": 0.0207
+    "uplUsd": -0.0174
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.09,
     "marginUsd": 6.2352,
-    "uplUsd": -0.1224
+    "uplUsd": -0.261
    },
    {
     "k": "PEPEUSDT:long",
     "size": 3792000,
     "marginUsd": 1.9626,
-    "uplUsd": 0.1638
+    "uplUsd": -0.0671
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.4,
     "marginUsd": 1.0361,
-    "uplUsd": 0.0176
+    "uplUsd": 0.0024
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.42,
     "marginUsd": 2.4371,
-    "uplUsd": -0.1092
+    "uplUsd": -0.147
    },
    {
     "k": "NEARUSDT:long",
     "size": 7,
     "marginUsd": 2.9106,
-    "uplUsd": 0.441
+    "uplUsd": 0.1267
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2344,
+  "solUsd": 0.2334,
   "stableUsd": 0,
-  "bagsUsd": 0.0587,
-  "totalUsd": 0.2931,
+  "bagsUsd": 0.059,
+  "totalUsd": 0.2924,
   "tokens": {
    "BQAeeSow": 0.0009,
-   "8PGyHCKv": 0.0578
+   "8PGyHCKv": 0.0581
   },
-  "staleMs": 6422
+  "staleMs": 8254
  },
- "totalUsd": 39.4331,
+ "totalUsd": 38.1801,
  "deltas": [
+  {
+   "ts": 1793809396762,
+   "kind": "position-opened",
+   "detail": "ZECUSDT:long",
+   "amt": 2.4699
+  },
+  {
+   "ts": 1793809396761,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -1.2524
+  },
   {
    "ts": 1793809223432,
    "kind": "size-reduced",
@@ -199,18 +217,6 @@
    "ts": 1793808927649,
    "kind": "size-reduced",
    "detail": "AMDUSDT:long Δ-0.009999999999999995",
-   "amt": 0
-  },
-  {
-   "ts": 1793808927581,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1744
-  },
-  {
-   "ts": 1793808914661,
-   "kind": "size-reduced",
-   "detail": "PEPEUSDT:long Δ-948000",
    "amt": 0
   }
  ]
