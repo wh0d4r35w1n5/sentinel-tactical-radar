@@ -3945,7 +3945,11 @@ async function main() {
       // scanner): a stale or hand-built short gets the same bar — fade
       // family, high score, capped target. Net-RR floor is enforced in
       // the RR defense block below.
-      if (!OPEN_SEASON && o.direction === 'SHORT' && !o.setup) {
+      // SHORTS STAY ON THE STRICT BAR IN EVERY MODE (operator order
+      // 2026-11-04 — shorts are so dangerous): open season lifted the
+      // listing requirement for LONGS only. A short without an authored
+      // setup still faces the mean-rev bar: proven strat, score, scalp tgt.
+      if (o.direction === 'SHORT' && !o.setup) {
         const ok = (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile').split(',').map((x) => x.trim());
         const sMin = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
         const sTgt = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
