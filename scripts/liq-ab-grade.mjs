@@ -35,7 +35,13 @@ async function candles(sym, startMs, endMs) {
   // kline API pages newest->oldest; walk forward in 100-bar chunks (25h of 15m)
   while (cur < endMs) {
     const url = `${HOST}/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=${gran}&startTime=${cur}&endTime=${Math.min(endMs, cur + 100 * 900e3)}&limit=100`;
-    const j = await (await fetch(url, { signal: AbortSignal.timeout(12000) })).json();
+    const j = await Promise.race([
+      (async () => (await fetch(url, { signal: AbortSignal.timeout(12000) })).json())(),
+      // hard deadline that always settles — an aborted fetch can leave
+      // .json() pending on a dead socket; an unsettled await kills the
+      // whole grade run with node exit 13.
+      new Promise((_, rej) => setTimeout(() => rej(new Error('candle fetch hard timeout')), 16000)),
+    ]).catch(() => ({ data: [] }));
     const arr = (j && j.data) || [];
     if (!arr.length) break;
     arr.sort((a, b) => +a[0] - +b[0]);
