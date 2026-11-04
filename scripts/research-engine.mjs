@@ -109,6 +109,17 @@ function propose(led) {
     if (ep >= 30 && mean > 0 && !led.rfcs.some((x) => x.auto && x.cell === cell && x.state !== 'closed' && x.state !== 'reverted'))
       led.rfcs.push({ id: uid(), auto: true, cell, class: 'shadow', title: `cell ${cell} meets promotion evidence (n=${ep}, mean ${mean}%)`, state: 'submitted', history: [] });
   }
+  // Einstein lab bridge: the R&D layer's measured proposals enter the RFC
+  // pipeline — code-scope journal as awaiting-operator (never auto-implement),
+  // proposals carrying a declared target+params go through CAB as state-knob.
+  const ein = rj(path.join(ROOT, 'state', 'einstein.json'));
+  for (const p of ein?.proposals || []) {
+    const rid = `EIN-${p.id}`;
+    if (!p.id || led.rfcs.some((x) => x.id === rid)) continue;
+    led.rfcs.push({ id: rid, auto: true, class: (p.target && p.params) ? 'state-knob' : 'code',
+      title: `einstein: ${p.txt}`, target: p.target, params: p.params,
+      state: 'submitted', history: [{ to: 'submitted', at: Date.now(), why: 'einstein lab proposal' }] });
+  }
 }
 
 function tick() {
