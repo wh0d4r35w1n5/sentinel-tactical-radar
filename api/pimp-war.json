@@ -1,16 +1,23 @@
 {
- "at": "2026-11-04T06:23:44.400Z",
+ "at": "2026-11-04T06:29:35.132Z",
  "wallets": {
   "futures": {
-   "equityUsd": 43.86,
-   "marginFreeUsd": 36.31,
-   "epochNetUsd": -0.01,
-   "fills": 1,
+   "equityUsd": 43.82,
+   "marginFreeUsd": 28,
+   "epochNetUsd": -0.02,
+   "fills": 2,
    "positions": [
+    {
+     "symbol": "AAPLUSDT",
+     "side": "short",
+     "upl": 0,
+     "lev": 2,
+     "margin": 8.3
+    },
     {
      "symbol": "MCDUSDT",
      "side": "short",
-     "upl": -0.11,
+     "upl": -0.15,
      "lev": 2,
      "margin": 7.73
     }
@@ -27,6 +34,12 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1793773427549,
+    "symbol": "AAPLUSDT",
+    "text": "OPEN AAPLUSDT $-0.01"
+   },
    {
     "venue": "bitget",
     "ts": 1793773195863,
@@ -88,13 +101,6 @@
     "symbol": "SI276",
     "sig": "2R5RCUBZR3CPte4YiC8rhpMc9DBB9W8Ho6Pq3cUkWtW67mASS2r6ZjBQvvKSjSubQE6FLmmLNKLAxygLUWnkPoaT",
     "text": "BUY SI276 $1.12"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791803853906,
-    "symbol": "GOIF",
-    "sig": null,
-    "text": "RECONCILE GOIF"
    }
   ]
  },
@@ -563,7 +569,7 @@
    "wins": 4,
    "losses": 17,
    "closes": 27,
-   "stolen": 364,
+   "stolen": 368,
    "gen": 0,
    "form": -0.2752,
    "mood": "working",
@@ -592,9 +598,9 @@
     -0.9965
    ],
    "persona": {
-    "swagger": 0.41,
-    "tilt": 0.33,
-    "greed": 0.47,
+    "swagger": 0.42,
+    "tilt": 0.31,
+    "greed": 0.48,
     "discipline": 0.44
    }
   },
@@ -606,7 +612,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 2168,
+   "stolen": 2172,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -667,6 +673,14 @@
  ],
  "intents": [],
  "drama": [
+  {
+   "ts": 1793773775127,
+   "text": "📓 Velvet Vice stole Lucky Lucy's playbook — third time this week the corner talks about it"
+  },
+  {
+   "ts": 1793773700423,
+   "text": "🧬 Bolt Betsy tweaked her reads — score downweighted (street R&D)"
+  },
   {
    "ts": 1793773358247,
    "text": "🧬 Solana Sadie tweaked her reads — mom downweighted (street R&D)"
@@ -778,14 +792,6 @@
   {
    "ts": 1793766984263,
    "text": "🧬 Fastlane Faye tweaked her reads — score upweighted (street R&D)"
-  },
-  {
-   "ts": 1793766884168,
-   "text": "🧬 Fastlane Faye tweaked her reads — stratW upweighted (street R&D)"
-  },
-  {
-   "ts": 1793766836416,
-   "text": "🧬 Velvet Vice tweaked her reads — score upweighted (street R&D)"
   }
  ],
  "attrib": {
