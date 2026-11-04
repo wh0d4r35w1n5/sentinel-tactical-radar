@@ -1,7 +1,12 @@
 {
- "at": "2026-11-04T12:36:08Z",
- "ok": true,
- "drifted": [],
+ "at": "2026-11-04T12:56:09Z",
+ "ok": false,
+ "drifted": [
+  {
+   "path": "scripts/tg-signals.py",
+   "serverMtime": "2026-11-01T14:10Z"
+  }
+ ],
  "notInRepo": [],
  "rule": "code changes go to GitHub main, then: sudo python3 /opt/sentinel/scripts/deploy-from-repo.py"
 }
