@@ -1,56 +1,80 @@
 {
- "ts": "2026-11-04T10:46:10.902Z",
+ "ts": "2026-11-04T10:51:31.566Z",
  "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.9625,
-  "availableUsd": 36.2181,
+  "equityUsd": 44.0519,
+  "availableUsd": 36.6241,
   "grantUsd": 0,
-  "equityOwnUsd": 43.9625,
-  "marginUsedUsd": 7.747,
-  "uplUsd": -0.0146,
+  "equityOwnUsd": 44.0519,
+  "marginUsedUsd": 7.3518,
+  "uplUsd": 0.0728,
   "positions": [
    {
     "k": "EBAYUSDT:short",
     "size": 0.31,
     "marginUsd": 3.6812,
-    "uplUsd": -0.0837
+    "uplUsd": -0.0279
    },
    {
     "k": "ZHONGJIUSDT:long",
-    "size": 0.17,
-    "marginUsd": 1.4383,
-    "uplUsd": 0.0595
+    "size": 0.13,
+    "marginUsd": 1.1008,
+    "uplUsd": 0.0338
    },
    {
     "k": "BLURUSDT:long",
     "size": 2822.3,
     "marginUsd": 2.1645,
-    "uplUsd": 0
+    "uplUsd": 0.0564
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.08,
-    "marginUsd": 0.4629,
-    "uplUsd": 0.0096
+    "size": 0.07,
+    "marginUsd": 0.4052,
+    "uplUsd": 0.0105
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2254,
+  "solUsd": 0.2257,
   "stableUsd": 0,
   "bagsUsd": 0.0565,
-  "totalUsd": 0.2819,
+  "totalUsd": 0.2822,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0556
   },
   "staleMs": 0
  },
- "totalUsd": 44.2444,
+ "totalUsd": 44.334,
  "deltas": [
+  {
+   "ts": 1793789438847,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.009999999999999995",
+   "amt": 0
+  },
+  {
+   "ts": 1793789405185,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0988
+  },
+  {
+   "ts": 1793789405182,
+   "kind": "size-reduced",
+   "detail": "ZHONGJIUSDT:long Δ-0.010000000000000009",
+   "amt": 0
+  },
+  {
+   "ts": 1793789195701,
+   "kind": "size-reduced",
+   "detail": "ZHONGJIUSDT:long Δ-0.03",
+   "amt": 0
+  },
   {
    "ts": 1793789023593,
    "kind": "position-closed",
@@ -145,30 +169,6 @@
    "ts": 1793786760774,
    "kind": "size-reduced",
    "detail": "PURRUSDT:long Δ-0.010000000000000231",
-   "amt": 0
-  },
-  {
-   "ts": 1793786760773,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0765
-  },
-  {
-   "ts": 1793786747072,
-   "kind": "size-reduced",
-   "detail": "PURRUSDT:long Δ-0.009999999999999787",
-   "amt": 0
-  },
-  {
-   "ts": 1793786705683,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.009999999999999995",
-   "amt": 0
-  },
-  {
-   "ts": 1793786495127,
-   "kind": "size-reduced",
-   "detail": "BLURUSDT:long Δ-940.6999999999998",
    "amt": 0
   }
  ]
