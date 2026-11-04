@@ -1,32 +1,32 @@
 {
- "ts": "2026-11-04T09:33:27.955Z",
- "ageMs": 3227,
+ "ts": "2026-11-04T09:39:28.630Z",
+ "ageMs": 1552,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.78,
-  "availableUsd": 29.0321,
+  "equityUsd": 43.8913,
+  "availableUsd": 29.4666,
   "grantUsd": 0,
-  "equityOwnUsd": 43.78,
-  "marginUsedUsd": 14.3116,
-  "uplUsd": 0.4363,
+  "equityOwnUsd": 43.8913,
+  "marginUsedUsd": 13.8906,
+  "uplUsd": 0.4915,
   "positions": [
    {
     "k": "PURRUSDT:long",
     "size": 2.09,
     "marginUsd": 2.1335,
-    "uplUsd": 0.5121
+    "uplUsd": 0.5267
    },
    {
     "k": "OUSTUSDT:long",
     "size": 0.6,
     "marginUsd": 1.8923,
-    "uplUsd": 0.294
+    "uplUsd": 0.312
    },
    {
     "k": "ZHONGJIUSDT:long",
-    "size": 0.28,
-    "marginUsd": 2.3645,
-    "uplUsd": 0.0336
+    "size": 0.23,
+    "marginUsd": 1.9435,
+    "uplUsd": 0.0828
    },
    {
     "k": "BLURUSDT:long",
@@ -38,31 +38,43 @@
     "k": "XAGUSDT:long",
     "size": 0.11,
     "marginUsd": 0.6354,
-    "uplUsd": 0.0033
+    "uplUsd": 0.0077
    },
    {
     "k": "BXUSDT:short",
     "size": 0.31,
     "marginUsd": 3.6828,
-    "uplUsd": -0.3596
+    "uplUsd": -0.3906
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2246,
+  "solUsd": 0.2243,
   "stableUsd": 0,
   "bagsUsd": 0.0557,
-  "totalUsd": 0.2803,
+  "totalUsd": 0.28,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0548
   },
-  "staleMs": 3227
+  "staleMs": 1552
  },
- "totalUsd": 44.0602,
+ "totalUsd": 44.1713,
  "deltas": [
+  {
+   "ts": 1793784947801,
+   "kind": "size-reduced",
+   "detail": "ZHONGJIUSDT:long Δ-0.05000000000000002",
+   "amt": 0
+  },
+  {
+   "ts": 1793784946900,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1114
+  },
   {
    "ts": 1793784739343,
    "kind": "balance-move",
@@ -170,18 +182,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.1439
-  },
-  {
-   "ts": 1793783458230,
-   "kind": "size-reduced",
-   "detail": "PURRUSDT:long Δ-0.010000000000000231",
-   "amt": 0
-  },
-  {
-   "ts": 1793783453444,
-   "kind": "size-reduced",
-   "detail": "PURRUSDT:long Δ-0.009999999999999787",
-   "amt": 0
   }
  ]
 }
