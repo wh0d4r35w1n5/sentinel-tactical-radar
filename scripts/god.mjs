@@ -360,8 +360,8 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
   } catch (e) {
     add('god-powers', 'FAIL', 'exchange configuration refused: ' + e.message);
   }
-  if (X && MODE !== 'demo' && MODE !== 'live') {
-    add('god-powers', 'WARN', `mode=${MODE || 'off'} — exchange inspection/repair disabled outside demo/live`);
+  if (X && MODE2 !== 'demo' && MODE2 !== 'live') {
+    add('god-powers', 'WARN', `mode=${MODE2 || 'off'} — exchange inspection/repair disabled outside demo/live`);
   } else if (X && !X.hasCreds) {
     add('god-powers', 'WARN', `no ${X.name.toUpperCase()} credentials in env — running degraded audit-only`);
   } else if (X && process.env.GOD_INTERVENE === '0') {
@@ -479,7 +479,7 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
         unknown.length
           ? 'untracked positions: ' + unknown.map((p) => `${p.symbol}:${p.holdSide || p.side}`).join(',')
           : `${(positions || []).length} exchange positions all ledger-visible`);
-      add('god-powers', 'PASS', `armed — ${X.name} ${MODE} watch + protection repair active every cycle`);
+      add('god-powers', 'PASS', `armed — ${X.name} ${MODE2} watch + protection repair active every cycle`);
     } catch (e) {
       add('god-powers', 'FAIL', 'credentialed layer error: ' + (e.message || e));
     }
