@@ -5309,4 +5309,9 @@ hardRace(main(), +(process.env.SENTINEL_SCAN_DEADLINE_MS || 540_000))
     console.warn(`scanner build failed, keeping last snapshot: ${e.message}`);
     process.exitCode = 1;
   })
-  .finally(() => clearInterval(keepAlive));
+  .finally(() => {
+    clearInterval(keepAlive);
+    // hung fetch handles must not orphan the process — a scanner that
+    // stays resident past its spawn window just starves the next one.
+    process.exit(process.exitCode ?? 0);
+  });
