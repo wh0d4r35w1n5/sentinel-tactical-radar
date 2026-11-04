@@ -1,32 +1,32 @@
 {
- "ts": "2026-11-04T20:12:00.418Z",
- "ageMs": 3179,
+ "ts": "2026-11-04T20:17:54.523Z",
+ "ageMs": 10150,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.6299,
-  "availableUsd": 25.4337,
+  "equityUsd": 33.625,
+  "availableUsd": 25.6724,
   "grantUsd": 0,
-  "equityOwnUsd": 33.6299,
-  "marginUsedUsd": 8.0799,
-  "uplUsd": 0.0974,
+  "equityOwnUsd": 33.625,
+  "marginUsedUsd": 7.8467,
+  "uplUsd": 0.1023,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1351,
-    "uplUsd": -0.0085
+    "uplUsd": -0.0103
    },
    {
     "k": "TRXUSDT:long",
     "size": 144,
     "marginUsd": 4.6148,
-    "uplUsd": 0.0883
+    "uplUsd": 0.0797
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3963,
-    "uplUsd": -0.0356
+    "uplUsd": -0.023
    },
    {
     "k": "KSTRUSDT:long",
@@ -36,9 +36,9 @@
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.23,
-    "marginUsd": 1.3366,
-    "uplUsd": 0.0276
+    "size": 0.19,
+    "marginUsd": 1.1035,
+    "uplUsd": 0.0304
    }
   ]
  },
@@ -53,10 +53,16 @@
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.057
   },
-  "staleMs": 3179
+  "staleMs": 10150
  },
- "totalUsd": 33.9163,
+ "totalUsd": 33.9114,
  "deltas": [
+  {
+   "ts": 1793823358222,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.04000000000000001",
+   "amt": 0
+  },
   {
    "ts": 1793823024893,
    "kind": "position-closed",
@@ -170,12 +176,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": -0.2122
-  },
-  {
-   "ts": 1793813424225,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.07999999999999996",
-   "amt": 0
   }
  ]
 }
