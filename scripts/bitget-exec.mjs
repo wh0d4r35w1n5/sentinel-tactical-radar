@@ -152,13 +152,13 @@ const RR_CUM = RR.alloc.reduce((a, f, i) => (a.push(+(a[i] + f).toFixed(8)), a),
 // crude 24h-change veto). Reads state/klines-1h.json closes; classifies each
 // symbol up/down/flat from the 1h mean slope + swing structure (HL/LH).
 // Cached per mtime — the file is ~8MB, one read per exec cycle max.
-let __kl1hCache = { m: 0, data: null };
-const htfTrend = (sym) => {
+let __kl1hCache = { '1h': { m: 0, data: null }, '4H': { m: 0, data: null } };
+const htfTrend = (sym, tf = '1h') => {
   try {
-    const fp = path.join(__dirname, '..', 'state', 'klines-1h.json');
+    const fp = path.join(__dirname, '..', 'state', 'klines-' + tf + '.json');
     const m = +fs.statSync(fp).mtimeMs || 0;
-    if (m !== __kl1hCache.m) __kl1hCache = { m, data: JSON.parse(fs.readFileSync(fp, 'utf8')) };
-    const row = __kl1hCache.data?.[sym];
+    if (m !== __kl1hCache[tf].m) __kl1hCache[tf] = { m, data: JSON.parse(fs.readFileSync(fp, 'utf8')) };
+    const row = __kl1hCache[tf].data?.[sym];
     const cl = row?.payload?.closes;
     const at = +row?.at || 0;
     if (!Array.isArray(cl) || cl.length < 24 || Date.now() - at > 45 * 60e3) return null;
@@ -3999,10 +3999,16 @@ async function main() {
       // higher-low structure is fading the trend — the BABA case. Applies to
       // authored setups too; a real breakdown strat won't emit in an uptrend.
       if (o.direction === 'SHORT') {
-        const htf = htfTrend(o.symbol);
-        if (htf === 'up') {
-          state.actions.push(`${o.symbol}: ⛔ short-into-HTF-uptrend — 1h rising mean + HL structure`);
-          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, ts: Date.now(), gates: ['htf-uptrend-short-veto'] });
+        const h4 = htfTrend(o.symbol, '4H'), h1 = htfTrend(o.symbol, '1h');
+        const fr2 = fundMap?.[o.symbol];
+        const sWhy = h4 != null && h4 !== 'down' ? `short-no-4H-downtrend (${h4})`
+          : h1 != null && h1 !== 'down' ? `short-no-1h-downtrend (${h1})`
+          : (h4 === 'down' && h1 === 'down') ? null
+          : 'short-trend-unproven (no HTF data)';
+        if (sWhy || (fr2 != null && fr2 < 0)) {
+          const w = sWhy || `short-pays-funding ${fr2}%/8h (crowded-short squeeze bait)`;
+          state.actions.push(`${o.symbol}: ⛔ ${w}`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, ts: Date.now(), gates: ['short-trend-rule'] });
           continue;
         }
       }
