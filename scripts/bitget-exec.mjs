@@ -3713,7 +3713,7 @@ async function main() {
               bubFlags: c._bubFlags || [],
               breadthDay: bub?.breadth?.dayGreen ?? null,
               score: c._sc ?? c.score });
-            state.actions.push();
+            state.actions.push('SLOT-FILL mandate - margin into ' + c.symbol + ' long (immediate, override) · ' + CORE_LEV + 'x · stop ' + CORE_STOP_PCT + '%');
             picked++;
             markTried(c.symbol);
             continue;
