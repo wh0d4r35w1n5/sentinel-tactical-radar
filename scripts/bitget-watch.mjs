@@ -239,22 +239,44 @@ async function reconcileK2TakeProfits(p, rr, dec, sizeDec, rows, actions, errors
   const mark = +p.markPrice || 0;
   const stop = desiredSl(p, dec);
   const legs = desiredLegs(p, rr, stop.stopPct, dec, sizeDec, mark,
-    +cmCache?.[p.symbol]?.sizeMultiplier || 0, +cmCache?.[p.symbol]?.minTradeNum || 0);
+    +cmCache?.[p.symbol]?.sizeMultiplier || 0,
+    Math.max(+cmCache?.[p.symbol]?.minTradeNum || 0, learnedMinSlice(p.symbol)));
   const legRows = rows.filter((r) => r.planType === 'profit_plan');
   if (legs.length) {
     if (!legsMatch(legRows, legs, dec, Math.pow(10, sizeDec))) {
       await cancelRows(p.symbol, legRows);
-      let placed = 0;
+      let placed = 0, fold = 0;
+      const legsEff = [];
       for (const l of legs) {
+        const want = +(l.size + fold).toFixed(sizeDec);
         try {
-          await X.planOrder(p.symbol, 'profit_plan', String(l.px), String(l.size), p.holdSide, p.marginMode);
-          placed++;
+          await X.planOrder(p.symbol, 'profit_plan', String(l.px), String(want), p.holdSide, p.marginMode);
+          placed++; fold = 0; legsEff.push({ px: l.px, size: want });
         } catch (e) {
-          errors.push(`${p.symbol}: K2 TP leg ${l.px} failed: ${e.message.slice(0, 100)}`);
+          // sub-slice leg: fold its share into the NEXT rung instead of
+          // leaving it uncovered — a rung that cannot place never banks.
+          if (/40808|checkBDScale|size/i.test(e.message || '')) {
+            fold += l.size; learnMinSlice(p.symbol, l.size);
+            errors.push(`${p.symbol}: K2 TP leg ${l.px} sub-slice (${l.size}) — folded into next rung`);
+          } else {
+            errors.push(`${p.symbol}: K2 TP leg ${l.px} failed: ${e.message.slice(0, 100)}`);
+          }
         }
       }
+      // folded tail still banks: a whole-position pos_profit at the last
+      // rung's price covers every unfilled share (size 0 = all remaining).
+      if (fold > 0) {
+        const lastPx = legs[legs.length - 1].px;
+        try {
+          if (!legRows.some((r) => r.planType === 'pos_profit')) {
+            await X.planOrder(p.symbol, 'pos_profit', String(lastPx), '0', p.holdSide, p.marginMode);
+            legsEff.push({ px: lastPx, size: fold });
+            errors.push(`${p.symbol}: K2 folded tail ${round(fold, sizeDec)} → whole-position TP @ ${lastPx}`);
+          }
+        } catch (e) { errors.push(`${p.symbol}: K2 folded-tail TP failed: ${e.message.slice(0, 100)}`); }
+      }
       const check = await X.getPlans(p.symbol).catch(() => null);
-      if (check === null || !legsMatch(check.filter((r) => r.planType === 'profit_plan'), legs, dec, Math.pow(10, sizeDec)))
+      if (check === null || !legsMatch(check.filter((r) => r.planType === 'profit_plan'), legsEff.length ? legsEff : legs, dec, Math.pow(10, sizeDec)))
         errors.push(`${p.symbol}: K2 TP ladder verification failed`);
       if (placed) actions.push(`${p.symbol}: K2 TP ladder armed ${placed}/${legs.length} configured rungs`);
     }
@@ -288,6 +310,23 @@ async function reconcileK2TakeProfits(p, rr, dec, sizeDec, rows, actions, errors
 }
 
 let cmCache = null;
+
+// Exchange-reported minimum slice, learned from 40808 rejects: contract
+// catalog values go stale; once a leg dies on size the real floor is
+// journaled and every later ladder respects it.
+const LEARN_MIN_FILE = path.join(__dirname, '..', 'state', 'contract-min-learn.json');
+const learnMinSlice = (sym, failedSize) => {
+  try {
+    const m = JSON.parse(fs.readFileSync(LEARN_MIN_FILE, 'utf8'));
+    m[sym] = Math.max(+m[sym] || 0, +failedSize || 0);
+    fs.writeFileSync(LEARN_MIN_FILE, JSON.stringify(m));
+  } catch {
+    try { fs.writeFileSync(LEARN_MIN_FILE, JSON.stringify({ [sym]: +failedSize || 0 })); } catch {}
+  }
+};
+const learnedMinSlice = (sym) => {
+  try { return +JSON.parse(fs.readFileSync(LEARN_MIN_FILE, 'utf8'))[sym] || 0; } catch { return 0; }
+};
 // decimals fallback helpers (see cycle() — used only when the contract map
 // lacks a symbol). Price grid from the live ticker string: the exchange
 // formats markPrice to the tick, so the fraction length IS the grid.
