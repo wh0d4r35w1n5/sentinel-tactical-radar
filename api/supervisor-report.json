@@ -1,21 +1,21 @@
 {
-  "refreshedAt": "2026-11-03T23:58:42.826Z",
+  "refreshedAt": "2026-11-04T00:08:44.838Z",
   "mode": {
-    "ledgerMode": "demo",
-    "ledgerExchange": "bybit",
+    "ledgerMode": "live",
+    "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 41.78
+    "equityUsd": 0.03
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-03T23:58:42.826Z"
+    "at": "2026-11-04T00:08:44.838Z"
   },
   "sweep": {
-    "scanned": 434,
-    "cancelled": 0,
-    "at": "2026-11-03T23:58:42.826Z"
+    "scanned": 475,
+    "cancelled": 9,
+    "at": "2026-11-04T00:08:44.838Z"
   },
   "journals": {
     "realFills": 125,
@@ -29,57 +29,12 @@
     "excluded": 0,
     "cellCount": 0
   },
-  "positions": [
-    "MONUSDT:-0.007687",
-    "1000BONKUSDT:1.68577344",
-    "PUFFERUSDT:0.14532",
-    "ONDOUSDT:-0.67850371",
-    "UAIUSDT:-0.098",
-    "1000000MOGUSDT:-0.06336",
-    "WLDUSDT:-0.43882529",
-    "JSTUSDT:0.07546",
-    "COMPUSDT:0.04122",
-    "DOTUSDT:0.03405",
-    "XRPUSDT:0.0765",
-    "ARUSDT:-1.347",
-    "XAUTUSDT:0.08536",
-    "YBUSDT:0.034245",
-    "CVCUSDT:-0.24772",
-    "ZETAUSDT:0.71362881",
-    "AEROUSDT:0.2635",
-    "SSVUSDT:-0.04945",
-    "TRBUSDT:0.13744",
-    "MOODENGUSDT:-0.45084",
-    "1000000BABYDOGEUSDT:-0.10784",
-    "ZENUSDT:0.1757",
-    "LINEAUSDT:0",
-    "BLENDUSDT:-0.24684",
-    "XCNUSDT:-0.2379",
-    "NEOUSDT:0.02172",
-    "BANDUSDT:0.03348",
-    "BELUSDT:-0.0227",
-    "LDOUSDT:0.12006296",
-    "TAOUSDT:-0.4653",
-    "KIIUSDT:-0.0564",
-    "ALTUSDT:0.1139",
-    "B3USDT:-0.13804",
-    "ERAUSDT:-0.1863",
-    "TUSDT:0.07161",
-    "MIRAUSDT:-0.875",
-    "MOVEUSDT:-0.089509",
-    "ORDIUSDT:-0.60135",
-    "BNBUSDT:0.2432",
-    "SOLUSDT:-1.421",
-    "BCHUSDT:-1.3968",
-    "ADAUSDT:-0.4359",
-    "AVAXUSDT:-1.1664",
-    "TRXUSDT:-0.387",
-    "LINKUSDT:-2.6394",
-    "GMTUSDT:-0.380551",
-    "DOGEUSDT:0.00067",
-    "1000LUNCUSDT:-0.20384",
-    "LTCUSDT:-0.055"
+  "positions": [],
+  "problems": [
+    "mode drift — ledger 'live' vs .env 'demo' — verify which is real",
+    "LIVE ledger while .env is demo — possible unauthorized live flip"
   ],
-  "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 9 untriggered legs on dead seats"
+  ]
 }
