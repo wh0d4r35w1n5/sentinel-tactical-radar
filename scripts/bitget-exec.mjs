@@ -372,6 +372,18 @@ const FLOOR_MIN = process.env.LIVE_FLOOR_MIN === '1';
 // user mandate: longs only — SENTINEL_LONG_ONLY=1 refuses every SHORT order
 // at routing time (defense-in-depth under the scanner's shorts-banned gate).
 const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
+// OPEN SEASON (operator order 2026-11-04 — "trade literally anything you
+// want, no restrictions from my side"): state/open-season.json enabled
+// lifts the listing rails — live-cell allowlist, longs-only direction
+// gate, short whitelist/score floor and the non-terminal policy veto all
+// stand down. Convictions still ride: halted/abandoned policy records,
+// dead admission cells, measured-losing symbols and every mechanical
+// rail (drift, R:R, contract min, armor) are untouched. Read live per
+// call so the flag flips without a restart.
+const openSeason = () => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'open-season.json'), 'utf8')).enabled === true; }
+  catch { return false; }
+};
 // idempotent-order window: a signal that already produced an entry attempt
 // inside this horizon is a replay, not a new opportunity — skip it.
 const ENTRY_DEDUP_MS = +(process.env.SENTINEL_ENTRY_DEDUP_MS || 10 * 60e3);
@@ -1309,6 +1321,7 @@ async function main() {
     const a = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'live-cell-allowlist.json'), 'utf8'));
     if (a.enabled) LIVE_CELL_ALLOW = { directions: new Set(a.directions || []), prefixes: a.strategyPrefixes || [], cells: new Set(a.cells || []) };
   } catch {}
+  var OPEN_SEASON = openSeason();
   try {
     // loss measured against equity at the START of the 24h window, not the
     // shrunken current equity — otherwise the same dollar loss trips an
@@ -3045,7 +3058,7 @@ async function main() {
         // census-validated pump-short setup channel (50/50 dual-positive,
         // ~95% WR at >=2% 2h pump triggers on 13.4M real tests). Everything
         // else stays long-only per operator rule.
-        if (LONG_ONLY && s.direction === 'SHORT' && !['pump-short', 'sentinel-structure'].includes(s.strategy)
+        if (LONG_ONLY && !openSeason() && s.direction === 'SHORT' && !['pump-short', 'sentinel-structure'].includes(s.strategy)
             && !(s.pattern && shadowPromoted[s.pattern])) {
           rej('longs-only-mandate');
           try { fs.appendFileSync(path.join(__dirname, '..', 'state', 'pattern-census.jsonl'), JSON.stringify({ ts: Date.now(), src: 'shadow-reject', sym, side: 'short', pattern: s.pattern || s.mode, entryPx: s.entryPx || s.lastPx || null, slPx: s.slPx || null, veto: 'longs-only' }) + '\n'); } catch {}
@@ -3820,7 +3833,7 @@ async function main() {
       // absolutely everything"): the demo book is the evidence lab — authored
       // cells trade paper to earn fresh episode records. The live gate stays
       // Wyckoff-only; demo fills journal to a separate file either way.
-      if (LIVE_CELL_ALLOW && MODE !== 'demo') {
+      if (LIVE_CELL_ALLOW && !OPEN_SEASON && MODE !== 'demo') {
         // When cells[] is populated it is the precise gate — exact
         // 'Strategy:SIDE' membership — so one measured-positive short cell
         // can be admitted without opening the direction to every prefix.
@@ -3923,7 +3936,7 @@ async function main() {
       // so a stale or hand-built plan can never route a short entry.
       // census-validated pump-short setups are the only exempted shorts —
       // the mandate still blocks every other short path.
-      if (LONG_ONLY && o.direction === 'SHORT' && !(o.setup && ['pump-short', 'sentinel-structure'].includes(o.strategy))) {
+      if (LONG_ONLY && !OPEN_SEASON && o.direction === 'SHORT' && !(o.setup && ['pump-short', 'sentinel-structure'].includes(o.strategy))) {
         state.actions.push(`${o.symbol}: ⛔ SHORT blocked — longs-only mandate`);
         continue;
       }
@@ -3931,7 +3944,7 @@ async function main() {
       // scanner): a stale or hand-built short gets the same bar — fade
       // family, high score, capped target. Net-RR floor is enforced in
       // the RR defense block below.
-      if (o.direction === 'SHORT' && !o.setup) {
+      if (!OPEN_SEASON && o.direction === 'SHORT' && !o.setup) {
         const ok = (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile').split(',').map((x) => x.trim());
         const sMin = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
         const sTgt = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
@@ -4068,7 +4081,7 @@ async function main() {
         // the holdout already buried them; a demo seat earns zero evidence and
         // just churns fees (post-reset: SFP took 18 demo entries at SQN -67).
         const terminal = sp && (sp.status === 'halted' || sp.status === 'abandoned');
-        if (terminal || (MODE !== 'demo' && sp && sp.status !== 'live' && !rehab)) {
+        if (terminal || (!OPEN_SEASON && MODE !== 'demo' && sp && sp.status !== 'live' && !rehab)) {
           state.actions.push(`${o.symbol}: ⛔ policy-veto — '${o.strategy}'${spCell ? ` ${o.direction}` : ''} status=${sp.status} (${(sp.why || '').slice(0, 90)})`);
           (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['strategy-policy-' + sp.status] });
           continue;

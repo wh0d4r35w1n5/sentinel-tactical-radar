@@ -48,7 +48,15 @@ export function assertAdmission(intent, { allowlist, admission, envelope, now = 
   validateRiskPolicy(risk);
   const cell = canonicalCell(intent.strategy, intent.direction);
   const pocket = `${cell}:${intent.symbol}`;
-  const listed = allowlist?.cells?.includes(cell) || allowlist?.cells?.includes(pocket);
+  // OPEN SEASON (operator order 2026-11-04 — "trade literally anything you
+  // want, no restrictions from my side"): state/open-season.json lifts the
+  // listing requirement — an unrecorded or below-bar-but-unconvicted cell
+  // admits at probation (half risk) and its episodes become the record.
+  // Convictions still ride: 'dead' records, non-positive means, measured-
+  // losing symbols and the envelope brake all still refuse.
+  const openSeason = readJson(path.join(ROOT, 'state', 'open-season.json'), true)?.enabled === true;
+  const listed = openSeason ||
+    allowlist?.cells?.includes(cell) || allowlist?.cells?.includes(pocket);
   if (!cell || allowlist?.enabled !== true || !listed)
     fail(`strategy not admitted: ${intent.strategy || 'unattributed'} ${intent.direction || '?'}`);
   if (!['LONG', 'SHORT'].includes(intent.direction)) fail('unvalidated direction');
@@ -59,7 +67,7 @@ export function assertAdmission(intent, { allowlist, admission, envelope, now = 
   // half risk while it accrues the forward record needed for promotion.
   // A name prefix alone, or evidence under a different exit model, admits
   // nothing.
-  const tier =
+  let tier =
     evidence?.status === 'live' && evidence.source === 'validated-forward-exits' &&
     evidence.episodes >= 3 ? 'live'
     : evidence?.status === 'probation' && evidence.source === 'mega-backtest-1m' &&
@@ -75,12 +83,15 @@ export function assertAdmission(intent, { allowlist, admission, envelope, now = 
   // while the forward record accrues under the real exit.
   if (intent.exitModel && tier === 'live' && intent.exitModel !== evidence?.exitModel)
     fail('unvalidated exit model');
-  if (!tier || !(evidence.netAfterCost > 0) ||
+  if (!tier && openSeason && evidence?.status !== 'dead' && !(evidence && !(evidence.netAfterCost > 0)))
+    tier = 'probation';
+  if (!tier || (evidence && (
+      !(evidence.netAfterCost > 0) ||
       (tier === 'live' && !(evidence.ci?.[0] > 0)) ||
-      (tier === 'probation' && !(evidence.sqn >= 1 || evidence.ci?.[0] > 0)))
+      (tier === 'probation' && !openSeason && !(evidence.sqn >= 1 || evidence.ci?.[0] > 0)))))
     fail(`${cell} has no qualifying evidence`);
-  const evidenceAt = Date.parse(evidence.reviewedAt);
-  if (!finite(evidenceAt) || now < evidenceAt || now - evidenceAt > risk.maxEvidenceAgeMs)
+  const evidenceAt = Date.parse(evidence?.reviewedAt);
+  if (evidence && (!finite(evidenceAt) || now < evidenceAt || now - evidenceAt > risk.maxEvidenceAgeMs))
     fail('stale admission evidence');
   const at = +envelope?.at;
   if (!positive(at) || now < at || now - at > 180000) fail('stale deployment envelope');

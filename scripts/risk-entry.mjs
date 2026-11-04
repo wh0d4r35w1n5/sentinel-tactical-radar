@@ -22,18 +22,24 @@ export async function openRiskEntry(X, order, contract, { riskScale = 1, root = 
   const pocket = cell && `${cell}:${order.symbol}`;
   const allow = readJson(path.join(root, 'state', 'live-cell-allowlist.json'), true);
   const adm = readJson(path.join(root, 'state', 'cell-admission.json'), true);
-  const listed = allow?.enabled === true &&
-    (allow?.cells?.includes(cell) || (pocket && allow?.cells?.includes(pocket)));
+  // OPEN SEASON (operator order 2026-11-04): unrecorded/unconvicted cells
+  // admit at probation — convictions (dead, non-positive mean) still refuse.
+  const openSeason = readJson(path.join(root, 'state', 'open-season.json'), true)?.enabled === true;
+  const listed = openSeason || (allow?.enabled === true &&
+    (allow?.cells?.includes(cell) || (pocket && allow?.cells?.includes(pocket))));
   const ev = (pocket && adm?.cells?.[pocket]) || adm?.cells?.[cell];
-  const tier =
+  let tier =
     ev?.status === 'live' && ev.source === 'validated-forward-exits' &&
     ev.episodes >= 3 ? 'live'
     : ev?.status === 'probation' && ev.source === 'mega-backtest-1m' &&
       ev.episodes >= 200 ? 'probation'
     : null;
-  if (!listed || !tier || !(ev.netAfterCost > 0) ||
-      (tier === 'live' && !(ev.ci?.[0] > 0)) ||
-      (tier === 'probation' && !(ev.sqn >= 1 || ev.ci?.[0] > 0)))
+  if (!tier && openSeason && ev?.status !== 'dead' && !(ev && !(ev.netAfterCost > 0)))
+    tier = 'probation';
+  if (!listed || !tier || (ev && !(ev.netAfterCost > 0)) ||
+      (!openSeason && (
+        (tier === 'live' && !(ev.ci?.[0] > 0)) ||
+        (tier === 'probation' && !(ev.sqn >= 1 || ev.ci?.[0] > 0)))))
     throw new Error(`entry-risk: ${cell || order.strategy || 'unattributed'} has no qualifying evidence`);
   if (tier === 'probation') riskScale *= 0.5; // backtest-only proof earns half risk
   const price = +order.refEntry;
