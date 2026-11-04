@@ -3998,6 +3998,15 @@ async function main() {
       // analysis, not just a 24h number): a short into a rising 1h mean with
       // higher-low structure is fading the trend — the BABA case. Applies to
       // authored setups too; a real breakdown strat won't emit in an uptrend.
+      // CRYPTO-ONLY universe (operator order 2026-11-04 — no boomer coin
+      // bullshit): stock/metal/fx-mapped perps are banned outright. Denylist
+      // covers Bitget RWA contracts + HKD-suffix listings + metals.
+      const NON_CRYPTO = new Set((process.env.SENTINEL_NON_CRYPTO || 'XAUUSDT,XAGUSDT,XPTUSDT,XPDUSDT,AAPLUSDT,MSFTUSDT,TSLAUSDT,NVDAUSDT,AMZNUSDT,METAUSDT,GOOGUSDT,GOOGLUSDT,NFLXUSDT,AMDUSDT,INTCUSDT,COINUSDT,MSTRUSDT,MCDUSDT,BABAUSDT,EBAYUSDT,SAMSUNGUSDT,MDBUSDT,GSUSDT,ZHONGJIUSDT,TOKYOELUSDT,SNDKUSDT,AMCUSDT,GILDUSDT,GEUSDT,QQQUSDT,SOXLUSDT,SPYUSDT,DIAUSDT,IWMUSDT,PURRUSDT,SKHYUSDT,SKHYNIXUSDT,OUSTUSDT,NKEUSDT,WMTUSDT,JPMUSDT,VUSDT,MAUSDT,DISUSDT,PYPLUSDT,PLTRUSDT,ORCLUSDT,IBMUSDT,CSCOUSDT,XOMUSDT,CVXUSDT,JNJUSDT,PFEUSDT,BACUSDT,WFCUSDT,KOUSDT,PEPUSDT,HDUSDT,COSTUSDT,TGTUSDT,F').split(',').map((x) => x.trim()));
+      if (NON_CRYPTO.has(o.symbol) || /HKDUSDT$/.test(o.symbol)) {
+        state.actions.push(`${o.symbol}: 🚫 non-crypto contract banned (operator order)`);
+        (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, ts: Date.now(), gates: ['non-crypto'] });
+        continue;
+      }
       if (o.direction === 'SHORT') {
         const h4 = htfTrend(o.symbol, '4H'), h1 = htfTrend(o.symbol, '1h');
         const fr2 = fundMap?.[o.symbol];
