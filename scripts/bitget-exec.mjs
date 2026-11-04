@@ -4112,6 +4112,14 @@ async function main() {
           state.actions.push(`${o.symbol}: 🏃 price ran ${round(drift * 100, 2)}% past ref entry — skipped (chasing = worse R:R)`);
           continue;
         }
+        // STRAIGHT-INTO-GREEN confirm (operator order 2026-11-04): the mark
+        // must already be printing in trade direction at seat time. A signal
+        // whose tape hasn't moved our way stays queued until it does.
+        const minFavor = +(process.env.SENTINEL_MIN_FAVOR_DRIFT || 0.001);
+        if (last > 0 && drift < minFavor) {
+          state.actions.push(`${o.symbol}: ⏳ awaiting tape confirm — drift ${round(drift * 100, 2)}% < ${round(minFavor * 100, 2)}% in our favor — queued`);
+          continue;
+        }
         // trigger-side sanity: if mark already sits beyond the modeled stop,
         // the SL trigger is wrong-side the instant it lands (Bitget 43023 /
         // instant trigger) — the position is born dead; if it's already past
