@@ -159,7 +159,7 @@ const htfTrend = (sym, tf = '1h') => {
     const m = +fs.statSync(fp).mtimeMs || 0;
     if (m !== __kl1hCache[tf].m) __kl1hCache[tf] = { m, data: JSON.parse(fs.readFileSync(fp, 'utf8')) };
     const row = __kl1hCache[tf].data?.[sym];
-    const cl = row?.payload?.closes;
+    const cl = row?.payload?.closes || (Array.isArray(row?.rows) ? row.rows.map((r) => +r.c).filter(Number.isFinite) : null);
     const at = +row?.at || 0;
     if (!Array.isArray(cl) || cl.length < 24 || Date.now() - at > 45 * 60e3) return null;
     const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
