@@ -3641,7 +3641,9 @@ async function main() {
         // (the empty-book bug). Seeds still ride every hard gate below.
         if (!(perSlotFor(c) > 0.2)) continue; // unproven keeps the diluted floor; proven seats concentrate the budget
         const isSeed = CORE_SYMS.includes(c.symbol) || c.majors || c.onchain || liveStratSym[c.symbol];
-        if ((c.score || 0) < MANDATE_MIN_SCORE && !isSeed) continue;
+        // seeds ride the SAME score floor (operator 2026-11-04 — the good
+        // pick days came from quality-gated picks, not seeded liquidity).
+        if ((c.score || 0) < MANDATE_MIN_SCORE) continue;
         const verdict = envCells[c.symbol]?.verdict || envCells[canon(c.symbol)]?.verdict;
         if (verdict === 'loser') continue; // measured-negative cell — evidence gate
         // dead-intel discipline (measured: slot-deploy gross −0.083%/ep is
