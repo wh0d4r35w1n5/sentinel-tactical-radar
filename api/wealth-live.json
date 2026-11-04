@@ -1,68 +1,74 @@
 {
- "ts": "2026-11-04T20:02:24.042Z",
- "ageMs": 12006,
+ "ts": "2026-11-04T20:06:57.526Z",
+ "ageMs": 947,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.6072,
-  "availableUsd": 24.5514,
+  "equityUsd": 33.6394,
+  "availableUsd": 24.9055,
   "grantUsd": 0,
-  "equityOwnUsd": 33.6072,
-  "marginUsedUsd": 9.0427,
-  "uplUsd": -0.0035,
+  "equityOwnUsd": 33.6394,
+  "marginUsedUsd": 8.6964,
+  "uplUsd": 0.0101,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1351,
-    "uplUsd": -0.0087
+    "uplUsd": -0.0084
    },
    {
     "k": "MUUSDT:long",
     "size": 0.01,
     "marginUsd": 0.3269,
-    "uplUsd": -0.0627
+    "uplUsd": -0.0712
    },
    {
     "k": "TRXUSDT:long",
     "size": 144,
     "marginUsd": 4.6148,
-    "uplUsd": 0.0495
+    "uplUsd": 0.0696
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3963,
-    "uplUsd": -0.025
+    "uplUsd": -0.0274
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.23,
     "marginUsd": 0.597,
-    "uplUsd": 0.023
+    "uplUsd": 0.0251
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.34,
-    "marginUsd": 1.9725,
-    "uplUsd": 0.0204
+    "size": 0.28,
+    "marginUsd": 1.6262,
+    "uplUsd": 0.0224
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2277,
+  "solUsd": 0.2279,
   "stableUsd": 0,
   "bagsUsd": 0.0579,
-  "totalUsd": 0.2856,
+  "totalUsd": 0.2858,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.057
   },
-  "staleMs": 12006
+  "staleMs": 947
  },
- "totalUsd": 33.8928,
+ "totalUsd": 33.9252,
  "deltas": [
+  {
+   "ts": 1793822640246,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.06",
+   "amt": 0
+  },
   {
    "ts": 1793821658299,
    "kind": "size-reduced",
@@ -175,12 +181,6 @@
    "ts": 1793813220838,
    "kind": "size-reduced",
    "detail": "SNDKUSDT:long Δ-0.001",
-   "amt": 0
-  },
-  {
-   "ts": 1793813191247,
-   "kind": "size-reduced",
-   "detail": "QQQUSDT:long Δ-0.010000000000000002",
    "amt": 0
   }
  ]
