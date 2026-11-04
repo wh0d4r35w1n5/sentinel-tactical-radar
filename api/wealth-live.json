@@ -1,68 +1,80 @@
 {
- "ts": "2026-11-04T19:46:23.542Z",
- "ageMs": 1492,
+ "ts": "2026-11-04T19:51:41.272Z",
+ "ageMs": 276,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.8296,
-  "availableUsd": 24.5247,
+  "equityUsd": 33.6072,
+  "availableUsd": 24.5514,
   "grantUsd": 0,
-  "equityOwnUsd": 33.8296,
-  "marginUsedUsd": 9.0706,
-  "uplUsd": -0.015,
+  "equityOwnUsd": 33.6072,
+  "marginUsedUsd": 9.0448,
+  "uplUsd": -0.0227,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1351,
-    "uplUsd": -0.0066
+    "uplUsd": -0.0076
    },
    {
     "k": "MUUSDT:long",
     "size": 0.01,
     "marginUsd": 0.3269,
-    "uplUsd": -0.0561
+    "uplUsd": -0.0593
    },
    {
     "k": "TRXUSDT:long",
     "size": 144,
     "marginUsd": 4.6148,
-    "uplUsd": 0.0581
+    "uplUsd": 0.0495
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3963,
-    "uplUsd": -0.021
+    "uplUsd": -0.0208
    },
    {
     "k": "KSTRUSDT:long",
-    "size": 0.24,
-    "marginUsd": 0.6228,
-    "uplUsd": 0.0242
+    "size": 0.23,
+    "marginUsd": 0.597,
+    "uplUsd": 0.0223
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.34,
     "marginUsd": 1.9746,
-    "uplUsd": -0.0136
+    "uplUsd": -0.0068
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.229,
+  "solUsd": 0.2278,
   "stableUsd": 0,
-  "bagsUsd": 0.0596,
-  "totalUsd": 0.2886,
+  "bagsUsd": 0.0595,
+  "totalUsd": 0.2873,
   "tokens": {
-   "BQAeeSow": 0.001,
+   "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0586
   },
-  "staleMs": 1492
+  "staleMs": 276
  },
- "totalUsd": 34.1181,
+ "totalUsd": 33.8945,
  "deltas": [
+  {
+   "ts": 1793821658299,
+   "kind": "size-reduced",
+   "detail": "KSTRUSDT:long Δ-0.009999999999999981",
+   "amt": 0
+  },
+  {
+   "ts": 1793821641617,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": -0.2346
+  },
   {
    "ts": 1793819500481,
    "kind": "balance-move",
@@ -170,18 +182,6 @@
    "kind": "size-reduced",
    "detail": "QQQUSDT:long Δ-0.010000000000000002",
    "amt": 0
-  },
-  {
-   "ts": 1793813180093,
-   "kind": "size-reduced",
-   "detail": "SNDKUSDT:long Δ-0.001",
-   "amt": 0
-  },
-  {
-   "ts": 1793813180092,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0909
   }
  ]
 }
