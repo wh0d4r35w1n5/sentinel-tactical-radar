@@ -229,7 +229,11 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
       fail('position already exists; top-ups and manual-position additions are disabled');
     if (s.pending.some(o => !reducing(o))) fail('pending opening order must be reconciled first');
     const price = s.price;
-    if (!positive(price) || Math.abs(price / intent.entryPrice - 1) > c.risk.maxPriceDriftFraction)
+    // confirmPrint orders are armed momentum chases — their thesis IS the
+    // drift. They ride a wider band (1%) or they can never fill on a real
+    // move; a runaway past 1% or any adverse slide still refuses.
+    const driftMax = intent.confirmPrint ? Math.max(0.01, c.risk.maxPriceDriftFraction) : c.risk.maxPriceDriftFraction;
+    if (!positive(price) || Math.abs(price / intent.entryPrice - 1) > driftMax)
       fail('stale entry price');
     const exp = portfolioExposure(s.positions, s.plans);
     // open season: unproven cells pay full risk — the operator ordered

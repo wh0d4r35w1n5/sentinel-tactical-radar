@@ -62,7 +62,7 @@ export async function openRiskEntry(X, order, contract, { riskScale = 1, root = 
     : price * (shortDir ? 1.01 : 0.99);
   const stopPrice = +(Math.floor(rawStop / tick) * tick).toFixed(+contract.pricePlace || 0);
   const intent = { symbol: order.symbol, strategy: order.strategy, direction: order.direction,
-    exitModel: EXIT_MODEL, entryPrice: price, stopPrice, riskScale };
+    exitModel: EXIT_MODEL, entryPrice: price, stopPrice, riskScale, confirmPrint: order.confirmPrint };
   let approved = await X.prepareEntry(intent);
   // Skip no-op margin/leverage writes — Bitget can reject them and a spurious
   // refusal must not stall a valid entry.
