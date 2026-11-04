@@ -1,26 +1,26 @@
 {
-  "refreshedAt": "2026-11-04T17:06:54.878Z",
+  "refreshedAt": "2026-11-04T17:16:55.739Z",
   "mode": {
     "ledgerMode": "live",
     "ledgerExchange": "bitget",
     "envExec": "demo",
     "envX": "bybit",
-    "equityUsd": 36.7,
+    "equityUsd": 34.26,
     "liveLane": true
   },
   "units": {
     "checked": 5,
     "dead": 0,
-    "at": "2026-11-04T17:06:54.878Z"
+    "at": "2026-11-04T17:16:55.739Z"
   },
   "sweep": {
-    "scanned": 0,
-    "cancelled": 0,
-    "at": "2026-11-04T17:06:54.878Z"
+    "scanned": 5,
+    "cancelled": 5,
+    "at": "2026-11-04T17:16:55.739Z"
   },
   "journals": {
-    "realFills": 320,
-    "demoFillsBybit": 33
+    "realFills": 336,
+    "demoFillsBybit": 34
   },
   "evidence": {
     "demoEpisodes": 0,
@@ -28,21 +28,22 @@
     "demoWinRate": null,
     "demoSqN": null,
     "excluded": 0,
-    "cellCount": 0
+    "cellCount": 1
   },
   "positions": [
-    "SOLUSDT:-0.3744",
-    "BABAUSDT:0.0016",
-    "XRPUSDT:-0.3774",
-    "ZECUSDT:0.01312",
-    "MUUSDT:0.0289",
-    "TRXUSDT:0.19346750712",
-    "QQQUSDT:0.1176",
-    "PEPEUSDT:-0.013338",
-    "KSTRUSDT:0.032",
-    "XAGUSDT:-0.0336",
-    "ENAUSDT:-0.60669"
+    "SOLUSDT:-0.2052",
+    "BABAUSDT:0.0005",
+    "XRPUSDT:-0.4845",
+    "SNDKUSDT:-0.01498",
+    "ZECUSDT:-0.07637",
+    "MUUSDT:-0.0093",
+    "TRXUSDT:0.17186750712",
+    "QQQUSDT:0.0568",
+    "KSTRUSDT:0.02225",
+    "XAGUSDT:0.0294"
   ],
   "problems": [],
-  "notes": []
+  "notes": [
+    "orphan sweep — cancelled 5 untriggered legs on dead seats"
+  ]
 }
