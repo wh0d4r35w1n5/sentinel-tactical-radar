@@ -93,7 +93,21 @@ export async function openRiskEntry(X, order, contract, { riskScale = 1, root = 
     if (+size + lotStep * 1e-9 < required)
       throw new Error('entry-risk: five-rung TP requires at least ' + required + ' ' + order.symbol + ' contracts; risk-sized ' + size);
   };
-  assertFiveTpCapacity(approved.size);
+  try {
+    assertFiveTpCapacity(approved.size);
+  } catch (e) {
+    // ladder-floor retry: a seat risk-sized under the five-rung contract
+    // minimum is bumped to the floor when the risk pipeline allows the
+    // larger notional — otherwise ETH/SOL-class contracts can never seat
+    // at probe sizes. The second assert still throws if prepareEntry caps
+    // it below the floor — rails hold either way.
+    const m = /requires at least ([\d.eE+-]+)/.exec(e.message || '');
+    if (!m || !(+m[1] * price > 0)) throw e;
+    approved = await X.prepareEntry({ ...intent, requestedNotionalUsd: +m[1] * price });
+    assertFiveTpCapacity(approved.size);
+    if (approved.marginMode !== 'isolated') await X.setIsolated(order.symbol);
+    if (approved.actualLeverage !== approved.leverage) await X.setLeverage(order.symbol, approved.leverage);
+  }
   const openSide = order.direction === 'SHORT' ? 'sell' : 'buy';
   const holdSide = order.direction === 'SHORT' ? 'short' : 'long';
   try {
