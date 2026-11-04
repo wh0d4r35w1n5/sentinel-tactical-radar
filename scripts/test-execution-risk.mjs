@@ -58,7 +58,10 @@ t('riskScale halves size', () => {
   return { full: a.riskUsd, half: b.riskUsd };
 });
 t('half-risk under contract min refuses, never oversizes', () =>
-  sizeEntry({ ...base, riskScale: 0.5 }, policy), 'minimum');
+  // equity small enough that even half-tier budget can't reach the contract
+  // minimum — under live policy (2% risk floor for small books) $33.55 half-
+  // risks $15.4 notional, which legitimately sizes. $8 cannot.
+  sizeEntry({ ...base, equityUsd: 8, availableUsd: 8, riskScale: 0.5 }, policy), 'minimum');
 t('leverageCap shrinks notional, never raises risk', () => {
   const r = sizeEntry({ ...base, leverageCap: 2 }, policy);
   if (r.leverage > 2 || r.riskUsd > 33.55 * policy.riskPerTradeFraction + 1e-9) throw new Error('cap wrong');
@@ -83,7 +86,15 @@ t('wyckoff probation admits at half tier', () => {
 t('non-wyckoff refused', () => assertAdmission({ ...wIntent, strategy: 'Liquidity Sweep' }, mkArgs()), 'not admitted');
 t('short refused', () => assertAdmission({ ...wIntent, direction: 'SHORT' }, mkArgs()), 'entry-risk');
 t('unattributed refused', () => assertAdmission({ ...wIntent, strategy: null }, mkArgs()), 'not admitted');
-t('wrong exit model refused', () => assertAdmission({ ...wIntent, exitModel: 'ladder' }, mkArgs()), 'exit model');
+t('probation tolerates exit-model variance (half-risk pricing)', () => {
+  const r = assertAdmission({ ...wIntent, exitModel: 'ladder' }, mkArgs());
+  if (r.tier !== 'probation') throw new Error('expected probation');
+  return r;
+});
+t('live tier refuses wrong exit model', () => assertAdmission({ ...wIntent, exitModel: 'ladder' }, mkArgs({
+  admission: { cells: { 'Wyckoff:LONG': { status: 'live', source: 'validated-forward-exits', exitModel: EXIT_MODEL,
+    episodes: 40, netAfterCost: 0.5, ci: [0.05, 0.9], reviewedAt: new Date().toISOString() } } },
+})), 'exit model');
 t('stale evidence refused', () => assertAdmission(wIntent, mkArgs({
   admission: { cells: { 'Wyckoff:LONG': { status: 'probation', source: 'mega-backtest-1m', exitModel: EXIT_MODEL,
     episodes: 10715, netAfterCost: 0.1, ci: [0.01, 0.2], reviewedAt: new Date(Date.now() - 2 * 86400000).toISOString() } } },
