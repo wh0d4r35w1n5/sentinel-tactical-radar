@@ -3698,6 +3698,26 @@ async function main() {
           const tk = await X.ticker(c.symbol);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
           if (!(last > 0)) continue;
+          if (cmdOverride) {
+            // operator override: seats fire at market NOW — no +0.2% wait.
+            // The confirm gate was built for dead-tape protection; the
+            // override trades that filter for immediate deployment under
+            // the standing risk rails (bounded R, declared stop, exchange-side).
+            plan.orders.push({ symbol: c.symbol, direction: 'LONG', refEntry: last,
+              notionalUsd: round(perSlotFor(c) * CORE_LEV, 2),
+              stopPct: CORE_STOP_PCT, targetPct: CORE_TARGET_PCT,
+              leverage: CORE_LEV, conv: 1, runnerMult: 1.8,
+              strategy: 'slot-deploy', core: true, mandate: true, confirmPrint: true,
+              pimp: c.pimp, crack: c.crack,
+              bubTilt: bubTilt(c), weakTilt: weakTilt(c),
+              bubFlags: c._bubFlags || [],
+              breadthDay: bub?.breadth?.dayGreen ?? null,
+              score: c._sc ?? c.score });
+            state.actions.push();
+            picked++;
+            markTried(c.symbol);
+            continue;
+          }
           confirmArm(c.symbol, last, {
             symbol: c.symbol, direction: 'LONG', refEntry: last,
             notionalUsd: round(perSlotFor(c) * CORE_LEV, 2),
