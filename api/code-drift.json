@@ -1,7 +1,12 @@
 {
- "at": "2026-11-04T15:47:12Z",
- "ok": true,
- "drifted": [],
+ "at": "2026-11-04T15:56:13Z",
+ "ok": false,
+ "drifted": [
+  {
+   "path": "scripts/risk-entry.mjs",
+   "serverMtime": "2026-11-04T15:54Z"
+  }
+ ],
  "notInRepo": [],
  "rule": "code changes go to GitHub main, then: sudo python3 /opt/sentinel/scripts/deploy-from-repo.py"
 }
