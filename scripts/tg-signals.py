@@ -313,7 +313,7 @@ def sig_text(f, plan, ctx):
     return "\n".join(lines)[:1020]
 
 def close_text(f, pos_entry):
-    side = "LONG" if f.get("side") == "sell" else "SHORT"
+    side = "LONG" if f.get("side") in ("buy", "long") else "SHORT"
     pnl = (f.get("profit") or 0) - (f.get("fee") or 0)
     em = "✅" if pnl > 0 else "🔻"
     ret = ""
@@ -452,7 +452,7 @@ async def main():
                         if await send(ch, cap, png):
                             st["entries"][f["symbol"] + ":" + side] = {"px": f["price"], "ts": f["ts"]}
                     else:
-                        side = "LONG" if f.get("side") == "sell" else "SHORT"
+                        side = "LONG" if f.get("side") in ("buy", "long") else "SHORT"
                         ent = st["entries"].pop(f["symbol"] + ":" + side, None)
                         epx = ent["px"] if isinstance(ent, dict) else ent
                         ets = ent.get("ts") if isinstance(ent, dict) else None
