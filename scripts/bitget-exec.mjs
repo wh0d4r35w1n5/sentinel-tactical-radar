@@ -3953,7 +3953,12 @@ async function main() {
         const ok = (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile').split(',').map((x) => x.trim());
         const sMin = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
         const sTgt = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
-        const why = !o.strategy || !ok.includes(o.strategy) ? 'short-strat (mean-rev only)'
+        // UPTREND VETO (operator 2026-11-04 — BABA is in a solid uptrend):
+        // fading strength is how shorts die; a mean-rev short is only
+        // allowed when the tape is NOT trending up on the day.
+        const upMax = +(process.env.SENTINEL_SHORT_UPTREND_VETO_PCT || 3);
+        const why = (o.changePct ?? 0) >= upMax ? `short-into-uptrend +${round(o.changePct,1)}%/24h`
+          : !o.strategy || !ok.includes(o.strategy) ? 'short-strat (mean-rev only)'
           : (o.score ?? 0) < sMin ? `short-score<${sMin}`
           : (o.targetPct ?? 99) > sTgt ? `short-tgt>${sTgt}% (scalp-only)`
           : null;
