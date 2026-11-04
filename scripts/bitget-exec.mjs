@@ -4002,7 +4002,7 @@ async function main() {
       // bullshit): stock/metal/fx-mapped perps are banned outright. Denylist
       // covers Bitget RWA contracts + HKD-suffix listings + metals.
       const NON_CRYPTO = new Set((process.env.SENTINEL_NON_CRYPTO || 'XAGUSDT,XPTUSDT,XPDUSDT,AAPLUSDT,MSFTUSDT,TSLAUSDT,NVDAUSDT,AMZNUSDT,METAUSDT,GOOGUSDT,GOOGLUSDT,NFLXUSDT,AMDUSDT,INTCUSDT,COINUSDT,MSTRUSDT,MCDUSDT,BABAUSDT,EBAYUSDT,SAMSUNGUSDT,MDBUSDT,GSUSDT,ZHONGJIUSDT,TOKYOELUSDT,AMCUSDT,GILDUSDT,GEUSDT,QQQUSDT,SOXLUSDT,SPYUSDT,DIAUSDT,IWMUSDT,PURRUSDT,SKHYUSDT,SKHYNIXUSDT,RGTIUSDT,IONQUSDT,QBTSUSDT,OUSTUSDT,NKEUSDT,WMTUSDT,JPMUSDT,VUSDT,MAUSDT,DISUSDT,PYPLUSDT,PLTRUSDT,ORCLUSDT,IBMUSDT,CSCOUSDT,XOMUSDT,CVXUSDT,JNJUSDT,PFEUSDT,BACUSDT,WFCUSDT,KOUSDT,PEPUSDT,HDUSDT,COSTUSDT,TGTUSDT,F').split(',').map((x) => x.trim()));
-      if (NON_CRYPTO.has(o.symbol) || /HKDUSDT$/.test(o.symbol)) {
+      if (false && NON_CRYPTO.has(o.symbol)) { // operator 2026-11-04: all contracts trade — ban lifted
         state.actions.push(`${o.symbol}: 🚫 non-crypto contract banned (operator order)`);
         (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, ts: Date.now(), gates: ['non-crypto'] });
         continue;
