@@ -1,5 +1,91 @@
 {
- "at": "2026-11-04T12:17:00.259Z",
- "counts": {},
- "rfcs": []
+ "at": "2026-11-04T12:37:19.263Z",
+ "counts": {
+  "reviewing": 1,
+  "rejected": 2
+ },
+ "rfcs": [
+  {
+   "id": "RFC-TEST-KNOB-1",
+   "class": "state-knob",
+   "title": "probe: nudge gross notional cap 20→18 to verify implement+PIR path",
+   "target": "state/execution-risk.json",
+   "params": {
+    "maxGrossNotionalMultiple": 18
+   },
+   "reviewHours": 1,
+   "revertIfEquityDownPct": 2,
+   "state": "reviewing",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793795649087,
+     "why": "hypothesis queue"
+    },
+    {
+     "to": "approved",
+     "at": 1793795649188,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793795830304,
+     "why": "implemented state/execution-risk.json {\"maxGrossNotionalMultiple\":18} — PIR at 2026-11-04T13:37:10.123Z"
+    }
+   ],
+   "prior": {
+    "maxGrossNotionalMultiple": 20
+   },
+   "implementedAt": 1793795830003,
+   "reviewAt": 1793799430123,
+   "baseline": {
+    "equity": 42.43,
+    "at": 1793795830303
+   }
+  },
+  {
+   "id": "RFC-TEST-BOUNDS-1",
+   "class": "state-knob",
+   "title": "probe: exceed declared bound — must be rejected by CAB",
+   "target": "state/execution-risk.json",
+   "params": {
+    "riskPerTradeFraction": 0.15
+   },
+   "state": "rejected",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793795649087,
+     "why": "hypothesis queue"
+    },
+    {
+     "to": "rejected",
+     "at": 1793795649188,
+     "why": "riskPerTradeFraction=0.15 outside bounds {\"min\":0.005,\"max\":0.1}"
+    }
+   ]
+  },
+  {
+   "id": "RFC-TEST-NEVER-1",
+   "class": "state-knob",
+   "title": "probe: never-path field — must be rejected by CAB",
+   "target": "state/execution-risk.json",
+   "params": {
+    "requireForwardEvidence": false
+   },
+   "state": "rejected",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793795649087,
+     "why": "hypothesis queue"
+    },
+    {
+     "to": "rejected",
+     "at": 1793795649188,
+     "why": "field requireForwardEvidence is a never-path"
+    }
+   ]
+  }
+ ]
 }
