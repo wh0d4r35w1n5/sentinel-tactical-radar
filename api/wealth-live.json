@@ -1,59 +1,68 @@
 {
- "ts": "2026-11-04T12:08:38.570Z",
- "ageMs": 0,
+ "ts": "2026-11-04T12:13:07.895Z",
+ "ageMs": 1320,
  "src": "ws",
  "futures": {
-  "equityUsd": 42.9904,
-  "availableUsd": 15.1887,
+  "equityUsd": 42.624,
+  "availableUsd": 25.7423,
   "grantUsd": 0,
-  "equityOwnUsd": 42.9904,
-  "marginUsedUsd": 28.5826,
-  "uplUsd": -0.7829,
+  "equityOwnUsd": 42.624,
+  "marginUsedUsd": 17.1241,
+  "uplUsd": -0.2694,
   "positions": [
    {
     "k": "FUSDT:long",
     "size": 8681,
     "marginUsd": 2.3661,
-    "uplUsd": -0.1302
+    "uplUsd": -0.1389
    },
    {
     "k": "KWEBUSDT:long",
     "size": 0.97,
     "marginUsd": 2.3209,
-    "uplUsd": 0.0201
-   },
-   {
-    "k": "GMTUSDT:long",
-    "size": 18091,
-    "marginUsd": 11.4586,
-    "uplUsd": -0.4885
+    "uplUsd": 0.0113
    },
    {
     "k": "TRXUSDT:long",
     "size": 349,
     "marginUsd": 11.1351,
-    "uplUsd": -0.2012
+    "uplUsd": -0.1419
    },
    {
     "k": "BLURUSDT:long",
     "size": 1693.5,
     "marginUsd": 1.302,
-    "uplUsd": 0.0169
+    "uplUsd": 0
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2248,
+  "solUsd": 0.2241,
   "stableUsd": 0,
-  "bagsUsd": 0,
-  "totalUsd": 0.2248,
-  "tokens": {},
-  "staleMs": 0
+  "bagsUsd": 0.0565,
+  "totalUsd": 0.2806,
+  "tokens": {
+   "BQAeeSow": 0.0009,
+   "8PGyHCKv": 0.0556
+  },
+  "staleMs": 7268
  },
- "totalUsd": 43.2152,
+ "totalUsd": 42.9045,
  "deltas": [
+  {
+   "ts": 1793794386575,
+   "kind": "position-closed",
+   "detail": "GMTUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793794373984,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.3204
+  },
   {
    "ts": 1793794085530,
    "kind": "balance-move",
@@ -160,18 +169,6 @@
    "ts": 1793791334565,
    "kind": "position-closed",
    "detail": "XAGUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1793791030226,
-   "kind": "size-reduced",
-   "detail": "BLURUSDT:long Δ-1128.8000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1793790723112,
-   "kind": "position-closed",
-   "detail": "ZHONGJIUSDT:long",
    "amt": 0
   }
  ]
