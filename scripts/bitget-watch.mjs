@@ -574,7 +574,11 @@ async function cycle() {
         await reconcileK2TakeProfits(p, rr, dec, sizeDec, rows, actions, errors);
         snapNext[p.symbol] = { m: +p.marginSize || 0, s: size, e: +p.openPriceAvg,
           l: liq, u: +p.unrealizedPL || 0, ct: +p.cTime || 0 };
-        actions.push(`${p.symbol}: hourly K2 stop and configured take-profit protection active`);
+        {
+          const tpLegs = rows.filter((r) => r.planType === 'profit_plan' || r.planType === 'pos_profit').length;
+          const stLegs = rows.filter((r) => r.planType === 'pos_loss' || r.planType === 'loss_plan').length;
+          actions.push(`${p.symbol}: protection verified — ${stLegs} stop leg(s), ${tpLegs} TP leg(s) resting on exchange`);
+        }
         continue;
       }
       // ---- margin/size event: posted margin or contracts changed since
