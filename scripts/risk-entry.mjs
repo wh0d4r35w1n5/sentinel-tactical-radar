@@ -147,12 +147,15 @@ export async function protectRiskSeat(X, pos, contract, { now = Date.now(), root
   const seat = executionSeat(pos, root);
   if (!seat) return false;
   const symbol = pos.symbol;
+  const side = String(pos.holdSide || pos.side || 'long').toLowerCase() === 'short' ? 'short' : 'long';
+  const S = side === 'short';
   const plans = await X.getPlans(symbol);
   const existing = plans.filter(p => /loss/.test(p.planType || '') &&
-    (!p.holdSide || p.holdSide === holdSide));
-  const priorStop = Math.max(seat.initialStop, ...existing.map(p => +p.triggerPrice || 0));
+    (!p.holdSide || p.holdSide === side));
+  const trig = existing.map(p => +p.triggerPrice).filter(x => x > 0);
+  const priorStop = S ? Math.min(seat.initialStop, ...trig) : Math.max(seat.initialStop, ...trig);
   if (now - seat.openedAt >= 96 * 3600000) {
-    await X.closePosition(symbol, 'long');
+    await X.closePosition(symbol, side);
     return true;
   }
   let cached = candleCache.get(symbol);
@@ -167,23 +170,23 @@ export async function protectRiskSeat(X, pos, contract, { now = Date.now(), root
     candleCache.set(symbol, cached);
   }
   const trail = hourlyTrail({ rows: cached.rows, entryPrice: seat.entryPrice,
-    initialStop: seat.initialStop, priorStop, openedAt: seat.openedAt, now });
+    initialStop: seat.initialStop, priorStop, openedAt: seat.openedAt, now, side });
   const tick = +contract.priceTick || 10 ** -(+contract.pricePlace || 0);
-  const trigger = +(Math.floor((trail?.stop ?? priorStop) / tick) * tick).toFixed(+contract.pricePlace || 0);
+  const trigger = +((S ? Math.ceil : Math.floor)((trail?.stop ?? priorStop) / tick) * tick).toFixed(+contract.pricePlace || 0);
   const mark = +pos.markPrice;
   if (!(mark > 0)) throw new Error('hourly trail: mark unavailable');
-  if (trigger >= mark) {
+  if (S ? trigger <= mark : trigger >= mark) {
     // The closed-hour exit decision is already breached; never widen it to fit.
-    await X.closePosition(symbol, 'long');
+    await X.closePosition(symbol, side);
     return true;
   }
   const wholeStop = existing.find(p => p.planType === 'pos_loss' || +p.size >= +pos.total);
-  if (!wholeStop || +wholeStop.triggerPrice < trigger) {
+  if (!wholeStop || (S ? +wholeStop.triggerPrice > trigger : +wholeStop.triggerPrice < trigger)) {
     // Tighten-only ratchet: the new stop goes live BEFORE stale lower stops
     // are cancelled — no naked window — and priorStop feeding hourlyTrail
     // means an existing trigger can never sit above the computed stop.
-    await X.planOrder(symbol, 'pos_loss', String(trigger), '0', 'long', pos.marginMode);
-    const stale = existing.filter(p => +p.triggerPrice < trigger - tick / 2);
+    await X.planOrder(symbol, 'pos_loss', String(trigger), '0', side, pos.marginMode);
+    const stale = existing.filter(p => S ? +p.triggerPrice > trigger + tick / 2 : +p.triggerPrice < trigger - tick / 2);
     const byType = new Map();
     for (const p of stale) {
       const id = p.orderId || p.id; if (!id) continue;

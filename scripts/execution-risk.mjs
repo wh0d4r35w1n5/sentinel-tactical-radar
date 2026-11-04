@@ -325,24 +325,26 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
 }
 
 // Same historical geometry: 14 *closed hourly* true ranges, best prior hourly close.
-export function hourlyTrail({ rows, entryPrice, initialStop, openedAt, now = Date.now(), priorStop = initialStop }) {
+// side-aware (2026-11-04): shorts trail trough + 2*ATR14 and ratchet DOWN only.
+export function hourlyTrail({ rows, entryPrice, initialStop, openedAt, now = Date.now(), priorStop = initialStop, side = 'long' }) {
+  const S = side === 'short';
   const closed = rows.filter(r => r.t + 3600000 <= now).sort((a, b) => a.t - b.t);
   if (closed.length < 15 || now - (closed.at(-1).t + 3600000) > 600000) return null;
   if (closed.some((r, i) => ![r.t, r.o, r.h, r.l, r.c].every(finite) ||
       r.h < r.l || r.c <= 0 || (i && r.t - closed[i - 1].t !== 3600000))) return null;
   // Need all closes since entry; otherwise a truncated window could forget the peak.
   if (closed[0].t > openedAt) return null;
-  let stop = Math.max(initialStop, priorStop), peak = entryPrice;
+  let stop = S ? Math.min(initialStop, priorStop) : Math.max(initialStop, priorStop), peak = entryPrice;
   for (let i = 14; i < closed.length; i++) {
     const b = closed[i];
     if (b.t + 3600000 <= openedAt) continue;
-    peak = Math.max(peak, b.c);
+    peak = S ? Math.min(peak, b.c) : Math.max(peak, b.c);
     let tr = 0;
     for (let k = i - 13; k <= i; k++) {
       const r = closed[k], prev = closed[k - 1];
       tr += Math.max(r.h - r.l, Math.abs(r.h - prev.c), Math.abs(r.l - prev.c));
     }
-    stop = Math.max(stop, peak - 2 * tr / 14);
+    stop = S ? Math.min(stop, peak + 2 * tr / 14) : Math.max(stop, peak - 2 * tr / 14);
   }
   return { stop, peak, asOf: closed.at(-1).t + 3600000 };
 }
