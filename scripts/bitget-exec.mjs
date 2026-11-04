@@ -3673,7 +3673,7 @@ async function main() {
         const isSeed = CORE_SYMS.includes(c.symbol) || c.majors || c.onchain || liveStratSym[c.symbol];
         // seeds ride the SAME score floor (operator 2026-11-04 — the good
         // pick days came from quality-gated picks, not seeded liquidity).
-        if ((c.score || 0) < MANDATE_MIN_SCORE) continue;
+        if ((c.score || 0) < MANDATE_MIN_SCORE && !(cmdOverride && isSeed)) continue;
         const verdict = envCells[c.symbol]?.verdict || envCells[canon(c.symbol)]?.verdict;
         if (verdict === 'loser') continue; // measured-negative cell — evidence gate
         // dead-intel discipline (measured: slot-deploy gross −0.083%/ep is
@@ -3685,7 +3685,7 @@ async function main() {
         const fam = envFam[c.symbol] || envFam[canon(c.symbol)];
         if (fam && (famCount[fam] || 0) >= famCap) continue;   // one family = one bet (semi-stack fix)
         if (heldCanon.has(canon(c.symbol))) continue;          // same underlying already seated (twin clip)
-        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
+        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || (cooledSym.has(c.symbol) && !cmdOverride) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
         const triedAt = typeof triedMap[c.symbol] === 'object' ? triedMap[c.symbol].ts : triedMap[c.symbol];
         if (triedAt && Date.now() - triedAt < TRY_MS) continue; // attempted recently (or dip-quote still resting) — rotate
         const lc = lastCloseBySym[c.symbol];
