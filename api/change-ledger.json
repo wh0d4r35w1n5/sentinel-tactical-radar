@@ -1,10 +1,10 @@
 {
- "at": "2026-11-04T15:52:11.556Z",
+ "at": "2026-11-04T16:07:23.478Z",
  "counts": {
   "closed": 1,
   "rejected": 2,
   "awaiting-operator": 20,
-  "approved": 10
+  "reviewing": 10
  },
  "rfcs": [
   {
@@ -483,7 +483,7 @@
    "params": {
     "MTF 4H": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -494,8 +494,20 @@
      "to": "approved",
      "at": 1793807525117,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808431528,
+     "why": "implemented state/factor-caps.json {\"MTF 4H\":0.25} — PIR at 2026-11-05T16:07:11.340Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808431340,
+   "reviewAt": 1793894831340,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808431528
+   }
   },
   {
    "id": "EIN-cap-MTF stack",
@@ -506,7 +518,7 @@
    "params": {
     "MTF stack": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -517,8 +529,20 @@
      "to": "approved",
      "at": 1793807529786,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808441498,
+     "why": "implemented state/factor-caps.json {\"MTF stack\":0.25} — PIR at 2026-11-05T16:07:21.498Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808441498,
+   "reviewAt": 1793894841498,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808441498
+   }
   },
   {
    "id": "EIN-cap-MTF 1D",
@@ -529,7 +553,7 @@
    "params": {
     "MTF 1D": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -540,8 +564,20 @@
      "to": "approved",
      "at": 1793807529786,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808442511,
+     "why": "implemented state/factor-caps.json {\"MTF 1D\":0.25} — PIR at 2026-11-05T16:07:22.510Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808442510,
+   "reviewAt": 1793894842510,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808442510
+   }
   },
   {
    "id": "EIN-cap-macro tr",
@@ -552,7 +588,7 @@
    "params": {
     "macro tr": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -563,8 +599,20 @@
      "to": "approved",
      "at": 1793807529787,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808442629,
+     "why": "implemented state/factor-caps.json {\"macro tr\":0.25} — PIR at 2026-11-05T16:07:22.628Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808442628,
+   "reviewAt": 1793894842628,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808442629
+   }
   },
   {
    "id": "EIN-cap-smacro",
@@ -575,7 +623,7 @@
    "params": {
     "smacro": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -586,8 +634,20 @@
      "to": "approved",
      "at": 1793807529787,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808442660,
+     "why": "implemented state/factor-caps.json {\"smacro\":0.25} — PIR at 2026-11-05T16:07:22.660Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808442660,
+   "reviewAt": 1793894842660,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808442660
+   }
   },
   {
    "id": "EIN-cap-MTF 1H",
@@ -598,7 +658,7 @@
    "params": {
     "MTF 1H": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -609,8 +669,20 @@
      "to": "approved",
      "at": 1793807529886,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808442948,
+     "why": "implemented state/factor-caps.json {\"MTF 1H\":0.25} — PIR at 2026-11-05T16:07:22.708Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808442708,
+   "reviewAt": 1793894842708,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808442948
+   }
   },
   {
    "id": "EIN-cap-Ichimoku",
@@ -621,7 +693,7 @@
    "params": {
     "Ichimoku": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -632,8 +704,20 @@
      "to": "approved",
      "at": 1793807529887,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808442998,
+     "why": "implemented state/factor-caps.json {\"Ichimoku\":0.25} — PIR at 2026-11-05T16:07:22.998Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808442998,
+   "reviewAt": 1793894842998,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808442998
+   }
   },
   {
    "id": "EIN-cap-MTF 15m",
@@ -644,7 +728,7 @@
    "params": {
     "MTF 15m": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -655,8 +739,20 @@
      "to": "approved",
      "at": 1793807529887,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808443029,
+     "why": "implemented state/factor-caps.json {\"MTF 15m\":0.25} — PIR at 2026-11-05T16:07:23.028Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808443028,
+   "reviewAt": 1793894843028,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808443029
+   }
   },
   {
    "id": "EIN-cap-breakout",
@@ -667,7 +763,7 @@
    "params": {
     "breakout": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -678,8 +774,20 @@
      "to": "approved",
      "at": 1793807529887,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808443078,
+     "why": "implemented state/factor-caps.json {\"breakout\":0.25} — PIR at 2026-11-05T16:07:23.078Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808443078,
+   "reviewAt": 1793894843078,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808443078
+   }
   },
   {
    "id": "EIN-cap-effort/result",
@@ -690,7 +798,7 @@
    "params": {
     "effort/result": 0.25
    },
-   "state": "approved",
+   "state": "reviewing",
    "history": [
     {
      "to": "submitted",
@@ -701,8 +809,20 @@
      "to": "approved",
      "at": 1793807530176,
      "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    },
+    {
+     "to": "reviewing",
+     "at": 1793808443088,
+     "why": "implemented state/factor-caps.json {\"effort/result\":0.25} — PIR at 2026-11-05T16:07:23.088Z"
     }
-   ]
+   ],
+   "prior": {},
+   "implementedAt": 1793808443088,
+   "reviewAt": 1793894843088,
+   "baseline": {
+    "equity": 37.7479,
+    "at": 1793808443088
+   }
   }
  ]
 }

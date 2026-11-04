@@ -1,5 +1,5 @@
 {
- "at": "2026-11-04T15:56:13Z",
+ "at": "2026-11-04T16:06:09Z",
  "ok": false,
  "drifted": [
   {
@@ -7,6 +7,9 @@
    "serverMtime": "2026-11-04T15:54Z"
   }
  ],
- "notInRepo": [],
+ "notInRepo": [
+  "scripts/check-stops.mjs",
+  "scripts/fix-stops.mjs"
+ ],
  "rule": "code changes go to GitHub main, then: sudo python3 /opt/sentinel/scripts/deploy-from-repo.py"
 }
