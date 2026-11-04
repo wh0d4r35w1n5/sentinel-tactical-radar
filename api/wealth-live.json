@@ -1,68 +1,80 @@
 {
- "ts": "2026-11-04T10:23:38.891Z",
- "ageMs": 5895,
+ "ts": "2026-11-04T10:35:19.516Z",
+ "ageMs": 6455,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.8559,
-  "availableUsd": 31.2527,
+  "equityUsd": 43.8325,
+  "availableUsd": 33.521,
   "grantUsd": 0,
-  "equityOwnUsd": 43.8559,
-  "marginUsedUsd": 11.6873,
-  "uplUsd": 0.9559,
+  "equityOwnUsd": 43.8325,
+  "marginUsedUsd": 9.8605,
+  "uplUsd": 0.4931,
   "positions": [
    {
     "k": "PURRUSDT:long",
     "size": 2.07,
     "marginUsd": 2.1135,
-    "uplUsd": 0.503
-   },
-   {
-    "k": "OUSTUSDT:long",
-    "size": 0.56,
-    "marginUsd": 1.7693,
-    "uplUsd": 0.42
+    "uplUsd": 0.5196
    },
    {
     "k": "EBAYUSDT:short",
     "size": 0.31,
     "marginUsd": 3.6812,
-    "uplUsd": -0.062
+    "uplUsd": -0.0837
    },
    {
     "k": "ZHONGJIUSDT:long",
     "size": 0.17,
     "marginUsd": 1.4383,
-    "uplUsd": 0.0952
+    "uplUsd": 0.0969
    },
    {
     "k": "BLURUSDT:long",
     "size": 2822.3,
     "marginUsd": 2.1645,
-    "uplUsd": -0.0282
+    "uplUsd": -0.0564
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.09,
-    "marginUsd": 0.5204,
-    "uplUsd": 0.0279
+    "size": 0.08,
+    "marginUsd": 0.4629,
+    "uplUsd": 0.0168
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2255,
+  "solUsd": 0.2259,
   "stableUsd": 0,
   "bagsUsd": 0.0565,
-  "totalUsd": 0.282,
+  "totalUsd": 0.2824,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0556
   },
-  "staleMs": 5895
+  "staleMs": 6455
  },
- "totalUsd": 44.1378,
+ "totalUsd": 44.1149,
  "deltas": [
+  {
+   "ts": 1793788278487,
+   "kind": "balance-move",
+   "detail": "equity",
+   "amt": -0.1079
+  },
+  {
+   "ts": 1793788001127,
+   "kind": "position-closed",
+   "detail": "OUSTUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793787991706,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.009999999999999995",
+   "amt": 0
+  },
   {
    "ts": 1793787622397,
    "kind": "balance-move",
@@ -164,24 +176,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": -0.1718
-  },
-  {
-   "ts": 1793786082675,
-   "kind": "position-opened",
-   "detail": "EBAYUSDT:short",
-   "amt": 3.6812
-  },
-  {
-   "ts": 1793785612624,
-   "kind": "size-reduced",
-   "detail": "ZHONGJIUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1793785563749,
-   "kind": "position-closed",
-   "detail": "BXUSDT:short",
-   "amt": 0
   }
  ]
 }
