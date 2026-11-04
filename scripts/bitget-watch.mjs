@@ -292,10 +292,14 @@ async function reconcileK2TakeProfits(p, rr, dec, sizeDec, rows, actions, errors
   const long = p.holdSide === 'long';
   const grid = Array.isArray(rr.absPct) ? rr.absPct : [];
   const pct = +grid[Math.floor(grid.length / 2)] || 0.9;
-  const target = entry > 0
+  let target = entry > 0
     ? roundTo(long ? entry * (1 + pct / 100) : entry * (1 - pct / 100), dec) : 0;
-  if (!(target > 0) || (mark > 0 && (long ? target <= mark * 1.0002 : target >= mark * 0.9998))) {
-    errors.push(`${p.symbol}: K2 seat cannot split and configured TP is not placeable above/below mark`);
+  // runner already past the grid target: a plan order must sit on the right
+  // side of mark — arm a lock-in TP just beyond the tape, never zero TP.
+  if (mark > 0 && (long ? target <= mark * 1.0002 : target >= mark * 0.9998))
+    target = roundTo(long ? mark * 1.0025 : mark * 0.9975, dec);
+  if (!(target > 0)) {
+    errors.push(`${p.symbol}: K2 seat cannot split and no placeable TP`);
     return;
   }
   try {
