@@ -1,38 +1,38 @@
 {
- "ts": "2026-11-04T10:51:31.566Z",
- "ageMs": 0,
+ "ts": "2026-11-04T10:56:25.804Z",
+ "ageMs": 127,
  "src": "ws",
  "futures": {
-  "equityUsd": 44.0519,
+  "equityUsd": 43.9665,
   "availableUsd": 36.6241,
   "grantUsd": 0,
-  "equityOwnUsd": 44.0519,
+  "equityOwnUsd": 43.9665,
   "marginUsedUsd": 7.3518,
-  "uplUsd": 0.0728,
+  "uplUsd": -0.0094,
   "positions": [
    {
     "k": "EBAYUSDT:short",
     "size": 0.31,
     "marginUsd": 3.6812,
-    "uplUsd": -0.0279
+    "uplUsd": -0.0341
    },
    {
     "k": "ZHONGJIUSDT:long",
     "size": 0.13,
     "marginUsd": 1.1008,
-    "uplUsd": 0.0338
+    "uplUsd": 0.0403
    },
    {
     "k": "BLURUSDT:long",
     "size": 2822.3,
     "marginUsd": 2.1645,
-    "uplUsd": 0.0564
+    "uplUsd": -0.0282
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.07,
     "marginUsd": 0.4052,
-    "uplUsd": 0.0105
+    "uplUsd": 0.0126
    }
   ]
  },
@@ -47,10 +47,16 @@
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0556
   },
-  "staleMs": 0
+  "staleMs": 127
  },
- "totalUsd": 44.334,
+ "totalUsd": 44.2487,
  "deltas": [
+  {
+   "ts": 1793789716013,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1044
+  },
   {
    "ts": 1793789438847,
    "kind": "size-reduced",
@@ -163,12 +169,6 @@
    "ts": 1793786770222,
    "kind": "size-reduced",
    "detail": "ZHONGJIUSDT:long Δ-0.009999999999999981",
-   "amt": 0
-  },
-  {
-   "ts": 1793786760774,
-   "kind": "size-reduced",
-   "detail": "PURRUSDT:long Δ-0.010000000000000231",
    "amt": 0
   }
  ]
