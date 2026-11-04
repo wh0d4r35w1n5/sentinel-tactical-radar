@@ -1,68 +1,80 @@
 {
- "ts": "2026-11-04T09:30:30.758Z",
- "ageMs": 1953,
+ "ts": "2026-11-04T09:33:27.955Z",
+ "ageMs": 3227,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.6902,
-  "availableUsd": 29.0199,
+  "equityUsd": 43.78,
+  "availableUsd": 29.0321,
   "grantUsd": 0,
-  "equityOwnUsd": 43.6902,
-  "marginUsedUsd": 14.3215,
-  "uplUsd": 0.3641,
+  "equityOwnUsd": 43.78,
+  "marginUsedUsd": 14.3116,
+  "uplUsd": 0.4363,
   "positions": [
    {
     "k": "PURRUSDT:long",
-    "size": 2.1,
-    "marginUsd": 2.1434,
-    "uplUsd": 0.4725
+    "size": 2.09,
+    "marginUsd": 2.1335,
+    "uplUsd": 0.5121
    },
    {
     "k": "OUSTUSDT:long",
     "size": 0.6,
     "marginUsd": 1.8923,
-    "uplUsd": 0.27
+    "uplUsd": 0.294
    },
    {
     "k": "ZHONGJIUSDT:long",
     "size": 0.28,
     "marginUsd": 2.3645,
-    "uplUsd": 0.0056
+    "uplUsd": 0.0336
    },
    {
     "k": "BLURUSDT:long",
     "size": 4703.7,
     "marginUsd": 3.603,
-    "uplUsd": -0.0941
+    "uplUsd": -0.047
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.11,
     "marginUsd": 0.6354,
-    "uplUsd": 0.0077
+    "uplUsd": 0.0033
    },
    {
     "k": "BXUSDT:short",
     "size": 0.31,
     "marginUsd": 3.6828,
-    "uplUsd": -0.2976
+    "uplUsd": -0.3596
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2241,
+  "solUsd": 0.2246,
   "stableUsd": 0,
   "bagsUsd": 0.0557,
-  "totalUsd": 0.2798,
+  "totalUsd": 0.2803,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0548
   },
-  "staleMs": 6991
+  "staleMs": 3227
  },
- "totalUsd": 43.9701,
+ "totalUsd": 44.0602,
  "deltas": [
+  {
+   "ts": 1793784739343,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.1023
+  },
+  {
+   "ts": 1793784715424,
+   "kind": "size-reduced",
+   "detail": "PURRUSDT:long Δ-0.010000000000000231",
+   "amt": 0
+  },
   {
    "ts": 1793784577807,
    "kind": "size-reduced",
@@ -170,18 +182,6 @@
    "kind": "size-reduced",
    "detail": "PURRUSDT:long Δ-0.009999999999999787",
    "amt": 0
-  },
-  {
-   "ts": 1793783453389,
-   "kind": "size-reduced",
-   "detail": "PURRUSDT:long Δ-0.03000000000000025",
-   "amt": 0
-  },
-  {
-   "ts": 1793783453146,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.0874
   }
  ]
 }
