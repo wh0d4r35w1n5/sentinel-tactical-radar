@@ -1,50 +1,62 @@
 {
- "ts": "2026-11-04T11:07:42.586Z",
- "ageMs": 0,
+ "ts": "2026-11-04T11:21:27.620Z",
+ "ageMs": 10335,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.8328,
-  "availableUsd": 40.2741,
+  "equityUsd": 43.9596,
+  "availableUsd": 42.2854,
   "grantUsd": 0,
-  "equityOwnUsd": 43.8328,
-  "marginUsedUsd": 3.6128,
-  "uplUsd": -0.0231,
+  "equityOwnUsd": 43.9596,
+  "marginUsedUsd": 1.6483,
+  "uplUsd": 0.0277,
   "positions": [
    {
-    "k": "ZHONGJIUSDT:long",
-    "size": 0.13,
-    "marginUsd": 1.1008,
-    "uplUsd": 0.0273
-   },
-   {
     "k": "BLURUSDT:long",
-    "size": 2822.3,
-    "marginUsd": 2.1645,
-    "uplUsd": -0.0564
+    "size": 1693.5,
+    "marginUsd": 1.3008,
+    "uplUsd": 0.0169
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.06,
     "marginUsd": 0.3475,
-    "uplUsd": 0.006
+    "uplUsd": 0.0108
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2257,
+  "solUsd": 0.2263,
   "stableUsd": 0,
   "bagsUsd": 0.0565,
-  "totalUsd": 0.2822,
+  "totalUsd": 0.2828,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0556
   },
-  "staleMs": 0
+  "staleMs": 10335
  },
- "totalUsd": 44.115,
+ "totalUsd": 44.2424,
  "deltas": [
+  {
+   "ts": 1793791030226,
+   "kind": "size-reduced",
+   "detail": "BLURUSDT:long Δ-1128.8000000000002",
+   "amt": 0
+  },
+  {
+   "ts": 1793790723112,
+   "kind": "position-closed",
+   "detail": "ZHONGJIUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793790620529,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 0.0686
+  },
   {
    "ts": 1793790278298,
    "kind": "size-reduced",
@@ -145,24 +157,6 @@
    "ts": 1793787355859,
    "kind": "size-added",
    "detail": "XAGUSDT:long Δ0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1793787347239,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.010000000000000009",
-   "amt": 0
-  },
-  {
-   "ts": 1793787208752,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0679
-  },
-  {
-   "ts": 1793786958317,
-   "kind": "size-reduced",
-   "detail": "OUSTUSDT:long Δ-0.009999999999999898",
    "amt": 0
   }
  ]

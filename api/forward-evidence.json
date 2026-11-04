@@ -1,5 +1,5 @@
 {
- "ts": "2026-11-04T11:05:15.935Z",
+ "ts": "2026-11-04T11:20:16.558Z",
  "windowStart": "2026-11-04T06:19:55.863Z",
  "episodes": {
   "total": 14,
@@ -7,9 +7,9 @@
   "clustered": 14,
   "dip": {
    "n": 7,
-   "netUsd": 1.1467,
+   "netUsd": 1.1826,
    "wrPct": 85.7,
-   "meanPct": 0.478
+   "meanPct": 0.471
   },
   "pump": {
    "n": 7,
@@ -18,14 +18,20 @@
    "meanPct": -0.611
   },
   "operator": {
-   "n": 0
+   "n": 3,
+   "netUsd": -0.5319,
+   "wrPct": 33.3,
+   "meanPct": -0.87
   },
   "unattributed": {
-   "n": 0
+   "n": 2,
+   "netUsd": -16.527,
+   "wrPct": 0,
+   "meanPct": null
   }
  },
  "realized": {
-  "netUsd": -0.145,
+  "netUsd": -0.109,
   "equityCurve": [
    {
     "t": 1793774264342,
@@ -60,28 +66,28 @@
     "eq": -1.3435
    },
    {
-    "t": 1793786481796,
-    "eq": -1.3174
-   },
-   {
     "t": 1793787972909,
-    "eq": -0.803
+    "eq": -0.8291
    },
    {
     "t": 1793789015804,
-    "eq": -0.1024
-   },
-   {
-    "t": 1793789405093,
-    "eq": -0.0393
-   },
-   {
-    "t": 1793789438738,
-    "eq": -0.0326
+    "eq": -0.1285
    },
    {
     "t": 1793789909761,
-    "eq": -0.145
+    "eq": -0.2409
+   },
+   {
+    "t": 1793790270554,
+    "eq": -0.2332
+   },
+   {
+    "t": 1793790705633,
+    "eq": -0.1508
+   },
+   {
+    "t": 1793790984123,
+    "eq": -0.109
    }
   ],
   "maxDrawdownUsd": 1.3435
@@ -95,9 +101,9 @@
    },
    "live": {
     "n": 7,
-    "netUsd": 1.1467,
+    "netUsd": 1.1826,
     "wrPct": 85.7,
-    "meanPct": 0.478
+    "meanPct": 0.471
    }
   },
   "pump": {
@@ -114,5 +120,5 @@
    }
   }
  },
- "verdict": "live net NEGATIVE over 14 episodes ($-0.14) — backtest edge not confirmed"
+ "verdict": "live net NEGATIVE over 14 episodes ($-0.11) — backtest edge not confirmed"
 }
