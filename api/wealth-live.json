@@ -1,38 +1,32 @@
 {
- "ts": "2026-11-04T10:56:25.804Z",
- "ageMs": 127,
+ "ts": "2026-11-04T11:07:42.586Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 43.9665,
-  "availableUsd": 36.6241,
+  "equityUsd": 43.8328,
+  "availableUsd": 40.2741,
   "grantUsd": 0,
-  "equityOwnUsd": 43.9665,
-  "marginUsedUsd": 7.3518,
-  "uplUsd": -0.0094,
+  "equityOwnUsd": 43.8328,
+  "marginUsedUsd": 3.6128,
+  "uplUsd": -0.0231,
   "positions": [
-   {
-    "k": "EBAYUSDT:short",
-    "size": 0.31,
-    "marginUsd": 3.6812,
-    "uplUsd": -0.0341
-   },
    {
     "k": "ZHONGJIUSDT:long",
     "size": 0.13,
     "marginUsd": 1.1008,
-    "uplUsd": 0.0403
+    "uplUsd": 0.0273
    },
    {
     "k": "BLURUSDT:long",
     "size": 2822.3,
     "marginUsd": 2.1645,
-    "uplUsd": -0.0282
+    "uplUsd": -0.0564
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.07,
-    "marginUsd": 0.4052,
-    "uplUsd": 0.0126
+    "size": 0.06,
+    "marginUsd": 0.3475,
+    "uplUsd": 0.006
    }
   ]
  },
@@ -47,10 +41,28 @@
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0556
   },
-  "staleMs": 127
+  "staleMs": 0
  },
- "totalUsd": 44.2487,
+ "totalUsd": 44.115,
  "deltas": [
+  {
+   "ts": 1793790278298,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.010000000000000009",
+   "amt": 0
+  },
+  {
+   "ts": 1793789931968,
+   "kind": "position-closed",
+   "detail": "EBAYUSDT:short",
+   "amt": 0
+  },
+  {
+   "ts": 1793789909996,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.0536
+  },
   {
    "ts": 1793789716013,
    "kind": "balance-move",
@@ -151,24 +163,6 @@
    "ts": 1793786958317,
    "kind": "size-reduced",
    "detail": "OUSTUSDT:long Δ-0.009999999999999898",
-   "amt": 0
-  },
-  {
-   "ts": 1793786930549,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": 0.1563
-  },
-  {
-   "ts": 1793786926639,
-   "kind": "size-reduced",
-   "detail": "OUSTUSDT:long Δ-0.030000000000000027",
-   "amt": 0
-  },
-  {
-   "ts": 1793786770222,
-   "kind": "size-reduced",
-   "detail": "ZHONGJIUSDT:long Δ-0.009999999999999981",
    "amt": 0
   }
  ]
