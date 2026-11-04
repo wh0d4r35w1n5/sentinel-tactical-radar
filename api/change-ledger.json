@@ -1,9 +1,10 @@
 {
- "at": "2026-11-04T15:37:09.355Z",
+ "at": "2026-11-04T15:52:11.556Z",
  "counts": {
   "closed": 1,
   "rejected": 2,
-  "awaiting-operator": 20
+  "awaiting-operator": 20,
+  "approved": 10
  },
  "rfcs": [
   {
@@ -470,6 +471,236 @@
      "to": "awaiting-operator",
      "at": 1793800895782,
      "why": "code changes never auto-implement"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-MTF 4H",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"MTF 4H\" vote weight at 0.25 — measured -0.71% lift across 4123 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "MTF 4H": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807525117,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-MTF stack",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"MTF stack\" vote weight at 0.25 — measured -0.92% lift across 4124 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "MTF stack": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529786,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-MTF 1D",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"MTF 1D\" vote weight at 0.25 — measured -0.94% lift across 4122 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "MTF 1D": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529786,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-macro tr",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"macro tr\" vote weight at 0.25 — measured -0.97% lift across 4124 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "macro tr": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529787,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-smacro",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"smacro\" vote weight at 0.25 — measured -1.08% lift across 4123 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "smacro": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529787,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-MTF 1H",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"MTF 1H\" vote weight at 0.25 — measured -1.23% lift across 4124 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "MTF 1H": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529886,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-Ichimoku",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"Ichimoku\" vote weight at 0.25 — measured -1.24% lift across 4123 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "Ichimoku": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529887,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-MTF 15m",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"MTF 15m\" vote weight at 0.25 — measured -1.57% lift across 4124 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "MTF 15m": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529887,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-breakout",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"breakout\" vote weight at 0.25 — measured -3.79% lift across 4123 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "breakout": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807529887,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
+    }
+   ]
+  },
+  {
+   "id": "EIN-cap-effort/result",
+   "auto": true,
+   "class": "state-knob",
+   "title": "einstein: cap \"effort/result\" vote weight at 0.25 — measured -10% lift across 703 graded signals",
+   "target": "state/factor-caps.json",
+   "params": {
+    "effort/result": 0.25
+   },
+   "state": "approved",
+   "history": [
+    {
+     "to": "submitted",
+     "at": 1793807524457,
+     "why": "einstein lab proposal"
+    },
+    {
+     "to": "approved",
+     "at": 1793807530176,
+     "why": "CAB rules pass: bounded class, inside declared bounds, no never-paths"
     }
    ]
   }
