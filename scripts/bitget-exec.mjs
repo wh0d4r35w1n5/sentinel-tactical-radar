@@ -590,14 +590,22 @@ const sizeFor = (cm, symbol, notionalUsd, price) => {
 async function main() {
   const tRun = Date.now();
   const planPath = path.join(API_DIR, 'live-plan.json');
-  const outPath = path.join(API_DIR, 'live-ledger.json');
+  // lane-scoped state (2026-11-04): sentinel-live-exec and the demo lane in
+  // sentinel-rapid both wrote api/live-ledger.json + exec-catalog.json, so
+  // each lane threw away the other's memory every cycle (sameBook() fails ->
+  // entriesLog/managed/legs/protectionHaltUntil/dayPeak reset), and every
+  // live reader — scanner heat/positions/catalog window, bitget-watch,
+  // liq-guard, supervisor — saw the demo book half the time. Live keeps the
+  // canonical names; the demo lane writes live-ledger.demo<book>.json.
+  const LANE_SFX = MODE === 'demo' ? `.demo${BOOK_TAG}` : '';
+  const outPath = path.join(API_DIR, `live-ledger${LANE_SFX}.json`);
   const state = { mode: MODE, exchange: X.name, refreshedAt: new Date().toISOString(), actions: [], errors: [] };
   // untradeable symbols persist across runs — the scanner blocks entries on
   // them, so the executor never re-attempts and never re-fails. Without the
   // merge the block would flap off every other cycle. Authoritative store is
   // exec-catalog.json (survives ledger rewrites); live-ledger kept in sync
   // for the dashboard.
-  const catPath = path.join(API_DIR, 'exec-catalog.json');
+  const catPath = path.join(API_DIR, `exec-catalog${LANE_SFX}.json`);
   const priorPlanSyms = new Set();
   // engine-managed symbols: positions THIS executor entered (persisted in
   // the ledger across restarts). A symbol not in the set is a foreign
@@ -1208,7 +1216,10 @@ async function main() {
   })();
   // risk multiplier override — clamped hard so a fat-finger can't 50x the book
   const cmdRisk = cmdJson('cmd-risk.json');
-  const riskMulOverride = Number.isFinite(+cmdRisk?.mul) ? Math.min(Math.max(+cmdRisk.mul, 0), 8) : null;
+  // {"mul": null} is the Telegram /risk clear value — +null is 0, which used to
+  // read as a ZERO multiplier (every demo seat sized to nothing) instead of "no override"
+  const riskMulOverride = cmdRisk?.mul != null && cmdRisk.mul !== '' && Number.isFinite(+cmdRisk.mul)
+    ? Math.min(Math.max(+cmdRisk.mul, 0), 8) : null;
   // targeted close — one-shot like flatten: {symbol, ts} closes that symbol's
   // position at market, then self-clears with an ack for the C2 layer.
   const cmdClosePath = path.join(__dirname, '..', 'state', 'cmd-close.json');
@@ -1274,7 +1285,12 @@ async function main() {
   let cbReason = null;
   var kellyStrat = {}; // empirical-Kelly multiplier per strategy — survives the try
   var stratPolicy = {}; // evidence-driven strategy lifecycle — state/strategy-policy.json
-  try { stratPolicy = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'strategy-policy.json'), 'utf8')).strategies || {}; } catch {}
+  var stratPolicyCells = {}; // same lifecycle per strategy:direction cell (judged on its own record)
+  try {
+    const spDoc = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'strategy-policy.json'), 'utf8'));
+    stratPolicy = spDoc.strategies || {};
+    stratPolicyCells = spDoc.cells || {};
+  } catch {}
   // REHAB/trail lane — state/trail-strategies.json (shared with scanner +
   // liq-guard): cells whose edge was proven under ATR-trail exits (SFP/Sweep
   // LONG +2.28/+1.75 SQN @ n≈1700-1900 vs buried under the ladder). A
@@ -4035,8 +4051,15 @@ async function main() {
       // strategies are promoted to 'live' only on independent-episode proof
       // of positive expectancy; probation/halted/abandoned take NO orders.
       // Operator/setup orders exempt — they don't ride the edge estimate.
-      if (!canon && !o.setup && !o.mandate && o.strategy) {
-        const sp = stratPolicy[o.strategy];
+      // Canon orders on LIVE stay owned by the entry-risk rail
+      // (cell-admission.json) exactly as before. The demo lane has no such
+      // rail, so canon demo orders skipped the lifecycle entirely and kept
+      // seating abandoned cells (SFP/Sweep longs all day 2026-11-04). Demo
+      // now applies it too, judged per strategy:direction cell when the
+      // cell has its own record (strategy-policy.json `cells`).
+      if ((!canon || MODE === 'demo') && !o.setup && !o.mandate && o.strategy) {
+        const spCell = stratPolicyCells[`${o.strategy}:${o.direction}`];
+        const sp = spCell || stratPolicy[o.strategy];
         // trail-rehab carve-out: a cell listed in trail-strategies.json may
         // seat LONG as a trail seat even while its policy record still reads
         // under the ladder regime — rehab episodes are the evidence stream.
@@ -4046,7 +4069,7 @@ async function main() {
         // just churns fees (post-reset: SFP took 18 demo entries at SQN -67).
         const terminal = sp && (sp.status === 'halted' || sp.status === 'abandoned');
         if (terminal || (MODE !== 'demo' && sp && sp.status !== 'live' && !rehab)) {
-          state.actions.push(`${o.symbol}: ⛔ policy-veto — '${o.strategy}' status=${sp.status} (${(sp.why || '').slice(0, 90)})`);
+          state.actions.push(`${o.symbol}: ⛔ policy-veto — '${o.strategy}'${spCell ? ` ${o.direction}` : ''} status=${sp.status} (${(sp.why || '').slice(0, 90)})`);
           (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, rangePosition: o.rangePosition ?? null, changePct: o.changePct ?? null, ts: Date.now(), px: o.refEntry ?? o.lastPrice ?? null, gates: ['strategy-policy-' + sp.status] });
           continue;
         }

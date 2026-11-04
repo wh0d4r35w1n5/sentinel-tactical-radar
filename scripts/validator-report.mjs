@@ -30,7 +30,7 @@ for (const f of ['history/eval-2026-09.json', 'history/eval-2026-10.json', 'sign
 }
 const seen = new Set(); const evals = recs.filter((r) => { const k = r.key || `${r.runTs}|${r.asset}|${r.direction}`; return !seen.has(k) && seen.add(k); });
 const sev = readJ(path.join(API, 'signal-eval.json'), {});
-const hits = evals.filter((r) => (r.direction === 'SHORT' ? -1 : 1) * r.fwd24h > 0).length;
+const hits = evals.filter((r) => r.fwd24h > 0).length; // fwd24h is direction-signed at the source — no second flip
 rep.checks.evalJournal = { labeledEvals: evals.length, dirAcc24h: +(hits / evals.length).toFixed(4), emitterN: sev.stats?.n, emitterLabeled: sev.stats?.labeled, emitterConsistency: (sev.stats?.labeled > sev.stats?.n) ? 'INCONSISTENT — labeled exceeds total n, denominators differ' : 'consistent', note: 'recomputed on deduped labeled set; emitter denominators differ (labeled>n) — definitional drift, not necessarily error' };
 diff('labeledEvals', sev.stats?.labeled ?? null, evals.length);
 diff('dirAcc24h', sev.stats?.dirAcc24h ?? null, +(hits / evals.length * 100).toFixed(2), '%');

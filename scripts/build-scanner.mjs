@@ -73,6 +73,15 @@ const SHORT_STRATS = new Set(
 const SHORT_MIN_RR = +(process.env.SENTINEL_SHORT_MIN_RR || 1.5);
 const SHORT_MAX_TGT = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
 const SHORT_MIN_SCORE = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
+// short-only handicaps (mean-rev whitelist, net-RR 1.5, 2.5% target cap,
+// score 75, bull-tape -10 surcharge, short-class) are OFF by default since
+// 2026-11-04: both sides now face the same gates and the direction-aware
+// cell record decides. Sign-correct journal: SHORT signals +1.13% avg 24h
+// fwd vs LONG -1.31% (signal-eval byDirection, n=13.7k) — the handicaps
+// were aimed at the winning side, and the 2.5% scalp cap exits shorts
+// early: independent short episodes lost at 4h in the first half of the
+// journal and earned at 24h in both. SENTINEL_SHORT_HANDICAP=1 restores.
+const SHORT_HANDICAP = process.env.SENTINEL_SHORT_HANDICAP === '1';
 // mode-scoped fills journal — demo fills/cooldowns must never read the
 // live loss record (and vice versa).
 const BOOK_TAG =
@@ -1632,8 +1641,47 @@ async function main() {
     const ts = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'trail-strategies.json'), 'utf8'));
     rehabSet = new Set(ts.strategies || []);
   } catch {}
-  const stratBlockedNow = (s) => (stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) && !(s.direction === 'LONG' && rehabSet.has(s.strategy));
-  const stratEff = (k) => stratRegBoost[k] ?? (stratBoost[k] || 0);
+  // ---- direction-aware cells (2026-11-04). A strategy's LONGs and SHORTs
+  // are different bets. Pooled by strategy, the losing longs condemned the
+  // winning shorts, while the rehab carve-out and the score>=75 override
+  // waved the losing longs through anyway (59% of signals clear 75).
+  // Walk-forward on the Oct-Nov journal (no lookahead, 0.17% cost, 24h
+  // hold): pooled admission -0.59%/trade n=614; per-cell +0.37%/trade
+  // n=519. A cell with its own record (strategy|direction n>=EVAL_MIN_N,
+  // in-regime strategy|direction|mktType n>=15) is judged on its own net
+  // P&L after cost, both ways: no carve-out and no score override. Thin
+  // cells inherit the pooled verdict exactly as before.
+  const CELL_COST = +(process.env.SENTINEL_CELL_COST_PCT || 0.17);
+  const evalByStratDir = evalStatsFull.byStrategyDir || {};
+  const evalByStratDirMkt = evalStatsFull.byStrategyDirMkt || {};
+  const cellNet = (v) => (v && Number.isFinite(v.avgFwd24h) ? (v.avgFwd24h - CELL_COST) * (v.n / (v.n + 10)) : null);
+  const cellOf = (s) => {
+    const v = evalByStratDir[`${s.strategy}|${s.direction}`];
+    return v && (v.n || 0) >= EVAL_MIN_N && cellNet(v) != null ? v : null;
+  };
+  const cellRegOf = (s) => {
+    const v = evalByStratDirMkt[`${s.strategy}|${s.direction}|${mktType}`];
+    return v && (v.n || 0) >= 15 && cellNet(v) != null ? v : null;
+  };
+  const cellHardBlocked = (s) => {
+    const c = cellOf(s);
+    if (!c) return false;
+    const r = cellRegOf(s);
+    return cellNet(c) < 0 || (r != null && cellNet(r) < 0);
+  };
+  const stratBlockedNow = (s) => cellOf(s)
+    ? cellHardBlocked(s)
+    : (stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) && !(s.direction === 'LONG' && rehabSet.has(s.strategy));
+  const stratEff = (k, dir) => {
+    if (dir) {
+      const s = { strategy: k, direction: dir };
+      if (cellOf(s)) {
+        if (cellHardBlocked(s)) return 0;
+        return Math.min(6, Math.round(clamp(cellNet(cellRegOf(s) || cellOf(s)) * 3, -4, 6) * 10) / 10);
+      }
+    }
+    return stratRegBoost[k] ?? (stratBoost[k] || 0);
+  };
 
   const strategyFor = (r, k) => {
     if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
@@ -1819,7 +1867,7 @@ async function main() {
             surgeScore * 0.15 +
             Math.min((k.ta?.confluence || 0) * 3, 12) +
             (stratAdj[strategy] || 0) +
-            stratEff(strategy) +
+            stratEff(strategy, dir0) +
             derivBoost +
             newsBoost +
             mcapBoost +
@@ -1842,7 +1890,7 @@ async function main() {
       const fz = {
         mom: momentumScore, vol: volumeScore, liq: liquidityScore, surg: surgeScore,
         confl: Math.min((k.ta?.confluence || 0) * 3, 12),
-        ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy),
+        ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy, dir0),
         deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
         soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, lib: libBoost, clim: climax ? -10 : 0,
       };
@@ -2666,6 +2714,10 @@ async function main() {
   // down is a legitimate output.
   const MIN_ENTRY_SCORE = +(process.env.SENTINEL_MIN_SCORE || (RISK_MAX ? 55 : 70));
   const STRAT_OVERRIDE = +(process.env.SENTINEL_STRAT_OVERRIDE || 75);
+  // the score override reaches pooled (thin-cell) blocks only: the composite
+  // score measures non-predictive (score IC24h 0.006 on sign-correct
+  // independent episodes); a cell's own forward record is evidence
+  const stratAdmits = (s, score) => !stratBlockedNow(s) || (score >= STRAT_OVERRIDE && !cellHardBlocked(s));
   // ---- Tharp's core law enforced: no system works in every market type.
   // bear tape → only reversal-family LONGs trade; bull tape → only
   // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
@@ -2728,7 +2780,7 @@ async function main() {
   // The surcharge now binds only where shorts are vetoed anyway (bull/
   // mixed) — bear and side tapes are the legal short cells.
   const shortPenaltyOf = (s) =>
-    s.direction === 'SHORT' && !mktType.startsWith('bear') && !mktType.startsWith('side')
+    SHORT_HANDICAP && s.direction === 'SHORT' && !mktType.startsWith('bear') && !mktType.startsWith('side')
       ? 10
       : 0;
   // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
@@ -2881,7 +2933,7 @@ async function main() {
     // for cells the eval system also measured negative. Without this the
     // two evidence systems disagreed — and a stale allowlist failing
     // CLOSED vetoed every proven-name candidate — the book starved.
-    if (!stratBlockedNow(s) || score >= STRAT_OVERRIDE) return true;
+    if (stratAdmits(s, score)) return true;
     // missing/stale allowlist fails CLOSED for proven strategies — a dead
     // optimizer must never re-open measured-negative cells
     if (!sqnAllowed)
@@ -3079,7 +3131,7 @@ async function main() {
         const needTgt = RR_MIN * (floorEff + rrCostPct) + rrCostPct + 0.05;
         // shorts are scalps by mandate (SHORT_MAX_TGT) — extending past that
         // cap would just trade an rr veto for a short-tgt veto
-        const tgtCap = s.direction === 'SHORT' ? Math.min(8, SHORT_MAX_TGT) : 8;
+        const tgtCap = SHORT_HANDICAP && s.direction === 'SHORT' ? Math.min(8, SHORT_MAX_TGT) : 8;
         if (needTgt > s.targetPct && needTgt <= tgtCap) {
           s.targetPct = pct(needTgt);
           rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
@@ -3105,7 +3157,7 @@ async function main() {
     // families under water). Capital follows measured edge, not the
     // inverted composite: high score + negative alpha now sizes SMALL.
     const conv = Math.round(
-      clamp(0.35 + stratEff(s.strategy) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
+      clamp(0.35 + stratEff(s.strategy, s.direction) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
     ) / 100;
     // strategy circuit-breaker — a doctrine that has already bled on ≥3
     // closed trades gets half-size until its record clears. Risk control,
@@ -3153,7 +3205,12 @@ async function main() {
       return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
     })(), 'net-edge');
     gate(RELAX || rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, ${floorEff === atrFloor ? 'atr-floor' : `meas-floor ${pct(floorEff)}%`} stop can't fit)`);
-    gate(RELAX ||
+    // with a fresh factor-IC table, sponsorship is the ic-sponsor gate's job
+    // (a MEASURED-predictive factor voting with the signal). This legacy list
+    // leans on OBV/Dow/Wyckoff agreement, which the same table measures as
+    // anti-predictive (lift OBV -0.38, Dow -1.36, wyckoff -0.42), so it
+    // vetoed the better setups. It stays the fallback when IC is stale.
+    gate(RELAX || icFresh ||
       (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
       (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
       s.ta?.ignition?.dir === s.direction ||
@@ -3192,7 +3249,7 @@ async function main() {
     // short-class: shorts are legal where the eval record says they earn —
     // bear tape and side tape (trend +0.13% t=6.2, meanrev +0.04% flat) —
     // plus the two exempt sweep strategies and any risk-off regime.
-    gate(RELAX || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
+    gate(RELAX || !SHORT_HANDICAP || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
       s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
     gate(!LONG_ONLY || s.direction !== 'SHORT' || SHORT_STRATS.has(s.strategy) || (sqnAllowed && (sqnAllowed.set.has(s.strategy) || sqnAllowed.set.has(s.strategy + ':SHORT'))), 'shorts-banned');
     // operator mandate: shorts are mean-reversion scalps ONLY — fade
@@ -3201,7 +3258,7 @@ async function main() {
     // general floor: net-RR >= SHORT_MIN_RR after ALL costs, target
     // capped at SHORT_MAX_TGT so exits are quick, and a high score floor
     // — "extreme sense" entries only. RELAX does not soften this block.
-    if (s.direction === 'SHORT') {
+    if (SHORT_HANDICAP && s.direction === 'SHORT') {
       gate(SHORT_STRATS.has(s.strategy) || (sqnAllowed && sqnAllowed.set.has(s.strategy + ':SHORT')), 'short-strat (mean-rev only)');
       const shortNetRR = (s.targetPct - rrCostPct) / (stopPct + rrCostPct);
       gate(shortNetRR >= SHORT_MIN_RR, `short-rr<${SHORT_MIN_RR}:1 net`);
@@ -3213,7 +3270,7 @@ async function main() {
     // the eval block — the strategy's record stays on the board for
     // evidence, but exceptional confluence may still route. Default 75;
     // set high to restore the strict block.
-    gate(RELAX || !stratBlockedNow(s) || tradeScore >= STRAT_OVERRIDE, 'strat-blocked');
+    gate(RELAX || stratAdmits(s, tradeScore), 'strat-blocked');
     gate(!openFor(s.asset, s.direction), 'already-open');
     gate(!proxyBlocked(s), 'proxy-dup');
     gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
@@ -3345,7 +3402,7 @@ async function main() {
   // positions the engine itself would never enter on
   const freshDir = new Map(
     signals
-      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && (!stratBlockedNow(s) || tradeScoreOf(s) >= STRAT_OVERRIDE))
+      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && stratAdmits(s, tradeScoreOf(s)))
       .map((s) => [s.asset, s.direction])
   );
 
@@ -3974,8 +4031,17 @@ async function main() {
       mktType,
       regimeBlocked: [...stratRegBlock],
       regimeBoosts: stratRegBoost,
+      // direction-aware cells — the admission that actually binds whenever a
+      // strategy|direction has its own record (see cellOf/cellHardBlocked)
+      cellRule: `strategy|direction n>=${EVAL_MIN_N} (in-regime n>=15) judged on own avg fwd24h - ${CELL_COST}% cost; thin cells use the pooled rule`,
+      cellsBlocked: Object.entries(evalByStratDir)
+        .filter(([, v]) => (v.n || 0) >= EVAL_MIN_N && cellNet(v) < 0).map(([k]) => k),
+      cellsAdmitted: Object.entries(evalByStratDir)
+        .filter(([, v]) => (v.n || 0) >= EVAL_MIN_N && cellNet(v) >= 0).map(([k]) => k),
       hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
-      shortGate: 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape',
+      shortGate: SHORT_HANDICAP
+        ? 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape'
+        : 'symmetric: shorts and longs face the same gates; mkt-type doctrine + direction-aware cell records decide (SENTINEL_SHORT_HANDICAP=1 restores the old short-only bar)',
       atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
     },
     // Chat With Traders corpus — transcripts distilled into doctrine themes;
@@ -4503,6 +4569,10 @@ async function main() {
   // regime-conditional strategy table — the scorer's regime-switch input:
   // strategy alpha measured PER mktType, not just globally
   evStats.byStrategyMkt = group((r) => (r.strategy ?? '?') + '|' + (r.mktType ?? 'unknown'));
+  // direction-aware cells — a strategy's longs and shorts graded apart (the
+  // admission gate's input; pooled tables hid opposite-signed sides)
+  evStats.byStrategyDir = group((r) => (r.strategy ?? '?') + '|' + (r.direction ?? '?'));
+  evStats.byStrategyDirMkt = group((r) => (r.strategy ?? '?') + '|' + (r.direction ?? '?') + '|' + (r.mktType ?? 'unknown'));
   // calibration: does the score ORDER predict? Monotone hit rate across
   // deciles = a ranking that means something; flat/inverted = decoration.
   evStats.calibration = group((r) =>

@@ -97,9 +97,31 @@ for (const [s, st] of Object.entries(attr.byStrategy)) {
   const btC = btCell(s);
   policies[s] = { status, why, episodes: n, meanDirFwd24h: st.meanDirFwd24h?.mean ?? null, ci: st.meanDirFwd24h?.ci ?? null, netAfterCost: net, hitRate: st.hitRate?.p ?? null, extLib: extFor(s), backtest: btC, backtestAdvisory: btAdvisory(btC), reviewedAt: new Date().toISOString() };
 }
-const out = { ts: Date.now(), updatedAt: new Date().toISOString(), source: 'edge-attribution + codified rules', rules: RULES, thresholds: { promoteN: PROMOTE_N, haltN: HALT_N }, strategies: policies };
+// per-cell lifecycle (strategy:direction) — same rules, judged on the cell's
+// own episodes, plus a holdout bar for 'live': both chronological halves
+// net-positive after cost (more cells = more chances to pass by luck, so the
+// cell must have earned it twice). The exec reads `cells` before `strategies`.
+const cellPolicies = {};
+for (const [c, st] of Object.entries(attr.byCell || {})) {
+  const n = st.episodes || 0, lo = st.meanDirFwd24h?.ci?.[0], hi = st.meanDirFwd24h?.ci?.[1], net = st.netAfterCost;
+  const h = st.holdout || {};
+  let status = 'probation', why = 'insufficient evidence (default)';
+  if (n >= HALT_N && hi != null && hi < 0) {
+    status = 'halted';
+    why = `${n} episodes, CI upper ${hi} < 0 — significantly negative expectancy`;
+    if (n >= 60) { status = 'abandoned'; why += `, n=${n} >= 60`; }
+  } else if (n >= PROMOTE_N && lo != null && lo > 0 && net > 0 && h.firstNetAfterCost > 0 && h.secondNetAfterCost > 0) {
+    status = 'live';
+    why = `${n} episodes, CI lower +${lo}, netAfterCost +${net}, holdout halves +${h.firstNetAfterCost}/+${h.secondNetAfterCost}`;
+  } else if (n >= PROMOTE_N && lo != null && lo > 0 && net > 0) {
+    why = `${n} episodes, CI lower +${lo} but a holdout half is not net-positive (${h.firstNetAfterCost}/${h.secondNetAfterCost})`;
+  }
+  cellPolicies[c] = { status, why, strategy: st.strategy, direction: st.direction, episodes: n, meanDirFwd24h: st.meanDirFwd24h?.mean ?? null, ci: st.meanDirFwd24h?.ci ?? null, netAfterCost: net, holdout: h, hitRate: st.hitRate?.p ?? null, reviewedAt: new Date().toISOString() };
+}
+const out = { ts: Date.now(), updatedAt: new Date().toISOString(), source: 'edge-attribution + codified rules', rules: { ...RULES, cellLive: 'cell (strategy:direction) live = strategy live rule on its own episodes AND both chronological halves netAfterCost>0' }, thresholds: { promoteN: PROMOTE_N, haltN: HALT_N }, strategies: policies, cells: cellPolicies };
 writeJ(path.join(STATE, 'strategy-policy.json'), out);
 writeJ(path.join(API, 'strategy-policy.json'), out); // dashboard-visible copy
 const counts = {};
 for (const p of Object.values(policies)) counts[p.status] = (counts[p.status] || 0) + 1;
-console.log('strategy-policy:', JSON.stringify(counts), '| live:', Object.entries(policies).filter(([, p]) => p.status === 'live').map(([s]) => s).join(',') || 'none');
+console.log('strategy-policy:', JSON.stringify(counts), '| live:', Object.entries(policies).filter(([, p]) => p.status === 'live').map(([s]) => s).join(',') || 'none',
+  '| cells:', Object.entries(cellPolicies).map(([c, p]) => `${c}=${p.status}`).join(', ') || 'none');

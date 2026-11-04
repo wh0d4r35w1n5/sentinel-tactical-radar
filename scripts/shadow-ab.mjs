@@ -20,7 +20,8 @@ const evals = recs.filter((r) => { const k = r.key || `${r.runTs}|${r.asset}|${r
 
 const COST_PCT = 0.17; // taker×2 + spread — same cost model as attribution
 const NOTIONAL = 20;   // micro-book clip: $20 notional per shadow position
-const dirSign = (r) => (r.direction === 'SHORT' ? -1 : 1);
+// fwd24h is already direction-signed at the source (build-scanner: fwd = sgn x move);
+// a second sign flip inverted every SHORT, so the stored value is used as-is
 const day = (ts) => Math.floor(ts / 864e5);
 
 // strategies that existed in the v1.0 master baseline — "original Sentinel"
@@ -47,7 +48,7 @@ function runVariant(name, takeSignal, maxPerDay, opts = {}) {
     const picks = todays.sort((a, b) => (b.score || 0) - (a.score || 0)).filter((r) => { const k = r.asset + r.direction; return !seen2.has(k) && seen2.add(k); }).slice(0, maxPerDay);
     let dayPnl = 0;
     for (const r of picks) {
-      const net = NOTIONAL * (dirSign(r) * r.fwd24h / 100 - COST_PCT / 100);
+      const net = NOTIONAL * (r.fwd24h / 100 - COST_PCT / 100);
       dayPnl += net; trades++; wins += net > 0 ? 1 : 0; fees += NOTIONAL * COST_PCT / 100;
     }
     // benchmark leg compounds the index every day regardless

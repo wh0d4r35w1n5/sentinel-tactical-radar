@@ -79,15 +79,22 @@ const envTxt = (() => { try { return fs.readFileSync(path.join(ROOT, '.env'), 'u
 const envExec = (envTxt.match(/^SENTINEL_EXEC=(\w+)/m) || [])[1];
 const envX = (envTxt.match(/^SENTINEL_EXCHANGE=(\w+)/m) || [])[1];
 sv.mode = { ledgerMode: ledger.mode, ledgerExchange: ledger.exchange, envExec, envX, equityUsd: ledger.equityUsd };
-if (ledger.mode && envExec && ledger.mode !== envExec)
+// two lanes (2026-11-04): sentinel-live-exec owns api/live-ledger.json and the
+// demo lane writes api/live-ledger.demo<book>.json, so while the live lane is
+// a supervised unit a live ledger next to a demo .env is the design, not drift
+const liveLane = /(^|,)\s*sentinel-live-exec\s*(,|$)/.test(process.env.SUPERVISOR_UNITS || '');
+sv.mode.liveLane = liveLane;
+if (!liveLane && ledger.mode && envExec && ledger.mode !== envExec)
   problems.push(`mode drift — ledger '${ledger.mode}' vs .env '${envExec}' — verify which is real`);
-if (ledger.mode === 'live' && envExec !== 'live')
+if (!liveLane && ledger.mode === 'live' && envExec !== 'live')
   problems.push(`LIVE ledger while .env is ${envExec} — possible unauthorized live flip`);
+if (liveLane && ledger.mode && ledger.mode !== 'live')
+  problems.push(`live-ledger.json holds a '${ledger.mode}' book — a non-live lane is writing the live ledger`);
 const rf = readJson(path.join(STATE, 'real-fills.json'));
 const df = readJson(path.join(STATE, 'demo-fills-bybit.json'));
 sv.journals = { realFills: rf?.fills?.length ?? null, demoFillsBybit: df?.fills?.length ?? null };
 // demo contamination check: real-fills newest entry must predate demo switch
-if (envExec === 'demo' && Array.isArray(rf?.fills) && rf.fills.length) {
+if (!liveLane && envExec === 'demo' && Array.isArray(rf?.fills) && rf.fills.length) {
   const lastRealTs = Math.max(...rf.fills.map((f) => +f.ts || 0));
   if (sv.lastRealTs != null && lastRealTs > sv.lastRealTs)
     problems.push(`real-fills grew while MODE=${envExec} — demo fills may be contaminating the live rail`);

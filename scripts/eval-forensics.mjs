@@ -11,7 +11,10 @@ const writeJ = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.string
 
 // ---------- load the full journal ----------
 const recs = [];
-for (const f of ['history/eval-2026-09.json', 'history/eval-2026-10.json', 'signal-eval.json']) {
+// every monthly archive, not a hardcoded list — Nov+ records were silently
+// missing from the evidence base (only the signal-eval hot window reached it)
+const months = (() => { try { return fs.readdirSync(path.join(API, 'history')).filter((f) => /^eval-\d{4}-\d{2}\.json$/.test(f)).sort().map((f) => `history/${f}`); } catch { return []; } })();
+for (const f of [...months, 'signal-eval.json']) {
   const d = readJ(path.join(API, f), null);
   const r = d?.records || (Array.isArray(d) ? d : []);
   for (const x of r) if (x?.runTs && x.asset) recs.push(x);
@@ -21,8 +24,12 @@ const seen = new Set();
 const evals = recs.filter((r) => { const k = r.key || `${r.runTs}|${r.asset}|${r.direction}`; if (seen.has(k)) return false; seen.add(k); return true; })
   .sort((a, b) => a.runTs - b.runTs);
 
-const dirSign = (r) => (r.direction === 'SHORT' ? -1 : 1);
-const dirAdj = (r, f = 'fwd24h') => (r[f] == null ? null : dirSign(r) * r[f]);
+// fwd1h/4h/24h and alpha* are ALREADY direction-signed at the source
+// (build-scanner eval engine: fwd = sgn x move, sgn = LONG ? 1 : -1). This
+// file used to multiply by the direction sign a second time, which scored
+// every winning SHORT as a loser and every losing SHORT as a winner — and
+// strategy-policy abandoned strategies on that inverted record. Use the
+// stored value as-is.
 const labeled = evals.filter((r) => r.fwd24h != null);
 
 // ---------- independence: episode clustering ----------
@@ -64,7 +71,7 @@ const COST_PCT = 0.0017; // ~0.17% round trip: taker×2 + spread — modeled, no
 const grades = {};
 for (const g of [...new Set(episodes.map((e) => e.grade))]) {
   const eps = episodes.filter((e) => e.grade === g);
-  const fws = eps.map((e) => dirSign(e) * e.fwd24h);
+  const fws = eps.map((e) => e.fwd24h);
   const hits = fws.filter((x) => x > 0).length;
   const rawN = eps.reduce((a, e) => a + e.members.length, 0);
   grades[g] = {
@@ -79,7 +86,7 @@ const mid = episodes[Math.floor(episodes.length / 2)]?.ts;
 const holdout = { splitTs: mid ? new Date(mid).toISOString() : null, first: {}, second: {} };
 for (const g of Object.keys(grades)) {
   for (const [h, eps] of [['first', episodes.filter((e) => e.grade === g && e.ts < mid)], ['second', episodes.filter((e) => e.grade === g && e.ts >= mid)]]) {
-    const fws = eps.map((e) => dirSign(e) * e.fwd24h);
+    const fws = eps.map((e) => e.fwd24h);
     holdout[h][g] = { n: eps.length, meanDirFwd24h: tCI(fws).mean, hitRate: eps.length ? +(fws.filter((x) => x > 0).length / eps.length).toFixed(4) : null };
   }
 }
@@ -111,8 +118,28 @@ const attr = { ts: Date.now(), updatedAt: new Date().toISOString(), costModelPct
 attr.byStrategy = {};
 for (const s of [...new Set(episodes.map((e) => e.strategy).filter(Boolean))]) {
   const eps = episodes.filter((e) => e.strategy === s);
-  const fws = eps.map((e) => dirSign(e) * e.fwd24h);
+  const fws = eps.map((e) => e.fwd24h);
   attr.byStrategy[s] = { episodes: eps.length, meanDirFwd24h: tCI(fws), netAfterCost: fws.length ? +(mean(fws) - COST_PCT * 100).toFixed(5) : null, hitRate: wilson(fws.filter((x) => x > 0).length, eps.length) };
+}
+
+// per-cell (strategy x direction) expectancy — a strategy's longs and shorts
+// are different bets; pooled, one side's record condemned the other. Holdout
+// = the cell's own episodes split chronologically in half; strategy-policy
+// requires both halves net-positive before a cell can read 'live'.
+attr.byCell = {};
+for (const s of [...new Set(episodes.map((e) => e.strategy).filter(Boolean))]) {
+  for (const d of ['LONG', 'SHORT']) {
+    const eps = episodes.filter((e) => e.strategy === s && e.direction === d);
+    if (!eps.length) continue;
+    const fws = eps.map((e) => e.fwd24h);
+    const h = Math.floor(fws.length / 2);
+    const net = (xs) => (xs.length ? +(mean(xs) - COST_PCT * 100).toFixed(5) : null);
+    attr.byCell[`${s}:${d}`] = {
+      strategy: s, direction: d, episodes: eps.length, meanDirFwd24h: tCI(fws), netAfterCost: net(fws),
+      hitRate: wilson(fws.filter((x) => x > 0).length, eps.length),
+      holdout: { firstN: h, firstNetAfterCost: net(fws.slice(0, h)), secondN: fws.length - h, secondNetAfterCost: net(fws.slice(h)) },
+    };
+  }
 }
 
 // per-confluence-tag: present vs absent (does the tag add value?)
@@ -122,7 +149,7 @@ for (const r of labeled) for (const c of r.confl || []) tags.add(c.k);
 for (const tag of tags) {
   const withTag = episodes.filter((e) => e.members[0].confl?.some((c) => c.k === tag));
   const without = episodes.filter((e) => !e.members[0].confl?.some((c) => c.k === tag));
-  const fw = (eps) => eps.map((e) => dirSign(e) * e.fwd24h);
+  const fw = (eps) => eps.map((e) => e.fwd24h);
   const w = fw(withTag), wo = fw(without);
   attr.byConfluence[tag] = {
     withTag: { n: w.length, meanDirFwd24h: tCI(w).mean },
@@ -133,19 +160,19 @@ for (const tag of tags) {
 
 // score calibration — does higher score = higher fwd? (the IC Will keeps asking about)
 const scEps = episodes.filter((e) => e.score != null);
-attr.scoreIC24h = spearman(scEps.map((e) => e.score), scEps.map((e) => dirSign(e) * e.fwd24h));
-attr.scoreIC4h = spearman(scEps.map((e) => e.score), scEps.map((e) => (e.fwd4h != null ? dirSign(e) * e.fwd4h : null)).map((x, i) => x == null ? 0 : x));
+attr.scoreIC24h = spearman(scEps.map((e) => e.score), scEps.map((e) => e.fwd24h));
+attr.scoreIC4h = spearman(scEps.map((e) => e.score), scEps.map((e) => (e.fwd4h != null ? e.fwd4h : null)).map((x, i) => x == null ? 0 : x));
 // score deciles — monotone or noise?
 const sorted = [...scEps].sort((a, b) => a.score - b.score);
 attr.scoreDeciles = Array.from({ length: 10 }, (_, i) => {
   const bin = sorted.slice(Math.floor(i * sorted.length / 10), Math.floor((i + 1) * sorted.length / 10));
-  const fws = bin.map((e) => dirSign(e) * e.fwd24h);
+  const fws = bin.map((e) => e.fwd24h);
   return { decile: i + 1, scoreRange: [bin[0]?.score, bin[bin.length - 1]?.score], n: bin.length, meanDirFwd24h: tCI(fws).mean, hitRate: bin.length ? +(fws.filter((x) => x > 0).length / bin.length).toFixed(3) : null };
 });
 // feature columns present on records
 for (const f of ['rsi', 'volRatio', 'momScore', 'boardRank']) {
   const ok = episodes.filter((e) => e.members[0][f] != null);
-  attr[`ic_${f}`] = spearman(ok.map((e) => e.members[0][f]), ok.map((e) => dirSign(e) * e.fwd24h));
+  attr[`ic_${f}`] = spearman(ok.map((e) => e.members[0][f]), ok.map((e) => e.fwd24h));
 }
 attr.verdict = 'positive netAfterCost + non-overlapping positive CI = independently predictive; negative/zero = contributes nothing after costs';
 writeJ(path.join(API, 'edge-attribution.json'), attr);
