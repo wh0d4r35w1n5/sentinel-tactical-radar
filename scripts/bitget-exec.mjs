@@ -147,6 +147,30 @@ const RR = (() => {
 // (observed live: legs at 4R/7R only), and small books fell under the
 // leg-count floor → single whole-size TP instead of a staggered ladder.
 const RR_CUM = RR.alloc.reduce((a, f, i) => (a.push(+(a[i] + f).toFixed(8)), a), [0]);
+
+// ---- HTF trend read (operator order 2026-11-04: real MTF analysis, not the
+// crude 24h-change veto). Reads state/klines-1h.json closes; classifies each
+// symbol up/down/flat from the 1h mean slope + swing structure (HL/LH).
+// Cached per mtime — the file is ~8MB, one read per exec cycle max.
+let __kl1hCache = { m: 0, data: null };
+const htfTrend = (sym) => {
+  try {
+    const fp = path.join(__dirname, '..', 'state', 'klines-1h.json');
+    const m = +fs.statSync(fp).mtimeMs || 0;
+    if (m !== __kl1hCache.m) __kl1hCache = { m, data: JSON.parse(fs.readFileSync(fp, 'utf8')) };
+    const row = __kl1hCache.data?.[sym];
+    const cl = row?.payload?.closes;
+    const at = +row?.at || 0;
+    if (!Array.isArray(cl) || cl.length < 24 || Date.now() - at > 45 * 60e3) return null;
+    const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const fast = mean(cl.slice(-4)), slow = mean(cl.slice(-12));
+    const hi1 = Math.max(...cl.slice(-24, -12)), hi2 = Math.max(...cl.slice(-12));
+    const lo1 = Math.min(...cl.slice(-24, -12)), lo2 = Math.min(...cl.slice(-12));
+    if (fast > slow * 1.0005 && lo2 > lo1) return 'up';      // rising mean + HL structure
+    if (fast < slow * 0.9995 && hi2 < hi1) return 'down';    // falling mean + LH structure
+    return 'flat';
+  } catch { return null; }
+};
 const RR_MAX_ALLOC = Math.max(...RR.alloc);
 // ---- wealth vault: SENTINEL_VAULT_SHARE (default 50%) of every
 // profitable close is swept into state/wealth-vault.json — a balance the
@@ -3969,6 +3993,18 @@ async function main() {
           : (o.targetPct ?? 99) > sTgt ? `short-tgt>${sTgt}% (scalp-only)`
           : null;
         if (why) { state.actions.push(`${o.symbol}: ${why}`); continue; }
+      }
+      // HTF trend veto on EVERY short (operator order 2026-11-04 — multi-timeframe
+      // analysis, not just a 24h number): a short into a rising 1h mean with
+      // higher-low structure is fading the trend — the BABA case. Applies to
+      // authored setups too; a real breakdown strat won't emit in an uptrend.
+      if (o.direction === 'SHORT') {
+        const htf = htfTrend(o.symbol);
+        if (htf === 'up') {
+          state.actions.push(`${o.symbol}: ⛔ short-into-HTF-uptrend — 1h rising mean + HL structure`);
+          (state.rejects = state.rejects || []).push({ symbol: o.symbol, direction: o.direction, score: o.score, ts: Date.now(), gates: ['htf-uptrend-short-veto'] });
+          continue;
+        }
       }
       if (!o.core && !o.setup) { // mandate roles (core-carry deploys) and operator setups are exempt from tape gates
         if (regimeChop) {
