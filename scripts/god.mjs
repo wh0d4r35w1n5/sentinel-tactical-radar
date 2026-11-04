@@ -341,10 +341,22 @@ const interv = (what, res) => interventions.push({ what, res, at: new Date().toI
   // Adapter centralizes signing and endpoint selection, so demo oversight
   // cannot accidentally query or repair a different exchange/account.
   const MODE = (process.env.SENTINEL_EXEC || '').toLowerCase();
-  const DEMO = MODE === 'demo';
+  // audit-surface repair (2026-11-04): on this box the god pass is spawned
+  // by rapid demo-scoped env, so every credentialed check queried an empty
+  // demo account while reporting live-ledger stats (demo book,
+  // 0 exchange positions). When the live ledger exists and reports
+  // mode=live, audit THAT surface — the same credentialed lane the
+  // executor actually runs.
+  let liveSurface = null;
+  try { liveSurface = readJson('live-ledger.json'); } catch {}
+  const liveMode = (liveSurface && liveSurface.mode || '').toLowerCase() === 'live';
+  const MODE2 = liveMode ? 'live' : MODE;
+  const DEMO = MODE2 === 'demo';
   let X = null;
   try {
-    X = makeExchange(process.env);
+    X = makeExchange(liveMode
+      ? { ...process.env, SENTINEL_EXEC: 'live', SENTINEL_EXCHANGE: ((liveSurface && liveSurface.exchange) || 'bitget').toLowerCase() }
+      : process.env);
   } catch (e) {
     add('god-powers', 'FAIL', 'exchange configuration refused: ' + e.message);
   }
