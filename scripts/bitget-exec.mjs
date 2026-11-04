@@ -4010,10 +4010,10 @@ async function main() {
       if (o.direction === 'SHORT') {
         const h4 = htfTrend(o.symbol, '4H'), h1 = htfTrend(o.symbol, '1h');
         const fr2 = fundMap?.[o.symbol];
-        const sWhy = h4 != null && h4 !== 'down' ? `short-no-4H-downtrend (${h4})`
+        const sWhy = h4 == null ? 'short-trend-unproven (no 4H data)'
+          : h4 !== 'down' ? `short-no-4H-downtrend (${h4})`
           : h1 === 'up' ? 'short-into-1h-uptrend'
-          : (h4 === 'down' && h1 === 'down') ? null
-          : 'short-trend-unproven (no HTF data)';
+          : null;
         if (sWhy || (fr2 != null && fr2 < 0)) {
           const w = sWhy || `short-pays-funding ${fr2}%/8h (crowded-short squeeze bait)`;
           state.actions.push(`${o.symbol}: ⛔ ${w}`);
