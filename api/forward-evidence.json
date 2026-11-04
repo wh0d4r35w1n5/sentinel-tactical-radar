@@ -1,15 +1,18 @@
 {
- "ts": "2026-11-04T06:36:28.888Z",
- "windowStart": null,
+ "ts": "2026-11-04T06:41:30.080Z",
+ "windowStart": "2026-11-04T06:19:55.863Z",
  "episodes": {
-  "total": 0,
-  "independent": 0,
+  "total": 1,
+  "independent": 1,
   "clustered": 0,
   "dip": {
    "n": 0
   },
   "pump": {
-   "n": 0
+   "n": 1,
+   "netUsd": -0.1975,
+   "wrPct": 0,
+   "meanPct": -1.277
   },
   "operator": {
    "n": 0
@@ -19,9 +22,14 @@
   }
  },
  "realized": {
-  "netUsd": 0,
-  "equityCurve": [],
-  "maxDrawdownUsd": 0
+  "netUsd": -0.1975,
+  "equityCurve": [
+   {
+    "t": 1793774264342,
+    "eq": -0.1975
+   }
+  ],
+  "maxDrawdownUsd": 0.1975
  },
  "claims": {
   "dip": {
@@ -41,7 +49,10 @@
     "note": "pump>=3%/2h short -> 2% stop +1.5% TP, held-out"
    },
    "live": {
-    "n": 0
+    "n": 1,
+    "netUsd": -0.1975,
+    "wrPct": 0,
+    "meanPct": -1.277
    }
   }
  },
