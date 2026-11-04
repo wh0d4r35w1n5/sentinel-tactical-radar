@@ -1222,7 +1222,8 @@ async def main():
                 scan = api("market-scanner") or {}
                 for s in scan.get("signals", [])[-10:]:
                     k = f"sig:{s.get('asset')}:{s.get('direction')}:{s.get('emittedAt', s.get('updatedAt',''))[:13]}"
-                    if k not in alerted and s.get("key"):
+                    top_grade = str(s.get("grade") or "") in ("S", "A+", "A") or (s.get("score") or 0) >= 85
+                    if k not in alerted and s.get("key") and top_grade:
                         alerted.add(k)
                         mtf = ((s.get("ta") or {}).get("mtf") or {}).get("stack", "")
                         await say(f"⚡ <b>NEW SIGNAL</b> — <code>{s.get('asset')}</code> {s.get('direction')} · "

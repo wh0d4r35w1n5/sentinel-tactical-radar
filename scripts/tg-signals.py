@@ -383,6 +383,14 @@ async def main():
     backoff = POLL
     while True:
         try:
+            if not c.is_connected():
+                try:
+                    await c.connect()
+                    print("[vip-signals] reconnected", flush=True)
+                except Exception as re:
+                    print("[vip-signals] reconnect err:", str(re)[:80], flush=True)
+                    await asyncio.sleep(15)
+                    continue
             fills = (load_json(BASE + "/state/real-fills.json", {}) or {}).get("fills", [])
             plans = (load_json(BASE + "/api/live-plan.json", {}) or {}).get("orders", [])
             ctx = load_ctx()
