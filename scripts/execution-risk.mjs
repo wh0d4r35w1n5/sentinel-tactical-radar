@@ -219,7 +219,9 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
     if (!positive(price) || Math.abs(price / intent.entryPrice - 1) > c.risk.maxPriceDriftFraction)
       fail('stale entry price');
     const exp = portfolioExposure(s.positions, s.plans);
-    const tierScale = tier === 'probation' ? 0.5 : 1; // backtest-only proof earns half risk
+    // open season: unproven cells pay full risk — the operator ordered
+    // maximal deployment; half-size probation was the listing-era caution.
+    const tierScale = tier === 'probation' && !openSeason() ? 0.5 : 1; // backtest-only proof earns half risk
     const sized = sizeEntry({ ...intent, equityUsd: s.equityUsd, availableUsd: s.availableUsd,
       entryPrice: price, contract: s.contract, existingNotionalUsd: exp.notionalUsd,
       riskScale: (intent.riskScale ?? 1) * tierScale,
