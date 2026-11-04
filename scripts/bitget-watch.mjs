@@ -314,7 +314,7 @@ let cmCache = null;
 // Exchange-reported minimum slice, learned from 40808 rejects: contract
 // catalog values go stale; once a leg dies on size the real floor is
 // journaled and every later ladder respects it.
-const LEARN_MIN_FILE = path.join(__dirname, '..', 'state', 'contract-min-learn.json');
+const LEARN_MIN_FILE = path.join(ROOT, 'state', 'contract-min-learn.json');
 const learnMinSlice = (sym, failedSize) => {
   try {
     const m = JSON.parse(fs.readFileSync(LEARN_MIN_FILE, 'utf8'));
