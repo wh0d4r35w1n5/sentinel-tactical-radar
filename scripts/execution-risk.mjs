@@ -54,7 +54,9 @@ export function assertAdmission(intent, { allowlist, admission, envelope, now = 
   // admits at probation (half risk) and its episodes become the record.
   // Convictions still ride: 'dead' records, non-positive means, measured-
   // losing symbols and the envelope brake all still refuse.
-  const openSeason = readJson(path.join(ROOT, 'state', 'open-season.json'), true)?.enabled === true;
+  const openSeason = process.env.SENTINEL_OPEN_SEASON != null
+    ? process.env.SENTINEL_OPEN_SEASON === '1'
+    : readJson(path.join(ROOT, 'state', 'open-season.json'), true)?.enabled === true;
   const listed = openSeason ||
     allowlist?.cells?.includes(cell) || allowlist?.cells?.includes(pocket);
   if (!cell || allowlist?.enabled !== true || !listed)

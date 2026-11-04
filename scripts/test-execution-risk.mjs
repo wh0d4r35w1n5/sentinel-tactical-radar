@@ -5,6 +5,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Listing-rail tests exercise closed-gate semantics regardless of the live
+// open-season flag; one explicit open-season case below pins the new path.
+process.env.SENTINEL_OPEN_SEASON = '0';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const policy = validateRiskPolicy(JSON.parse(fs.readFileSync(path.join(ROOT, 'state', 'execution-risk.json'), 'utf8')));
 const contract = { sizePlace: 3, sizeMultiplier: 0.001, pricePlace: 4, minTradeNum: 0.05, minTradeUSDT: 5, maxLev: 25 };
@@ -95,6 +99,23 @@ t('live tier refuses wrong exit model', () => assertAdmission({ ...wIntent, exit
   admission: { cells: { 'Wyckoff:LONG': { status: 'live', source: 'validated-forward-exits', exitModel: EXIT_MODEL,
     episodes: 40, netAfterCost: 0.5, ci: [0.05, 0.9], reviewedAt: new Date().toISOString() } } },
 })), 'exit model');
+t('open season admits unrecorded cells at probation', () => {
+  process.env.SENTINEL_OPEN_SEASON = '1';
+  try {
+    const r = assertAdmission({ ...wIntent, strategy: 'Brand New Thing', symbol: 'NOVELUSDT' }, mkArgs());
+    if (r.tier !== 'probation') throw new Error('expected probation admit');
+    return r;
+  } finally { process.env.SENTINEL_OPEN_SEASON = '0'; }
+});
+t('open season still refuses convicted cells', () => {
+  process.env.SENTINEL_OPEN_SEASON = '1';
+  try {
+    return assertAdmission({ ...wIntent, strategy: 'Measured Loser' }, mkArgs({
+      admission: { cells: { 'Measured Loser:LONG': { status: 'probation', source: 'mega-backtest-1m',
+        episodes: 900, netAfterCost: -0.4, ci: [-0.9, 0.1], reviewedAt: new Date().toISOString() } } },
+    }));
+  } finally { process.env.SENTINEL_OPEN_SEASON = '0'; }
+}, 'qualifying evidence');
 t('stale evidence refused', () => assertAdmission(wIntent, mkArgs({
   admission: { cells: { 'Wyckoff:LONG': { status: 'probation', source: 'mega-backtest-1m', exitModel: EXIT_MODEL,
     episodes: 10715, netAfterCost: 0.1, ci: [0.01, 0.2], reviewedAt: new Date(Date.now() - 2 * 86400000).toISOString() } } },

@@ -24,7 +24,9 @@ export async function openRiskEntry(X, order, contract, { riskScale = 1, root = 
   const adm = readJson(path.join(root, 'state', 'cell-admission.json'), true);
   // OPEN SEASON (operator order 2026-11-04): unrecorded/unconvicted cells
   // admit at probation — convictions (dead, non-positive mean) still refuse.
-  const openSeason = readJson(path.join(root, 'state', 'open-season.json'), true)?.enabled === true;
+  const openSeason = process.env.SENTINEL_OPEN_SEASON != null
+    ? process.env.SENTINEL_OPEN_SEASON === '1'
+    : readJson(path.join(root, 'state', 'open-season.json'), true)?.enabled === true;
   const listed = openSeason || (allow?.enabled === true &&
     (allow?.cells?.includes(cell) || (pocket && allow?.cells?.includes(pocket))));
   const ev = (pocket && adm?.cells?.[pocket]) || adm?.cells?.[cell];

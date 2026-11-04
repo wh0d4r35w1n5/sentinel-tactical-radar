@@ -381,6 +381,7 @@ const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
 // rail (drift, R:R, contract min, armor) are untouched. Read live per
 // call so the flag flips without a restart.
 const openSeason = () => {
+  if (process.env.SENTINEL_OPEN_SEASON != null) return process.env.SENTINEL_OPEN_SEASON === '1';
   try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'open-season.json'), 'utf8')).enabled === true; }
   catch { return false; }
 };
