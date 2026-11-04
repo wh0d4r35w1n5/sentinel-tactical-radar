@@ -56,10 +56,15 @@ export async function openRiskEntry(X, order, contract, { riskScale = 1, root = 
   // exactly like the backtest.
   const structural = +(order.wyckInvalid ?? order.structInvalid);
   const shortDir = order.direction === 'SHORT';
+  const flatPct = (+order.stopPct || 1) / 100; // orders that declare their
+  // own stop (slot-deploy 3.3%, setups' authored stop) ride that distance —
+  // the flat 1% grid only applies to orders carrying no stopPct. A declared
+  // 3.3% stop dying at -0.93% was the churn the fee autopsy kept finding:
+  // momentum seats paid full R on noise instead of their stated risk.
   const rawStop = structural > 0
-    ? (shortDir ? (structural > price ? structural : price * 1.01)
-                : (structural < price ? structural : price * 0.99))
-    : price * (shortDir ? 1.01 : 0.99);
+    ? (shortDir ? (structural > price ? structural : price * (1 + flatPct))
+                : (structural < price ? structural : price * (1 - flatPct)))
+    : price * (shortDir ? 1 + flatPct : 1 - flatPct);
   const stopPrice = +(Math.floor(rawStop / tick) * tick).toFixed(+contract.pricePlace || 0);
   const intent = { symbol: order.symbol, strategy: order.strategy, direction: order.direction,
     exitModel: EXIT_MODEL, entryPrice: price, stopPrice, riskScale, confirmPrint: order.confirmPrint };
