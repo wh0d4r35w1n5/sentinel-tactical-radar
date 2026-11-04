@@ -1363,6 +1363,8 @@ async function main() {
   const IC_VETO = +(process.env.SENTINEL_IC_VETO ?? -2);
   const IC_SPONSOR_LIFT = +(process.env.SENTINEL_IC_SPONSOR_LIFT ?? 0.4);
   let factorIC = {}, icFresh = false;
+  let factorCaps = {};
+  try { factorCaps = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'factor-caps.json'), 'utf8')) || {}; } catch {}
   try {
     const c = JSON.parse(fs.readFileSync(IC_FILE, 'utf8'));
     if (Date.now() - (c.at || 0) < 30 * 60e3) { factorIC = c.ic || {}; icFresh = true; }
@@ -1803,7 +1805,7 @@ async function main() {
       for (const f of k?.ta?.factors || []) {
         const ic = factorIC[f.k];
         if (!ic || (f.dir !== 'bull' && f.dir !== 'bear')) continue;
-        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1);
+        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1) * (factorCaps[f.k] ?? 1);
         // sponsor = a factor with a MEASURED positive lift voting with the
         // signal — without one, the setup is built of noise + anti-predictors
         if (f.dir === wantDir && ic.lift >= IC_SPONSOR_LIFT) icSponsor = true;
@@ -4777,7 +4779,7 @@ async function main() {
     const want = [];
     for (const f of factorIC)
       if (f.n >= 15 && f.lift != null && f.lift <= -0.5)
-        want.push({ id: 'downweight-' + f.k, txt: 'remove or cap "' + f.k + '" from the confluence vote pool — measured ' + f.lift + '% lift across ' + f.n + ' graded signals', scope: 'scanner', auto: false, ts: now });
+        want.push({ id: 'cap-' + f.k, txt: 'cap "' + f.k + '" vote weight at 0.25 — measured ' + f.lift + '% lift across ' + f.n + ' graded signals', scope: 'scanner', auto: true, ts: now, target: 'state/factor-caps.json', params: { [f.k]: 0.25 } });
     const seenP = new Set(ein.proposals.map((p) => p.id));
     for (const w of want) if (!seenP.has(w.id)) ein.proposals.push(w);
 

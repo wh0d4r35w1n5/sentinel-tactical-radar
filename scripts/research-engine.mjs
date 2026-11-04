@@ -36,6 +36,9 @@ const WRITABLE = {
   },
   'state/open-season.json': { fields: { enabled: { any: [true, false] } }, never: [] },
   'state/rr-config.json': { fields: { '*': { min: 0.05, max: 20 } }, never: [] },
+  // factor vote caps: Einstein-measured downweights, flat map factor->cap
+  // (0=silenced, 1=full vote). CAB-bounded — every factor inside [0,1].
+  'state/factor-caps.json': { fields: { '*': { min: 0, max: 1 } }, never: [] },
 };
 const NEVER_RE = /manual|secret|key|token|env|convict|abandon|halt|wallet|pem/i;
 
