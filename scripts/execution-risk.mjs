@@ -221,7 +221,10 @@ export function createEntryGuard({ root = ROOT, mode, snapshot, now = Date.now }
     const exp = portfolioExposure(s.positions, s.plans);
     // open season: unproven cells pay full risk — the operator ordered
     // maximal deployment; half-size probation was the listing-era caution.
-    const tierScale = tier === 'probation' && !openSeason() ? 0.5 : 1; // backtest-only proof earns half risk
+    const openSeasonNow = process.env.SENTINEL_OPEN_SEASON != null
+      ? process.env.SENTINEL_OPEN_SEASON === '1'
+      : readJson(path.join(root, 'state', 'open-season.json'), true)?.enabled === true;
+    const tierScale = tier === 'probation' && !openSeasonNow ? 0.5 : 1; // backtest-only proof earns half risk
     const sized = sizeEntry({ ...intent, equityUsd: s.equityUsd, availableUsd: s.availableUsd,
       entryPrice: price, contract: s.contract, existingNotionalUsd: exp.notionalUsd,
       riskScale: (intent.riskScale ?? 1) * tierScale,
