@@ -1,25 +1,39 @@
 {
- "at": "2026-11-04T07:09:29.674Z",
+ "at": "2026-11-04T07:14:29.107Z",
  "wallets": {
   "futures": {
    "equityUsd": 43.61,
-   "marginFreeUsd": 24.59,
-   "epochNetUsd": -0.22,
-   "fills": 7,
+   "marginFreeUsd": 9.69,
+   "epochNetUsd": -0.25,
+   "fills": 11,
    "positions": [
     {
      "symbol": "AAPLUSDT",
      "side": "short",
-     "upl": 0,
+     "upl": -0.01,
      "lev": 2,
      "margin": 8.3
     },
     {
      "symbol": "BANKUSDT",
      "side": "long",
-     "upl": -0.16,
+     "upl": -0.1,
      "lev": 2,
      "margin": 10.94
+    },
+    {
+     "symbol": "XAGUSDT",
+     "side": "long",
+     "upl": 0.01,
+     "lev": 1,
+     "margin": 6.21
+    },
+    {
+     "symbol": "XRPUSDT",
+     "side": "short",
+     "upl": -0.02,
+     "lev": 5,
+     "margin": 8.66
     }
    ]
   },
@@ -34,6 +48,30 @@
    "laneWins": 6
   },
   "activity": [
+   {
+    "venue": "bitget",
+    "ts": 1793776329168,
+    "symbol": "XRPUSDT",
+    "text": "CLOSE XRPUSDT $-0.05"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1793776328452,
+    "symbol": "XAGUSDT",
+    "text": "CLOSE XAGUSDT +$0.00"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1793776327892,
+    "symbol": "BANKUSDT",
+    "text": "CLOSE BANKUSDT $-0.15"
+   },
+   {
+    "venue": "bitget",
+    "ts": 1793776327363,
+    "symbol": "AAPLUSDT",
+    "text": "CLOSE AAPLUSDT $-0.02"
+   },
    {
     "venue": "bitget",
     "ts": 1793776052674,
@@ -69,33 +107,6 @@
     "ts": 1793773427549,
     "symbol": "AAPLUSDT",
     "text": "OPEN AAPLUSDT $-0.01"
-   },
-   {
-    "venue": "bitget",
-    "ts": 1793773195863,
-    "symbol": "MCDUSDT",
-    "text": "OPEN MCDUSDT $-0.01"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791814086162,
-    "symbol": "SEAN",
-    "sig": "2godFCZd8hsZhf9KKi3x9N9KscBDV8Cw5jX6zbceYNFCrY6em6yj8Kx4Xd3S6rm3vq7waYoqdC39mmQuNMAa9Fab",
-    "text": "SELL SEAN"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791807382981,
-    "symbol": "GOMO",
-    "sig": null,
-    "text": "RECONCILE GOMO"
-   },
-   {
-    "venue": "solana",
-    "ts": 1791807382801,
-    "symbol": null,
-    "sig": "2jXuW8G61zZFwMSH8zWyVW1uE8DkZvS7feqxWq46jZ3yRts14ar3MhPP2JD2nGqJL5Ntk13TEde54S6GVbegeSaz",
-    "text": "BOOTSTRAP boot"
    }
   ]
  },
@@ -564,7 +575,7 @@
    "wins": 4,
    "losses": 17,
    "closes": 27,
-   "stolen": 398,
+   "stolen": 403,
    "gen": 0,
    "form": -0.2752,
    "mood": "working",
@@ -594,8 +605,8 @@
    ],
    "persona": {
     "swagger": 0.45,
-    "tilt": 0.24,
-    "greed": 0.48,
+    "tilt": 0.23,
+    "greed": 0.49,
     "discipline": 0.46
    }
   },
@@ -607,7 +618,7 @@
    "wins": 1,
    "losses": 2,
    "closes": 3,
-   "stolen": 2202,
+   "stolen": 2207,
    "gen": 0,
    "form": -0.4862,
    "mood": "cold",
@@ -668,6 +679,18 @@
  ],
  "intents": [],
  "drama": [
+  {
+   "ts": 1793776438034,
+   "text": "🧬 Solana Sadie tweaked her reads — score upweighted (street R&D)"
+  },
+  {
+   "ts": 1793776395823,
+   "text": "🧬 Velvet Vice tweaked her reads — mom downweighted (street R&D)"
+  },
+  {
+   "ts": 1793776326616,
+   "text": "🧬 Bolt Betsy tweaked her reads — chg upweighted (street R&D)"
+  },
   {
    "ts": 1793776020481,
    "text": "🧬 Gold Teeth tweaked her reads — mom downweighted (street R&D)"
@@ -775,18 +798,6 @@
   {
    "ts": 1793770147929,
    "text": "📓 Velvet Vice stole Lucky Lucy's playbook — third time this week the corner talks about it"
-  },
-  {
-   "ts": 1793769831842,
-   "text": "🧬 Bolt Betsy tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793769585705,
-   "text": "🧬 Queen B tweaked her reads — stratW downweighted (street R&D)"
-  },
-  {
-   "ts": 1793769582999,
-   "text": "🧬 Queen B tweaked her reads — chg downweighted (street R&D)"
   }
  ],
  "attrib": {
