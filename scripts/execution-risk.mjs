@@ -29,11 +29,13 @@ export function readJson(file, optional = false) {
 export function validateRiskPolicy(p) {
   if (p?.version !== 1) fail('missing or unsupported risk policy');
   for (const k of ['riskPerTradeFraction', 'maxPortfolioRiskFraction',
-    'maxPositionMarginFraction', 'cashReserveFraction', 'roundTripFeeFraction',
+    'maxPositionMarginFraction', 'roundTripFeeFraction',
     'slippageFraction', 'liquidationBufferFraction', 'liquidationBandUseFraction',
     'maxPriceDriftFraction']) {
     if (!positive(p[k]) || p[k] >= 1) fail(`invalid ${k}`);
   }
+  // 0 is a valid reserve: operator ordered 100% deployment 2026-11-04.
+  if (!(+p.cashReserveFraction >= 0) || p.cashReserveFraction >= 1) fail('invalid cashReserveFraction');
   for (const k of ['maxGrossNotionalMultiple', 'maxPositionNotionalMultiple',
     'maxSnapshotAgeMs', 'maxEvidenceAgeMs']) if (!positive(p[k])) fail(`invalid ${k}`);
   if (!Number.isInteger(p.maxLeverage) || p.maxLeverage < 1) fail('invalid maxLeverage');
