@@ -1,74 +1,80 @@
 {
- "ts": "2026-11-04T18:51:14.077Z",
- "ageMs": 7605,
+ "ts": "2026-11-04T18:55:51.965Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.8403,
-  "availableUsd": 19.5862,
+  "equityUsd": 33.6716,
+  "availableUsd": 24.5247,
   "grantUsd": 0,
-  "equityOwnUsd": 33.8403,
-  "marginUsedUsd": 14.6713,
-  "uplUsd": -0.3666,
+  "equityOwnUsd": 33.6716,
+  "marginUsedUsd": 9.0706,
+  "uplUsd": 0.0544,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1351,
-    "uplUsd": -0.002
-   },
-   {
-    "k": "XRPUSDT:long",
-    "size": 51,
-    "marginUsd": 5.6007,
-    "uplUsd": -0.4743
+    "uplUsd": -0.0037
    },
    {
     "k": "MUUSDT:long",
     "size": 0.01,
     "marginUsd": 0.3269,
-    "uplUsd": 0.0039
+    "uplUsd": -0.016
    },
    {
     "k": "TRXUSDT:long",
     "size": 144,
     "marginUsd": 4.6148,
-    "uplUsd": 0.0826
+    "uplUsd": 0.0725
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3963,
-    "uplUsd": -0.0064
+    "uplUsd": -0.0224
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.24,
     "marginUsd": 0.6228,
-    "uplUsd": 0.0228
+    "uplUsd": 0.0206
    },
    {
     "k": "XAGUSDT:long",
     "size": 0.34,
     "marginUsd": 1.9746,
-    "uplUsd": 0.0068
+    "uplUsd": 0.0034
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2301,
+  "solUsd": 0.2295,
   "stableUsd": 0,
   "bagsUsd": 0.0597,
-  "totalUsd": 0.2898,
+  "totalUsd": 0.2892,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0587
   },
-  "staleMs": 7605
+  "staleMs": 0
  },
- "totalUsd": 34.1301,
+ "totalUsd": 33.9609,
  "deltas": [
+  {
+   "ts": 1793818473399,
+   "kind": "position-closed",
+   "detail": "XRPUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793818451012,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": -0.1687
+  },
   {
    "ts": 1793817721430,
    "kind": "position-closed",
@@ -175,18 +181,6 @@
    "ts": 1793813139184,
    "kind": "size-reduced",
    "detail": "SNDKUSDT:long Δ-0.001",
-   "amt": 0
-  },
-  {
-   "ts": 1793813046058,
-   "kind": "size-reduced",
-   "detail": "QQQUSDT:long Δ-0.009999999999999995",
-   "amt": 0
-  },
-  {
-   "ts": 1793813040258,
-   "kind": "size-reduced",
-   "detail": "QQQUSDT:long Δ-0.010000000000000009",
    "amt": 0
   }
  ]
