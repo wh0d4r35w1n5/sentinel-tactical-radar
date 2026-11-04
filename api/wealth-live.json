@@ -1,12 +1,12 @@
 {
- "ts": "2026-11-04T03:50:14.761Z",
- "ageMs": 2899,
+ "ts": "2026-11-04T03:55:19.807Z",
+ "ageMs": 7888,
  "src": "ws",
  "futures": {
-  "equityUsd": 0.0943,
-  "availableUsd": 0.0943,
+  "equityUsd": 44.0506,
+  "availableUsd": 44.0506,
   "grantUsd": 0,
-  "equityOwnUsd": 0.0943,
+  "equityOwnUsd": 44.0506,
   "marginUsedUsd": 0,
   "uplUsd": 0,
   "positions": []
@@ -14,18 +14,24 @@
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2191,
+  "solUsd": 0.2192,
   "stableUsd": 0,
   "bagsUsd": 0.0557,
-  "totalUsd": 0.2748,
+  "totalUsd": 0.2749,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.0548
   },
-  "staleMs": 2899
+  "staleMs": 7888
  },
- "totalUsd": 0.3691,
+ "totalUsd": 44.3255,
  "deltas": [
+  {
+   "ts": 1793764258117,
+   "kind": "balance-move",
+   "detail": "account push",
+   "amt": 43.9563
+  },
   {
    "ts": 1793651270928,
    "kind": "position-closed",
@@ -139,12 +145,6 @@
    "kind": "balance-move",
    "detail": "account push",
    "amt": 0.7553
-  },
-  {
-   "ts": 1793639605920,
-   "kind": "size-reduced",
-   "detail": "USELESSUSDT:long Δ-1008",
-   "amt": 0
   }
  ]
 }
