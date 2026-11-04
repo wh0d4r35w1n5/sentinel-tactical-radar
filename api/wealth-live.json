@@ -1,68 +1,74 @@
 {
- "ts": "2026-11-04T20:06:57.526Z",
- "ageMs": 947,
+ "ts": "2026-11-04T20:12:00.418Z",
+ "ageMs": 3179,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.6394,
-  "availableUsd": 24.9055,
+  "equityUsd": 33.6299,
+  "availableUsd": 25.4337,
   "grantUsd": 0,
-  "equityOwnUsd": 33.6394,
-  "marginUsedUsd": 8.6964,
-  "uplUsd": 0.0101,
+  "equityOwnUsd": 33.6299,
+  "marginUsedUsd": 8.0799,
+  "uplUsd": 0.0974,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1351,
-    "uplUsd": -0.0084
-   },
-   {
-    "k": "MUUSDT:long",
-    "size": 0.01,
-    "marginUsd": 0.3269,
-    "uplUsd": -0.0712
+    "uplUsd": -0.0085
    },
    {
     "k": "TRXUSDT:long",
     "size": 144,
     "marginUsd": 4.6148,
-    "uplUsd": 0.0696
+    "uplUsd": 0.0883
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3963,
-    "uplUsd": -0.0274
+    "uplUsd": -0.0356
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.23,
     "marginUsd": 0.597,
-    "uplUsd": 0.0251
+    "uplUsd": 0.0255
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.28,
-    "marginUsd": 1.6262,
-    "uplUsd": 0.0224
+    "size": 0.23,
+    "marginUsd": 1.3366,
+    "uplUsd": 0.0276
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2279,
+  "solUsd": 0.2286,
   "stableUsd": 0,
   "bagsUsd": 0.0579,
-  "totalUsd": 0.2858,
+  "totalUsd": 0.2865,
   "tokens": {
    "BQAeeSow": 0.0009,
    "8PGyHCKv": 0.057
   },
-  "staleMs": 947
+  "staleMs": 3179
  },
- "totalUsd": 33.9252,
+ "totalUsd": 33.9163,
  "deltas": [
+  {
+   "ts": 1793823024893,
+   "kind": "position-closed",
+   "detail": "MUUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793823005848,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.05000000000000002",
+   "amt": 0
+  },
   {
    "ts": 1793822640246,
    "kind": "size-reduced",
@@ -169,18 +175,6 @@
    "ts": 1793813424225,
    "kind": "size-reduced",
    "detail": "XAGUSDT:long Δ-0.07999999999999996",
-   "amt": 0
-  },
-  {
-   "ts": 1793813267278,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.1145
-  },
-  {
-   "ts": 1793813220838,
-   "kind": "size-reduced",
-   "detail": "SNDKUSDT:long Δ-0.001",
    "amt": 0
   }
  ]
