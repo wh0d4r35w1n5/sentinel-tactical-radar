@@ -39,6 +39,7 @@ export function validateRiskPolicy(p) {
   for (const k of ['maxGrossNotionalMultiple', 'maxPositionNotionalMultiple',
     'maxSnapshotAgeMs', 'maxEvidenceAgeMs']) if (!positive(p[k])) fail(`invalid ${k}`);
   if (!Number.isInteger(p.maxLeverage) || p.maxLeverage < 1) fail('invalid maxLeverage');
+  if (p.minLeverage != null && (!Number.isInteger(p.minLeverage) || p.minLeverage < 1 || p.minLeverage > p.maxLeverage)) fail('invalid minLeverage');
   if (p.riskPerTradeFraction > p.maxPortfolioRiskFraction ||
       p.maxPositionNotionalMultiple > p.maxGrossNotionalMultiple) fail('inconsistent risk caps');
   if (p.allowTopUps !== false || p.requireForwardEvidence !== true ||
@@ -137,7 +138,11 @@ export function sizeEntry(input, policy) {
   if (!(notionalUsd > 0)) fail('notional budget exhausted');
   const marginBudget = Math.min(equityUsd * p.maxPositionMarginFraction,
     cashBudget - notionalUsd * costFraction);
-  let leverage = fixedLeverage ?? Math.max(1, Math.ceil(notionalUsd / marginBudget - 1e-12));
+  // leverage floor (operator order 2026-11-04 — wants real leverage on
+  // seats): the seat borrows at policy.minLeverage minimum; risk budget
+  // still sizes the notional, the stop still sizes the loss.
+  const levFloor = Number.isInteger(p.minLeverage) && p.minLeverage >= 1 ? Math.min(p.minLeverage, cap) : 1;
+  let leverage = fixedLeverage ?? Math.max(levFloor, Math.ceil(notionalUsd / marginBudget - 1e-12));
   if (!Number.isInteger(leverage) || leverage < 1 || leverage > cap) fail('leverage exceeds risk/liquidation cap');
   // A lower exchange leverage cap shrinks affordable size; it never enlarges the risk budget.
   notionalUsd = Math.min(notionalUsd, cashBudget / (1 / leverage + costFraction),
