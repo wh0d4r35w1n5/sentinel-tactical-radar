@@ -24,10 +24,10 @@ const wj = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(
 const WRITABLE = {
   'state/execution-risk.json': {
     fields: {
-      riskPerTradeFraction: { min: 0.005, max: 0.05 },
-      maxPortfolioRiskFraction: { min: 0.02, max: 0.2 },
-      maxPositionNotionalMultiple: { min: 0.1, max: 2 },
-      maxGrossNotionalMultiple: { min: 0.5, max: 8 },
+      riskPerTradeFraction: { min: 0.005, max: 0.10 },
+      maxPortfolioRiskFraction: { min: 0.02, max: 0.5 },
+      maxPositionNotionalMultiple: { min: 0.1, max: 6 },
+      maxGrossNotionalMultiple: { min: 0.5, max: 20 },
       cashReserveFraction: { min: 0, max: 0.5 },
       minLeverage: { min: 1, max: 25 },
       maxLeverage: { min: 1, max: 25 },
