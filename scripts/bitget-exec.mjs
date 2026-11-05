@@ -3489,7 +3489,14 @@ async function main() {
         if (!(+(bub?.mom) >= 0)) return false;
         return !!b && +b.hour > 0 && +b.day > 0 && +b.week > 0;
       };
-      const perSlotUsd = Math.min(marginFree / slotsAvail, mandateRiskUsd / slotRiskDenom);
+      // Van Tharp sizing fix (2026-11-05): the old $0.20 floor let the
+      // deploy-all override fill seats at $0.27 margin — $2 notional that
+      // can never clear the ~0.12% fee toll. Pure churn, not a position.
+      // A seat is only a seat at ~1R viability (>= MIN_SEAT_MARGIN); the
+      // budget concentrates into affordable seats instead of spraying dust.
+      const MIN_SEAT_MARGIN = +(process.env.SENTINEL_MIN_SEAT_MARGIN || 1.25);
+      const seatAffordable = Math.max(1, Math.floor(marginFree / MIN_SEAT_MARGIN));
+      const perSlotUsd = Math.min(marginFree / Math.max(1, Math.min(slotsAvail, seatAffordable)), mandateRiskUsd / slotRiskDenom);
       // edge-weighted sizing (VT: risk is earned, not equal): the budget
       // divided across ALL open slots prices proven cells under the seat
       // floor — the only measured-positive flow stood down by dilution.
@@ -3521,7 +3528,7 @@ async function main() {
         if (b && +b.hour > 0 && +b.day > 0 && +b.week > 0) return Math.max(perSlotRSMargin(), sendItSeat, perSlotUsd);
         return perSlotUsd;
       };
-      const anySeatFits = () => perSlotUsd > 0.2 || perSlotProven > 0.2 || sendItSeat > 0.2 || (typeof dumpBrake !== 'undefined' && dumpBrake && perSlotRSMargin() > 0.2);
+      const anySeatFits = () => perSlotUsd >= MIN_SEAT_MARGIN || perSlotProven >= MIN_SEAT_MARGIN || sendItSeat >= MIN_SEAT_MARGIN || (typeof dumpBrake !== 'undefined' && dumpBrake && perSlotRSMargin() >= MIN_SEAT_MARGIN);
       // seat floor $0.20 margin (~$14 notional at 70x — well above the
       // exchange's $5 min). Austerity-tier probe budgets live down here;
       // the old $0.50 floor silently stood the mandate down whenever the
@@ -3669,7 +3676,7 @@ async function main() {
         // majors-seed caps at ~47 even on billion-dollar turnover, so a
         // 50-floor meant the mandate could NEVER deploy in a flat tape
         // (the empty-book bug). Seeds still ride every hard gate below.
-        if (!(perSlotFor(c) > 0.2)) continue; // unproven keeps the diluted floor; proven seats concentrate the budget
+        if (!(perSlotFor(c) >= MIN_SEAT_MARGIN)) { markTried(c.symbol); continue; } // VT floor: below ~1R viability a seat is a fee donation, not a position
         const isSeed = CORE_SYMS.includes(c.symbol) || c.majors || c.onchain || liveStratSym[c.symbol];
         // seeds ride the SAME score floor (operator 2026-11-04 — the good
         // pick days came from quality-gated picks, not seeded liquidity).
@@ -3685,7 +3692,7 @@ async function main() {
         const fam = envFam[c.symbol] || envFam[canon(c.symbol)];
         if (fam && (famCount[fam] || 0) >= famCap) continue;   // one family = one bet (semi-stack fix)
         if (heldCanon.has(canon(c.symbol))) continue;          // same underlying already seated (twin clip)
-        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || (cooledSym.has(c.symbol) && !cmdOverride) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
+        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
         const triedAt = typeof triedMap[c.symbol] === 'object' ? triedMap[c.symbol].ts : triedMap[c.symbol];
         if (triedAt && Date.now() - triedAt < TRY_MS) continue; // attempted recently (or dip-quote still resting) — rotate
         const lc = lastCloseBySym[c.symbol];
@@ -3698,26 +3705,6 @@ async function main() {
           const tk = await X.ticker(c.symbol);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
           if (!(last > 0)) continue;
-          if (cmdOverride) {
-            // operator override: seats fire at market NOW — no +0.2% wait.
-            // The confirm gate was built for dead-tape protection; the
-            // override trades that filter for immediate deployment under
-            // the standing risk rails (bounded R, declared stop, exchange-side).
-            plan.orders.push({ symbol: c.symbol, direction: 'LONG', refEntry: last,
-              notionalUsd: round(perSlotFor(c) * CORE_LEV, 2),
-              stopPct: CORE_STOP_PCT, targetPct: CORE_TARGET_PCT,
-              leverage: CORE_LEV, conv: 1, runnerMult: 1.8,
-              strategy: 'slot-deploy', core: true, mandate: true, confirmPrint: true,
-              pimp: c.pimp, crack: c.crack,
-              bubTilt: bubTilt(c), weakTilt: weakTilt(c),
-              bubFlags: c._bubFlags || [],
-              breadthDay: bub?.breadth?.dayGreen ?? null,
-              score: c._sc ?? c.score });
-            state.actions.push('SLOT-FILL mandate - margin into ' + c.symbol + ' long (immediate, override) · ' + CORE_LEV + 'x · stop ' + CORE_STOP_PCT + '%');
-            picked++;
-            markTried(c.symbol);
-            continue;
-          }
           confirmArm(c.symbol, last, {
             symbol: c.symbol, direction: 'LONG', refEntry: last,
             notionalUsd: round(perSlotFor(c) * CORE_LEV, 2),
@@ -3765,7 +3752,7 @@ async function main() {
       if (SLOT_DEPLOY_ON && fits && !picked && !posBySym.size && !wageChase && !plan.orders.some((o) => o.mandate)) {
         for (const c of cand) {
           if (dumpBrake && !rsExempt(c)) continue;           // rout rule holds — long strength, never the falling average
-          if (!(perSlotFor(c) > 0.2)) continue;
+          if (!(perSlotFor(c) >= MIN_SEAT_MARGIN)) continue;
           const verdict = envCells[c.symbol]?.verdict || envCells[canon(c.symbol)]?.verdict;
           if (verdict === 'loser') continue;                 // measured-negative cells stay banned — always
           if (process.env.SENTINEL_PROVEN_ONLY === '1' && verdict !== 'proven' && verdict !== 'flat') continue; // small book = no R&D budget
