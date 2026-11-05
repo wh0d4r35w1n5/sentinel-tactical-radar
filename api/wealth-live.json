@@ -1,44 +1,62 @@
 {
- "ts": "2026-11-05T01:40:43.801Z",
- "ageMs": 4421,
+ "ts": "2026-11-05T01:45:32.965Z",
+ "ageMs": 8952,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.5551,
-  "availableUsd": 32.2864,
+  "equityUsd": 33.5724,
+  "availableUsd": 32.367,
   "grantUsd": 0,
-  "equityOwnUsd": 33.5551,
-  "marginUsedUsd": 1.2537,
-  "uplUsd": 0.015,
+  "equityOwnUsd": 33.5724,
+  "marginUsedUsd": 1.1761,
+  "uplUsd": 0.0283,
   "positions": [
    {
     "k": "TRXUSDT:long",
     "size": 26,
     "marginUsd": 0.8378,
-    "uplUsd": 0.0144
+    "uplUsd": 0.0134
    },
    {
     "k": "KSTRUSDT:long",
-    "size": 0.16,
-    "marginUsd": 0.4159,
-    "uplUsd": 0.0006
+    "size": 0.13,
+    "marginUsd": 0.3383,
+    "uplUsd": 0.0149
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2315,
+  "solUsd": 0.2317,
   "stableUsd": 0,
   "bagsUsd": 0.0585,
-  "totalUsd": 0.29,
+  "totalUsd": 0.2902,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0575
   },
-  "staleMs": 4421
+  "staleMs": 8952
  },
- "totalUsd": 33.8452,
+ "totalUsd": 33.8626,
  "deltas": [
+  {
+   "ts": 1793843039583,
+   "kind": "size-reduced",
+   "detail": "KSTRUSDT:long Δ-0.010000000000000009",
+   "amt": 0
+  },
+  {
+   "ts": 1793842984023,
+   "kind": "size-reduced",
+   "detail": "KSTRUSDT:long Δ-0.009999999999999981",
+   "amt": 0
+  },
+  {
+   "ts": 1793842960985,
+   "kind": "size-reduced",
+   "detail": "KSTRUSDT:long Δ-0.010000000000000009",
+   "amt": 0
+  },
   {
    "ts": 1793842801588,
    "kind": "size-reduced",
@@ -139,24 +157,6 @@
    "ts": 1793837763463,
    "kind": "size-reduced",
    "detail": "XAGUSDT:long Δ-0.020000000000000004",
-   "amt": 0
-  },
-  {
-   "ts": 1793836903424,
-   "kind": "balance-move",
-   "detail": "account push",
-   "amt": -0.0528
-  },
-  {
-   "ts": 1793836903422,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.03",
-   "amt": 0
-  },
-  {
-   "ts": 1793834907881,
-   "kind": "size-reduced",
-   "detail": "TRXUSDT:long Δ-6",
    "amt": 0
   }
  ]
