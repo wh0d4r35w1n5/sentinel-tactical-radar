@@ -1,62 +1,74 @@
 {
- "ts": "2026-11-05T01:08:41.709Z",
- "ageMs": 8947,
+ "ts": "2026-11-05T01:14:02.990Z",
+ "ageMs": 0,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.5044,
-  "availableUsd": 30.512,
+  "equityUsd": 33.4801,
+  "availableUsd": 32.0124,
   "grantUsd": 0,
-  "equityOwnUsd": 33.5044,
-  "marginUsedUsd": 3.1474,
-  "uplUsd": -0.1542,
+  "equityOwnUsd": 33.4801,
+  "marginUsedUsd": 1.5181,
+  "uplUsd": -0.0552,
   "positions": [
    {
     "k": "BABAUSDT:long",
     "size": 0.01,
     "marginUsd": 0.1349,
-    "uplUsd": -0.0122
+    "uplUsd": -0.0141
    },
    {
     "k": "TRXUSDT:long",
     "size": 26,
     "marginUsd": 0.8378,
-    "uplUsd": 0.0024
-   },
-   {
-    "k": "QQQUSDT:long",
-    "size": 0.02,
-    "marginUsd": 1.3949,
-    "uplUsd": -0.1138
+    "uplUsd": 0.0032
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.21,
     "marginUsd": 0.5454,
-    "uplUsd": -0.0426
-   },
-   {
-    "k": "XAGUSDT:long",
-    "size": 0.04,
-    "marginUsd": 0.2344,
-    "uplUsd": 0.012
+    "uplUsd": -0.0443
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.231,
+  "solUsd": 0.2307,
   "stableUsd": 0,
-  "bagsUsd": 0.0587,
-  "totalUsd": 0.2897,
+  "bagsUsd": 0.0588,
+  "totalUsd": 0.2895,
   "tokens": {
    "BQAeeSow": 0.001,
-   "8PGyHCKv": 0.0577
+   "8PGyHCKv": 0.0578
   },
-  "staleMs": 8947
+  "staleMs": 0
  },
- "totalUsd": 33.7941,
+ "totalUsd": 33.7696,
  "deltas": [
+  {
+   "ts": 1793841164898,
+   "kind": "position-closed",
+   "detail": "XAGUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793841164895,
+   "kind": "position-closed",
+   "detail": "QQQUSDT:long",
+   "amt": 0
+  },
+  {
+   "ts": 1793840949057,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.009999999999999998",
+   "amt": 0
+  },
+  {
+   "ts": 1793840933587,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.010000000000000002",
+   "amt": 0
+  },
   {
    "ts": 1793840851826,
    "kind": "size-reduced",
@@ -151,30 +163,6 @@
    "ts": 1793824374981,
    "kind": "size-reduced",
    "detail": "XAGUSDT:long Δ-0.03",
-   "amt": 0
-  },
-  {
-   "ts": 1793823358222,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.04000000000000001",
-   "amt": 0
-  },
-  {
-   "ts": 1793823024893,
-   "kind": "position-closed",
-   "detail": "MUUSDT:long",
-   "amt": 0
-  },
-  {
-   "ts": 1793823005848,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.05000000000000002",
-   "amt": 0
-  },
-  {
-   "ts": 1793822640246,
-   "kind": "size-reduced",
-   "detail": "XAGUSDT:long Δ-0.06",
    "amt": 0
   }
  ]
