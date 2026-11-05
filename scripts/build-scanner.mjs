@@ -1805,7 +1805,7 @@ async function main() {
       for (const f of k?.ta?.factors || []) {
         const ic = factorIC[f.k];
         if (!ic || (f.dir !== 'bull' && f.dir !== 'bear')) continue;
-        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1) * (factorCaps[f.k] ?? 1);
+        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1) * (icFresh ? 1 : (factorCaps[f.k] ?? 1));
         // sponsor = a factor with a MEASURED positive lift voting with the
         // signal — without one, the setup is built of noise + anti-predictors
         if (f.dir === wantDir && ic.lift >= IC_SPONSOR_LIFT) icSponsor = true;
