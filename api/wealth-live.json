@@ -1,14 +1,14 @@
 {
- "ts": "2026-11-05T00:48:50.053Z",
- "ageMs": 5925,
+ "ts": "2026-11-05T00:56:01.593Z",
+ "ageMs": 12035,
  "src": "ws",
  "futures": {
-  "equityUsd": 33.5839,
-  "availableUsd": 30.2633,
+  "equityUsd": 33.5652,
+  "availableUsd": 30.3879,
   "grantUsd": 0,
-  "equityOwnUsd": 33.5839,
-  "marginUsedUsd": 3.379,
-  "uplUsd": -0.0446,
+  "equityOwnUsd": 33.5652,
+  "marginUsedUsd": 3.2635,
+  "uplUsd": -0.0946,
   "positions": [
    {
     "k": "BABAUSDT:long",
@@ -20,43 +20,55 @@
     "k": "TRXUSDT:long",
     "size": 26,
     "marginUsd": 0.8378,
-    "uplUsd": 0.0037
+    "uplUsd": 0.005
    },
    {
     "k": "QQQUSDT:long",
     "size": 0.02,
     "marginUsd": 1.3949,
-    "uplUsd": -0.0594
+    "uplUsd": -0.0914
    },
    {
     "k": "KSTRUSDT:long",
     "size": 0.21,
     "marginUsd": 0.5454,
-    "uplUsd": -0.0105
+    "uplUsd": -0.0225
    },
    {
     "k": "XAGUSDT:long",
-    "size": 0.08,
-    "marginUsd": 0.466,
-    "uplUsd": 0.0344
+    "size": 0.06,
+    "marginUsd": 0.3506,
+    "uplUsd": 0.027
    }
   ]
  },
  "solana": {
   "address": "kpevjJ1iqvctQkTjGTMcQUapmivSM4FDEWGDjoQGvyV",
   "solQty": 0.002413,
-  "solUsd": 0.2315,
+  "solUsd": 0.2317,
   "stableUsd": 0,
   "bagsUsd": 0.0587,
-  "totalUsd": 0.2902,
+  "totalUsd": 0.2904,
   "tokens": {
    "BQAeeSow": 0.001,
    "8PGyHCKv": 0.0577
   },
-  "staleMs": 5925
+  "staleMs": 12035
  },
- "totalUsd": 33.8741,
+ "totalUsd": 33.8556,
  "deltas": [
+  {
+   "ts": 1793840079844,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.010000000000000009",
+   "amt": 0
+  },
+  {
+   "ts": 1793839802218,
+   "kind": "size-reduced",
+   "detail": "XAGUSDT:long Δ-0.009999999999999995",
+   "amt": 0
+  },
   {
    "ts": 1793839393843,
    "kind": "size-reduced",
@@ -164,18 +176,6 @@
    "kind": "balance-move",
    "detail": "equity",
    "amt": -0.2346
-  },
-  {
-   "ts": 1793819500481,
-   "kind": "balance-move",
-   "detail": "equity",
-   "amt": 0.1557
-  },
-  {
-   "ts": 1793818473399,
-   "kind": "position-closed",
-   "detail": "XRPUSDT:long",
-   "amt": 0
   }
  ]
 }
