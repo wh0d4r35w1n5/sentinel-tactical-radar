@@ -184,7 +184,7 @@ async def main():
             c2_ent, C2_MARKED = me, me.id
     API_DIR = ROOT / "api"
     STATE_DIR = ROOT / "state"
-    LINKS = "https://54-66-217-111.sslip.io"
+    LINKS = "https://52-65-5-228.sslip.io"
 
     def api(name):
         try:
@@ -231,6 +231,37 @@ async def main():
                 await asyncio.sleep(min(e.seconds + 1, 60))
                 return await client.send_message(c2_ent, text, parse_mode="html", link_preview=False)
         return _s()
+
+    def say_ops(text):
+        async def _s():
+            try:
+                return await client.send_message(me, text, parse_mode="html", link_preview=False)
+            except FloodWaitError as e:
+                await asyncio.sleep(min(e.seconds + 1, 60))
+                return await client.send_message(me, text, parse_mode="html", link_preview=False)
+            except Exception as e:
+                print(f"[tg-c2] ops-send: {type(e).__name__}: {e}", flush=True)
+                return False
+        return _s()
+
+    # Operator-mandated personal rails: balance/milestone cards go directly
+    # to each recipient's DMs. Same deliver-or-log contract as say().
+    DM_IDS = {"will": 6648799778, "gabe": 5602702241, "mey": 8350114278}
+    dm_ents = {}
+    def say_dm(who):
+        async def _s(text):
+            try:
+                if who not in dm_ents:
+                    dm_ents[who] = await client.get_entity(DM_IDS[who])
+                return await client.send_message(dm_ents[who], text, parse_mode="html", link_preview=False)
+            except FloodWaitError as e:
+                await asyncio.sleep(min(e.seconds + 1, 60))
+                return await client.send_message(dm_ents[who], text, parse_mode="html", link_preview=False)
+            except Exception as e:
+                print(f"[tg-c2] {who}-send: {type(e).__name__}: {e}", flush=True)
+                return False
+        return _s
+    say_to = {w: say_dm(w) for w in DM_IDS}
 
     # ---- command handlers -------------------------------------------------
     def c_status():
@@ -990,7 +1021,7 @@ async def main():
         if not secret:
             return ("🔗 <b>TradingView hook not armed</b>\n"
                     "state/tv-hook.json needs <code>{\"secret\":\"…\"}</code> on the box")
-        url = "https://54-66-217-111.sslip.io/tv-hook"
+        url = "https://52-65-5-228.sslip.io/tv-hook"
         tpl = ('{"key":"%s","symbol":"{{ticker}}","direction":"long",'
                '"mode":"market","sl":{{close}}*0.97,"tps":[{{close}}*1.03,'
                '{{close}}*1.06],"risk":0.5,"id":"{{timenow}}"}') % secret
@@ -1184,6 +1215,7 @@ async def main():
         except Exception:
             alerted = set()
         prev_pos, prev_halt, prev_dead = None, None, ""
+        dead_since = 0
         prev_trip, prev_vault, prev_god = "", None, None
         while True:
             try:
@@ -1221,19 +1253,30 @@ async def main():
                             dead.append(svc.replace("sentinel-", "").replace(".service", ""))
                     except Exception:
                         pass
+                led_detail = ""
                 try:
                     led_age = (time.time() - os.path.getmtime(ROOT / "api" / "live-ledger.json")) / 60
                     if led_age > 3:
-                        dead.append(f"ledger stale {led_age:.0f}m")
+                        dead.append("ledger-stale")
+                        led_detail = f" ({led_age:.0f}m stale)"
                 except Exception:
                     pass
-                dk = "|".join(dead)
+                # dedupe on WHICH component died, not how long it's been dead —
+                # keying on the age fired a fresh alert every minute while the
+                # condition persisted. One alert on entry, one re-alert every
+                # 15min while it persists, one CLEAR on recovery.
+                dk = "|".join(sorted(dead))
+                now_t = time.time()
                 if dk != prev_dead:
                     prev_dead = dk
+                    dead_since = now_t if dk else 0
                     if dk:
-                        await say("\U0001F6A8 <b>DEADMAN</b> — " + esc(dk))
+                        await say("\U0001F6A8 <b>DEADMAN</b> — " + esc(dk + led_detail))
                     else:
                         await say("\U0001FAC0 <b>DEADMAN CLEAR</b> — services + ledger alive")
+                elif dk and now_t - dead_since > 900:
+                    dead_since = now_t
+                    await say("\U0001F6A8 <b>DEADMAN persists</b> — " + esc(dk + led_detail))
                 # quant + vault + audit watches — breakers, edge-death, sweeps, GOD
                 cbx = ll.get("circuitBreakers") or {}
                 trip = str(cbx.get("tripped") or "")
@@ -1295,10 +1338,22 @@ async def main():
                             op.replace(claimed)
                         except OSError:
                             claimed = op
+                        # routine-protection pings are trail mechanics, not
+                        # alerts — armed/lock messages on every position turn
+                        # the control channel into spam. Action events
+                        # (trims, brakes, cuts, sweeps, spirals) still post.
+                        DROP_PAT = ("LIQ-GUARD armed", "BAGRUN-LOCK", "BE-LOCK", "BAGRUNNER armed")
                         for l in claimed.read_text().splitlines():
                             try:
-                                t = json.loads(l).get("text")
-                                if t:
+                                o = json.loads(l)
+                                t = o.get("text")
+                                if not t or any(p in t for p in DROP_PAT):
+                                    continue
+                                if o.get("to") in say_to:
+                                    await say_to[o.get("to")](t)
+                                elif o.get("to") == "ops":
+                                    await say_ops(t)
+                                else:
                                     await say(t)
                             except Exception:
                                 pass
