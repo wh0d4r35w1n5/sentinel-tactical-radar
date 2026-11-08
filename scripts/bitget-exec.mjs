@@ -3245,6 +3245,105 @@ async function main() {
                 }
               }
             } catch { }
+            // Wyckoff + Elliott cells (operator order 2026-11-08 — "push both
+            // theories to the absolute limit"). Shadow-only census rows,
+            // forward-graded like every other cell; promotion is earned.
+            //   wyckoff-spring : pierce below a 30-bar swing low then RECLAIM
+            //                    within 6 bars — the stop-run + reclaim long.
+            //   wyckoff-upthr  : pierce above swing high then reject — short.
+            //   ew-cont        : impulse leg (3 rising closes, vol expanding)
+            //                    then 38-62% retrace holding -> continuation.
+            //   ew-5div        : price makes new high on LOWER volume than the
+            //                    impulse leg — wave-5 divergence -> short.
+            try {
+              state._censusLast = state._censusLast || {};
+              const emitCell = (cell, dir, slPx) => {
+                const rk = `${sym}:${cell}:${dir}`;
+                if (Date.now() - (state._censusLast[rk] || 0) <= 3600e3) return;
+                state._censusLast[rk] = Date.now();
+                fs.appendFileSync(path.join(__dirname, '..', 'state', 'pattern-census.jsonl'),
+                  JSON.stringify({ ts: Date.now(), src: 'pattern-census', sym, side: dir,
+                    pattern: cell, entryPx: last, slPx: +slPx.toPrecision(6),
+                    atrPct: +(atr / last * 100).toFixed(2),
+                    tvRate: Number.isFinite(tvRate[sym]) ? tvRate[sym] : null }) + '\n');
+              };
+              const swingLo = Math.min(...w.slice(-36, -6).map((r) => r.l));
+              const swingHi = Math.max(...w.slice(-36, -6).map((r) => r.h));
+              const tail6 = w.slice(-6);
+              if (swingLo > 0 && tail6.some((r) => r.l < swingLo - 0.15 * atr) && last > swingLo)
+                emitCell('wyckoff-spring', 'long', Math.min(...w.slice(-12).map((r) => r.l)) - 0.3 * atr);
+              if (swingHi > 0 && tail6.some((r) => r.h > swingHi + 0.15 * atr) && last < swingHi)
+                emitCell('wyckoff-upthr', 'short', Math.max(...w.slice(-12).map((r) => r.h)) + 0.3 * atr);
+              // mechanical Elliott: impulse = last-12-bar leg with >=3 net
+              // rising closes and mean volume above its own 32-bar mean
+              const leg = w.slice(-12);
+              const legUp = leg.filter((r) => r.c > r.o).length >= 7;
+              const legDn = leg.filter((r) => r.c < r.o).length >= 7;
+              const vMean32 = w.slice(-44, -12).reduce((a, r) => a + (r.qv || 0), 0) / Math.max(1, w.slice(-44, -12).length);
+              const legVol = leg.reduce((a, r) => a + (r.qv || 0), 0) / leg.length;
+              const legHi = Math.max(...leg.map((r) => r.h));
+              const legLo = Math.min(...leg.map((r) => r.l));
+              const range = legHi - legLo;
+              if (legUp && legVol > vMean32 * 1.3 && range > 1.5 * atr) {
+                const retrace = (legHi - last) / range;
+                if (retrace >= 0.38 && retrace <= 0.62)
+                  emitCell('ew-cont', 'long', legLo - 0.3 * atr);
+                const prevHi = Math.max(...w.slice(-40, -12).map((r) => r.h));
+                if (last > prevHi && legVol < (w.slice(-24, -12).reduce((a, r) => a + (r.qv || 0), 0) / 12) * 1.1)
+                  emitCell('ew-5div', 'short', legHi + 0.3 * atr);
+              }
+              if (legDn && legVol > vMean32 * 1.3 && range > 1.5 * atr) {
+                const retrace = (last - legLo) / range;
+                if (retrace >= 0.38 && retrace <= 0.62)
+                  emitCell('ew-cont', 'short', legHi + 0.3 * atr);
+              }
+              // Harmonic cells — Gartley/Bat/Crab (operator order, accuracy
+              // paramount: STRICT Fibonacci bands, completion-zone required).
+              // XABCD pivot chain, alternating swing pivots ±3 bars:
+              //   bullish: X lo -> A hi -> B lo -> C hi -> D lo (D completing)
+              //   ratios: b=AB/XA c=BC/AB d=XD/XA — classic Gartley geometry.
+              const piv = [];
+              for (let i = 3; i < w.length - 3; i++) {
+                const r = w[i];
+                const isHi = r.h >= Math.max(...w.slice(i - 3, i + 4).map((q) => q.h));
+                const isLo = r.l <= Math.min(...w.slice(i - 3, i + 4).map((q) => q.l));
+                if (isHi && isLo) continue;
+                if (isHi) piv.push({ i, p: r.h, t: 'H' });
+                else if (isLo) piv.push({ i, p: r.l, t: 'L' });
+              }
+              const tailP = piv.slice(-6);
+              const ratio = (a, b) => b !== 0 ? a / b : null;
+              const harmTest = (seq, dir) => {
+                // seq = [X,A,B,C,D] with X oldest; dir 'long' = bullish pattern
+                const [X, A, B, C, D] = seq.map((q) => q.p);
+                const XA = Math.abs(A - X), AB = Math.abs(B - A), BC = Math.abs(C - B), XD = Math.abs(D - X);
+                if (!(XA > 0 && AB > 0 && BC > 0 && XD > 0)) return;
+                const b = ratio(AB, XA), c = ratio(BC, AB), d = ratio(XD, XA);
+                if (b == null || c == null || d == null) return;
+                // completion zone: price must be AT D (within 0.6%)
+                if (Math.abs(last - D) / D > 0.006) return;
+                const cOK = c >= 0.382 && c <= 0.886;
+                const name =
+                  b >= 0.55 && b <= 0.68 && cOK && d >= 0.70 && d <= 0.85 ? 'gartley'
+                  : b >= 0.35 && b <= 0.52 && cOK && d >= 0.80 && d <= 0.92 ? 'bat'
+                  : b >= 0.35 && b <= 0.62 && cOK && d >= 1.10 && d <= 1.65 ? 'crab'
+                  : null;
+                if (!name) return;
+                const sl = dir === 'long' ? X - 0.2 * atr : X + 0.2 * atr;
+                emitCell(name, dir, sl);
+              };
+              if (tailP.length >= 5) {
+                const last5 = tailP.slice(-5);
+                const seqOk = last5.every((q, i) => i === 0 || q.t !== last5[i - 1].t);
+                if (seqOk && w.length - 1 - last5[4].i <= 8) {
+                  // bullish Gartley/Bat/Crab: L,H,L,H,L (X=low ... D=low)
+                  if (last5.map((q) => q.t).join('') === 'LHLHL') harmTest(last5, 'long');
+                  // bearish mirror: H,L,H,L,H — ratios are absolute so the
+                  // same math classifies; SL sits beyond X (the high).
+                  if (last5.map((q) => q.t).join('') === 'HLHLH') harmTest(last5, 'short');
+                }
+              }
+            } catch { }
           } catch { }
           if (!gen) continue;
           const titan = titanConfluence(sym, genDir === 'SHORT' ? 'short' : 'long');
