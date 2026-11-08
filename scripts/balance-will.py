@@ -40,7 +40,8 @@ def env_creds():
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
                 kv[k.strip()] = v.strip().strip('"').strip("'")
-        return kv.get("BITGET_API_KEY"), kv.get("BITGET_API_SECRET"), kv.get("BITGET_API_PASSPHRASE")
+        return (kv.get("BITGET_API_KEY"), kv.get("BITGET_API_SECRET"),
+                kv.get("BITGET_API_PASSPHRASE") or kv.get("BITGET_PASSPHRASE"))
     except Exception:
         return None, None, None
 
@@ -74,13 +75,27 @@ def poll_flows(now_ms):
     seen = set(st.get("seen") or [])
     delta = 0.0
     d = bg_get(f"/api/v2/spot/account/bills?startTime={start}&endTime={now_ms}&limit=100")
+    px_cache = {}
+    def coin_usd(coin):
+        c = str(coin or "").upper()
+        if c in ("USDT", "USDC", "USD"):
+            return 1.0
+        if c not in px_cache:
+            try:
+                with urllib.request.urlopen(
+                    f"https://api.bitget.com/api/v2/spot/market/tickers?symbol={c}USDT", timeout=6
+                ) as r:
+                    px_cache[c] = float((json.loads(r.read()).get("data") or [{}])[0].get("lastPr") or 0)
+            except Exception:
+                px_cache[c] = 0.0
+        return px_cache[c]
     for b in ((d or {}).get("data") or []):
         bid = str(b.get("billId") or b.get("id") or "")
         bt = str(b.get("businessType") or b.get("type") or "")
         if bid in seen or not re.search(r"deposit|withdraw", bt, re.I):
             continue
         try:
-            delta += float(b.get("amount") or 0)
+            delta += float(b.get("size") or b.get("amount") or 0) * coin_usd(b.get("coin"))
             seen.add(bid)
         except Exception:
             pass
