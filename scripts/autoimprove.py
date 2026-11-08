@@ -201,9 +201,14 @@ def round_loop():
     except Exception:
         pass
     fills_newest = max((+f.get("ts", 0) or 0 for f in fills), default=0) / 1000
-    if metrics.get("seats", 0) > 0 and fills_newest and now - fills_newest > 900:
-        findings.append(f"real-fills journal lags {int(now - fills_newest)}s with seats open — attribution blind")
-    metrics["fills_lag_s"] = round(now - fills_newest, 1) if fills_newest else None
+    # fills-sync liveness: newest-fill age reads "lag" on quiet tape (file
+    # only rewrites when fills land). The exec stamps lastFillSync every
+    # cycle regardless — ITS age is the real attribution-blindness probe.
+    lfs = ledger.get("lastFillSync") or 0
+    fills_lag = (now - lfs / 1000) if lfs else (now - fills_newest)
+    metrics["fills_sync_age_s"] = round(fills_lag, 1) if fills_lag else None
+    if metrics["seats"] > 0 and fills_lag and fills_lag > 900:
+        findings.append(f"fills sync stale {int(fills_lag)}s with seats open — attribution blind")
     plan_age = age_s(API + "/live-plan.json")
     if plan_age is not None and plan_age > 1500:
         findings.append(f"live-plan stale {int(plan_age / 60)}min — scanner tail pending")

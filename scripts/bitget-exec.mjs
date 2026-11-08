@@ -5485,6 +5485,7 @@ async function main() {
       store.fills = store.fills.slice(0, +(process.env.SENTINEL_FILLS_CAP || 1500));
       writeJson(fillsPath, store);
     }
+    state.lastFillSync = Date.now(); // sync-alive marker — quiet tape ≠ lag
     // tag AFTER the merge so this cycle's fresh closes attribute too —
     // fills appended above would otherwise read as bot until next run
     tagManualCloses(store.fills);
