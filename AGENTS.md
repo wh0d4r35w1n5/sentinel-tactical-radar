@@ -1132,3 +1132,21 @@ dies at its line; capital redeploys into the next setup.
   silently by agent discretion. Anything not written here is unmarried.
 - Agent conviction is not an exit policy: "strong evidence for the trade"
   justifies entry, never cancels the exit machinery behind it.
+
+### Smart version (same order, operator clarification): exits are
+### THESIS-INVALIDATION, not dumb lines.
+
+Unmarried != hair-trigger. A drawdown inside an intact setup is noise —
+hold it. But the moment the entry thesis dies, the seat dies with it —
+*before* the price stop, not after. Doctrine:
+1. ENTRY EVIDENCE GUARDS THE SEAT — whatever admitted it (structure
+   break + volume, cell SQN, momentum) is monitored continuously; when
+   the admission evidence is gone, exit on invalidation even P&L-flat.
+2. DEAD CAPITAL IS A COST — a flatlining seat burns opportunity;
+   time-invalidation exits free it for setups that are actually moving.
+3. CUT != ABANDON — invalidate now, re-enter on fresh evidence. Re-entry
+   is cheaper than riding pain through a broken thesis.
+4. SCALE WITH DETERIORATION — evidence weakening trims; evidence dead
+   kills. Exits track the thesis gradient, not just the price line.
+5. PRICE-LEVEL ARMOR STILL RIDES — invalidation exits layer UNDER the
+   resting stop/trail; the stop is the floor, not the trigger.
