@@ -45,14 +45,19 @@ while True:
         # equity + REAL wallet balances (spot account + Solana), not the
         # lane's modeled purseUsd. pimp-war futures-only read ~$12 light
         # on Bot 1 and a modeled figure on Bot 2 (fake-scare 2026-11-07).
+        wl_note = ""
         try:
-            w = json.loads((ROOT / "api" / "wealth-live.json").read_text())
+            wlf = ROOT / "api" / "wealth-live.json"
+            w_age = time.time() - wlf.stat().st_mtime
+            w = json.loads(wlf.read_text())
             bot1_usd = float(w["futures"]["equityOwnUsd"]) + float((w.get("spot") or {}).get("totalUsd") or 0)
             bot2_usd = float((w.get("solana") or {}).get("totalUsd") or 0)
             if bot1_usd > 0: eq = bot1_usd
             if bot2_usd > 0: bot2 = bot2_usd
+            if w_age > 600:
+                wl_note = f"\n⚠ feed {w_age/60:.0f}m stale — verify"
         except Exception:
-            pass
+            wl_note = "\n⚠ wealth-live unread — legacy figures"
         net = float(fut.get("epochNetUsd", 0))
         npos = len(fut.get("positions") or [])
         now = time.time()
@@ -62,7 +67,7 @@ while True:
         if now - gabe_last >= GABE_EVERY_S:
             msg = (f"Bot 1: A${eq * aud:.2f}\n"
                    f"Bot 2: A${bot2 * aud:.2f}\n"
-                   f"Total: A${(eq + bot2) * aud:.2f}")
+                   f"Total: A${(eq + bot2) * aud:.2f}{wl_note}")
             with open(OUTBOX, "a") as f:
                 for who in ("gabe", "mey", "will"):
                     f.write(json.dumps({"to": who, "text": msg}) + chr(10))
