@@ -64,6 +64,13 @@ def svc_state(name):
     except Exception:
         return "unknown"
 
+def svc_type(name):
+    try:
+        r = subprocess.run(["systemctl", "show", name, "-p", "Type", "--value"], capture_output=True, text=True, timeout=10)
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
 def restart_svc(name):
     try:
         subprocess.run(["systemctl", "restart", name], timeout=30)
@@ -156,7 +163,11 @@ def round_loop():
     rest = load(REST_ST, {}) or {}
     for svc in SERVICES:
         st = svc_state(svc)
-        if st in ("active",):
+        # oneshot units are inactive between timer fires BY DESIGN — counting
+        # that as dead and restarting mid-pass kills work (this restart-churn
+        # SIGKILLed a running build-scanner 2026-11-08). 'activating' is a
+        # live transition state, not dead.
+        if st in ("active", "activating") or svc_type(svc) == "oneshot":
             rest.pop(svc, None)
             continue
         rec = rest.setdefault(svc, {"dead": 0, "lastRestart": 0})
