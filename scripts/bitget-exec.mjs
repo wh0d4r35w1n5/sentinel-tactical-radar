@@ -1280,10 +1280,56 @@ async function main() {
   const dayDDpct = dayPeakUsd > 0 ? Math.max(0, (dayPeakUsd - equityUsd) / dayPeakUsd) * 100 : 0;
   state.dayDDPct = round(dayDDpct, 2);
   const MASSACRE_DD_PCT = +(process.env.SENTINEL_MASSACRE_DD_PCT || 20);
-  // DD-scaled risk — a wounded book defends with smaller knives. Survival
-  // first: size follows the session's damage, not the mandate's appetite.
-  const ddRiskScale = dayDDpct >= 30 ? 0 : dayDDpct >= 20 ? 0.25 : dayDDpct >= 10 ? 0.5 : 1;
+  // Adaptive compounding governor (operator order 2026-11-08 — "compounding
+  // only for us, never against us"; "best in the world"). One continuous
+  // multiplier — no cliff tiers — the budget breathes with the book's own
+  // evidence:
+  //   ddTerm     exp decay on today's equity damage (HALF_DD % halves risk)
+  //   streakTerm 0.82^n on consecutive net-losing closes; consecutive wins
+  //              restore up to ×1.15 — losses shrink exposure geometrically,
+  //              wins compound it back up (anti-martingale, not martingale)
+  //   feeTerm    24h fee-burn share decay — fees compounding IS against us
+  //   regimeTerm fresh breadth collapse halves the whole budget
+  //   winBoost   sitting on today's peak compounds up to ×1.2 — FOR us
+  // Floor 0.08 honors the house-never-empties doctrine; cap 1.25 stops
+  // euphoria overlevering. Massacre floor (≥30% day DD) still zeroes.
+  const dynRisk = (() => {
+    try {
+      const HALF_DD = +(process.env.SENTINEL_DD_HALFLIFE_PCT || 8);
+      const ddTerm = Math.exp(-Math.max(0, dayDDpct) * Math.LN2 / HALF_DD);
+      let fills = [];
+      try { fills = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills) || []; } catch { }
+      let losses = 0, wins = 0;
+      for (const f of fills) {
+        const side = String(f.tradeSide || f.side || '').toLowerCase();
+        if (!/close|sell/.test(side) && !(+f.profit)) continue;
+        const net = (+f.profit || 0) + (+f.fee || 0);
+        if (net < 0) { if (wins) break; losses++; }
+        else if (net > 0) { if (losses) break; wins++; }
+        if (losses + wins >= 40) break;
+      }
+      const streakTerm = losses ? Math.pow(0.82, Math.min(losses, 8)) : Math.min(1.15, 1 + 0.03 * Math.min(wins, 5));
+      const dayF = fills.filter((f) => nowMs - (+f.ts || 0) < 86400e3);
+      const fees24 = Math.abs(dayF.reduce((a, f) => a + (+f.fee || 0), 0));
+      const gross24 = dayF.reduce((a, f) => a + Math.max(0, +f.profit || 0), 0);
+      const feeShare = gross24 > 0.5 ? fees24 / gross24 : 0;
+      const feeTerm = feeShare > 0.7 ? 0.45 : feeShare > 0.5 ? 0.65 : feeShare > 0.35 ? 0.85 : 1;
+      let regimeTerm = 1;
+      try {
+        const bh = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'breadth-history.jsonl'), 'utf8').trim().split('\n').pop());
+        const bts = +bh.ts > 1e12 ? +bh.ts / 1000 : +bh.ts;
+        if (Date.now() / 1000 - bts < 1800 && bh.dG <= 0.3 && bh.hG <= 0.3) regimeTerm = 0.55;
+      } catch { }
+      const winBoost = dayDDpct <= 0.5 && streakTerm > 1 ? Math.min(1.2, streakTerm) : 1;
+      return { m: Math.min(1.25, Math.max(0.08, ddTerm * streakTerm * feeTerm * regimeTerm * winBoost)),
+               ddTerm, streakTerm, feeTerm, regimeTerm, winBoost, feeShare };
+    } catch { return { m: 1 }; }
+  })();
+  const ddRiskScale = dayDDpct >= 30 ? 0 : dynRisk.m;
   state.ddRiskScale = ddRiskScale;
+  state.dynRisk = { mult: round(ddRiskScale, 3), ...dynRisk, dayDDpct: round(dayDDpct, 2) };
+  if (ddRiskScale < 0.9 || ddRiskScale > 1.02)
+    state.actions.push(`📈 dyn-risk ×${round(ddRiskScale, 2)} — dd ${round(dayDDpct, 1)}% · streak ×${round(dynRisk.streakTerm || 1, 2)} · fee-share ${round((dynRisk.feeShare || 0) * 100, 0)}% · regime ×${dynRisk.regimeTerm || 1} · boost ×${dynRisk.winBoost || 1}`);
   const MIN_TRADE_EQUITY = +(process.env.SENTINEL_MIN_EQUITY || 5.5);
   // ---- operator halt: state/cmd-halt.json written by the telegram C2 —
   // joins the same rail as the kill-switch: entries only, existing
@@ -2899,8 +2945,22 @@ async function main() {
             JSON.stringify({ ts: Date.now(), rates: tvRate }));
         } catch { }
         const recentFor = (sym) => !cooldownExempt.has(sym) && setupFile.setups.some((x) => x.symbol === sym && (nowMs - (+new Date(x.createdAt || 0) || 0) < 12 * 3600e3));
+        // Velocity-first admission (operator order 2026-11-08): we want the
+        // tiny-face-value coins whose range is huge in % terms (1000BONK /
+        // USELESS / DOT class) — a 15m atrPct under the floor can never earn
+        // the round-trip fee toll, so those names get refused outright and
+        // the authoring queue sorts by atrPct, not TV rating.
+        const MIN_ATR_PCT = +(process.env.SENTINEL_MIN_ATR_PCT || 0.010);
+        const atrPctMap = {};
+        for (const s2 of autoPool) {
+          const r2 = kl[s2]?.rows;
+          if (!r2 || r2.length < 40) { atrPctMap[s2] = 0; continue; }
+          const w2 = r2.slice(-64);
+          const a2 = w2.slice(-32).reduce((a, r) => a + (r.h - r.l), 0) / Math.min(32, w2.length);
+          atrPctMap[s2] = w2.at(-1).c > 0 ? a2 / w2.at(-1).c : 0;
+        }
         let authored = 0;
-        for (const sym of [...autoPool].sort((a, b) => (tvRate[b] ?? -9) - (tvRate[a] ?? -9))) {
+        for (const sym of [...autoPool].sort((a, b) => (atrPctMap[b] - atrPctMap[a]) || (tvRate[b] ?? -9) - (tvRate[a] ?? -9))) {
           if (authored >= +(process.env.SENTINEL_AUTHOR_MAX || 4)) break; // machine theses per cycle — quality over spray, funnel widened by operator order
           const rows = kl[sym]?.rows;
           if (!rows || rows.length < 40) continue;
@@ -2913,6 +2973,7 @@ async function main() {
           const atr = w.slice(-32).reduce((a, r) => a + (r.h - r.l), 0) / Math.min(32, w.length);
           const last = w.at(-1).c;
           if (!(atr > 0 && last > 0)) continue;
+          if (atr / last < MIN_ATR_PCT) continue; // velocity floor — can't earn fees
           const lows24 = w.slice(-24).map((r) => r.l);
           const shelf = Math.min(...lows24);
           const resist = Math.max(...w.slice(0, 32).map((r) => r.h));
@@ -3127,6 +3188,38 @@ async function main() {
                     tvRate: Number.isFinite(tvRate[sym]) ? tvRate[sym] : null }) + '\n');
               }
             }
+            // RVOL cells (Revv Nissan / CoinData-style volume anomaly —
+            // "volume into flat price = accumulation before news"). Two
+            // cells, both shadow-only census rows for forward grading:
+            //   rvol-accum   — bar volume >=3x trailing 20-bar mean while
+            //                  |bar move| < 0.8*atr: flow without the move.
+            //   rvol-ignition— same volume spike with the bar already moving
+            //                  in direction: the momentum entry on the break.
+            try {
+              const vols = w.slice(-21, -1).map((r) => r.qv || 0);
+              const vMean = vols.reduce((a, b) => a + b, 0) / Math.max(1, vols.length);
+              const vLast = w.at(-1).qv || 0;
+              const rvol = vMean > 0 ? vLast / vMean : 0;
+              if (rvol >= 3) {
+                const barMove = w.at(-1).c - w.at(-1).o;
+                state._censusLast = state._censusLast || {};
+                const cell = Math.abs(barMove) < 0.8 * atr ? 'rvol-accum'
+                  : barMove > 0 ? 'rvol-ignition' : 'rvol-ignition-dn';
+                const dir = cell === 'rvol-ignition-dn' ? 'short' : 'long';
+                const rk = `${sym}:${cell}:${dir}`;
+                if (Date.now() - (state._censusLast[rk] || 0) > 3600e3) {
+                  state._censusLast[rk] = Date.now();
+                  const slBase = dir === 'long'
+                    ? Math.min(...w.slice(-24).map((r) => r.l)) - 0.3 * atr
+                    : Math.max(...w.slice(-24).map((r) => r.h)) + 0.3 * atr;
+                  fs.appendFileSync(path.join(__dirname, '..', 'state', 'pattern-census.jsonl'),
+                    JSON.stringify({ ts: Date.now(), src: 'pattern-census', sym, side: dir,
+                      pattern: cell, entryPx: last, slPx: +slBase.toPrecision(6),
+                      rvol: +rvol.toFixed(2),
+                      tvRate: Number.isFinite(tvRate[sym]) ? tvRate[sym] : null }) + '\n');
+                }
+              }
+            } catch { }
           } catch { }
           if (!gen) continue;
           const titan = titanConfluence(sym, genDir === 'SHORT' ? 'short' : 'long');
@@ -3622,7 +3715,7 @@ async function main() {
       const SLOT_DEPLOY_ON = process.env.SENTINEL_SLOT_DEPLOY !== '0';
       const mandateSeatCap = SLOT_DEPLOY_ON ? +(env?.deploy?.mandateSeatCap ?? slotsAvail) : 0;
       if (!SLOT_DEPLOY_ON && slotsAvail > 0) state.actions.push('slot-deploy lane OFF (measured SQN -3.22 n=105) — seats route via sentinel-structure setups only');
-      const mandateRiskUsd = Math.max(kellyRemainUsd, probeRiskUsd);
+      const mandateRiskUsd = Math.max(kellyRemainUsd, probeRiskUsd) * ddRiskScale;
       const slotRiskDenom = Math.max(1, slotsAvail) * CORE_LEV * (CORE_STOP_PCT / 100);
       // ---- portfolio heat cap (operator order 2026-11-05, Tharp doctrine):
       // per-seat stops bound one R each — nothing bounded the SUM. The
@@ -3881,6 +3974,12 @@ async function main() {
         }
         try { if (triedDirty) fs.writeFileSync(tryFile, JSON.stringify(triedMap)); } catch { }
       }
+      // Velocity floor on the mandate lane too (operator order 2026-11-08):
+      // fixed CORE_TARGET_PCT geometry can't print on a dead-range name —
+      // low-ATR% candidates are fee donations. Fails open when no klines.
+      const MIN_ATR_PCT_M = +(process.env.SENTINEL_MIN_ATR_PCT || 0.010);
+      let klMandate = {};
+      try { klMandate = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'klines-15m.json'), 'utf8')); } catch { }
       const fits = anySeatFits();
       if (!fits) {
         state.actions.push(`📌 SLOT-FILL mandate — risk budget $${round(mandateRiskUsd, 2)} (kelly $${round(kellyRemainUsd, 2)}, probe $${round(probeRiskUsd, 2)}, ${committedRiskUsd > 0 ? `$${round(committedRiskUsd, 2)} committed, ` : ''}$${round(kellyRemainUsd, 2)} kelly-left) sizes seats to <$0.20 margin — standing down (perSlot $${round(perSlotUsd,3)} prov $${round(perSlotProven,3)} pool ${provenPool.length} rs $${round(perSlotRSMargin(),3)} n ${rsCount()})`);
@@ -3918,6 +4017,13 @@ async function main() {
         // bled within the window — paying to re-learn the same lesson.
         const cellLossAt = Math.max(envCells[c.symbol]?.lastLossAt || 0, envCells[canon(c.symbol)]?.lastLossAt || 0);
         if (cellLossAt && Date.now() - cellLossAt < REENTRY_MS) continue;
+        const kr = klMandate[c.symbol]?.rows;
+        if (kr && kr.length >= 40) {
+          const kw = kr.slice(-64);
+          const ka = kw.slice(-32).reduce((a, r) => a + (r.h - r.l), 0) / Math.min(32, kw.length);
+          const kl2 = kw.at(-1).c;
+          if (!(ka > 0 && kl2 > 0) || ka / kl2 < MIN_ATR_PCT_M) continue; // velocity floor — dead range can't print the fixed target
+        }
         try {
           const tk = await X.ticker(c.symbol);
           const last = +(Array.isArray(tk) ? tk[0].lastPr : tk?.lastPr);
