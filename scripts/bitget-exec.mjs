@@ -1303,7 +1303,7 @@ async function main() {
       for (const f of fills) {
         const side = String(f.tradeSide || f.side || '').toLowerCase();
         if (!/close|sell/.test(side) && !(+f.profit)) continue;
-        const net = (+f.profit || 0) + (+f.fee || 0);
+        const net = (+f.profit || 0) - (+f.fee || 0);
         if (net < 0) { if (wins) break; losses++; }
         else if (net > 0) { if (losses) break; wins++; }
         if (losses + wins >= 40) break;
@@ -1336,7 +1336,7 @@ async function main() {
     for (const f of ff) {
       if (nowMs - (+f.ts || 0) >= 86400e3) continue;
       const s2 = String(f.symbol || '');
-      if (s2) symNet24[s2] = (symNet24[s2] || 0) + (+f.profit || 0) + (+f.fee || 0);
+      if (s2) symNet24[s2] = (symNet24[s2] || 0) + (+f.profit || 0) - (+f.fee || 0);
     }
   } catch { }
   const symFactorOf = (sym) => {
@@ -1508,7 +1508,14 @@ async function main() {
     // pre-epoch positions (opened before journaled entries existed — e.g.
     // legacy fills from the pre-equity-anchor ~$6k book) are real dollars
     // but not THIS model's record — they can't trip or defend the breakers.
-    const pos = posAll.filter((g) => !g.preEpoch);
+    // dead-mix reset watermark (state/cb-reset.json): positions whose last
+    // fill predates the latest reset don't count toward breakers — the
+    // convicted mix's record stays on file but can't hold the NEW mix
+    // hostage. Doctrine: re-arm only on a dead-mix record + a different
+    // mix afterward; this is the functional half of that contract.
+    let cbResetAt = 0;
+    try { cbResetAt = +JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cb-reset.json'), 'utf8')).at || 0; } catch { }
+    const pos = posAll.filter((g) => !g.preEpoch && (!cbResetAt || (+g.lastTs || 0) >= cbResetAt));
     const last20 = pos.slice(0, 20);
     const dayPnl = day.reduce((a, f) => a + (f.profit || 0), 0);
     const fees24 = day.reduce((a, f) => a + (f.fee || 0), 0);
