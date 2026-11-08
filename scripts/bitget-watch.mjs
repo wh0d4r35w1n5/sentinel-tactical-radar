@@ -117,7 +117,13 @@ function desiredSl(pos, dec) {
   // clears the round-trip fee toll (~0.3%), not at +1.5% — fees bank first,
   // then the ratchet carries the runner. Floor +0.2% ≈ taker RT + slip.
   if (peakPct >= 0.35) {
-    const lockPct = Math.max(0.2, 0.55 * peakPct);
+    // tiered giveback (operator mandate 2026-11-08 — bank profit regularly
+    // BEFORE the rungs when smart): the measured distribution is sub-1.2%
+    // favors that die before rung 1 — lock 2/3 of those; real runners keep
+    // the 55% giveback so the trend can breathe.
+    const give = peakPct < 1.2 ? +(process.env.BW_GIVEBACK_SMALL || 0.66)
+                              : +(process.env.BW_GIVEBACK_BIG || 0.55);
+    const lockPct = Math.max(0.2, give * peakPct);
     const lock = long ? ceilTick(entry * (1 + lockPct / 100), dec) : floorTick(entry * (1 - lockPct / 100), dec);
     // placeable-only: a lock the mark already crossed can't rest — clamping
     // it to mark-0.15% arms a hair-trigger that dies on noise. Skip, don't

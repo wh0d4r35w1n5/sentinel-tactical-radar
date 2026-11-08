@@ -3038,7 +3038,12 @@ async function main() {
           let sf = null;
           if (genDir === 'SHORT') {
             sf = shortFactors(sym, { breakdown: true });
-            const minF = +(process.env.SENTINEL_SHORT_MIN_FACTORS || 6);
+            // equity-scaled short bar: shorts need stronger evidence than
+            // longs (operator doctrine) — below $75 equity the factor floor
+            // gains a point; SOXL-class short bleed (−$0.39 = ~20 banks'
+            // worth) is what the extra factor is priced against.
+            const minF = +(process.env.SENTINEL_SHORT_MIN_FACTORS || 6)
+              + ((typeof equityUsd === 'number' ? equityUsd : 1e9) < +(process.env.LIVE_MID_EQ_USD || 75) ? +(process.env.SENTINEL_SHORT_EQ_FACTOR_BUMP || 1) : 0);
             if (sf.score < minF) {
               try {
                 fs.appendFileSync(path.join(__dirname, '..', 'state', 'liq-shadow.jsonl'),
@@ -3567,7 +3572,11 @@ async function main() {
       // can never clear the ~0.12% fee toll. Pure churn, not a position.
       // A seat is only a seat at ~1R viability (>= MIN_SEAT_MARGIN); the
       // budget concentrates into affordable seats instead of spraying dust.
-      const MIN_SEAT_MARGIN = +(process.env.SENTINEL_MIN_SEAT_MARGIN || 1.25);
+      // seat floor scales with equity — a seat must be big enough that a
+      // banked rung means something. $1.25-margin seats churned cents while
+      // fees held (measured 2026-11-08: ~45 banks net +$0.12). At $31.5 the
+      // floor is ~$2.52: fewer, bigger seats or none — capacity is not quota.
+      const MIN_SEAT_MARGIN = Math.max(+(process.env.SENTINEL_MIN_SEAT_MARGIN || 1.25), equityUsd * +(process.env.SENTINEL_SEAT_EQ_FRAC || 0.08));
       const seatAffordable = Math.max(1, Math.floor(marginFree / MIN_SEAT_MARGIN));
       const perSlotUsd = Math.min(marginFree / Math.max(1, Math.min(slotsAvail, seatAffordable)), mandateRiskUsd / slotRiskDenom);
       // edge-weighted sizing (VT: risk is earned, not equal): the budget
@@ -3611,7 +3620,9 @@ async function main() {
       // Below the floor the seat stays idle; CORE_SYMS ride exempt because
       // the macro mandate is standing, not scored.
       const MANDATE_MIN_SCORE = +(process.env.SENTINEL_MANDATE_MIN_SCORE || 50)
-        + (equityUsd < +(process.env.LIVE_LOW_EQ_USD || 25) ? +(process.env.LIVE_LOW_EQ_SCORE_BUMP || 10) : 0);
+        + (equityUsd < +(process.env.LIVE_LOW_EQ_USD || 25) ? +(process.env.LIVE_LOW_EQ_SCORE_BUMP || 10)
+        : equityUsd < +(process.env.LIVE_MID_EQ_USD || 75) ? +(process.env.LIVE_MID_EQ_SCORE_BUMP || 6)
+        : equityUsd < +(process.env.LIVE_HIGH_EQ_USD || 200) ? +(process.env.LIVE_HIGH_EQ_SCORE_BUMP || 2) : 0);
       // evidence re-rank (Will-audit answer to "a score of 85 is not proof
       // a trade is profitable"): raw score is an activity proxy — the
       // envelope's cell verdicts are the MEASURED record. Proven cells
