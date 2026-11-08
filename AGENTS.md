@@ -1262,3 +1262,17 @@ Lessons burned in:
 - Vol-event detector (breadth dG+hG <= 0.3 on a fresh read) fires ops
   alerts while the event is happening — paired with the setup-lane
   `breadth-brake-long` reject in bitget-exec.
+
+## Compounding doctrine — "only for us, never against us" (2026-11-08 operator order)
+
+ddRiskScale is now a CONTINUOUS engine (state.dynRisk), not cliff tiers:
+exp decay on day DD (8% half-life), 0.82^n loss-streak decay, win-streak
+restore ≤×1.15, day-peak boost ≤×1.2, 24h fee-share decay, fresh-breadth
+×0.55. Floor 0.08 (house never empties), cap 1.25, massacre ≥30% → 0.
+Propagates via effDdScale → setup risk / orders / rebalance + mandateRiskUsd.
+Per-symbol multiplier symFactorOf(): trailing-24h realized net ÷ equity ×10,
+clamp [0.3, 1.3] — each seat sizes to ITS symbol's record.
+Velocity floor: SENTINEL_MIN_ATR_PCT (default 0.010) refuses dead-range
+names in BOTH setup and mandate lanes; setup authoring sorts ATR%-first.
+RVOL cells (rvol-accum / rvol-ignition[-dn]) journal shadow census rows —
+promotion only via measured shadow-policy.

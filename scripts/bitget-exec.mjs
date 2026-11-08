@@ -1326,6 +1326,24 @@ async function main() {
     } catch { return { m: 1 }; }
   })();
   const ddRiskScale = dayDDpct >= 30 ? 0 : dynRisk.m;
+  // per-symbol evidence multiplier — a seat sizes to ITS symbol's trailing
+  // 24h realized record, not the book average: measured winners earn up to
+  // ×1.3, measured bleeders decay toward 0.3 (deny/cell gates still do the
+  // outright bans). No record = neutral 1 — evidence is earned, not assumed.
+  const symNet24 = {};
+  try {
+    const ff = (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'real-fills.json'), 'utf8')).fills) || [];
+    for (const f of ff) {
+      if (nowMs - (+f.ts || 0) >= 86400e3) continue;
+      const s2 = String(f.symbol || '');
+      if (s2) symNet24[s2] = (symNet24[s2] || 0) + (+f.profit || 0) + (+f.fee || 0);
+    }
+  } catch { }
+  const symFactorOf = (sym) => {
+    const n = symNet24[sym];
+    if (n == null || !(equityUsd > 0)) return 1;
+    return Math.min(1.3, Math.max(0.3, 1 + 10 * (n / equityUsd)));
+  };
   state.ddRiskScale = ddRiskScale;
   state.dynRisk = { mult: round(ddRiskScale, 3), ...dynRisk, dayDDpct: round(dayDDpct, 2) };
   if (ddRiskScale < 0.9 || ddRiskScale > 1.02)
@@ -3415,7 +3433,7 @@ async function main() {
         const costPct = 0.20; // same fee+slip floor the RR gate applies
         const netRR = (targetPct - costPct) / (stopPct + costPct);
         if (!(netRR >= SETUP_RR_FLOOR)) { rej(`net-rr ${round(netRR, 2)} < ${SETUP_RR_FLOOR}`); continue; }
-        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * effDdScale;
+        const riskUsd = equityUsd * ((+s.riskPct || SETUP_RISK_DEF) / 100) * effDdScale * symFactorOf(sym);
         const clip = (s.clipHalf || s.breakClipDone) ? 0.5 : 1;
         plan.orders.push({
           symbol: sym, direction: s.direction, refEntry: last,
@@ -3830,10 +3848,11 @@ async function main() {
       const sendItSeat = SEND_IT ? Math.max(0, equityUsd * +(process.env.SENTINEL_SEND_IT_FRAC || 0.35)) : 0;
       const perSlotFor = (c) => {
         const verdict = envCells[c.symbol]?.verdict || envCells[canon(c.symbol)]?.verdict;
-        if (verdict === 'proven') return Math.max(perSlotProven, sendItSeat, perSlotUsd);
+        const sf = symFactorOf(c.symbol);
+        if (verdict === 'proven') return Math.max(perSlotProven, sendItSeat, perSlotUsd) * sf;
         const b = bub?.bySym?.[c.symbol];
-        if (b && +b.hour > 0 && +b.day > 0 && +b.week > 0) return Math.max(perSlotRSMargin(), sendItSeat, perSlotUsd);
-        return perSlotUsd;
+        if (b && +b.hour > 0 && +b.day > 0 && +b.week > 0) return Math.max(perSlotRSMargin(), sendItSeat, perSlotUsd) * sf;
+        return perSlotUsd * sf;
       };
       const anySeatFits = () => perSlotUsd >= MIN_SEAT_MARGIN || perSlotProven >= MIN_SEAT_MARGIN || sendItSeat >= MIN_SEAT_MARGIN || (typeof dumpBrake !== 'undefined' && dumpBrake && perSlotRSMargin() >= MIN_SEAT_MARGIN);
       // seat floor $0.20 margin (~$14 notional at 70x — well above the
