@@ -465,6 +465,16 @@ const CORE_SYMS = (process.env.SENTINEL_CORE_SYMS ?? 'ETHUSDT,BTCUSDT')
 const DENY_SYMS = new Set(
   (process.env.SENTINEL_DENY_SYMS || '').split(',').map((s) => s.trim()).filter(Boolean)
 );
+// measured-bleed deny — direction-aware quarantine ('SYM:long'/'SYM:short' ->
+// until) written into auto-deny.json by the fill-level self-audit below. The
+// seat-level quarantine couldn't see the measured pattern: semis shorts bled
+// −$3.5 across dozens of small closes inside mixed seats (2026-11-08 audit:
+// SHORT closes net −$1.53 while LONGs earned +$7.06).
+const DENY_DIR = new Map();
+const denyDir = (sym, dir) => {
+  const u = DENY_DIR.get(`${String(sym).toUpperCase()}:${String(dir).toLowerCase()}`);
+  return !!u && u > Date.now();
+};
 
 const log = (...a) => console.log('[exec]', ...a);
 const round = (x, p = 6) => +(+x).toFixed(p);
@@ -996,7 +1006,19 @@ async function main() {
   try {
     const ad = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'auto-deny.json'), 'utf8'));
     for (const e of ad.entries || [])
-      if (+e.until > Date.now()) DENY_SYMS.add(String(e.symbol).toUpperCase());
+      if (+e.until > Date.now()) {
+        if (e.side && e.side !== 'both') DENY_DIR.set(`${String(e.symbol).toUpperCase()}:${e.side}`, +e.until);
+        else DENY_SYMS.add(String(e.symbol).toUpperCase());
+      }
+  } catch {}
+  // cell-loser fold: the envelope's measured verdict condemns the whole
+  // symbol — ICNT traded 21 closes while marked 'loser' because the verdict
+  // gate only covered the mandate lane (2026-11-08 audit). Loser cells get
+  // zero opens on every lane.
+  try {
+    const dl = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'deploy-envelope.json'), 'utf8'));
+    for (const [sym, v] of Object.entries(dl.cells || {}))
+      if (v?.verdict === 'loser') DENY_SYMS.add(String(sym).toUpperCase());
   } catch {}
   // a MANUAL_HOLD on a flat symbol silently exempts future auto-entries from
   // management — flag it so the exemption can't linger forgotten
@@ -1786,6 +1808,43 @@ async function main() {
       }
       if (+f.ts >= dayStart) feesToday += +f.fee || 0;
     }
+    // measured-bleed quarantine — direction-aware, fill-level (the audit's
+    // own accounting): close-side profit per sym+side over the trailing
+    // window. n>=3 && net<=-0.30 condemns a drip-bleed; net<=-0.60 condemns
+    // even a single seat. Entries self-expire with the evidence window —
+    // a direction that stops bleeding ages out and may re-earn.
+    try {
+      const BLEED_MS = +(process.env.SENTINEL_BLEED_HOURS || 72) * 3600e3;
+      const since = Date.now() - BLEED_MS;
+      const agg = new Map();
+      for (const f of fj) {
+        if (f.tradeSide !== 'close' || f.profit == null || !(+f.ts >= since)) continue;
+        // fill `side` is POSITION-side on closes: 'buy'=long, 'sell'=short —
+        // verified vs bills (XRP 45 'sell' closes = the +0.44 short bucket).
+        const k = `${String(f.symbol).toUpperCase()}:${f.side === 'buy' ? 'long' : 'short'}`;
+        const a = agg.get(k) || { net: 0, n: 0 };
+        a.net += +f.profit || 0; a.n++;
+        agg.set(k, a);
+      }
+      const adPath = path.join(__dirname, '..', 'state', 'auto-deny.json');
+      let ad = { entries: [] };
+      try { ad = JSON.parse(fs.readFileSync(adPath, 'utf8')); } catch {}
+      ad.entries = (ad.entries || []).filter((e) => +e.until > Date.now());
+      const DENY_NET = +(process.env.SENTINEL_BLEED_NET || -0.3);
+      const DENY_BIG = +(process.env.SENTINEL_BLEED_BIG || -0.6);
+      for (const [k, a] of agg) {
+        if (!((a.n >= 3 && a.net <= DENY_NET) || a.net <= DENY_BIG)) continue;
+        const [symbol, side] = k.split(':');
+        const cur = ad.entries.find((e) => e.symbol === symbol && (e.side || 'both') === side);
+        if (cur) { cur.until = Date.now() + BLEED_MS; cur.netUsd = round(a.net, 3); cur.n = a.n; }
+        else {
+          ad.entries.push({ symbol, side, until: Date.now() + BLEED_MS, netUsd: round(a.net, 3), n: a.n, at: Date.now() });
+          state.actions.push(`🚫 BLEED-QUARANTINE ${symbol} ${side}: ${a.n} closes net $${round(a.net, 2)}/${BLEED_MS / 3600e3}h — ${side} side denied while the record condemns it`);
+        }
+      }
+      fs.writeFileSync(adPath, JSON.stringify(ad));
+      state.autoDenyDir = ad.entries.filter((e) => e.side).map((e) => `${e.symbol}:${e.side} $${e.netUsd}`);
+    } catch {}
   } catch {}
   for (const s of cooldownExempt) { delete lastCloseBySym[s]; delete lastLossCloseBySym[s]; }
   // fee-burn halt: commissions >5% of equity in a day stands the book
@@ -3135,6 +3194,7 @@ async function main() {
         // deterministic rejections — fail fast with a reason the operator
         // can read on the board instead of silently looping dead
         if (DENY_SYMS.has(sym)) { rej('denied-symbol'); continue; }
+        if (denyDir(sym, s.direction)) { rej(`measured-bleed-${String(s.direction || '').toLowerCase()}`); continue; }
         // longs-only mandate stands globally — the ONLY exemption is the
         // census-validated pump-short setup channel (50/50 dual-positive,
         // ~95% WR at >=2% 2h pump triggers on 13.4M real tests). Everything
@@ -3245,7 +3305,7 @@ async function main() {
         // DENY_SYMS must ride the injection skip too — a denied first
         // symbol used to win the `break` race, emit an order that the
         // place-gate then vetoed, and poison the carry path every cycle.
-        if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || DENY_SYMS.has(sym) || cooledSym.has(sym) || !cm[sym]) continue;
+        if (posBySym.has(sym) || ambiguous.has(sym) || MANUAL.has(sym) || DENY_SYMS.has(sym) || denyDir(sym, 'long') || cooledSym.has(sym) || !cm[sym]) continue;
         // re-entry cooldown rides the pick too — otherwise a cooled winner
         // (SOL in 6h loss-bench) wins the queue then dies downstream every
         // cycle and the lane starves behind a dead pick.
@@ -3782,7 +3842,7 @@ async function main() {
         const fam = envFam[c.symbol] || envFam[canon(c.symbol)];
         if (fam && (famCount[fam] || 0) >= famCap) continue;   // one family = one bet (semi-stack fix)
         if (heldCanon.has(canon(c.symbol))) continue;          // same underlying already seated (twin clip)
-        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
+        if (posBySym.has(c.symbol) || ambiguous.has(c.symbol) || MANUAL.has(c.symbol) || cooledSym.has(c.symbol) || DENY_SYMS.has(c.symbol) || denyDir(c.symbol, 'long') || !cm[c.symbol] || confirmWatch[c.symbol] || plan.orders.some((o) => o.symbol === c.symbol)) continue;
         const triedAt = typeof triedMap[c.symbol] === 'object' ? triedMap[c.symbol].ts : triedMap[c.symbol];
         if (triedAt && Date.now() - triedAt < TRY_MS) continue; // attempted recently (or dip-quote still resting) — rotate
         const lc = lastCloseBySym[c.symbol];
@@ -4679,6 +4739,12 @@ async function main() {
           const chaseOK = MODE === 'demo' ? true
             : (o.setup ? !SETUP_MAKER : (o.core || EDGE_LIVE.v >= CHASE_EDGE || flatChase));
           if (chaseOK) {
+            // last-line measured-bleed gate — every entry lane funnels here;
+            // a direction the 72h record condemns never reaches the exchange
+            if (denyDir(o.symbol, sgn > 0 ? 'long' : 'short')) {
+              state.actions.push(`${o.symbol}: 🚫 measured-bleed ${sgn > 0 ? 'long' : 'short'} denied at order gate`);
+              continue;
+            }
             const mo = await marketOrder(o.symbol, sgn > 0 ? 'buy' : 'sell', needSize, 'open', { clientOid: (coid + 'm').slice(0, 38) });
             if (war && (o.pimp || o.crack) && mo?.orderId) (war.orderMap ||= {})[(coid + 'm').slice(0, 38)] = String(mo.orderId);
             if (flatChase) {
@@ -5221,7 +5287,10 @@ async function main() {
       // rolling entry window, the journal) — unshift order depends on the
       // API's return direction, so sort explicitly rather than trust it
       store.fills.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-      store.fills = store.fills.slice(0, 400);
+      // 400-row cap only retained ~24h at the current fill rate — the 72h
+      // measured-bleed quarantine was half-blind (SNDK's −$1.35 evidence
+      // rotated out). 1500 rows covers the window with headroom.
+      store.fills = store.fills.slice(0, +(process.env.SENTINEL_FILLS_CAP || 1500));
       writeJson(fillsPath, store);
     }
     // tag AFTER the merge so this cycle's fresh closes attribute too —
