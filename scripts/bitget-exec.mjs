@@ -3247,6 +3247,21 @@ async function main() {
         // can read on the board instead of silently looping dead
         if (DENY_SYMS.has(sym)) { rej('denied-symbol'); continue; }
         if (denyDir(sym, s.direction)) { rej(`measured-bleed-${String(s.direction || '').toLowerCase()}`); continue; }
+        // breadth brake on the SETUP lane — the mandate lane's dump brake
+        // never bound setups, so long seats kept seating while the tape
+        // collapsed (2026-11-08: BB/QQQ longs seated mid-dump, stopped out
+        // minutes later). A long setup into collapsing breadth is a
+        // knife-catch; shorts into it still fire. Fails OPEN if the breadth
+        // feed is dead — a dead feed must not freeze setups.
+        try {
+          const bh = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'breadth-history.jsonl'), 'utf8').trim().split('\n').pop());
+          const floor = +(process.env.SENTINEL_BREADTH_BRAKE || 0.3);
+          if (sgn > 0 && Date.now() - (+bh.ts || 0) < 30 * 60e3 &&
+              bh.dG != null && bh.hG != null && bh.dG <= floor && bh.hG <= floor) {
+            rej(`breadth-brake-long (${Math.round(bh.dG * 100)}% green day / ${Math.round(bh.hG * 100)}% green hour — knife-catch)`);
+            continue;
+          }
+        } catch { }
         // longs-only mandate stands globally — the ONLY exemption is the
         // census-validated pump-short setup channel (50/50 dual-positive,
         // ~95% WR at >=2% 2h pump triggers on 13.4M real tests). Everything

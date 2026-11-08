@@ -152,6 +152,20 @@ def round_loop():
         if share > FEE_BURN_MAX:
             findings.append(f"fee burn {share * 100:.0f}% of gross (24h)")
 
+    # --- 5b. vol-event detector — breadth collapse = dump regime ---
+    try:
+        with open(ST + "/breadth-history.jsonl") as f:
+            bh = json.loads(f.readlines()[-1])
+        if (now - (bh.get("ts", 0) / 1000 if bh.get("ts", 0) > 1e12 else bh.get("ts", 0))) < 1800:
+            dG, hG = bh.get("dG"), bh.get("hG")
+            metrics["breadth_day_green"] = dG
+            metrics["breadth_hour_green"] = hG
+            if dG is not None and hG is not None and dG <= 0.3 and hG <= 0.3:
+                findings.append(f"VOL EVENT — breadth collapsed ({dG * 100:.0f}% green day / {hG * 100:.0f}% green hour): setup-longs braked, mandate stood down")
+                emit_ops(f"🌊 vol event: breadth {dG * 100:.0f}%d/{hG * 100:.0f}%h — entries braked")
+    except Exception:
+        pass
+
     # --- 6. funding arb candidates ---
     fj = load(API + "/funding.json", {}) or {}
     best = (fj.get("best") or [])[:3]
