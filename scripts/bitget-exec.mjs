@@ -2056,7 +2056,12 @@ async function main() {
         const peakGain = tr && tr.entry > 0
           ? (p.side === 'long' ? (tr.peak - tr.entry) / tr.entry : (tr.entry - tr.trough) / tr.entry) * 100
           : null;
-        if ((peakGain == null || peakGain < STALL_MFE_PCT) && (p.upl || 0) < 0) {
+        // scratch-or-red: a seat 45min+ with no favor that sits inside ~0.2%
+        // of margin is dead capital blocking a slot, not just a bleeder —
+        // kill flat seats too; the exit costs ~fees and frees the slot
+        // (time-invalidation doctrine, 2026-11-08).
+        const scratchUsd = (+p.marginSize || 0) * 0.002;
+        if ((peakGain == null || peakGain < STALL_MFE_PCT) && (p.upl || 0) < scratchUsd) {
           try {
             await closePosition(p.symbol, p.side);
             state.actions.push(`✂️ stall-exit ${p.symbol} ${p.side}: ${Math.round((Date.now() - p.cTime) / 6e4)}m old, peak favor ${peakGain == null ? 'untracked' : round(peakGain, 2) + '%'}, upl ${round(p.upl, 2)} — closed before the stop`);
