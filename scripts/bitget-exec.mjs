@@ -2057,11 +2057,15 @@ async function main() {
     const overSet = new Set(
       [...machineSeats].sort((a, b) => (+a.margin || 0) - (+b.margin || 0)).slice(0, overN).map((p) => `${p.symbol}:${p.side}`)
     );
+    const execSeats = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'execution-seats.json'), 'utf8')) || {}; } catch { return {}; } })();
+    const admCells = (() => { try { return (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'cell-admission.json'), 'utf8')) || {}).cells || {}; } catch { return {}; } })();
     for (const p of machineSeats) {
       const key = `${p.symbol}:${p.side}`;
       let reason = null;
       if (+p.margin > 0 && +p.margin < minSeatNow) reason = 'dust';
       else if (denyDir(p.symbol, p.side)) reason = 'denied';
+      else if (DENY_SYMS.has(String(p.symbol).toUpperCase())) reason = 'denied-sym';
+      else if (execSeats[key] && admCells[execSeats[key].cell]?.status === 'dead') reason = 'cell-dead';
       else if (overSet.has(key)) reason = 'over-tier';
       if (reason) ncfFlags[key] = { cTime: +p.cTime || 0, reason, marginUsd: round(+p.margin || 0, 4), at: Date.now() };
     }
