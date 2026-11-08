@@ -23,7 +23,8 @@ API = ROOT + "/api"
 LOG = ST + "/autoimprove-log.jsonl"
 REST_ST = ST + "/autoimprove-restarts.json"
 OUTBOX = ST + "/tg-outbox.jsonl"
-SLEEP_S = int(os.environ.get("AUTOIMPROVE_INTERVAL_S", "180"))
+SLEEP_S = int(os.environ.get("AUTOIMPROVE_INTERVAL_S", "30"))  # operator: much faster than 3min — file checks are featherweight; heavy probes staggered below
+ROUNDS = 0  # staggered-probe counter: subprocess checks (journalctl/systemctl) run every 4th round
 DENY_NET_LOSS = -0.25     # trailing-24h per sym:side net threshold
 DENY_NET_BIG = -0.50      # single-fill blowout threshold
 FEE_BURN_MAX = 0.55       # fees >55% of gross = finding
@@ -50,7 +51,15 @@ def age_s(path):
     except Exception:
         return None
 
-def emit_ops(text):
+ALERT_LAST = {}  # kind -> last emit ts; sustained conditions alert once per cooldown
+ALERT_COOLDOWN_S = 1800
+
+def emit_ops(text, kind=None):
+    if kind:
+        now = time.time()
+        if now - ALERT_LAST.get(kind, 0) < ALERT_COOLDOWN_S:
+            return
+        ALERT_LAST[kind] = now
     try:
         with open(OUTBOX, "a") as f:
             f.write(json.dumps({"to": "ops", "text": text[:600], "ts": int(time.time())}) + "\n")
@@ -95,17 +104,20 @@ def round_loop():
         a = closep.setdefault(k, [0.0, 0])
         a[0] += +p; a[1] += 1
     deny = load(ST + "/auto-deny.json", {}) or {}
-    deny_list = deny.get("deny") or []
-    have = {d.get("key") for d in deny_list if isinstance(d, dict)}
+    # exec reads ad.entries[] — {"symbol","side","until","netUsd","n","at"} —
+    # a `deny` list here was a dead letter the order gate never saw.
+    deny_list = deny.get("entries") or []
+    have = {(d.get("symbol"), d.get("side")) for d in deny_list if isinstance(d, dict)}
     wrote = 0
     for k, (net, n) in closep.items():
-        if k in have:
+        sym, _, side = str(k).partition(":")
+        if (sym, side) in have:
             continue
         if (n >= 3 and net <= DENY_NET_LOSS) or net <= DENY_NET_BIG:
-            deny_list.append({"key": k, "net": round(net, 4), "n": n, "at": int(now), "src": "autoimprove"})
+            deny_list.append({"symbol": sym, "side": side or "both", "until": int((now + 72 * 3600) * 1000), "netUsd": round(net, 4), "n": n, "at": int(now * 1000), "src": "autoimprove"})
             wrote += 1
     if wrote:
-        deny["deny"] = deny_list[-200:]
+        deny["entries"] = deny_list[-200:]
         try:
             json.dump(deny, open(ST + "/auto-deny.json", "w"))
             actions.append(f"auto-deny += {wrote} measured bleeder(s)")
@@ -117,22 +129,23 @@ def round_loop():
     # Watch journal emits protection lines per cycle — liveness = coverage.
     ledger = load(API + "/live-ledger.json", {}) or {}
     metrics["seats"] = len(ledger.get("positions", []))
-    try:
-        r = subprocess.run(
-            ["journalctl", "-u", "sentinel-bitget-watch-live.service", "--since", "-8min", "--no-pager", "-n", "200"],
-            capture_output=True, text=True, timeout=25)
-        prot_lines = len(re.findall(r"stop|tp|plan|armed|protect", r.stdout, re.I))
-        if prot_lines == 0:
-            findings.append("bitget-watch journal silent 8min — protection may be stalled")
-            emit_ops("⚠ autoimprove: bitget-watch silent 8min")
-    except Exception:
-        pass
+    if ROUNDS % 4 == 0:  # journalctl is subprocess-heavy — every 4th round
+        try:
+            r = subprocess.run(
+                ["journalctl", "-u", "sentinel-bitget-watch-live.service", "--since", "-8min", "--no-pager", "-n", "200"],
+                capture_output=True, text=True, timeout=25)
+            prot_lines = len(re.findall(r"stop|tp|plan|armed|protect", r.stdout, re.I))
+            if prot_lines == 0:
+                findings.append("bitget-watch journal silent 8min — protection may be stalled")
+                emit_ops("⚠ autoimprove: bitget-watch silent 8min", kind="watch-silent")
+        except Exception:
+            pass
 
     # --- 3. stale wind-down flag file (exec cycle wedge detector) ---
     ncf_age = age_s(ST + "/nonconforming-seats.json")
     if ncf_age is not None and ncf_age > STALE_FLAG_S:
         findings.append(f"nonconforming-seats.json stale {int(ncf_age)}s — exec cycle may be wedged")
-        emit_ops(f"⚠ autoimprove: exec flag file stale {int(ncf_age)}s")
+        emit_ops(f"⚠ autoimprove: exec flag file stale {int(ncf_age)}s", kind="exec-wedge")
     metrics["ncf_age_s"] = ncf_age
 
     # --- 4. flagged seats still open past profit window ---
@@ -162,7 +175,7 @@ def round_loop():
             metrics["breadth_hour_green"] = hG
             if dG is not None and hG is not None and dG <= 0.3 and hG <= 0.3:
                 findings.append(f"VOL EVENT — breadth collapsed ({dG * 100:.0f}% green day / {hG * 100:.0f}% green hour): setup-longs braked, mandate stood down")
-                emit_ops(f"🌊 vol event: breadth {dG * 100:.0f}%d/{hG * 100:.0f}%h — entries braked")
+                emit_ops(f"🌊 vol event: breadth {dG * 100:.0f}%d/{hG * 100:.0f}%h — entries braked", kind="vol-event")
     except Exception:
         pass
 
@@ -173,26 +186,55 @@ def round_loop():
     if cands:
         findings.append("funding candidates <24h breakeven: " + ", ".join(f"{b.get('asset')} {b.get('arb')} be={b.get('breakevenH')}h" for b in cands))
 
-    # --- 7. dead critical services -> bounded restart ---
+    # --- 6b. watcher freshness — nothing watches the watchers ---
+    # wealth-live freshness (the money feed), fills journal lag (attribution
+    # blindness while seats are open), plan staleness (mandate intel).
+    try:
+        w = load(API + "/wealth-live.json", {}) or {}
+        w_ts = w.get("ts")
+        if w_ts:
+            w_age = now - __import__("datetime").datetime.fromisoformat(str(w_ts).replace("Z", "+00:00")).timestamp()
+            metrics["wealth_age_s"] = round(w_age, 1)
+            if w_age > 90:
+                findings.append(f"wealth-live stale {int(w_age)}s — balance feed dead")
+                emit_ops(f"⚠ autoimprove: wealth-live stale {int(w_age)}s", kind="wealth-stale")
+    except Exception:
+        pass
+    fills_newest = max((+f.get("ts", 0) or 0 for f in fills), default=0) / 1000
+    if metrics.get("seats", 0) > 0 and fills_newest and now - fills_newest > 900:
+        findings.append(f"real-fills journal lags {int(now - fills_newest)}s with seats open — attribution blind")
+    metrics["fills_lag_s"] = round(now - fills_newest, 1) if fills_newest else None
+    plan_age = age_s(API + "/live-plan.json")
+    if plan_age is not None and plan_age > 1500:
+        findings.append(f"live-plan stale {int(plan_age / 60)}min — scanner tail pending")
+    metrics["plan_age_s"] = plan_age
+
+    # --- 7. dead critical services -> bounded restart (every 4th round —
+    # systemctl calls are the heaviest probe; staggered on the 30s cadence) ---
     rest = load(REST_ST, {}) or {}
-    for svc in SERVICES:
-        st = svc_state(svc)
-        # oneshot units are inactive between timer fires BY DESIGN — counting
-        # that as dead and restarting mid-pass kills work (this restart-churn
-        # SIGKILLed a running build-scanner 2026-11-08). 'activating' is a
-        # live transition state, not dead.
-        if st in ("active", "activating") or svc_type(svc) == "oneshot":
-            rest.pop(svc, None)
-            continue
-        rec = rest.setdefault(svc, {"dead": 0, "lastRestart": 0})
-        rec["dead"] += 1
-        if rec["dead"] >= 2 and (now - rec["lastRestart"]) > 900:
-            ok = restart_svc(svc)
-            rec["lastRestart"] = now
-            actions.append(f"restart {svc}: {'ok' if ok else 'failed'}")
-            emit_ops(f"🔧 autoimprove: restarted dead service {svc}")
-        else:
-            findings.append(f"service {svc} state={st} (dead rounds={rec['dead']})")
+    if ROUNDS % 4 == 0:
+        for svc in SERVICES:
+            st = svc_state(svc)
+            # oneshot units are inactive between timer fires BY DESIGN —
+            # counting that as dead and restarting mid-pass kills work
+            # (this restart-churn SIGKILLed a running build-scanner and
+            # restarted live-exec mid-vol-event 2026-11-08). 'activating' is
+            # a live transition state; 'unknown' is an is-active TIMEOUT under
+            # load — a timeout is not proof of death, never restart on it.
+            if st in ("active", "activating", "unknown") or svc_type(svc) == "oneshot":
+                if st == "unknown":
+                    findings.append(f"service {svc} state probe timed out (load) — not restarting")
+                rest.pop(svc, None)
+                continue
+            rec = rest.setdefault(svc, {"dead": 0, "lastRestart": 0})
+            rec["dead"] += 1
+            if rec["dead"] >= 2 and (now - rec["lastRestart"]) > 900:
+                ok = restart_svc(svc)
+                rec["lastRestart"] = now
+                actions.append(f"restart {svc}: {'ok' if ok else 'failed'}")
+                emit_ops(f"🔧 autoimprove: restarted dead service {svc}", kind=f"restart-{svc}")
+            else:
+                findings.append(f"service {svc} state={st} (dead rounds={rec['dead']})")
     try:
         json.dump(rest, open(REST_ST, "w"))
     except Exception:
@@ -212,9 +254,11 @@ def round_loop():
         print(json.dumps(row), flush=True)
 
 def main():
+    global ROUNDS
     while True:
         try:
             round_loop()
+            ROUNDS += 1
         except Exception as e:
             print("round error:", repr(e)[:200], flush=True)
         time.sleep(SLEEP_S)

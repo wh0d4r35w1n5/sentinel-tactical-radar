@@ -1242,3 +1242,23 @@ hold it. But the moment the entry thesis dies, the seat dies with it —
    kills. Exits track the thesis gradient, not just the price line.
 5. PRICE-LEVEL ARMOR STILL RIDES — invalidation exits layer UNDER the
    resting stop/trail; the stop is the floor, not the trigger.
+
+## Autoimprove loop — 30s cadence + never-restart-on-unknown (2026-11-08)
+
+`sentinel-autoimprove.service` runs every 30s (was 180s). Heavy subprocess
+probes (journalctl watch-liveness, systemctl service states) are staggered
+every 4th round so the cadence stays cheap on the loaded box.
+
+Lessons burned in:
+- **A timeout is not proof of death.** `systemctl is-active` returning
+  `unknown`/timing out under load must NEVER trigger a restart — the 21:34
+  live-exec restart during the dump was exactly this. `unknown` → finding
+  only. `activating`/`active`/`Type=oneshot` = alive-by-design.
+- **Sustained conditions alert once per 30min** (ALERT_LAST cooldown) — a
+  30s loop otherwise floods ops with the same vol-event/wedge warning.
+- **auto-deny schema**: exec reads `auto-deny.json` `entries[]`
+  {symbol,side,until,...} — the daemon's earlier `deny[]` writes were dead
+  letters. Any quarantine writer must match the reader's schema.
+- Vol-event detector (breadth dG+hG <= 0.3 on a fresh read) fires ops
+  alerts while the event is happening — paired with the setup-lane
+  `breadth-brake-long` reject in bitget-exec.
