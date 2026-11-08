@@ -104,18 +104,20 @@ while True:
 
         fire = (
             last is None
-            or abs(eq - last[0]) >= max(0.25, abs(last[0]) * MIN_EQ_MOVE_PCT)
+            or abs(eq + bot2 - last[0]) >= max(0.25, abs(last[0]) * MIN_EQ_MOVE_PCT)
+            or abs(bot2 - last[4]) >= 0.5
             or npos != last[2]
             or abs(net - last[1]) >= MIN_NET_MOVE_USD
             or now - last[3] >= HEARTBEAT_S
         )
         if fire:
-            msg = (f"Sentinel: A${eq*aud:.2f} (US${eq:.2f}) | "
+            msg = (f"Sentinel: A${(eq+bot2)*aud:.2f} (US${eq+bot2:.2f}) | "
+                   f"B1 A${eq*aud:.2f} · B2 A${bot2*aud:.2f} | "
                    f"free A${free*aud:.2f} | epoch net US${net:+.2f} | {npos} open")
             with open(OUTBOX, "a") as f:
                 f.write(json.dumps({"to": "vip", "text": msg}) + "\n")
                 f.write(json.dumps({"text": msg}) + "\n")
-            last = (eq, net, npos, now)
+            last = (eq + bot2, net, npos, now, bot2)
     except Exception as e:
         print(f"[balance-will] {type(e).__name__}: {e}", flush=True)
     time.sleep(60)
