@@ -22,7 +22,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 CFG_PATH = ROOT / "scripts" / "tg-config.json"
 OUT_PATH = ROOT / "state" / "tg-confluence.json"
-SESSION = str(ROOT / "scripts" / "tg-session")
+SESSION = str(ROOT / "scripts" / "tg-session-revived")
 MAX_AGE_S = 24 * 3600  # keep signals a day; scanner decides freshness
 
 # ---- signal parsing -------------------------------------------------------
