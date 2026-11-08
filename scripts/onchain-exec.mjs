@@ -182,7 +182,18 @@ async function main() {
     const HOLD_MINTS = new Set(readJ(path.join(STATE, 'onchain-hold.json'), {}).mints || []);
     const heldOrphans = Object.keys(bal.tokens).filter((m) => HOLD_MINTS.has(m) && !heldMints.has(m) && +bal.tokens[m] > 0);
     if (heldOrphans.length) console.log(`  🖐 hold-list: ${heldOrphans.map((m) => m.slice(0, 8) + '…').join(', ')} spared from orphan sweep`);
-    const orphans = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT && !heldMints.has(m) && !HOLD_MINTS.has(m));
+    // age gate: an orphan must PERSIST across passes before it is sweepable.
+    // A token that just landed (operator swap, airdrop, inbound transfer) is
+    // not purse fodder — the registration window is one timer cycle, and the
+    // CLAUDIA sweep sold an operator buy ~40s after it confirmed (2026-11-08).
+    const ORPHAN_AGE_MS = +(process.env.ONCHAIN_ORPHAN_AGE_MS || 600e3);
+    const orphanSeen = book.orphanSeen = book.orphanSeen || {};
+    const orphanCands = Object.keys(bal.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT && !heldMints.has(m) && !HOLD_MINTS.has(m) && +bal.tokens[m] > 0);
+    for (const m of orphanCands) if (!orphanSeen[m]) orphanSeen[m] = Date.now();
+    for (const m of Object.keys(orphanSeen)) if (!orphanCands.includes(m)) delete orphanSeen[m];
+    const orphans = orphanCands.filter((m) => Date.now() - orphanSeen[m] > ORPHAN_AGE_MS);
+    const fresh = orphanCands.filter((m) => !orphans.includes(m));
+    if (fresh.length) console.log(`  ⏳ young orphans held (age<${ORPHAN_AGE_MS / 60e3 | 0}m): ${fresh.map((m) => m.slice(0, 8) + '…').join(', ')}`);
     for (const mint of orphans.slice(0, 2)) {
       const raw = bal.tokensRaw?.[mint];
       if (!raw || !(+raw > 0)) continue;
@@ -216,6 +227,16 @@ async function main() {
     pos.zeroReads = (pos.zeroReads || 0) + 1;
     if (pos.zeroReads < 3) {
       console.log(`  ${pos.symbol}: wallet reads zero (${pos.zeroReads}/3) — holding seat pending confirm`);
+      continue;
+    }
+    // mint-scoped confirm before ANY close — the wallet listing silently
+    // misses fresh/lagged ATAs on flaky nodes (CLAUDIA seat nearly false-
+    // closed this way 2026-11-08). A mint-scoped read that returns tokens or
+    // errors keeps the seat; only a confirmed chain-zero reconciles.
+    const scoped = await sol.tokenBalance?.(pos.mint).catch(() => null);
+    if (scoped === null || scoped > 0) {
+      pos.zeroReads = 0;
+      console.log(`  ${pos.symbol}: mint-scoped read ${scoped === null ? 'errored' : 'shows ' + scoped} — listing miss, seat held`);
       continue;
     }
     journal({ side: 'reconcile', symbol: pos.symbol, mint: pos.mint, costUsd: pos.costUsd, note: 'wallet balance zero x3 — closed outside trail' });
@@ -286,8 +307,49 @@ async function main() {
     // staggered TP ladder — profile.tpLadder: [{mult, pct}] sells pct of the
     // CURRENT wallet qty each time mark crosses cost*mult; rungs are sticky
     // (pos.ladderDone) so a single cycle can't double-fire one.
+    // dynamic staggered TP — prof.dynTp {stepPct, sellPct, coverMult, outMint}:
+    // rungs RE-ANCHOR on every fill instead of a fixed multiplier table — each
+    // +stepPct above the higher of (last sell mark, cost×coverMult) sells
+    // sellPct of the LOOP portion. A trend keeps banking indefinitely (no
+    // "ladder exhausted"); coverMult (default 1.03) keeps every sale above the
+    // round-trip fee toll; proceeds settle to SOL by default (operator mandate
+    // 2026-11-08: profit back into SOL, net of fees, same staggered TP shape
+    // as the Bitget-side ladder).
+    const dyn = prof.dynTp || null;
+    if (dyn && pos.unitCost > 0 && (wQty > 0)) {
+      if (prof.moonKeep && pos.moonKeepRaw == null)
+        pos.moonKeepRaw = Math.floor(qtyRaw * prof.moonKeep);
+      const moonKeep = pos.moonKeepRaw || 0;
+      const cover = pos.unitCost * +(dyn.coverMult || 1.03);
+      const anchor = Math.max(+pos.lastTpUnit || 0, cover);
+      const trigger = anchor * (1 + +(dyn.stepPct || 0.15));
+      if (unitMark >= trigger) {
+        const sellable = Math.max(0, qtyRaw - moonKeep);
+        const sellRaw = Math.min(Math.floor(qtyRaw * +(dyn.sellPct || 0.12)), sellable);
+        if (!(sellRaw > 0)) {
+          if (sellable <= 0) console.log(`  ${pos.symbol}: moon-bag floor reached — dyn-tp fully banked`);
+        } else {
+          const outMint = dyn.outMint || sol.MINT.SOL;
+          try {
+            let rr = null, tpErr = null;
+            for (const slip of [SLIPPAGE_SELL_BPS, SLIPPAGE_SELL_BPS * 4]) {
+              try { rr = await sol.swapAny({ inputMint: pos.mint, outputMint: outMint, amount: sellRaw, slippageBps: slip, solBal: bal.sol }); break; }
+              catch (e) { tpErr = e; }
+            }
+            if (!rr) { try { rr = await sol.swapUltra({ inputMint: pos.mint, outputMint: outMint, amount: sellRaw, slippageBps: SLIPPAGE_SELL_BPS * 4 }); } catch (e) { tpErr = e; } }
+            if (!rr) throw tpErr;
+            journal({ side: 'tp-sell', symbol: pos.symbol, mint: pos.mint, qtyRaw: sellRaw, estUsd: +(unitMark * sellRaw).toFixed(4), costUsd: +(pos.unitCost * sellRaw).toFixed(4), netUsd: +((unitMark - pos.unitCost) * sellRaw).toFixed(4), sig: rr.signature, reason: `dyn-tp @${(trigger / pos.unitCost).toFixed(2)}x → SOL` });
+            pos.qtyRaw = Math.max(0, (pos.qtyRaw || 0) - sellRaw);
+            if (bal.tokensRaw) bal.tokensRaw[pos.mint] = Math.max(0, (bal.tokensRaw[pos.mint] || 0) - sellRaw);
+            pos.lastTpUnit = unitMark;
+            console.log(`  DYN-TP ${pos.symbol}: sold ${(+(dyn.sellPct || 0.12) * 100) | 0}% loop @ ${(trigger / pos.unitCost).toFixed(2)}x → SOL sig ${rr.signature.slice(0, 12)}`);
+          } catch (e) { console.log(`  ${pos.symbol}: dyn-tp failed ${String(e.message || e).slice(0, 80)}`); }
+        }
+      }
+    }
+
     const ladder = prof.tpLadder || null;
-    if (ladder && (pos.costUsd || 0) > 0) {
+    if (ladder && !dyn && (pos.costUsd || 0) > 0) {
       pos.ladderDone = pos.ladderDone || [];
       // moon bag (operator mandate 2026-11-07): prof.moonKeep freezes a share
       // of the seat qty that TP rungs and trails can NEVER sell — the loop

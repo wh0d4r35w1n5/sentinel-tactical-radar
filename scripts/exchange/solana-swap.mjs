@@ -148,4 +148,17 @@ export async function swapAny({ inputMint, outputMint, amount, slippageBps = 150
   return swap({ inputMint, outputMint, amount, slippageBps });
 }
 
-export default { walletReady, keypair, address, balances, quote, swap, swapUltra, swapAny, MINT };
+// mint-scoped balance — the authoritative read for ONE mint. The wallet-wide
+// listing silently misses fresh/lagged ATAs on flaky nodes (returns empty
+// maps, not errors); a mint-scoped query is how a reconcile can tell "real
+// zero" from "listing miss". Returns raw integer balance, or null on error.
+export async function tokenBalance(mintAddr) {
+  if (!walletReady()) return null;
+  const conn = new Connection(RPC, 'confirmed');
+  const r = await conn.getParsedTokenAccountsByOwner(
+    keypair().publicKey, { mint: new PublicKey(mintAddr) }).catch(() => null);
+  if (!r) return null;
+  return (r.value || []).reduce((a, t) => a + (+t.account.data.parsed?.info?.tokenAmount?.amount || 0), 0);
+}
+
+export default { walletReady, keypair, address, balances, quote, swap, swapUltra, swapAny, tokenBalance, MINT };
