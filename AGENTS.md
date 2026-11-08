@@ -1035,6 +1035,31 @@ Reviewed against the live architecture. Each row: the failure mode → what guar
   scripts+deploy+tv+AGENTS.md (secrets gitignored); offline tarball sent
   to Will via Telegram 2026-10-15 (.env*/tg-config/sessions excluded).
 
+### scanner/rapid decoupling (2026-11-08 — post-audit structural fix)
+
+`build-scanner` was spawned inside rapid's 15s loop: scans take ~26min on
+this box, exceeded `RAPID_CHILD_TIMEOUT_MS` every cycle (68 straight
+SIGKILLs), and died mid-tail — `api/trades-taken.json` + `health.json`
+froze Nov 5. Now: `sentinel-build-scanner.timer` fires the oneshot every
+45min (caged MemoryMax=1100M CPUWeight=15 IOWeight=15 TimeoutStartSec=3600
++ `SENTINEL_SCAN_DEADLINE_MS=2400000` — the script's internal 540s deadline
+was sized under the OLD spawn cap). Rapid only monitors planAge. Two
+companion fixes: rapid `StandardOutput=journal` (append-file logging
+D-state-froze the event loop on the writeback-jammed disk) and sysctl
+`vm.dirty_ratio=5/background=2`. `trades-taken.json` additionally has its
+own 10min timer (`sentinel-trades-taken.timer`) — evidence feed never
+waits on the scanner again.
+
+Evidence snapshot (api/, 2026-11-08 ~21:45): lifetime fees $754 vs $890
+realized gross; post-epoch book net +$5.16 on $2.50 fees; grade-A evals
+are the only earning cohort (+0.55%/ep, n93); per-family losers live in
+strategy-policy probation + state/auto-deny.json (sym:side 72h quarantine:
+MUU long+short, NEAR:short, SOXL:short, ICNT:long, SNDK:short). Promoted
+shadow cells (down3-cont:h5 +0.94%/trade WR59% n5334, h10 +1.25% WR61%)
+already pass the longs-only mandate — that path is wired, don't re-add it.
+Live exec env had SENTINEL_MIN_FAVOR_DRIFT=-1.0 (tape-confirm neutered) —
+restored 0.001 via drop-in zzz-favor-confirm.conf.
+
 ### auto-improvement loop (2026-11-08 — operator standing order "every 3 mins forever")
 
 `sentinel-autoimprove.service` runs `scripts/autoimprove.py` every 180s —
