@@ -1035,6 +1035,24 @@ Reviewed against the live architecture. Each row: the failure mode → what guar
   scripts+deploy+tv+AGENTS.md (secrets gitignored); offline tarball sent
   to Will via Telegram 2026-10-15 (.env*/tg-config/sessions excluded).
 
+### auto-improvement loop (2026-11-08 — operator standing order "every 3 mins forever")
+
+`sentinel-autoimprove.service` runs `scripts/autoimprove.py` every 180s —
+bounded profitability checks against LIVE STATE FILES ONLY (zero exchange
+API calls on the loaded box). Per round:
+- measured bleeders (trailing net ≤ −$0.25 n≥3, or ≤ −$0.50 single fill)
+  → folded into `state/auto-deny.json` quarantine
+- `nonconforming-seats.json` stale >300s → exec-cycle wedge → ops alert
+- flagged wind-down seats open >30min past profit window → finding
+- 24h fee-burn share > 55% of gross → finding
+- funding-arb candidates <24h breakeven → finding (carry lane's evidence)
+- bitget-watch journal silent >8min → protection-stall alert
+- dead critical service (≥2 dead rounds, ≤1 restart/15min) → restart
+
+NEVER opens positions, closes losers, loosens rails, touches manual seats,
+or edits code — positive findings only. Journals each round to
+`state/autoimprove-log.jsonl`, ops-alerts on actions.
+
 ### Full offline backup — the FAST procedure (2026-11-08, learned the hard way)
 
 **NEVER build the archive on the VPS.** Its disk WRITE path is nearly dead
