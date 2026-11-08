@@ -111,24 +111,20 @@ for (;;) {
     // entries are edge-gated anyway, so a slightly stale context is cheap.
     const b = Date.now(); const rExec = await run('scripts/bitget-exec.mjs'); tExec = Date.now() - b;
     beat('post-exec');
-    // scan-verify: build-scanner has a silent exit-0 path (empty event
-    // loop under socket pressure — pending promise, no handles → node
-    // exits mid-main). It prints nothing and the cycle flags clean while
-    // live-plan.json rots. A scan that didn't freshen the plan is a
-    // failed scan — retry once, and say it loud either way.
+    // scanner decoupled (2026-11-08): build-scanner runs on its own
+    // sentinel-build-scanner.timer (oneshot, cgroup-caged, 45min cadence).
+    // Spawning it per-cycle serialized exec behind a 26min+ scan that got
+    // SIGKILLed at CHILD_TIMEOUT every cycle — exec ran once per ~29min
+    // instead of every ~15s, and the tail artifacts (health/trades-taken)
+    // never wrote. Rapid now only monitors plan freshness: a stale plan
+    // flags the cycle loudly; exec still runs mandate-only on stale intel.
     const planAge = () => {
       try { return (Date.now() - JSON.parse(fs.readFileSync('api/live-plan.json', 'utf8')).ts) / 6e4; }
       catch { return Infinity; }
     };
-    let a = Date.now();
-    let rScan = await run('scripts/build-scanner.mjs');
-    if (planAge() > 15 && !(rScan.code || rScan.sig || rScan.err)) {
-      console.log(`[rapid] scan exited 0 but plan still ${Math.round(planAge())}min stale — silent exit, retrying once`);
-      rScan = await run('scripts/build-scanner.mjs');
-    }
-    if (planAge() > 15)
-      console.log(`[rapid] ⚠ scan produced no fresh plan (${Math.round(planAge())}min stale${rScan.sig ? `, sig=${rScan.sig}` : ''}${rScan.code ? `, code=${rScan.code}` : ''}) — exec runs mandate-only`);
-    tScan = Date.now() - a;
+    const age = planAge();
+    if (age > 15)
+      console.log(`[rapid] ⚠ plan ${Math.round(age)}min stale — exec runs mandate-only (scanner is timer-driven; check sentinel-build-scanner.service)`);
     beat('post-scan');
     await run('scripts/god.mjs').catch((e) => console.log('[rapid] god:', e.message || e));
     await run('scripts/thoughts.mjs').catch((e) => console.log('[rapid] thoughts:', e.message || e));
@@ -162,7 +158,7 @@ for (;;) {
     // crash accounting AFTER the fan-out — a dead scanner/exec flags the
     // cycle but must not starve the evidence + dashboard children that ride
     // below it (god/eval/bundle all read state, not the dead child's output).
-    const crashed = [rScan, rExec]
+    const crashed = [rExec]
       .filter((r) => r.code !== 0 || r.sig || r.err)
       .map((r) => `${r.f}: ${r.err?.message || `code=${r.code} sig=${r.sig}`}`)
       .join('; ');
