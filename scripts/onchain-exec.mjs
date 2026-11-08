@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import './load-env.mjs';
 import * as sol from './exchange/solana-swap.mjs';
 import { emitCustody } from './custody-proof.mjs';
+import { readJson as readRiskJson, validateRiskPolicy } from './execution-risk.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const API = path.join(ROOT, 'api');
@@ -51,6 +52,30 @@ const DUST_ABANDON_USD = +(process.env.ONCHAIN_DUST_USD || 0.05); // below this 
 // stays economic; env lets the operator scale them up when the purse grows
 const MIN_STABLE_USD = +(process.env.ONCHAIN_MIN_STABLE_USD || 5);
 const MIN_SIZE_USD = +(process.env.ONCHAIN_MIN_SIZE_USD || 4);
+// --- bot-1 intelligence, ported to the on-chain lane ---
+// dead-seat: a bag that never showed favor past NO_FAVOR_H gets cut — same
+// doctrine as the futures dead-seat kill (no favorable excursion = wrong seat).
+const NO_FAVOR_H = +(process.env.ONCHAIN_NO_FAVOR_H || 8);
+const FAVOR_MULT = +(process.env.ONCHAIN_FAVOR_MULT || 1.15);   // "favor" = peak >= cost*1.15
+// mint cooldown: a mint that exited red can't be rebought for N hours — the
+// cell-level lastLossAt gate, on mints instead of cells.
+const MINT_LOSS_CD_H = +(process.env.ONCHAIN_MINT_LOSS_CD_H || 12);
+// rolling-loss brake: if the last N realized exits net red by more than
+// ROLL_LOSS_USD, entries halt for ROLL_HALT_H — the lane's own CUSUM-lite.
+const ROLL_LOSS_USD = +(process.env.ONCHAIN_ROLL_LOSS_USD || 6);
+const ROLL_LOSS_N = +(process.env.ONCHAIN_ROLL_LOSS_N || 6);
+const ROLL_HALT_H = +(process.env.ONCHAIN_ROLL_HALT_H || 6);
+// purse drawdown brake: purse equity (stables + marks) off its latched peak
+// past PURSE_DD -> entries blocked. Same dd-kill shape as the futures book.
+const PURSE_DD = +(process.env.ONCHAIN_PURSE_DD || 0.35);
+// churn brake: > CHURN_MAX round-trip exits in CHURN_WIN_H -> entries pause
+// the rest of the window — the fee-burn rail.
+const CHURN_MAX = +(process.env.ONCHAIN_CHURN_MAX || 10);
+const CHURN_WIN_H = +(process.env.ONCHAIN_CHURN_WIN_H || 12);
+// score-tiered sizing: floor-score candidates get a half clip (probe tier),
+// clearing SCORE_FULL earns the full clip — probation vs live sizing.
+const SCORE_FULL = +(process.env.ONCHAIN_SCORE_FULL || 78);
+const EQ_FILE = path.join(STATE, 'onchain-equity-peak.json');
 
 // single-flight lock — rapid's cycle spawn AND the 3-min trail timer both
 // call this script; two concurrent runners could double-sell the same bag
@@ -181,12 +206,21 @@ async function main() {
   // account reads zero is closed regardless of what the book believes
   // (bootstrap sweeps, external moves). Quote-marks on zero balance are
   // fiction and their sells can only ever simulation-fail.
-  const walletQty = (m) => +(bal.tokens?.[m] || 0);
+  // wallet zero must CONFIRM across 3 passes before reconcile — a single
+  // lagged/absent balance read (RPC flake, Token-2022 map miss) used to drop
+  // live seats with the tokens still in the wallet (WEALTH seat lost
+  // management this way, 2026-11-07). A real external move stays zero.
+  const walletQty = (m) => +(bal.tokensRaw?.[m] || bal.tokens?.[m] || 0);
   for (const pos of [...book.positions]) {
-    if (walletQty(pos.mint) > 0) continue;
-    journal({ side: 'reconcile', symbol: pos.symbol, mint: pos.mint, costUsd: pos.costUsd, note: 'wallet balance zero — closed outside trail' });
+    if (walletQty(pos.mint) > 0) { pos.zeroReads = 0; continue; }
+    pos.zeroReads = (pos.zeroReads || 0) + 1;
+    if (pos.zeroReads < 3) {
+      console.log(`  ${pos.symbol}: wallet reads zero (${pos.zeroReads}/3) — holding seat pending confirm`);
+      continue;
+    }
+    journal({ side: 'reconcile', symbol: pos.symbol, mint: pos.mint, costUsd: pos.costUsd, note: 'wallet balance zero x3 — closed outside trail' });
     book.positions = book.positions.filter((p) => p.mint !== pos.mint);
-    console.log(`  ${pos.symbol}: wallet empty — book reconciled (cost $${(pos.costUsd || 0).toFixed(2)} returned via sweeps)`);
+    console.log(`  ${pos.symbol}: wallet empty (confirmed) — book reconciled (cost $${(pos.costUsd || 0).toFixed(2)} returned via sweeps)`);
   }
 
   // ---- exits first: trail every open position ----
@@ -196,8 +230,21 @@ async function main() {
     // fills, sweep leftovers, and externally-moved chunks all leave qtyRaw
     // overstated, and every swap built on it sim-fails 'insufficient funds'.
     await new Promise((r) => setTimeout(r, 150)); // lite-api burst pacing
-    const qtyRaw = Math.min(+pos.qtyRaw || 0, +(bal.tokensRaw?.[pos.mint] || 0));
+    const wQty = +(bal.tokensRaw?.[pos.mint] || 0);
+    if (wQty > 0 && (pos.qtyRaw || 0) > wQty) {
+      // external outflow (manual transfer / outside partial sell): the cost
+      // basis rides out with the tokens — per-unit marks keep the trail
+      // blind to qty, so a manual trim can never read as a price crash.
+      pos.costUsd = +((pos.costUsd || 0) * (wQty / pos.qtyRaw)).toFixed(6);
+      journal({ side: 'outflow', symbol: pos.symbol, mint: pos.mint, qtyRaw: pos.qtyRaw - wQty, note: 'external outflow — cost basis carried out' });
+      pos.qtyRaw = wQty;
+    }
+    let qtyRaw = Math.min(+pos.qtyRaw || 0, wQty);
     if (!(qtyRaw > 0)) continue; // zero-balance reconcile above owns this case
+    // moon bag: trails can only sell the loop portion — the locked floor
+    // stays in the wallet through every exit path
+    const moonKeepRaw = pos.moonKeepRaw || 0;
+    const sellableRaw = Math.max(0, qtyRaw - moonKeepRaw);
     let mark = null;
     try {
       // lite-api free tier answers bursts with Cloudflare HTML — one backoff
@@ -208,7 +255,7 @@ async function main() {
         try {
           q = await sol.quote({
             inputMint: pos.mint, outputMint: sol.MINT.USDC,
-            amount: qtyRaw, slippageBps: SLIPPAGE_SELL_BPS,
+            amount: sellableRaw > 0 ? sellableRaw : qtyRaw, slippageBps: SLIPPAGE_SELL_BPS,
           });
         } catch (e) { qErr = e; if (!att) await new Promise((r) => setTimeout(r, 1500)); }
       }
@@ -220,15 +267,78 @@ async function main() {
     // FEE_LOCK is a profit lock, not a -1.5% entry stop — a memecoin
     // sell-quote sits structurally below buy-in on tick one, so the cost
     // floor only tightens once peak has cleared the round-trip (LOCK_ARM).
-    const locked = (pos.peakUsd || 0) > (pos.costUsd || 0) * LOCK_ARM;
-    const trailStop = Math.max((pos.costUsd || 0) * (locked ? FEE_LOCK : STOP_LOSS), (pos.peakUsd || 0) * KEEP);
+    const prof = pos.profile || {};
+    // per-unit marks — the trail compares value-per-token, never the bag
+    // total, so partial outflows can't impersonate a price dump.
+    const unitMark = mark / qtyRaw;
+    if (!(pos.unitCost > 0)) pos.unitCost = (pos.costUsd || 0) > 0 ? pos.costUsd / qtyRaw : unitMark;
+    pos.peakUnit = Math.max(pos.peakUnit || unitMark, unitMark);
+    const locked = pos.peakUnit > pos.unitCost * (prof.arm ?? LOCK_ARM);
+    const trailStop = Math.max(pos.unitCost * (locked ? (prof.feeLock ?? FEE_LOCK) : (prof.floor ?? STOP_LOSS)), pos.peakUnit * (prof.keep ?? KEEP));
+    // floor:0 = operator never-sell-at-loss mandate (WEALTH 2026-11-06):
+    // the trail only exists in the profit zone — a peak retrace that would
+    // close below cost is NOT an exit, the seat holds. Ladder rungs and the
+    // armed feeLock still bank the upside.
+    const noLoss = +(prof.floor ?? 1) === 0;
+    const trailHit = unitMark < trailStop && (!noLoss || trailStop >= pos.unitCost);
     const heldH = (Date.now() - pos.ts) / 36e5;
+
+    // staggered TP ladder — profile.tpLadder: [{mult, pct}] sells pct of the
+    // CURRENT wallet qty each time mark crosses cost*mult; rungs are sticky
+    // (pos.ladderDone) so a single cycle can't double-fire one.
+    const ladder = prof.tpLadder || null;
+    if (ladder && (pos.costUsd || 0) > 0) {
+      pos.ladderDone = pos.ladderDone || [];
+      // moon bag (operator mandate 2026-11-07): prof.moonKeep freezes a share
+      // of the seat qty that TP rungs and trails can NEVER sell — the loop
+      // plays the rest, the bag rides to zero or 1000x with the operator.
+      if (!(wQty > 0)) continue; // lagged balance read — never burn rungs on phantom qty
+      if (prof.moonKeep && pos.moonKeepRaw == null)
+        pos.moonKeepRaw = Math.floor(qtyRaw * prof.moonKeep);
+      const moonKeepRaw = pos.moonKeepRaw || 0;
+      for (let i = 0; i < ladder.length; i++) {
+        const rung = ladder[i];
+        if (pos.ladderDone.includes(i) || unitMark < pos.unitCost * rung.mult) continue;
+        const sellable = Math.max(0, qtyRaw - moonKeepRaw);
+        const sellRaw = Math.min(Math.floor(qtyRaw * rung.pct), sellable);
+        if (!(sellRaw > 0)) { pos.ladderDone.push(i); if (sellable <= 0) console.log(`  ${pos.symbol}: moon-bag floor reached — loop fully banked`); continue; }
+        try {
+          let rr = null, tpErr = null;
+          for (const slip of [SLIPPAGE_SELL_BPS, SLIPPAGE_SELL_BPS * 4]) {
+            try { rr = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: sellRaw, slippageBps: slip, solBal: bal.sol }); break; }
+            catch (e) { tpErr = e; }
+          }
+          if (!rr) { try { rr = await sol.swapUltra({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: sellRaw, slippageBps: SLIPPAGE_SELL_BPS * 4 }); } catch (e) { tpErr = e; } }
+          if (!rr) throw tpErr;
+          journal({ side: 'tp-sell', symbol: pos.symbol, mint: pos.mint, qtyRaw: sellRaw, estUsd: +(unitMark * sellRaw).toFixed(4), costUsd: +(pos.unitCost * sellRaw).toFixed(4), netUsd: +((unitMark - pos.unitCost) * sellRaw).toFixed(4), sig: rr.signature, reason: `tp-rung${i + 1} @${rung.mult}x` });
+          pos.qtyRaw = Math.max(0, (pos.qtyRaw || 0) - sellRaw);
+          if (bal.tokensRaw) bal.tokensRaw[pos.mint] = Math.max(0, (bal.tokensRaw[pos.mint] || 0) - sellRaw);
+          pos.ladderDone.push(i);
+          console.log(`  TP${i + 1} ${pos.symbol}: sold ${(rung.pct * 100) | 0}% @ ${rung.mult}x mark $` + mark.toFixed(2) + ` sig ${rr.signature.slice(0, 12)}`);
+          await new Promise((r2) => setTimeout(r2, 150));
+        } catch (e) { console.log(`  ${pos.symbol}: tp-rung${i + 1} failed ${String(e.message || e).slice(0, 80)}`); }
+      }
+    }
+
     const reason =
-      mark < trailStop ? `trail ${mark.toFixed(2)}<${trailStop.toFixed(2)}` :
-      heldH > MAX_HOLD_H && mark < (pos.costUsd || 0) * 1.05 ? `age ${heldH.toFixed(0)}h unprofitable` :
+      trailHit ? `trail u${unitMark.toFixed(6)}<u${trailStop.toFixed(6)}` :
+      !noLoss && heldH > NO_FAVOR_H && pos.peakUnit < pos.unitCost * FAVOR_MULT ? `dead-seat no favor ${heldH.toFixed(0)}h` :
+      !noLoss && heldH > (prof.maxHoldH ?? MAX_HOLD_H) && unitMark < pos.unitCost * 1.05 ? `age ${heldH.toFixed(0)}h unprofitable` :
       null;
     console.log(`  ${pos.symbol}: $${mark.toFixed(2)} (cost $${pos.costUsd.toFixed(2)}, peak $${pos.peakUsd.toFixed(2)})${reason ? ' → ' + reason : ''}`);
     if (!reason) continue;
+    // moon bag: exits sell only the loop portion — the locked floor rides
+    // regardless of trails/stops. Seats with no floor (moonKeepRaw=0) exit
+    // whole exactly as before.
+    const exitRaw = Math.max(0, qtyRaw - (pos.moonKeepRaw || 0));
+    if (!(exitRaw > 0)) {
+      // moon-only seat — clear the stale armed peak too, or the next avg-in
+      // gets instantly trail-sold against a peak that was already monetized
+      pos.peakUnit = unitMark;
+      pos.peakUsd = Math.min(pos.peakUsd || mark, mark);
+      console.log(`  ${pos.symbol}: moon-bag only — ${reason} ignored`);
+      continue;
+    }
     try {
       // exits must LAND — a falling bag reprices inside the quote window,
       // so a tripped stop escalates slippage and then falls through to the
@@ -236,17 +346,29 @@ async function main() {
       // cycle. Better a bad fill than no exit at all.
       let r = null, lastErr = null;
       for (const slip of [SLIPPAGE_SELL_BPS, SLIPPAGE_SELL_BPS * 4]) {
-        try { r = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: qtyRaw, slippageBps: slip, solBal: bal.sol }); break; }
+        try { r = await sol.swapAny({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: exitRaw, slippageBps: slip, solBal: bal.sol }); break; }
         catch (e) { lastErr = e; }
       }
       if (!r) {
-        try { r = await sol.swapUltra({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: qtyRaw, slippageBps: SLIPPAGE_SELL_BPS * 4 }); }
+        try { r = await sol.swapUltra({ inputMint: pos.mint, outputMint: sol.MINT.USDC, amount: exitRaw, slippageBps: SLIPPAGE_SELL_BPS * 4 }); }
         catch (e) { lastErr = e; }
       }
       if (!r) throw lastErr;
-      journal({ side: 'sell', symbol: pos.symbol, mint: pos.mint, qtyRaw, estUsd: mark, costUsd: pos.costUsd, sig: r.signature, reason });
-      book.positions = book.positions.filter((p) => p.mint !== pos.mint);
-      console.log(`  SOLD ${pos.symbol} ~$${mark.toFixed(2)} sig ${r.signature.slice(0, 12)}… (${reason})`);
+      const exitFrac = exitRaw / qtyRaw;
+      journal({ side: 'sell', symbol: pos.symbol, mint: pos.mint, qtyRaw: exitRaw, estUsd: +(mark * exitFrac).toFixed(4), costUsd: +((pos.costUsd || 0) * exitFrac).toFixed(4), netUsd: +((mark - (pos.costUsd || 0)) * exitFrac).toFixed(4), sig: r.signature, reason });
+      if (qtyRaw - exitRaw > 0) {
+        pos.qtyRaw = qtyRaw - exitRaw;
+        if (pos.unitCost > 0) pos.costUsd = +(pos.unitCost * pos.qtyRaw).toFixed(4);
+        if (bal.tokensRaw) bal.tokensRaw[pos.mint] = Math.max(0, (bal.tokensRaw[pos.mint] || 0) - exitRaw);
+        // the old peak was monetized — clear it so dip rebuys aren't instantly
+        // trail-sold by a stale armed stop (whipsaw trap, WEALTH 2026-11-06)
+        pos.peakUnit = unitMark;
+        pos.peakUsd = Math.min(pos.peakUsd || mark, mark);
+        console.log(`  SOLD ${pos.symbol} loop-portion ~$${(mark * exitFrac).toFixed(2)} sig ${r.signature.slice(0, 12)}… (${reason}) — moon bag ${pos.qtyRaw} raw rides`);
+      } else {
+        book.positions = book.positions.filter((p) => p.mint !== pos.mint);
+        console.log(`  SOLD ${pos.symbol} ~$${mark.toFixed(2)} sig ${r.signature.slice(0, 12)}… (${reason})`);
+      }
     } catch (e) {
       // unsellable dust isn't a position, it's residue — write it off in
       // the book instead of burning a sim-fail retry every single tick.
@@ -259,6 +381,83 @@ async function main() {
   }
 
   // ---- entries: top audited candidate, non-perp only ----
+  // Existing exits remain active; funding the wallet must not silently re-arm
+  // an unvalidated entry engine outside the futures admission policy. An
+  // unreadable policy file means entries OFF — it must never kill the exit
+  // bookkeeping that already ran above.
+  let entriesAllowed = false;
+  try {
+    entriesAllowed =
+      validateRiskPolicy(readRiskJson(path.join(STATE, 'execution-risk.json'))).allowOnchainEntries === true &&
+      readRiskJson(path.join(STATE, 'execution-maintenance.json'), true)?.active !== true;
+  } catch {}
+  // FORCE-ACCUMULATE (operator order 2026-11-06 — "keep buying WEALTH
+  // on loop as directed; take profit regularly on the way up; move the
+  // stop into zero-risk-with-buffer once clear"). Every pass buys the
+  // mandated mint with a clip of spendable purse and registers/avg-ins
+  // the book position so the trail+ladder machinery manages it:
+  //   floor 0.75 pre-profit (bounded, not a coin-flip close),
+  //   feeLock 1.01 once peak > cost*1.02  = zero-risk PLUS buffer,
+  //   keep 0.80 trail, denser TP rungs banking on the way up,
+  //   maxHoldH ~1yr — the accumulation seat never expires.
+  const FORCE_MINT = process.env.ONCHAIN_FORCE_MINT || '';
+  const FORCE_SYM = process.env.ONCHAIN_FORCE_SYM || 'FORCE';
+  const FORCE_CLIP_USD = +(process.env.ONCHAIN_FORCE_CLIP_USD || 0); // 0 = PCT x spendable
+  const FORCE_MAX_COST = +(process.env.ONCHAIN_FORCE_MAX_COST_USD || 50);
+  const FORCE_MIN_KEEP = +(process.env.ONCHAIN_FORCE_MIN_KEEP_USD || 0.5);
+  if (FORCE_MINT && spendableUsd - FORCE_MIN_KEEP >= MIN_SIZE_USD) {
+    const clip = Math.min(FORCE_CLIP_USD || spendableUsd * PCT, spendableUsd - FORCE_MIN_KEEP, MAX_USD);
+    const existing = book.positions.find((pp) => pp.mint === FORCE_MINT);
+    const FORCE_GAS_MIN = +(process.env.ONCHAIN_FORCE_GAS_MIN || 0.002); // mandated lane: Ultra goes gasless under 0.004 anyway — don't starve the buy on a conservative floor (WEALTH rebuy blocked at sol=0.004, 2026-11-06)
+    if (clip >= MIN_SIZE_USD && bal.sol >= FORCE_GAS_MIN && (existing?.costUsd || 0) < FORCE_MAX_COST) {
+      const payMint = (bal.tokens[sol.MINT.USDC] || 0) >= clip ? sol.MINT.USDC : sol.MINT.USDT; // bal.tokens is UI units — compare to clip USD, not raw lamports
+      const inRaw = Math.round(clip * 1e6);
+      console.log(`  FORCE-BUY ${FORCE_SYM} $${clip.toFixed(2)} — accumulate loop`);
+      try {
+        await new Promise((r) => setTimeout(r, 250));
+        const q = await sol.quote({ inputMint: payMint, outputMint: FORCE_MINT, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS });
+        const r = await sol.swapAny({ inputMint: payMint, outputMint: FORCE_MINT, amount: inRaw, slippageBps: SLIPPAGE_BUY_BPS, solBal: bal.sol });
+        const fprof = { floor: +(process.env.ONCHAIN_FORCE_FLOOR || 0.75), arm: +(process.env.ONCHAIN_LOCK_ARM || 99), feeLock: +(process.env.ONCHAIN_FEE_LOCK || 1.01), keep: +(process.env.ONCHAIN_KEEP || 0.5), maxHoldH: 8760,
+          moonKeep: +(process.env.ONCHAIN_FORCE_MOON_KEEP || 0.4),
+          tpLadder: [{ mult: 1.15, pct: 0.15 }, { mult: 1.3, pct: 0.15 }, { mult: 1.6, pct: 0.2 }, { mult: 2.0, pct: 0.2 }, { mult: 3.0, pct: 0.25 }, { mult: 4.0, pct: 0.3 }, { mult: 6.0, pct: 0.4 }] };
+        if (existing) {
+          existing.qtyRaw = (+existing.qtyRaw || 0) + (+q.outAmount);
+          existing.costUsd = +(existing.costUsd || 0) + clip;
+          existing.profile = existing.profile || fprof;
+          existing.lastValueUsd = existing.costUsd;
+          console.log(`  FILLED (avg-in) sig ${r.signature.slice(0, 12)}… total cost $${existing.costUsd.toFixed(2)}`);
+        } else {
+          book.positions.push({ mint: FORCE_MINT, symbol: FORCE_SYM, qtyRaw: +q.outAmount, costUsd: clip, peakUsd: clip,
+            lastValueUsd: clip, ts: Date.now(), entryPxUsd: null, score: null, liqUsd: null, sig: r.signature, profile: fprof });
+          console.log(`  FILLED (new seat) sig ${r.signature.slice(0, 12)}…`);
+        }
+        journal({ side: 'buy', symbol: FORCE_SYM, mint: FORCE_MINT, usd: clip, qtyRaw: +q.outAmount, sig: r.signature, force: true });
+      } catch (e) { console.log(`  FORCE-BUY failed ${(e.message || '').slice(0, 120)}`); }
+    }
+  }
+
+  if (!entriesAllowed) {
+    done('onchain entries disabled by execution risk policy');
+    return;
+  }
+  // --- brakes (bot-1 rails, purse-shaped) ---
+  const fillsLog = readJ(FILLS_FILE, []);
+  const exits = fillsLog.filter((f) => ['sell', 'tp-sell', 'abandon', 'reconcile'].includes(f.side) && f.costUsd != null);
+  const purseEq = spendableUsd + deployed;
+  const eqTrack = readJ(EQ_FILE, null) || { peak: purseEq };
+  if (purseEq > (eqTrack.peak || 0)) { eqTrack.peak = purseEq; writeJ(EQ_FILE, eqTrack); }
+  const purseDdPct = eqTrack.peak > 0 ? (eqTrack.peak - purseEq) / eqTrack.peak : 0;
+  if (purseDdPct >= PURSE_DD) { console.log(`  🔒 purse-dd brake ${(purseDdPct * 100).toFixed(1)}% >= ${(PURSE_DD * 100)}% — entries blocked`); done('purse-dd brake'); return; }
+  const recentNet = exits.slice(-ROLL_LOSS_N).reduce((a, f) => a + ((f.estUsd || 0) - (f.costUsd || 0)), 0);
+  if (exits.length >= ROLL_LOSS_N && recentNet < -ROLL_LOSS_USD) {
+    const lastExit = exits[exits.length - 1]?.ts || 0;
+    if (Date.now() - lastExit < ROLL_HALT_H * 36e5) { console.log(`  🔒 rolling-loss brake $${recentNet.toFixed(2)} net on last ${ROLL_LOSS_N} exits — halt ${ROLL_HALT_H}h`); done('rolling-loss brake'); return; }
+  }
+  const churned = exits.filter((f) => Date.now() - f.ts < CHURN_WIN_H * 36e5).length;
+  if (churned >= CHURN_MAX) { console.log(`  🔒 churn brake ${churned} exits/${CHURN_WIN_H}h — entries paused`); done('churn brake'); return; }
+  const lossCd = {};
+  for (const f of exits.slice(-40)) if ((f.estUsd || 0) < (f.costUsd || 0) && f.mint) lossCd[f.mint] = f.ts;
+
   if (book.positions.length >= MAX_POSITIONS || deployed >= MAX_DEPLOYED_USD || spendableUsd < MIN_STABLE_USD) {
     done(spendableUsd < MIN_STABLE_USD ? `purse below floor ($${spendableUsd.toFixed(2)} spendable < $${MIN_STABLE_USD}${vaultRes > 0 ? ` · vault sealed $${vaultRes.toFixed(2)}` : ''})` : 'capacity full');
     return;
@@ -273,6 +472,7 @@ async function main() {
   const held = new Set(book.positions.map((p) => p.mint));
   const cands = (hot.hot || []).filter((h) =>
     h.chain === 'solana' && !h.perpAvailable && !held.has(h.contract) &&
+    !(lossCd[h.contract] && Date.now() - lossCd[h.contract] < MINT_LOSS_CD_H * 36e5) &&
     (h.score || 0) >= MIN_SCORE &&
     (+h.chg24h || 0) >= MIN_CHG_PCT &&
     h.audit && !h.audit.rugged && (h.audit.risks || []).length <= 3 &&
@@ -283,7 +483,7 @@ async function main() {
   let stableLeft = spendableUsd, deployLeft = MAX_DEPLOYED_USD - deployed;
   let usdcLeft = bal.tokens[sol.MINT.USDC] || 0, usdtLeft = bal.tokens[sol.MINT.USDT] || 0;
   for (const cand of cands.slice(0, MAX_POSITIONS - book.positions.length)) {
-    const sizeUsd = Math.min(MAX_USD, stableLeft * PCT, deployLeft);
+    const sizeUsd = Math.min(MAX_USD, stableLeft * PCT, deployLeft) * ((cand.score || 0) >= SCORE_FULL ? 1 : 0.5);
     if (sizeUsd < MIN_SIZE_USD) { console.log(`  purse drained below clip floor ($${sizeUsd.toFixed(2)} < $${MIN_SIZE_USD}) — done entering`); break; }
     // pay with whichever stable actually covers this clip
     const mint = usdcLeft >= sizeUsd ? sol.MINT.USDC : sol.MINT.USDT;

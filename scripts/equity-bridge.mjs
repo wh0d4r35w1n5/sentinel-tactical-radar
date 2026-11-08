@@ -27,10 +27,13 @@ for (let pg = 0; pg < 60; pg++) {
 }
 all.sort((a, b) => +a.cTime - +b.cTime);
 
+// Read the REAL Bitget account directly — live-ledger.json follows the
+// exec's mode (demo since 2026-10-26), which would poison the P&L join
+// with paper equity. This bridge reports real money only.
 let equityNow = null;
 try {
-  const ll = JSON.parse(fs.readFileSync(path.join(ROOT, 'api', 'live-ledger.json'), 'utf8'));
-  equityNow = +ll.equityUsd || null;
+  const acc = await X.getAccount();
+  equityNow = +acc?.equity || null;
 } catch {}
 
 const bridge = (since) => {
@@ -80,7 +83,7 @@ const out = {
   allTime: { ...bridge(0), windowStart: all.length ? new Date(+all[0].cTime).toISOString() : null, billsN: all.length },
   maxPnlDrawdownUsd: +ddUsd.toFixed(2),
   maxPnlDrawdownPct: +(ddPct * 100).toFixed(1),
-  equitySamples: samples.length,
+  equitySamples: samples,
 };
 fs.writeFileSync(path.join(ROOT, 'api', 'equity-bridge.json'), JSON.stringify(out, null, 2));
 console.log(JSON.stringify(out, null, 2));

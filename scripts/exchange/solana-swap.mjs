@@ -131,9 +131,21 @@ export async function swapUltra({ inputMint, outputMint, amount, slippageBps = 1
 // classic quote+swap otherwise. Pass a known solBal to skip the RPC probe.
 export async function swapAny({ inputMint, outputMint, amount, slippageBps = 150, solBal = null }) {
   if (solBal == null) solBal = (await balances()).sol;
-  return solBal < 0.004
-    ? swapUltra({ inputMint, outputMint, amount, slippageBps })
-    : swap({ inputMint, outputMint, amount, slippageBps });
+  if (solBal < 0.004) {
+    try {
+      return await swapUltra({ inputMint, outputMint, amount, slippageBps });
+    } catch (e) {
+      // Ultra's order book can't route every Token-2022 pair — WEALTH sells
+      // quote-fail there while the buy side works. Classic jup still routes;
+      // its preflight rejects unpaid-fee txs atomically so a thin wallet
+      // loses nothing by trying (~0.001 covers the fee once the dest ATA
+      // exists — no rent needed on sells into USDC).
+      if (solBal >= 0.001)
+        return swap({ inputMint, outputMint, amount, slippageBps });
+      throw e;
+    }
+  }
+  return swap({ inputMint, outputMint, amount, slippageBps });
 }
 
 export default { walletReady, keypair, address, balances, quote, swap, swapUltra, swapAny, MINT };
