@@ -1276,3 +1276,15 @@ Velocity floor: SENTINEL_MIN_ATR_PCT (default 0.010) refuses dead-range
 names in BOTH setup and mandate lanes; setup authoring sorts ATR%-first.
 RVOL cells (rvol-accum / rvol-ignition[-dn]) journal shadow census rows —
 promotion only via measured shadow-policy.
+
+## CAPITAL DEPLOYMENT — STANDING ORDER (2026-11-08, operator: "always deploy all capital according to tharp - savers are losers")
+
+All free margin works, always, sized by Van Tharp risk-based position
+sizing — never held back as "safety." Idle capital is a doctrine
+violation, not prudence. Deployment flows through the LEGAL lanes only:
+proven cells, RS-leaders, evidence-gated setups (tape-confirm, velocity
+floor, deny lists, manual-seat zero-contact all still ride). Breakers
+and vol-brakes still gate — but they are the exception that must be
+earned fresh, never a default excuse to sit in cash. When capital reads
+idle, the response is deploy-through-legal-lanes or an honest finding —
+never "waiting."
