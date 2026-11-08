@@ -203,6 +203,7 @@ async function restSnap() {
 // doesn't know (operator app buys, airdrops, hold-listed mints).
 async function bagPx(mints) {
   if (!mints.length) return {};
+  const out = {};
   try {
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mints.slice(0, 30).join(',')}`, { signal: AbortSignal.timeout(8000) });
     const j = await r.json();
@@ -211,13 +212,31 @@ async function bagPx(mints) {
       const m = p?.baseToken?.address, liq = +p?.liquidity?.usd || 0;
       if (m && liq > (best[m]?.liq || -1)) best[m] = { px: +p.priceUsd || 0, liq };
     }
-    return Object.fromEntries(Object.entries(best).map(([k, v]) => [k, v.px]));
-  } catch { return {}; }
+    for (const [k, v] of Object.entries(best)) if (v.px > 0) out[k] = v.px;
+  } catch {}
+  // Jupiter price fallback for mints dexscreener missed or a dead dex read —
+  // jup.ag/price/v3 covers pump.fun tokens and matched dexscreener to ~1bp.
+  const missing = mints.filter((m) => !(out[m] > 0));
+  if (missing.length) {
+    try {
+      const j = await fetch(`https://api.jup.ag/price/v3?ids=${missing.slice(0, 30).join(',')}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.json());
+      for (const m of missing) { const p = +j?.[m]?.usdPrice || 0; if (p > 0) out[m] = p; }
+    } catch {}
+  }
+  return out;
 }
 async function solPoll() {
   if (!sola.address) return;
   try {
     const b = await sol.balances();
+    // half-synced RPCs return empty/partial token maps (ankr/publicnode showed
+    // 0 accounts while mainnet-beta held the full ATA set) — an empty bag map
+    // right after a non-empty wallet is a suspect read, not truth. Keep
+    // last-good values + let staleMs grow; accept real zero only after 3
+    // consecutive confirmed empty reads.
+    const _bagMints = Object.keys(b.tokens).filter((m) => m !== sol.MINT.USDC && m !== sol.MINT.USDT);
+    if (_bagMints.length === 0 && (sola.bagsUsd > 0 || sola.stableUsd > 0) && (sola.emptyReads = (sola.emptyReads || 0) + 1) < 3) return;
+    sola.emptyReads = 0;
     sola.solQty = b.sol;
     const prevStable = sola.stableUsd;
     sola.tokens = b.tokens;
@@ -235,15 +254,15 @@ async function solPoll() {
       if (usd > 0) sola.tokenUsd[m.slice(0, 8)] = usd;
       walletBags += usd;
     }
-    let lanePurse = 0;
-    try {
-      const lane = JSON.parse(fs.readFileSync(A('onchain-lane.json'), 'utf8'));
-      lanePurse = +(lane.purseUsd || 0);
-    } catch {}
-    // wallet truth wins whenever the dexscreener read landed — the lane's
-    // purse estimate (cost-basis + vault leftovers) ran ~$3 high vs the
-    // Bitget Wallet app's real balances and inflated every ATH card.
-    sola.bagsUsd = walletBags > 0 ? walletBags : lanePurse;
+    // Both price feeds dead while the wallet provably holds bags = suspect
+    // price read, NOT a zero wallet. Keep last-good bagsUsd (staleMs exposes
+    // the age). The old lanePurse fallback reported a modeled ~$5.9 purse on
+    // every dexscreener blip — half the real value, alternating cards.
+    if (bagMints.length && walletBags <= 0 && (sola.bagsUsd || 0) > 0) {
+      log('bag price feed dead — keeping last-good bagsUsd', sola.bagsUsd);
+    } else {
+      sola.bagsUsd = walletBags;
+    }
     sola.at = Date.now();
     scheduleWrite();
   } catch {}
