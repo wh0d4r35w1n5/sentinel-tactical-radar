@@ -2033,6 +2033,41 @@ async function main() {
       state.errors.push(`orphan-sweep ${sym}: ${e.message}`);
     }
   }
+  // ---- non-conforming seat wind-down (operator order 2026-11-08): seats
+  // that violate the live rules get wound down PROFIT-ONLY — "close them as
+  // soon as it's smart, but only if in profit after round trip fees".
+  // Reasons: 'dust' margin below the equity-scaled seat floor, 'denied'
+  // measured-bleed sym:side, 'over-tier' smallest seats beyond the tier
+  // slot count. A flagged seat showing >= ~2x the RT taker toll in UPL is
+  // market-closed on the spot; still-red seats are published to
+  // nonconforming-seats.json so bitget-watch floors their stop at the
+  // fee-cover line the moment it becomes placeable. Only engine-owned
+  // (managed) seats are eligible — manual/foreign are never flagged.
+  const ncfFlags = {};
+  try {
+    const minSeatNow = Math.max(+(process.env.SENTINEL_MIN_SEAT_MARGIN || 1.25), equityUsd * +(process.env.SENTINEL_SEAT_EQ_FRAC || 0.08));
+    // engine-owned = managed lane OR dedicated risk-model (execution) seat;
+    // manual-book/manual-hold seats are never flagged. foreign() alone would
+    // exclude every execution seat — the whole book runs the wyckoff-1h
+    // model — so the flag set is built on provenance directly.
+    const machineSeats = [...posBySym.values()].filter((p) =>
+      !manualBook.has(String(p.symbol).toUpperCase()) &&
+      (managed.has(p.symbol) || !!executionSeat(p)));
+    const overN = Math.max(0, machineSeats.length - targetSlots(equityUsd));
+    const overSet = new Set(
+      [...machineSeats].sort((a, b) => (+a.margin || 0) - (+b.margin || 0)).slice(0, overN).map((p) => `${p.symbol}:${p.side}`)
+    );
+    for (const p of machineSeats) {
+      const key = `${p.symbol}:${p.side}`;
+      let reason = null;
+      if (+p.margin > 0 && +p.margin < minSeatNow) reason = 'dust';
+      else if (denyDir(p.symbol, p.side)) reason = 'denied';
+      else if (overSet.has(key)) reason = 'over-tier';
+      if (reason) ncfFlags[key] = { cTime: +p.cTime || 0, reason, marginUsd: round(+p.margin || 0, 4), at: Date.now() };
+    }
+  } catch {}
+  try { writeJson(path.join(__dirname, '..', 'state', 'nonconforming-seats.json'), ncfFlags); } catch {}
+  const FLAG_UPL_COVER = +(process.env.SENTINEL_FLAG_CLOSE_PCT || 0.0025); // fraction of notional ≈ 2x RT taker
   for (const p of posBySym.values()) {
     try {
       // foreign positions (app/exchange/manual opens) get the same hands-off
@@ -2049,6 +2084,19 @@ async function main() {
       // inside liq (manual-stop-track.json). The old path's synthesized
       // ladder is what fired +0.2% api closes 40s after operator opens.
       if (manualHold) continue;
+      const ncf = ncfFlags[`${p.symbol}:${p.side}`];
+      if (ncf && +ncf.cTime === +p.cTime) {
+        const notional = Math.abs((+p.size || 0) * (+p.entry || 0));
+        if (notional > 0 && +p.upl >= notional * FLAG_UPL_COVER) {
+          try {
+            await closePosition(p.symbol, p.side);
+            state.actions.push(`🏁 wind-down ${p.symbol} ${p.side} (${ncf.reason}): upl +$${round(p.upl, 3)} ≥ fee cover — closed in profit`);
+            continue;
+          } catch (e) {
+            state.errors.push(`wind-down ${p.symbol}: ${String(e).slice(0, 90)}`);
+          }
+        }
+      }
       const existing = plansOf(p.symbol);
       // 'moving_plan' (trailing stop) IS loss protection — without it in the
       // regex the repair loop would stack a second stop on a trailed position

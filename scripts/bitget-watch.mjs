@@ -113,6 +113,20 @@ function desiredSl(pos, dec) {
     }
   } catch {}
   const clearPx = mark > 0 ? (long ? floorTick(mark * (1 - 0.0015), dec) : ceilTick(mark * (1 + 0.0015), dec)) : 0;
+  // non-conforming wind-down (operator order 2026-11-08): seats the exec
+  // flagged dust/denied/over-tier floor their stop at the fee-cover line
+  // the moment it's placeable — they exit the first time they can close
+  // profitably after round-trip fees (~0.25% floor > ~0.12% RT toll).
+  // Seat-bound on cTime — a flag never jumps to a fresh seat on the symbol.
+  try {
+    const ncf = JSON.parse(fs.readFileSync(path.join(ROOT, 'state', 'nonconforming-seats.json'), 'utf8')) || {};
+    const fl = ncf[`${pos.symbol}:${pos.holdSide}`];
+    if (fl && +fl.cTime === +pos.cTime && entry > 0) {
+      const floorPct = +(process.env.BW_FLAG_FLOOR_PCT || 0.25);
+      const fpx = long ? ceilTick(entry * (1 + floorPct / 100), dec) : floorTick(entry * (1 - floorPct / 100), dec);
+      if (long ? fpx <= clearPx : fpx >= clearPx) px = long ? Math.max(px, fpx) : Math.min(px, fpx);
+    }
+  } catch {}
   // zero-risk asap (operator order 2026-11-02): engage the lock once favor
   // clears the round-trip fee toll (~0.3%), not at +1.5% — fees bank first,
   // then the ratchet carries the runner. Floor +0.2% ≈ taker RT + slip.
