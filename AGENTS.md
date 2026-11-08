@@ -1035,6 +1035,55 @@ Reviewed against the live architecture. Each row: the failure mode → what guar
   scripts+deploy+tv+AGENTS.md (secrets gitignored); offline tarball sent
   to Will via Telegram 2026-10-15 (.env*/tg-config/sessions excluded).
 
+### Full offline backup — the FAST procedure (2026-11-08, learned the hard way)
+
+**NEVER build the archive on the VPS.** Its disk WRITE path is nearly dead
+(sync flushed 4.7MB in 56s ≈ 84KB/s writeback; a local tar.gz build crawled
+~1.2MB/min and would have taken hours). The correct path:
+
+1. **Stream RAW tar over SSH to Windows — zero VPS writes:**
+   `ssh -o ServerAliveInterval=10 -o ServerAliveCountMax=6 sentinel
+   'sudo bash /home/ubuntu/full-tar.sh' > C:\Users\beaue\sentinel-vX.tar`
+   where full-tar.sh does `cd /` first — remote globs (`etc/systemd/system/
+   sentinel-*.service`) expand against the remote shell's CWD, which for
+   ssh non-interactive is ~ NOT / — always `cd /` inside a script.
+2. **Tar args**: `tar cf - tmp/notes.txt opt/sentinel
+   etc/systemd/system/sentinel-*.service etc/systemd/system/*.service.d`
+   — NO codec on the VPS (CPU-starved; zstd -T0 --long=27 hit 1.2MB/min
+   AND its buffers added swap pressure. --fast=1 didn't help — the WRITE
+   was the wall, not the codec).
+3. **If reads crawl**: `sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'` +
+   `sysctl -w vm.dirty_ratio=5 vm.dirty_background_ratio=2` took cached
+   reads 2.2→24.6MB/s. Small-file regions (tv/node_modules ~4.6k files)
+   still grind at metadata speed — patience or exclude.
+4. **Secrets to strip**: `/opt/sentinel/.env`, all `*.session*`,
+   `tg-config.json` (keep `.example`), `.session.revoked-bak` variants.
+   WARNING: GNU tar `--exclude=*.session` DOES NOT match
+   `opt/sentinel/state/tg-session.session` — exclusions silently failed
+   TWICE this session. Either anchor full paths or scrub post-hoc:
+   walk 512-byte tar member headers in python, skip DROP-regex members
+   (regex: `(^|/)\.env$|\.session[^/]*$|(^|/)tg-config\.json$`), rewrite
+   the stream. Always `tar -tf | grep -E '\.env$|\.session|tg-config'`
+   on the FINAL artifact before sending — zero matches required.
+5. **Telegram cap**: non-premium = 2GB — `FilePartsInvalidError` on
+   over-cap. `.git` objects are ~2GB alone and CANNOT ride a single-file
+   send; drop `opt/sentinel/.git` (regex `(^|/)opt/sentinel/\.git(/|$)`)
+   and note history lives on GitHub in the caption. .git's pack won't
+   compress anyway (already-packed). Everything else ≈ 0.3GB gz.
+6. **NEVER copy a live tg .session to another IP** — AuthKeyDuplicatedError
+   revokes the key for BOTH sides → ALL telegram output dies silently.
+   Session copies are same-IP only. Recovery used: `state/tg-signal-sess`
+   is a SECOND valid auth key on the same account — copied to
+   `scripts/tg-session-revived.session` on the VPS, tg-watch SESSION path
+   repointed, service stable. Dead key preserved as
+   `scripts/tg-session.session.dead-authkey`.
+7. **Send from the VPS** (same IP as the live sessions): telethon
+   `send_file(6648799778, '/tmp/file.tar.gz', caption=...)` via a
+   /tmp-copied session file (live files are sqlite-locked by services —
+   cp to /tmp first, never open in place).
+8. **Verify**: read Will's DM (`get_messages(6648799778, limit=N)`) and
+   confirm the FILE entry exists with size — send stdout is not proof.
+
 ## Execution-risk rail (2026-10-20 repair — after the A$18.18 bypass incident)
 
 Every live machine entry now flows through ONE path: `bitget-exec.mjs` order
