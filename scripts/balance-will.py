@@ -16,7 +16,34 @@ MIN_EQ_MOVE_PCT = 0.005      # 0.5% equity change
 MIN_NET_MOVE_USD = 0.5       # epoch-net change worth reporting
 HEARTBEAT_S = 3600           # silent ceiling — one post/hour even if flat
 GABE_EVERY_S = 300           # Gabe: fixed 5-minute cadence
+HIST = ROOT / "state" / "balance-hist.json"   # [ts, totalUsd] — % changes over 1/6/12/24h
 rate, rate_at = 1.53, 0.0    # fallback AUD per USD
+
+def hist_pct(total_usd):
+    """% change of the card's USD total at 1/6/12/24h lookbacks.
+    Reads the rolling history file, appends the current sample, prunes >26h.
+    Only horizons with a sample at-or-before the lookback (±15min) render —
+    the line grows as history accrues rather than fabricating a 0% anchor."""
+    try:
+        h = json.loads(HIST.read_text()) if HIST.exists() else []
+    except Exception:
+        h = []
+    now = time.time()
+    h.append([now, total_usd])
+    h = [s for s in h if now - s[0] < 26 * 3600]
+    try:
+        HIST.write_text(json.dumps(h))
+    except Exception:
+        pass
+    out = []
+    for label, secs in (("1h", 3600), ("6h", 6 * 3600), ("12h", 12 * 3600), ("24h", 24 * 3600)):
+        past = [s for s in h if s[0] <= now - secs + 900]
+        if not past:
+            continue
+        base = past[-1][1]
+        if base > 0:
+            out.append(f"{label} {(total_usd - base) / base * 100:+.1f}%")
+    return " | ".join(out)
 
 def get_rate():
     global rate, rate_at
@@ -65,9 +92,11 @@ while True:
 
         # simple rail — Gabe + Mey + Will Evans: fixed cadence, AUD only
         if now - gabe_last >= GABE_EVERY_S:
+            pct = hist_pct(eq + bot2)
             msg = (f"Bot 1: A${eq * aud:.2f}\n"
                    f"Bot 2: A${bot2 * aud:.2f}\n"
-                   f"Total: A${(eq + bot2) * aud:.2f}{wl_note}")
+                   f"Total: A${(eq + bot2) * aud:.2f}{wl_note}"
+                   + (f"\n{pct}" if pct else ""))
             with open(OUTBOX, "a") as f:
                 for who in ("gabe", "mey", "will"):
                     f.write(json.dumps({"to": who, "text": msg}) + chr(10))
