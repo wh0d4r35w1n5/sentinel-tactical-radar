@@ -1,0 +1,72 @@
+// SQN Factory — deployment pass. Reads sqn-factory.json, takes the top
+// promoted tp/sl cells, evaluates TODAY's latest daily bar per symbol,
+// and authors armed setups into cmd-setups.json (the established intake
+// -> full risk sizing + exchange-side protection). Probe sizing only:
+// backtest-promoted cells are not forward-proven.
+import fs from 'fs';
+import path from 'path';
+const STATE = '/opt/sentinel/state';
+const MAX_LIVE = 6;           // cap concurrent factory setups
+const PROBE_RISK = 2;         // pct-equity risk per probe seat
+const TOPN = 12;              // top promoted cells eligible to fire
+
+const fac = JSON.parse(fs.readFileSync(path.join(STATE, 'sqn-factory.json'), 'utf8'));
+const kl = JSON.parse(fs.readFileSync(path.join(STATE, 'klines-1D.json'), 'utf8'));
+let kl4 = {};
+try { kl4 = JSON.parse(fs.readFileSync(path.join(STATE, 'klines-4H.json'), 'utf8')); } catch {}
+const trend4h = (sym) => {   // +1 up, -1 down, 0 unknown — mirrors the exec short-trend rule upstream
+  const rows = kl4[sym] && kl4[sym].rows; if (!rows || rows.length < 25) return 0;
+  const cl = rows.map((r) => r.c), i = cl.length - 1;
+  let s = 0; for (let j = i - 19; j <= i; j++) s += cl[j];
+  const sma20 = s / 20;
+  return cl[i] > sma20 * 1.005 ? 1 : cl[i] < sma20 * 0.995 ? -1 : 0;
+};
+const setupPath = path.join(STATE, 'cmd-setups.json');
+const q = JSON.parse(fs.readFileSync(setupPath, 'utf8'));
+const setups = Array.isArray(q) ? q : (q.setups || []);
+
+const liveFac = setups.filter((s) => String(s.id || '').startsWith('fac-') && s.status === 'armed').length;
+if (liveFac >= MAX_LIVE) { console.log('factory seats full: ' + liveFac); process.exit(0); }
+
+const top = Object.entries(fac.promoted || {})
+  .filter(([k]) => /tp\d+-sl\d+:/.test(k))          // explicit tp/sl exits only
+  .sort((a, b) => b[1].sqn - a[1].sqn).slice(0, TOPN);
+
+const parse = (key) => {   // fac:mom{n}-{lt|gt}-{t}-{cont|fade}:tp{a}-sl{b}:{side}
+  const m = key.match(/^fac:mom(\d+)-(lt|gt)-(\d+)-(cont|fade):tp(\d+)-sl(\d+):(long|short)$/);
+  return m ? { n: +m[1], cmp: m[2], t: +m[3], kind: m[4], tp: +m[5], sl: +m[6], side: m[7] } : null;
+};
+
+let authored = 0;
+for (const [key, g] of top) {
+  if (liveFac + authored >= MAX_LIVE) break;
+  const p = parse(key); if (!p) continue;
+  for (const sym of Object.keys(kl)) {
+    if (liveFac + authored >= MAX_LIVE) break;
+    const rows = kl[sym] && kl[sym].rows; if (!rows || rows.length < p.n + 2) continue;
+    const i = rows.length - 1;
+    const chg = (rows[i].c - rows[i - p.n].c) / rows[i - p.n].c * 100;
+    const fired = p.cmp === 'lt' ? chg < -p.t : chg > p.t;
+    if (!fired) continue;
+    const t = trend4h(sym);                          // don't author against the 4H trend — the exec short-trend rule would refuse anyway
+    if (p.side === 'short' && t > -1) continue;
+    if (p.side === 'long' && t < 1) continue;
+    if (setups.some((s) => s.symbol === sym && s.status === 'armed' && String(s.id || '').startsWith('fac-'))) continue;
+    const e = rows[i].c, sgn = p.side === 'long' ? 1 : -1;
+    setups.push({
+      id: 'fac-' + sym + '-' + Date.now(), symbol: sym, direction: p.side.toUpperCase(),
+      mode: 'market', entryPx: e,
+      slPx: +(e * (1 - sgn * p.sl / 100)).toPrecision(6),
+      tps: [{ px: +(e * (1 + sgn * p.tp / 100)).toPrecision(6), pct: 85 }],
+      pattern: 'fac:mom' + p.n + '-' + p.cmp + '-' + p.t + '-' + p.kind + ':tp' + p.tp + '-sl' + p.sl,
+      riskPct: PROBE_RISK, ttlMin: 1440, strategy: 'sqn-factory', auto: true,
+      createdAt: Date.now(), blockedBy: null, status: 'armed',
+      note: 'sqn-factory ' + key + ' — sqn ' + g.sqn + ' wr ' + g.wr + '% n ' + g.n + ' (' + g.dirN + 'd) — backtest-promoted probe',
+    });
+    authored++;
+    console.log('AUTHORED', sym, p.side, key, 'chg' + p.n + '=' + chg.toFixed(1) + '%');
+  }
+}
+if (Array.isArray(q)) fs.writeFileSync(setupPath, JSON.stringify(setups, null, 1));
+else { q.setups = setups; fs.writeFileSync(setupPath, JSON.stringify(q, null, 1)); }
+console.log('authored ' + authored + ' factory setups');

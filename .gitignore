@@ -1,0 +1,18 @@
+# secrets — never in the repo
+.env*
+tg-config.json
+*.session*
+*sess*.session*
+*.pem
+*.key
+sentinel_vm_key*
+.ssh-keys/
+# runtime noise
+node_modules/
+__pycache__/
+*.pyc
+api/charts/
+state/
+*.jsonl
+live-scripts/tg-config.json
+live-tv/node_modules/

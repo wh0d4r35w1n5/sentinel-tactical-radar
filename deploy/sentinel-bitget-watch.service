@@ -1,0 +1,21 @@
+[Unit]
+Description=Sentinel Bitget protection watcher (SL + staggered TP ladders, never enters)
+After=network-online.target
+Wants=network-online.target
+# Never abandon the watcher to a start-rate limit — it must come back forever.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sentinel
+Environment=SENTINEL_EXCHANGE=bitget
+Environment=SENTINEL_EXEC=live
+Environment=BITGET_WATCH_MS=10000
+ExecStart=/usr/bin/node scripts/bitget-watch.mjs
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

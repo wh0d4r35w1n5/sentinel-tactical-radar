@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "id": "pre-clamp-whale-batch-2026-10-26",
+      "match": {
+        "minOpenNotionalUsd": 5000,
+        "openTsAfter": "2026-10-26T11:30:00Z",
+        "openTsBefore": "2026-10-26T13:00:00Z"
+      },
+      "reason": "Resting maker orders placed before the DEMO_SEAT_MARGIN_USD clamp filled at tail-order full-margin sizing (ENA $31k, XRP $47k, IMX/JUP ~$32k, PEPE $176k notional). PEPE seat was additionally NAKED (no stop/TP armed) and manually flattened outside exit protocol — its episode does not measure the cell's entry→exit path. Rule-based exclusion, not outcome-based: winners and losers in the batch are excluded equally.",
+      "at": "2026-10-26T12:55:00Z"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+import './load-env.mjs';
+import { makeExchange } from './exchange/index.mjs';
+const ex = makeExchange(process.env);
+const acc = await ex.getAccount();
+console.log('ACCOUNT', JSON.stringify(acc));
+const cm = await ex.contractMap();
+console.log('CONTRACT', JSON.stringify(cm['AMKRUSDT']));
+const tick = await ex.ticker('AMKRUSDT');
+console.log('TICK', JSON.stringify(tick).slice(0,300));
+const pos = await ex.getPos();
+console.log('AMKRPOS', JSON.stringify((pos||[]).find(p=>p.symbol==='AMKRUSDT')||null));

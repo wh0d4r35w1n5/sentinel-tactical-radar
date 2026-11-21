@@ -1,0 +1,16 @@
+[Unit]
+Description=Sentinel trades-taken episode reconstruction (evidence gallery Bot 1 feed)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sentinel
+Environment=SENTINEL_EXCHANGE=bitget
+Environment=SENTINEL_EXEC=live
+ExecStart=/usr/bin/node scripts/trades-taken.mjs
+Nice=19
+IOSchedulingClass=idle
+IOWeight=10
+MemoryMax=256M
+CPUQuota=20%
+TimeoutStartSec=120

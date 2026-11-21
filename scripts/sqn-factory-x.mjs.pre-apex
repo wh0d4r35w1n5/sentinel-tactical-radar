@@ -1,0 +1,265 @@
+// SQN Factory X — expansion pass (2026-11-12, team directive: grow the high-SQN
+// cell database + opportunity flow). Experimental sibling of sqn-factory.mjs —
+// writes state/sqn-factory-x.json, never touches production outputs.
+//
+// New trigger families beyond the base factory:
+//   volreg-*   volatility-regime gated momentum/mean-reversion (ATR% percentile)
+//   rs-*       cross-sectional relative strength vs universe median (chg20)
+//   ddhigh-*   distance-from-90d-high structure plays
+//   voldiv-*   volume/price divergence fades
+//   nr-*       range-compression expansion plays
+//   sess-*     UTC session momentum/fade (4H bars only — hour-of-day edge)
+// New exits: atr-trail{k} — peak-close trailing stop k*ATR14, max 10 bars.
+// Grading identical honesty: net of 0.12% fees, shrunk SQN, dirN>=15 days.
+import fs from 'fs';
+import path from 'path';
+const STATE = '/opt/sentinel/state';
+const FEE = 0.12;
+const MIN_N = 15, MIN_SQ = 0.5;
+
+const D = JSON.parse(fs.readFileSync(path.join(STATE, 'klines-1D.json'), 'utf8'));
+let H = {};
+try { H = JSON.parse(fs.readFileSync(path.join(STATE, 'klines-4H.json'), 'utf8')); } catch {}
+
+const syms = Object.keys(D).filter((k) => Array.isArray(D[k]?.rows) && D[k].rows.length > 60);
+
+// ---------- per-symbol feature rows (daily) ----------
+const feats = new Map(); // sym -> [{i,f}]
+const atr14 = (rows, i) => {
+  if (i < 15) return null;
+  let s = 0;
+  for (let j = i - 13; j <= i; j++) {
+    const r = rows[j], p = rows[j - 1];
+    s += Math.max(r.h - r.l, Math.abs(r.h - p.c), Math.abs(r.l - p.c));
+  }
+  return s / 14;
+};
+for (const sym of syms) {
+  const rows = D[sym].rows, cl = rows.map((r) => r.c);
+  const arr = [];
+  for (let i = 55; i < rows.length; i++) {
+    const r = rows[i];
+    const f = {};
+    f.c = cl[i];
+    f.chg1 = (cl[i] - cl[i - 1]) / cl[i - 1] * 100;
+    f.chg5 = (cl[i] - cl[i - 5]) / cl[i - 5] * 100;
+    f.chg20 = i >= 20 ? (cl[i] - cl[i - 20]) / cl[i - 20] * 100 : null;
+    f.dayChg = (cl[i] - r.o) / r.o * 100;
+    const mv = (() => { if (i < 20) return null; const v = rows.slice(i - 20, i).map((x) => x.qv).sort((a, b) => a - b); return v[10]; })();
+    f.volX = mv ? r.qv / mv : null;
+    f.atr = atr14(rows, i);
+    f.atrPct = f.atr && cl[i] ? f.atr / cl[i] * 100 : null;
+    // 90d high distance
+    let hi90 = -1e18; for (let j = Math.max(0, i - 90); j < i; j++) if (rows[j].h > hi90) hi90 = rows[j].h;
+    f.ddHigh = hi90 > 0 ? (cl[i] - hi90) / hi90 * 100 : null; // negative = below high
+    // range position + compression
+    f.rng = r.h > r.l ? (cl[i] - r.l) / (r.h - r.l) : 0.5;
+    f.rngSz = r.h > r.l ? (r.h - r.l) / cl[i] * 100 : null;
+    f.rngMed = (() => { if (i < 15) return null; const v = []; for (let j = i - 14; j < i; j++) v.push((rows[j].h - rows[j].l) / rows[j].c * 100); v.sort((a, b) => a - b); return v[7]; })();
+    // ATR percentile vs trailing 120d
+    f.atrPctile = (() => {
+      if (i < 120 || !f.atrPct) return null;
+      let below = 0, n = 0;
+      for (let j = i - 119; j < i; j++) {
+        const a = atr14(rows, j); if (!a || !rows[j].c) continue;
+        if (a / rows[j].c * 100 < f.atrPct) below++;
+        n++;
+      }
+      return n ? below / n : null;
+    })();
+    arr.push({ i, f, t: r.t });
+  }
+  feats.set(sym, arr);
+}
+
+// ---------- universe median chg20 per timestamp (RS factor) ----------
+const medChg20 = new Map(); // t -> median
+{
+  const byT = new Map();
+  for (const [sym, arr] of feats) for (const { i, f, t } of arr) {
+    if (f.chg20 == null) continue;
+    if (!byT.has(t)) byT.set(t, []);
+    byT.get(t).push(f.chg20);
+  }
+  for (const [t, v] of byT) { v.sort((a, b) => a - b); medChg20.set(t, v[Math.floor(v.length / 2)]); }
+}
+
+// ---------- trigger library X ----------
+const TRIG = [];
+const T = (id, test, side) => TRIG.push({ id, test, side });
+
+// vol-regime gated: momentum works in high-vol regime, fades in low-vol
+for (const t of [5, 10]) {
+  T(`volreg-hi-mom${t}`, (f) => f.chg5 != null && f.chg5 > t && f.atrPctile != null && f.atrPctile > 0.6, 'long');
+  T(`volreg-hi-mom${t}-fade`, (f) => f.chg5 != null && f.chg5 > t && f.atrPctile != null && f.atrPctile > 0.6, 'short');
+  T(`volreg-lo-mom${t}-fade`, (f) => f.chg5 != null && f.chg5 > t && f.atrPctile != null && f.atrPctile < 0.4, 'short');
+  T(`volreg-lo-dip${t}`, (f) => f.chg5 != null && f.chg5 < -t && f.atrPctile != null && f.atrPctile < 0.4, 'long');
+}
+// relative strength vs universe
+for (const t of [3, 6, 10]) {
+  T(`rs-lead${t}`, (f, med) => f.chg20 != null && med != null && f.chg20 - med > t, 'long');
+  T(`rs-lag${t}`, (f, med) => f.chg20 != null && med != null && f.chg20 - med < -t, 'short');
+  T(`rs-lead${t}-fade`, (f, med) => f.chg20 != null && med != null && f.chg20 - med > t, 'short');
+  T(`rs-lag${t}-rev`, (f, med) => f.chg20 != null && med != null && f.chg20 - med < -t, 'long');
+}
+// distance-from-high structure
+for (const t of [3, 6, 10]) {
+  T(`ddhi${t}-pull`, (f) => f.ddHigh != null && f.ddHigh > -t && f.chg5 != null && f.chg5 < 0, 'long');   // shallow pullback in strength
+  T(`ddhi${t}-disc`, (f) => f.ddHigh != null && f.ddHigh < -t && f.chg5 != null && f.chg5 > 0, 'long');   // deep discount bounce
+  T(`ddhi${t}-disc-fade`, (f) => f.ddHigh != null && f.ddHigh < -t && f.chg5 != null && f.chg5 > 0, 'short');
+}
+// volume/price divergence
+T('voldiv-upfade', (f) => f.dayChg > 1 && f.volX != null && f.volX < 0.8, 'short');
+T('voldiv-dnbnc', (f) => f.dayChg < -1 && f.volX != null && f.volX > 1.5, 'long');
+T('voldiv-dnshort', (f) => f.dayChg < -1 && f.volX != null && f.volX > 1.5, 'short');
+T('voldiv-upweak', (f) => f.dayChg > 0 && f.volX != null && f.volX < 0.7 && f.rng < 0.4, 'short');
+// range compression -> expansion (direction = chg5 sign)
+for (const t of [0.6, 0.8]) {
+  T(`nr-comp${t}-up`, (f) => f.rngSz != null && f.rngMed != null && f.rngSz < t * f.rngMed && f.chg5 != null && f.chg5 > 0, 'long');
+  T(`nr-comp${t}-dn`, (f) => f.rngSz != null && f.rngMed != null && f.rngSz < t * f.rngMed && f.chg5 != null && f.chg5 < 0, 'short');
+}
+// session triggers (4H) — UTC buckets: asia 0-7, lon 8-12, ny 13-20, late 21-23
+const SESS = { asia: [0, 7], lon: [8, 12], ny: [13, 20], late: [21, 23] };
+for (const [nm, [h0, h1]] of Object.entries(SESS)) {
+  T(`sess-${nm}-mom-cont`, (f) => f.hour >= h0 && f.hour <= h1 && f.chg3 != null && f.chg3 > 1.5, 'long', nm);
+  T(`sess-${nm}-mom-fade`, (f) => f.hour >= h0 && f.hour <= h1 && f.chg3 != null && f.chg3 > 1.5, 'short', nm);
+  T(`sess-${nm}-dip-bnc`, (f) => f.hour >= h0 && f.hour <= h1 && f.chg3 != null && f.chg3 < -1.5, 'long', nm);
+  T(`sess-${nm}-dip-cont`, (f) => f.hour >= h0 && f.hour <= h1 && f.chg3 != null && f.chg3 < -1.5, 'short', nm);
+}
+
+// ---------- exit library X ----------
+const EXITS = [];
+for (const h of [1, 2, 3, 5, 10]) EXITS.push({ id: 'h' + h, run: (rows, i, sgn) => (rows[i + h] ? sgn * ((rows[i + h].c - rows[i].c) / rows[i].c) * 100 - FEE : null) });
+for (const tp of [2, 4, 8]) for (const sl of [1, 2, 4]) EXITS.push({
+  id: 'tp' + tp + '-sl' + sl,
+  run: (rows, i, sgn) => {
+    const tPx = rows[i].c * (1 + sgn * tp / 100), sPx = rows[i].c * (1 - sgn * sl / 100);
+    for (let j = i + 1; j < Math.min(rows.length, i + 11); j++) {
+      const b = rows[j];
+      if (sgn > 0 ? b.l <= sPx : b.h >= sPx) return -sl - FEE;
+      if (sgn > 0 ? b.h >= tPx : b.l <= tPx) return tp - FEE;
+    }
+    return rows[i + 10] ? sgn * ((rows[i + 10].c - rows[i].c) / rows[i].c) * 100 - FEE : null;
+  },
+});
+// ATR trailing exits — matches live K2 geometry
+const trailAtr = (rows, i, sgn, k, maxB = 10) => {
+  if (i + 1 >= rows.length) return null;
+  let peak = rows[i].c, exit = null, held = 0;
+  for (let j = i + 1; j < Math.min(rows.length, i + 1 + maxB); j++) {
+    held++;
+    const a = atr14(rows, j - 1) || atr14(rows, i);
+    if (!a) continue;
+    if (sgn > 0 ? rows[j].h > peak : rows[j].l < peak) peak = sgn > 0 ? rows[j].h : rows[j].l;
+    const stop = peak - sgn * k * a;
+    const hit = sgn > 0 ? rows[j].l <= stop : rows[j].h >= stop;
+    if (hit) { exit = sgn * ((stop - rows[i].c) / rows[i].c) * 100 - FEE; break; }
+  }
+  if (exit == null) {
+    const j = Math.min(rows.length - 1, i + maxB);
+    exit = sgn * ((rows[j].c - rows[i].c) / rows[i].c) * 100 - FEE;
+  }
+  return exit;
+};
+for (const k of [1.5, 2, 3]) EXITS.push({ id: 'atr' + k, run: (rows, i, sgn) => trailAtr(rows, i, sgn, k) });
+
+// ---------- grading ----------
+const cells = new Map();
+const bump = (key, ret, day) => { let c = cells.get(key); if (!c) cells.set(key, c = { rets: [], days: new Set() }); c.rets.push(ret); c.days.add(day); };
+
+// live-signal capture: which promoted-eligible triggers fire on each symbol's
+// LATEST bar — deploy pass consumes this instead of re-deriving features.
+const lastSignals = []; // {sym, tf, cellBase, side, px, t}
+const isLast = (rows, i) => i === rows.length - 1;
+
+let totalBars = 0;
+// daily pass
+for (const [sym, arr] of feats) {
+  const rows = D[sym].rows; totalBars += rows.length;
+  const lastI = rows.length - 1;
+  for (const { i, f, t } of arr) {
+    const med = medChg20.get(t);
+    const last = i === lastI;
+    for (const tr of TRIG) {
+      if (tr.id.startsWith('sess-')) continue; // session triggers are 4H-only
+      let ok = false;
+      try { ok = tr.test(f, med); } catch { continue; }
+      if (!ok) continue;
+      if (last) lastSignals.push({ sym, tf: '1D', trig: tr.id, side: tr.side, px: rows[i].c, t: rows[i].t });
+      for (const ex of EXITS) {
+        const ret = ex.run(rows, i, tr.side === 'long' ? 1 : -1);
+        if (ret != null) bump('x:' + tr.id + ':' + ex.id + ':' + tr.side, ret, rows[i].t);
+      }
+    }
+  }
+}
+// 4H pass — session triggers + same exits on 4H bars
+const hSyms = Object.keys(H).filter((k) => Array.isArray(H[k]?.rows) && H[k].rows.length > 60);
+for (const sym of hSyms) {
+  const rows = H[sym].rows; totalBars += rows.length;
+  const cl = rows.map((r) => r.c);
+  for (let i = 30; i < rows.length; i++) {
+    const r = rows[i];
+    const f = { c: cl[i] };
+    for (const n of [3]) f['chg' + n] = (cl[i] - cl[i - n]) / cl[i - n] * 100;
+    f.hour = new Date(r.t).getUTCHours();
+    const last = i === rows.length - 1;
+    for (const tr of TRIG) {
+      if (!tr.id.startsWith('sess-')) continue;
+      let ok = false;
+      try { ok = tr.test(f, null); } catch { continue; }
+      if (!ok) continue;
+      if (last) lastSignals.push({ sym, tf: '4H', trig: tr.id, side: tr.side, px: rows[i].c, t: rows[i].t });
+      if (i === rows.length - 1) break; // last bar graded for signals only — no forward exit data
+      for (const ex of EXITS) {
+        const ret = ex.run(rows, i, tr.side === 'long' ? 1 : -1);
+        if (ret != null) bump('x4h:' + tr.id + ':' + ex.id + ':' + tr.side, ret, rows[i].t);
+      }
+    }
+  }
+}
+
+const sqnOf = (rets, days) => {
+  const n = rets.length, dN = days.size;
+  const mean = rets.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) * (b - mean), 0) / Math.max(1, n - 1));
+  const eff = Math.min(n, dN * 3);
+  const shrunk = sd > 0 ? (mean / sd) * Math.sqrt(eff) : 0;
+  return { n, dirN: dN, wr: +(rets.filter((r) => r > 0).length / n * 100).toFixed(1), meanNetPct: +mean.toFixed(3), sqn: +shrunk.toFixed(2) };
+};
+const out = { at: new Date().toISOString(), bar: { minN: MIN_N, minSqn: MIN_SQ }, symbols: syms.length, hSymbols: hSyms.length, bars: totalBars, triggers: TRIG.length, exits: EXITS.length, cells: {}, promoted: {}, convicted: {}, lastSignals };
+for (const [k, c] of cells) {
+  const g = sqnOf(c.rets, c.days); out.cells[k] = g;
+  if (g.dirN >= MIN_N && g.meanNetPct > 0 && g.sqn >= MIN_SQ) out.promoted[k] = g;
+  if (g.dirN >= MIN_N && g.meanNetPct < 0 && g.sqn <= -MIN_SQ) out.convicted[k] = g;
+}
+fs.writeFileSync(path.join(STATE, 'sqn-factory-x.json'), JSON.stringify(out, null, 1));
+
+// hypotheses feed — same ITIL lane as base factory
+try {
+  const HYPO = path.join(STATE, 'research-hypotheses.json');
+  let hypo = []; try { hypo = JSON.parse(fs.readFileSync(HYPO, 'utf8')); } catch {}
+  const seen = new Set(hypo.map((h) => h.id));
+  const top = (m) => Object.entries(m).sort((a, b) => Math.abs(b[1].sqn) - Math.abs(a[1].sqn)).slice(0, 25);
+  for (const [k, g] of top(out.promoted)) {
+    const id = 'FACX-' + k;
+    if (seen.has(id)) continue;
+    hypo.push({ id, class: 'shadow', source: 'sqn-factory-x',
+      title: 'promoted ' + k + ' — sqn ' + g.sqn + ' wr ' + g.wr + '% mean ' + g.meanNetPct + '% n=' + g.n + ' (' + g.dirN + 'd)',
+      state: 'submitted', history: [] });
+    seen.add(id);
+  }
+  for (const [k, g] of top(out.convicted)) {
+    const id = 'FACXX-' + k;
+    if (seen.has(id)) continue;
+    hypo.push({ id, class: 'shadow', source: 'sqn-factory-x',
+      title: 'convicted ' + k + ' — sqn ' + g.sqn + ' wr ' + g.wr + '% mean ' + g.meanNetPct + '% n=' + g.n + ' — measured loser, stands down',
+      state: 'submitted', history: [] });
+    seen.add(id);
+  }
+  fs.writeFileSync(HYPO, JSON.stringify(hypo, null, 1));
+} catch (e) { console.log('hypo feed err:', e.message); }
+
+const sorted = Object.entries(out.promoted).sort((a, b) => b[1].sqn - a[1].sqn);
+console.log('X graded ' + Object.keys(cells).length + ' cells | bars ' + totalBars + ' | promoted ' + sorted.length + ' | convicted ' + Object.keys(out.convicted).length);
+for (const [k, g] of sorted.slice(0, 20)) console.log(' PROMOTED', k, JSON.stringify(g));

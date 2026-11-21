@@ -1,0 +1,27 @@
+{
+ "strategies": [
+  "Wyckoff",
+  "Wyckoff Event",
+  "Wyckoff Spring",
+  "Wyckoff Test",
+  "Wyckoff JTC",
+  "Wyckoff LPS",
+  "TS Momentum",
+  "bounce",
+  "bull-flag",
+  "obv-stealth"
+ ],
+ "cell": "Wyckoff:LONG",
+ "exitModel": "wyckoff-1h-atr2-v1",
+ "timeframe": "1H",
+ "priceBasis": "closed-candle",
+ "k": 2,
+ "maxHoldHours": 96,
+ "note": "Exit geometry only; never entry permission. Admission requires canonical forward evidence. Completed historical K2: n=10715, mean net +0.0694%, SQN 2.29. Historical simulation is not live proof. | 2026-10-26 demo trail-rehab: Sweep/TSMom ride peak-K*ATR (K2 measured). Sweep signal edge +0.03% net (n=231) vs -0.15% ladder-realized. SFP NOT added: forward markout itself -1.43% CI[-2.18,-0.34] n=201 - signal fails, exits cannot rescue it. | 2026-10-27: promoted shadow cells ride K2 trail (closest funded replica of the graded SL-or-24h regime); far TP = protection only. | 2026-10-27: Sweep CUT \u2014 funded n=33 net -$28.28 mean -0.22% under ladder AND trail; rehab falsified by realized fills. Bench now judges it.",
+ "kBy": {
+  "TS Momentum": 2,
+  "bounce": 2,
+  "bull-flag": 2,
+  "obv-stealth": 2
+ }
+}

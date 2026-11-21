@@ -1,0 +1,100 @@
+name: Sentinel watchdog
+# Dead-man's switch + auto-failover: the live VPS pushes "vps: live state"
+# commits every ~2min. If the heartbeat or dashboard stops, this workflow
+# alarms (issue + email) AND promotes the warm standby — unless the standby
+# itself can still see the primary (split-brain guard inside standby-arm.sh).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: sentinel-watchdog
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parser regression fixtures
+        run: node scripts/watchdog-verdict.mjs --selftest
+
+      - name: Check live heartbeats
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          FAIL=""
+          # 1) dashboard reachable — any HTTP reply (incl. 301/404) = nginx alive
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://52.65.5.228/ || echo 000)
+          [ "$CODE" = "000" ] && FAIL="$FAIL dashboard_unreachable" || true
+          # 2) pushbot commit freshness — last api/ commit must be <15min old
+          TS=$(gh api "repos/$REPO/commits?path=api/live-ledger.json&per_page=1" --jq '.[0].commit.committer.date' 2>/dev/null)
+          NOW=$(date -u +%s); AGE=$(( NOW - $(date -u -d "$TS" +%s 2>/dev/null || echo 0) ))
+          [ "$AGE" -lt 900 ] || FAIL="$FAIL pushbot_stale=${AGE}s"
+          # 3) GOD verdict — the pushed artifact must not carry a hard fail.
+          # Parser lives in scripts/watchdog-verdict.mjs (committed + CI
+          # selftest above). Fail-closed on every malformed/unknown shape:
+          # BROKEN/ATTENTION/unknown verdict, nested checks failures,
+          # numeric top-level fail, non-array failures/fails, malformed
+          # checks shape, missing verdict, unparseable JSON.
+          GJ=$(cat api/god.json 2>/dev/null)
+          VERDICT=$(echo "$GJ" | node scripts/watchdog-verdict.mjs)
+          [ "$VERDICT" = "FAIL" ] && FAIL="$FAIL god_fail" || true
+          echo "dashboard=$CODE pushbot_age=${AGE}s god=$VERDICT"
+          echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Auto-promote standby (dead box only)
+        if: contains(steps.check.outputs.fail, 'unreachable') || contains(steps.check.outputs.fail, 'stale')
+        env:
+          STANDBY_HOST: ${{ secrets.STANDBY_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.STANDBY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          # unguarded keyscan under bash -e used to kill this step before arming
+          ssh-keyscan -T 10 "$STANDBY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          # standby-arm.sh independently refuses if primary is alive — double guard
+          ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new ubuntu@"$STANDBY_HOST" 'bash ~/standby-arm.sh' || echo "standby refused or unreachable"
+          sleep 20
+          CODE2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "http://$STANDBY_HOST/" || echo 000)
+          echo "standby_http=$CODE2"
+
+      - name: Raise the alarm
+        # always() — a failed promote step must not silence the alert
+        if: always() && steps.check.outputs.fail != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          FAIL: ${{ steps.check.outputs.fail }}
+          STANDBY_HOST: ${{ secrets.STANDBY_HOST }}
+        run: |
+          OPEN=$(gh issue list -R "$REPO" --state open --search "SENTINEL DOWN in:title" --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" -R "$REPO" -b "Still down: $FAIL ($(date -u +%FT%TZ))" || true
+          else
+            gh issue create -R "$REPO" --title "SENTINEL DOWN" \
+              -b "Watchdog tripped at $(date -u +%FT%TZ): $FAIL — standby auto-promotion attempted; check https://52-65-5-228.sslip.io and http://$STANDBY_HOST/" || true
+          fi
+          echo "::error::SENTINEL DOWN: $FAIL"
+          exit 1
+
+      - name: Clear the alarm on recovery
+        if: always() && steps.check.outputs.fail == '' && steps.check.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          OPEN=$(gh issue list -R "$REPO" --state open --search "SENTINEL DOWN in:title" --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$OPEN" ]; then
+            gh issue close "$OPEN" -R "$REPO" -c "Heartbeat restored at $(date -u +%FT%TZ) — closed by watchdog." || true
+          fi

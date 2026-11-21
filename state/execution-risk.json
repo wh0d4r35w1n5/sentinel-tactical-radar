@@ -1,0 +1,23 @@
+{
+ "version": 1,
+ "riskPerTradeFraction": 0.06,
+ "maxPortfolioRiskFraction": 0.3,
+ "maxGrossNotionalMultiple": 20,
+ "maxPositionNotionalMultiple": 8,
+ "maxPositionMarginFraction": 0.65,
+ "cashReserveFraction": 0,
+ "maxLeverage": 50,
+ "minLeverage": 1,
+ "roundTripFeeFraction": 0.0012,
+ "slippageFraction": 0.0005,
+ "liquidationBufferFraction": 0.0064,
+ "liquidationBandUseFraction": 0.6,
+ "maxPriceDriftFraction": 0.008,
+ "maxSnapshotAgeMs": 60000,
+ "maxEvidenceAgeMs": 86400000,
+ "allowTopUps": false,
+ "allowOnchainEntries": false,
+ "requireForwardEvidence": true,
+ "exitModel": "wyckoff-1h-atr2-v1",
+ "note": "OPERATOR CAP 6%: per-trade risk bumped 4%→6% for seat parity (~0 notional on 5% stops). 2026-11-19 zerotouch payoff fix."
+}

@@ -1,0 +1,1815 @@
+[
+ {
+  "id": "RFC-TEST-KNOB-1",
+  "class": "state-knob",
+  "title": "probe: nudge gross notional cap 20→18 to verify implement+PIR path",
+  "target": "state/execution-risk.json",
+  "params": {
+   "maxGrossNotionalMultiple": 18
+  },
+  "reviewHours": 1,
+  "revertIfEquityDownPct": 2
+ },
+ {
+  "id": "RFC-TEST-BOUNDS-1",
+  "class": "state-knob",
+  "title": "probe: exceed declared bound — must be rejected by CAB",
+  "target": "state/execution-risk.json",
+  "params": {
+   "riskPerTradeFraction": 0.15
+  }
+ },
+ {
+  "id": "RFC-TEST-NEVER-1",
+  "class": "state-knob",
+  "title": "probe: never-path field — must be rejected by CAB",
+  "target": "state/execution-risk.json",
+  "params": {
+   "requireForwardEvidence": false
+  }
+ },
+ {
+  "id": "FAC-fac:mom5-lt-20-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-20-cont:h5:short — sqn 3.68 wr 60.7% mean 3.763% n=887 (96d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-12-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-12-cont:h5:short — sqn 2.96 wr 60.9% mean 2.278% n=3367 (115d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-lt-20-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-lt-20-cont:h5:short — sqn 2.85 wr 65.5% mean 5.399% n=267 (73d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-3-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-3-cont:tp8-sl4:short — sqn 2.64 wr 41.2% mean 0.702% n=19451 (158d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-5-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-5-cont:tp8-sl4:short — sqn 2.64 wr 41.1% mean 0.719% n=16401 (152d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-8-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-8-cont:tp8-sl4:short — sqn 2.53 wr 40.7% mean 0.706% n=12303 (146d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-20-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-20-cont:h10:short — sqn 2.5 wr 60.6% mean 3.601% n=804 (89d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-20-cont:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-20-cont:h3:short — sqn 2.47 wr 56.2% mean 2.113% n=932 (99d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-8-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-8-cont:h5:short — sqn 2.3 wr 62.6% mean 1.753% n=7208 (126d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-3-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-3-cont:tp8-sl4:short — sqn 2.29 wr 40.6% mean 0.603% n=19253 (158d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-lt-20-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-lt-20-cont:h10:short — sqn 2.26 wr 65.9% mean 5.431% n=214 (67d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-5-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-5-cont:tp8-sl4:short — sqn 2.24 wr 40.2% mean 0.598% n=17382 (156d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom3-lt-20-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom3-lt-20-cont:h5:short — sqn 2.24 wr 60.8% mean 3.414% n=449 (89d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-8-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-8-cont:tp8-sl4:short — sqn 2.21 wr 40% mean 0.593% n=14833 (155d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-lt-20-cont:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-lt-20-cont:h3:short — sqn 2.21 wr 62.1% mean 3.449% n=282 (76d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom3-lt-20-cont:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom3-lt-20-cont:h3:short — sqn 2.15 wr 58.9% mean 2.441% n=482 (93d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:brk-low50:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:brk-low50:h10:short — sqn 2.14 wr 61.5% mean 2.397% n=940 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-12-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-12-cont:tp8-sl4:short — sqn 2.11 wr 39.7% mean 0.611% n=7753 (136d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom3-lt-12-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom3-lt-12-cont:h5:short — sqn 2.09 wr 60.3% mean 1.927% n=1941 (106d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up3-rev:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up3-rev:tp8-sl4:short — sqn 2 wr 40.4% mean 0.565% n=4416 (137d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-20-cont:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-20-cont:h3:short — sqn 2 wr 59% mean 1.394% n=2552 (115d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up3-rev:tp8-sl2:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up3-rev:tp8-sl2:short — sqn 1.96 wr 26.5% mean 0.413% n=4460 (138d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-8-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-8-cont:h5:short — sqn 1.93 wr 62.4% mean 1.248% n=13317 (147d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-12-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-12-cont:h5:short — sqn 1.89 wr 62.2% mean 1.306% n=10370 (142d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-5-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-5-cont:h5:short — sqn 1.85 wr 62% mean 1.17% n=15770 (148d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp2-sl2:long — sqn -29.42 wr 7.4% mean -1.825% n=650 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp2-sl1:long — sqn -25.78 wr 4.8% mean -0.977% n=650 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-12:tp2-sl1:long — sqn -23.69 wr 6.4% mean -0.929% n=1779 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma10-abv-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma10-abv-12:tp2-sl1:long — sqn -23.66 wr 6.6% mean -0.923% n=2361 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp2-sl4:long — sqn -22.25 wr 18% mean -3.04% n=650 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom5-gt-20:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom5-gt-20:tp2-sl1:long — sqn -22.21 wr 6.6% mean -0.923% n=1808 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-20:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-20:tp2-sl2:long — sqn -21.74 wr 11.9% mean -1.644% n=1016 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-12:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-12:tp2-sl2:long — sqn -21.29 wr 13.7% mean -1.571% n=1778 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma10-abv-8:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma10-abv-8:tp2-sl1:long — sqn -21.24 wr 8% mean -0.881% n=4529 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-20:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-20:tp2-sl1:long — sqn -21.01 wr 6.7% mean -0.919% n=1016 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-12:tp2-sl1:long — sqn -20.96 wr 7.9% mean -0.882% n=2644 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-lt-20:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-lt-20:tp2-sl1:long — sqn -20.91 wr 5.7% mean -0.948% n=297 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom5-gt-20:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom5-gt-20:tp2-sl2:long — sqn -20.45 wr 13.7% mean -1.571% n=1808 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom10-gt-20:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom10-gt-20:tp2-sl1:long — sqn -20.41 wr 8.1% mean -0.876% n=3585 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma10-abv-12:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma10-abv-12:tp2-sl2:long — sqn -20.28 wr 15% mean -1.52% n=2361 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-8:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-8:tp2-sl1:long — sqn -20.22 wr 8.5% mean -0.864% n=3685 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-lt-20:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-lt-20:tp2-sl2:long — sqn -20.06 wr 11.4% mean -1.662% n=297 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom5-gt-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom5-gt-12:tp2-sl1:long — sqn -19.49 wr 9.1% mean -0.848% n=4074 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma20-abv-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma20-abv-12:tp2-sl1:long — sqn -18.97 wr 9.2% mean -0.845% n=4799 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20-fade:tp2-sl1:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20-fade:tp2-sl1:short — sqn -18.76 wr 7.7% mean -0.889% n=650 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-8:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-8:tp2-sl1:long — sqn -18.75 wr 9.5% mean -0.834% n=4872 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp4-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp4-sl2:long — sqn -18.59 wr 7.1% mean -1.695% n=650 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom10-gt-12:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom10-gt-12:tp2-sl1:long — sqn -18.23 wr 10.4% mean -0.808% n=6664 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma10-abv-5:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma10-abv-5:tp2-sl1:long — sqn -18.02 wr 10.4% mean -0.807% n=7702 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-12:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-12:tp2-sl2:long — sqn -17.7 wr 17.9% mean -1.406% n=2644 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-12-cont:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-12-cont:h3:short — sqn 1.82 wr 56% mean 1.081% n=3558 (118d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:sma20-abv-8:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:sma20-abv-8:tp2-sl1:long — sqn -17.44 wr 10.8% mean -0.796% n=7781 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-5-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-5-cont:h5:short — sqn 1.8 wr 61.7% mean 1.256% n=11881 (138d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-gt-20-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-gt-20-fade:h10:short — sqn 3.18 wr 69.5% mean 6.882% n=475 (90d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-3-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-3-cont:h5:short — sqn 3.09 wr 64.2% mean 1.809% n=17856 (156d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom3-lt-8-cont:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom3-lt-8-cont:h5:short — sqn 2.93 wr 62.2% mean 2.111% n=5019 (125d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-3-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-3-cont:h10:short — sqn 2.88 wr 66.9% mean 2.604% n=15241 (146d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-12-cont:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-12-cont:tp8-sl4:short — sqn 2.87 wr 41.2% mean 0.776% n=12104 (157d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-5-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-5-cont:h10:short — sqn 2.86 wr 67.5% mean 2.7% n=12913 (140d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up5-rev:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up5-rev:h3:short — sqn 2.79 wr 60.4% mean 1.747% n=659 (99d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-20:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-20:tp2-sl4:long — sqn -19.99 wr 23.2% mean -2.727% n=853 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom5-gt-8:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom5-gt-8:tp2-sl1:long — sqn -18.09 wr 10.9% mean -0.794% n=5603 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up5-rev:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up5-rev:h10:short — sqn 3.4 wr 63.9% mean 4.296% n=562 (84d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up5-rev:h2:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up5-rev:h2:short — sqn 2.98 wr 60.6% mean 1.695% n=639 (101d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-12-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-12-cont:h10:short — sqn 3.04 wr 68.3% mean 3.087% n=8315 (139d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:close-hi-rng-fade:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:close-hi-rng-fade:tp8-sl4:short — sqn 3.18 wr 43.3% mean 0.914% n=3439 (134d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom3-lt-12-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom3-lt-12-cont:h10:short — sqn 3.55 wr 65.4% mean 4.366% n=1548 (101d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-lt-12-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-lt-12-cont:h10:short — sqn 3.51 wr 68.3% mean 5.147% n=909 (100d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:rsi-gt-90:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:rsi-gt-90:h10:short — sqn 4.32 wr 62.2% mean 9.657% n=90 (61d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up4-rev:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up4-rev:h10:short — sqn 3.8 wr 61.2% mean 3.635% n=1215 (106d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-8-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-8-cont:h10:short — sqn 3.5 wr 66.8% mean 3.563% n=5831 (123d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-8-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-8-cont:h10:short — sqn 3.49 wr 68.9% mean 3.3% n=10496 (144d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom10-lt-8-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom10-lt-8-cont:h10:short — sqn 3.62 wr 69.7% mean 3.546% n=9213 (134d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:brk-high50-fade:h2:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:brk-high50-fade:h2:short — sqn 3.95 wr 60.4% mean 2.348% n=690 (110d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-5-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-5-cont:h10:short — sqn 3.68 wr 68.2% mean 3.302% n=12298 (145d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom2-lt-8-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom2-lt-8-cont:h10:short — sqn 3.78 wr 67.2% mean 4.247% n=2529 (109d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp4-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp4-sl1:long — sqn -18.18 wr 3.4% mean -0.948% n=436 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up5-rev:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up5-rev:h5:short — sqn 4.19 wr 60.9% mean 3.224% n=483 (92d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up3-rev:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up3-rev:h10:short — sqn 3.94 wr 63.8% mean 3.684% n=2896 (125d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom2-gt-20:tp4-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom2-gt-20:tp4-sl4:long — sqn -18.13 wr 14.6% mean -2.949% n=410 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom20-lt-3-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom20-lt-3-cont:h10:short — sqn 4.12 wr 69% mean 3.611% n=13553 (147d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom5-gt-20:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom5-gt-20:tp2-sl4:long — sqn -17.9 wr 27% mean -2.502% n=1031 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:close-hi-rng-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:close-hi-rng-fade:h10:short — sqn 3.96 wr 65.1% mean 3.634% n=2678 (115d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up3-rev:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up3-rev:h5:short — sqn 4.03 wr 63.7% mean 2.572% n=2924 (136d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:mom5-lt-3-cont:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:mom5-lt-3-cont:h10:short — sqn 3.88 wr 68.2% mean 3.437% n=11828 (138d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:h5:short — sqn 5.53 wr 69.8% mean 3.349% n=4198 (126d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:h10:short — sqn 5.16 wr 70.2% mean 4.258% n=3728 (116d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:h10:short — sqn 5.07 wr 67.8% mean 2.483% n=6173 (98d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:tp8-sl4:short — sqn 4.88 wr 54.7% mean 1.388% n=6495 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-upfade:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-upfade:h5:short — sqn 4.87 wr 70.3% mean 2.987% n=3884 (128d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:tp8-sl4:short — sqn 4.67 wr 47.2% mean 1.374% n=4624 (132d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.8-dn:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.8-dn:h5:short — sqn 4.49 wr 67.4% mean 2.676% n=7696 (141d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-upfade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-upfade:atr3:short — sqn 4.36 wr 63.4% mean 2.86% n=4206 (135d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:atr3:short — sqn 4.32 wr 63.7% mean 2.761% n=4806 (133d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:tp4-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:tp4-sl4:short — sqn 4.29 wr 62.5% mean 0.879% n=6647 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-upfade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-upfade:h10:short — sqn 4.25 wr 68.5% mean 3.702% n=3501 (118d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.8-dn:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.8-dn:h10:short — sqn 4.21 wr 68.5% mean 3.504% n=6698 (131d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.8-dn:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.8-dn:tp8-sl4:short — sqn 4.09 wr 45% mean 1.134% n=8368 (148d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-upfade:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-upfade:tp8-sl4:short — sqn 4.05 wr 44.6% mean 1.19% n=4121 (135d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:h3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:h3:short — sqn 4.05 wr 63.9% mean 1.209% n=6682 (101d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.8-dn:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.8-dn:atr3:short — sqn 4 wr 63.1% mean 2.422% n=8702 (148d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:tp8-sl2:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:tp8-sl2:short — sqn 3.9 wr 38.2% mean 0.919% n=6676 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-ny-mom-fade:h2:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-ny-mom-fade:h2:short — sqn 3.84 wr 59.6% mean 0.899% n=5825 (103d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:rs-lag3:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:rs-lag3:h10:short — sqn 3.68 wr 65.9% mean 3.183% n=10966 (147d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:rs-lag6:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:rs-lag6:h10:short — sqn 3.62 wr 65.5% mean 3.339% n=8315 (144d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:rs-lag10:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:rs-lag10:h10:short — sqn 3.58 wr 64.8% mean 3.556% n=5602 (135d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-ny-mom-fade:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-ny-mom-fade:tp8-sl4:short — sqn 3.48 wr 50.4% mean 0.961% n=5629 (104d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:tp8-sl2:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:tp8-sl2:short — sqn 3.4 wr 29.9% mean 0.764% n=4701 (132d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-upweak:tp8-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-upweak:tp8-sl4:short — sqn 3.36 wr 45.7% mean 1.184% n=475 (91d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:tp8-sl1:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:tp8-sl1:short — sqn 3.33 wr 24.5% mean 0.629% n=6841 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi10-disc:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi10-disc:tp2-sl1:long — sqn -13.92 wr 15% mean -0.671% n=9190 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag6-rev:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag6-rev:tp2-sl1:long — sqn -13.87 wr 14.9% mean -0.673% n=10554 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag10-rev:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag10-rev:tp2-sl1:long — sqn -13.76 wr 14.6% mean -0.681% n=7033 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag3-rev:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag3-rev:tp2-sl1:long — sqn -13.44 wr 15.5% mean -0.656% n=14017 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi6-disc:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi6-disc:tp2-sl1:long — sqn -13.29 wr 15.7% mean -0.649% n=10780 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi3-disc:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi3-disc:tp2-sl1:long — sqn -12.92 wr 16.1% mean -0.638% n=11758 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:voldiv-dnbnc:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:voldiv-dnbnc:tp2-sl1:long — sqn -12.5 wr 15.4% mean -0.66% n=4063 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag10-rev:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag10-rev:tp2-sl2:long — sqn -11.97 wr 27.9% mean -1.002% n=7026 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi10-disc:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi10-disc:tp2-sl2:long — sqn -11.87 wr 28.8% mean -0.969% n=9166 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag6-rev:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag6-rev:tp2-sl2:long — sqn -11.63 wr 29.1% mean -0.957% n=10543 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead6:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead6:tp2-sl1:long — sqn -11.61 wr 17.5% mean -0.597% n=11339 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead3:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead3:tp2-sl1:long — sqn -11.56 wr 17.6% mean -0.594% n=14147 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead10:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead10:tp2-sl1:long — sqn -11.54 wr 17.4% mean -0.6% n=8302 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag3-rev:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag3-rev:tp2-sl2:long — sqn -11.4 wr 29.6% mean -0.935% n=14001 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi6-disc:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi6-disc:tp2-sl2:long — sqn -11.24 wr 29.9% mean -0.922% n=10755 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi3-disc:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi3-disc:tp2-sl2:long — sqn -10.85 wr 30.6% mean -0.896% n=11723 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead10:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead10:tp2-sl2:long — sqn -10.53 wr 30.8% mean -0.888% n=8263 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:voldiv-dnbnc:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:voldiv-dnbnc:tp2-sl2:long — sqn -10.39 wr 29.8% mean -0.928% n=4054 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead6:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead6:tp2-sl2:long — sqn -10.31 wr 31.4% mean -0.864% n=11290 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead3:tp2-sl2:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead3:tp2-sl2:long — sqn -10.13 wr 31.7% mean -0.849% n=14089 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:nr-comp0.8-up:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:nr-comp0.8-up:tp2-sl1:long — sqn -9.29 wr 19.7% mean -0.528% n=4282 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi10-disc:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi10-disc:tp2-sl4:long — sqn -9.23 wr 47.8% mean -1.246% n=9134 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag10-rev:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag10-rev:tp2-sl4:long — sqn -8.93 wr 47.7% mean -1.245% n=7001 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lead10-fade:tp2-sl1:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lead10-fade:tp2-sl1:short — sqn -8.85 wr 20.9% mean -0.494% n=8304 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi6-disc:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi6-disc:tp2-sl4:long — sqn -8.73 wr 49% mean -1.171% n=10710 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-ny-mom-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-ny-mom-fade:h10:short — sqn 3.36 wr 60.9% mean 1.771% n=5426 (100d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-ny-mom-fade:tp4-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-ny-mom-fade:tp4-sl4:short — sqn 3.35 wr 59.5% mean 0.673% n=5719 (104d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:rs-lag6-rev:tp2-sl4:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:rs-lag6-rev:tp2-sl4:long — sqn -8.75 wr 48.7% mean -1.186% n=10518 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:tp4-sl2:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:tp4-sl2:short — sqn 3.38 wr 46.1% mean 0.558% n=6835 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-mom-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-mom-fade:atr3:short — sqn 3.43 wr 60.3% mean 1.244% n=7091 (102d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x4h:sess-lon-mom-cont:tp2-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x4h:sess-lon-mom-cont:tp2-sl1:long — sqn -8.76 wr 18.2% mean -0.575% n=7054 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.5-dn:h15:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.5-dn:h15:short — sqn 5.87 wr 74.8% mean 7.542% n=1928 (66d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:h10:short — sqn 5.46 wr 74.2% mean 6.522% n=2425 (78d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:h15:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:h15:short — sqn 5.44 wr 74.1% mean 6.83% n=3007 (71d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-u0.5-v0.5-fade:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-u0.5-v0.5-fade:h5:short — sqn 5.42 wr 72.7% mean 3.922% n=2310 (79d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:h10:short — sqn 5.35 wr 75.7% mean 6.834% n=2010 (76d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.5-dn:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.5-dn:h20:short — sqn 5.18 wr 72.3% mean 8.297% n=1398 (61d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:h10:short — sqn 5.17 wr 71.6% mean 5.633% n=3234 (82d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d2-break-fade:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d2-break-fade:h10:short — sqn 5.17 wr 72.6% mean 5.89% n=2937 (79d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-u1-v0.5-fade:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-u1-v0.5-fade:h5:short — sqn 5.17 wr 73.4% mean 3.864% n=1698 (74d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:streak3-dncont:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:streak3-dncont:h20:short — sqn 5.01 wr 75.4% mean 7.925% n=2557 (67d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-u0.5-v0.5-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-u0.5-v0.5-fade:tp12-sl6:short — sqn 4.99 wr 50.8% mean 2.828% n=2366 (81d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:atr6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:atr6:short — sqn 4.99 wr 68.9% mean 4.559% n=3514 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.6-dn:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.6-dn:tp12-sl6:short — sqn 4.96 wr 51% mean 2.739% n=4328 (84d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:atr6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:atr6:short — sqn 4.9 wr 69.4% mean 4.667% n=2982 (85d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:streak4-dncont:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:streak4-dncont:h20:short — sqn 4.9 wr 76.3% mean 8.654% n=1522 (59d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:mom-c58-dn:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:mom-c58-dn:h20:short — sqn 4.88 wr 76.1% mean 8.539% n=3821 (70d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-m1.5-mom-fade:tp8-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-m1.5-mom-fade:tp8-sl6:short — sqn 4.87 wr 64.4% mean 2.26% n=6194 (54d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:h8:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:h8:short — sqn 4.83 wr 70.6% mean 5.097% n=2587 (80d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d2-break-fade:atr6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d2-break-fade:atr6:short — sqn 4.81 wr 68.2% mean 4.24% n=4141 (88d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.5-dn:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.5-dn:h5:short — sqn 4.8 wr 70.7% mean 3.895% n=2646 (76d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.7-dn:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.7-dn:tp12-sl6:short — sqn 4.79 wr 50% mean 2.573% n=6151 (89d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:voldiv-u0.5-v0.7-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:voldiv-u0.5-v0.7-fade:tp12-sl6:short — sqn 4.78 wr 49.7% mean 2.611% n=4184 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:atr4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:atr4:short — sqn 4.78 wr 66.5% mean 4.185% n=3514 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d10-below-mom:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d10-below-mom:h20:short — sqn 4.77 wr 75% mean 8.174% n=2973 (78d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-below-mom:h20:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-below-mom:h20:short — sqn 4.76 wr 74.6% mean 7.783% n=3977 (79d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c38-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c38-up:tp1-sl0.75:long — sqn -27.81 wr 6.9% mean -0.749% n=3287 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c38-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c38-up:tp1-sl1:long — sqn -26.37 wr 9.4% mean -0.932% n=3286 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c58-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c58-up:tp1-sl0.75:long — sqn -25.01 wr 8.5% mean -0.721% n=4018 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c35-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c35-up:tp1-sl0.75:long — sqn -24.65 wr 8.7% mean -0.718% n=5683 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi20-disc:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi20-disc:tp1-sl0.75:long — sqn -23.36 wr 9.7% mean -0.7% n=5742 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c58-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c58-up:tp1-sl1:long — sqn -23.15 wr 11.9% mean -0.883% n=4017 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c35-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c35-up:tp1-sl1:long — sqn -22.97 wr 11.9% mean -0.882% n=5682 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c55-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c55-up:tp1-sl0.75:long — sqn -22.81 wr 10.1% mean -0.692% n=6208 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c33-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c33-up:tp1-sl0.75:long — sqn -22.73 wr 10.1% mean -0.694% n=8227 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c108-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c108-up:tp1-sl0.75:long — sqn -22.73 wr 9.8% mean -0.698% n=5452 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c38-up:tp1-sl1.5:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c38-up:tp1-sl1.5:long — sqn -22.68 wr 15.3% mean -1.237% n=3286 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:sma50-d10-above-mom:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:sma50-d10-above-mom:tp1-sl0.75:long — sqn -21.83 wr 9.5% mean -0.703% n=4651 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi20-disc:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi20-disc:tp1-sl1:long — sqn -21.77 wr 13.3% mean -0.854% n=5741 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c108-rev:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c108-rev:tp1-sl0.75:long — sqn -21.28 wr 11% mean -0.677% n=12663 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c108-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c108-up:tp1-sl1:long — sqn -21.25 wr 13.4% mean -0.853% n=5451 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c33-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c33-up:tp1-sl1:long — sqn -21.24 wr 13.7% mean -0.847% n=8226 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c55-up:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c55-up:tp1-sl1:long — sqn -21.21 wr 13.9% mean -0.843% n=6207 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c32-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c32-up:tp1-sl0.75:long — sqn -21.03 wr 11.3% mean -0.672% n=9993 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c38-up:tp1.5-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c38-up:tp1.5-sl0.75:long — sqn -20.76 wr 6.9% mean -0.715% n=3287 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:streak2-upcont:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:streak2-upcont:tp1-sl0.75:long — sqn -20.72 wr 10.8% mean -0.681% n=3936 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c53-up:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c53-up:tp1-sl0.75:long — sqn -20.7 wr 11.6% mean -0.667% n=8440 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c58-up:tp1-sl1.5:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c58-up:tp1-sl1.5:long — sqn -20.63 wr 18% mean -1.169% n=4017 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:sma50-d10-above-mom:tp1-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:sma50-d10-above-mom:tp1-sl1:long — sqn -20.53 wr 12.9% mean -0.862% n=4651 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:voldiv-d2-v2-bnc:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:voldiv-d2-v2-bnc:tp1-sl0.75:long — sqn -20.32 wr 10.4% mean -0.688% n=2337 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c35-up:tp1-sl1.5:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c35-up:tp1-sl1.5:long — sqn -20.3 wr 18.3% mean -1.162% n=5682 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:atr6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:atr6:short — sqn 4.77 wr 67.7% mean 4.07% n=4509 (91d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:atr4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:atr4:short — sqn 4.77 wr 67.2% mean 4.328% n=2994 (85d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c208-rev:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c208-rev:tp1-sl0.75:long — sqn -20.28 wr 11.9% mean -0.661% n=15892 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:nr-comp0.7-dn:h15:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:nr-comp0.7-dn:h15:short — sqn 4.8 wr 73.2% mean 6.208% n=4303 (76d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-m2.5-mom-fade:tp8-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-m2.5-mom-fade:tp8-sl6:short — sqn 4.79 wr 64.4% mean 2.315% n=4365 (52d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x4h:sess-lon-m1.5-mom-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x4h:sess-lon-m1.5-mom-fade:tp12-sl6:short — sqn 4.82 wr 62.2% mean 2.592% n=6088 (55d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c38-up:tp1.5-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c38-up:tp1.5-sl1:long — sqn -20.43 wr 9.1% mean -0.891% n=3302 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:close-hi-rng-fade:tp8-sl2:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:close-hi-rng-fade:tp8-sl2:short — sqn 3.85 wr 30.9% mean 0.867% n=3420 (134d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d2-break-fade:atr4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d2-break-fade:atr4:short — sqn 4.96 wr 67.4% mean 4.147% n=4247 (88d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d10-break-fade:atr6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d10-break-fade:atr6:short — sqn 4.92 wr 71% mean 5.081% n=2151 (75d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d10-break-fade:atr4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d10-break-fade:atr4:short — sqn 4.95 wr 69.3% mean 4.881% n=2155 (75d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:atr4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:atr4:short — sqn 4.93 wr 67% mean 4.004% n=4607 (91d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:tp12-sl6:short — sqn 4.98 wr 50% mean 2.732% n=3155 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d2-break-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d2-break-fade:tp12-sl6:short — sqn 5.02 wr 50.5% mean 2.713% n=3705 (88d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:tp12-sl6:short — sqn 5.05 wr 50.4% mean 2.66% n=4017 (92d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c58-rev:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c58-rev:tp1-sl0.75:long — sqn -20.96 wr 10.5% mean -0.686% n=7827 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:up4-rev:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:up4-rev:h5:short — sqn 3.95 wr 60.7% mean 2.684% n=1097 (117d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:tp12-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:tp12-sl6:short — sqn 5.42 wr 51.2% mean 2.987% n=2792 (87d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:tp8-sl6:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:tp8-sl6:short — sqn 5.26 wr 59.5% mean 2.201% n=3465 (89d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:streak4-rev:h10:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:streak4-rev:h10:short — sqn 5.21 wr 64.5% mean 6.04% n=971 (70d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:h8:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:h8:short — sqn 5.19 wr 73% mean 5.618% n=2278 (80d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:tp12-sl4:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:tp12-sl4:short — sqn 5.17 wr 42.3% mean 2.382% n=4265 (93d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:mom-c105-rev:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:mom-c105-rev:tp1-sl0.75:long — sqn -21.24 wr 11.4% mean -0.671% n=16395 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-fac:mom3-gt-20:tp4-sl1:long",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "convicted fac:mom3-gt-20:tp4-sl1:long — sqn -19.04 wr 3.4% mean -0.949% n=614 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:close-hi-rng-fade:h5:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:close-hi-rng-fade:h5:short — sqn 5.16 wr 68.5% mean 3.156% n=3202 (130d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FAC-fac:close-hi-rng-fade:tp8-sl1:short",
+  "class": "shadow",
+  "source": "sqn-factory",
+  "title": "promoted fac:close-hi-rng-fade:tp8-sl1:short — sqn 4.16 wr 21.3% mean 0.741% n=3370 (137d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d6-break-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d6-break-fade:atr3:short — sqn 6.34 wr 74% mean 5.881% n=3446 (89d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d4-break-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d4-break-fade:atr3:short — sqn 6.27 wr 72.9% mean 5.635% n=3961 (91d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d2-break-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d2-break-fade:atr3:short — sqn 6.08 wr 71.4% mean 5.303% n=4542 (92d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d1-break-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d1-break-fade:atr3:short — sqn 5.98 wr 70.4% mean 5.063% n=4875 (95d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACX-x:sma50-d10-break-fade:atr3:short",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "promoted x:sma50-d10-break-fade:atr3:short — sqn 5.89 wr 75% mean 6.2% n=2503 (79d)",
+  "state": "submitted",
+  "history": []
+ },
+ {
+  "id": "FACXX-x:ddhi12-disc:tp1-sl0.75:long",
+  "class": "shadow",
+  "source": "sqn-factory-x",
+  "title": "convicted x:ddhi12-disc:tp1-sl0.75:long — sqn -21.41 wr 11.4% mean -0.671% n=8273 — measured loser, stands down",
+  "state": "submitted",
+  "history": []
+ }
+]

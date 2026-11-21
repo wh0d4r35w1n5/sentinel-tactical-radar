@@ -1,0 +1,19 @@
+[Unit]
+Description=Sentinel auto-improvement loop (3min bounded profitability checks)
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/sentinel
+ExecStart=/opt/sentinel/.venv/bin/python3 -u scripts/autoimprove.py
+Restart=always
+RestartSec=15
+# featherweight: single python process, ~few MB RSS, file-only reads
+Nice=10
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+OOMScoreAdjust=500
+MemoryMax=128M
+CPUQuota=15%
+
+[Install]
+WantedBy=multi-user.target

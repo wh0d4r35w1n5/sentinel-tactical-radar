@@ -1,0 +1,10 @@
+#!/bin/bash
+# exec-watchdog: restart sentinel-live-exec when live-ledger refresh stalls
+LEDGER=/opt/sentinel/api/live-ledger.json
+NOW=$(date +%s%3N)
+AT=$(python3 -c "import json,datetime,time;d=json.load(open(\"$LEDGER\"));ra=d.get(\"refreshedAt\");print(int(datetime.datetime.fromisoformat(ra.replace(\"Z\",\"+00:00\")).timestamp()*1000)) if ra else print(0)" 2>/dev/null || echo 0)
+AGE=$((NOW - AT))
+if [ "$AGE" -gt 240000 ]; then
+  systemctl restart sentinel-live-exec
+  logger -t exec-watchdog "live-ledger ${AGE}ms stale — restarted sentinel-live-exec"
+fi

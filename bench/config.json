@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "max_open_trades": 3,
+  "stake_currency": "USDT",
+  "stake_amount": 100,
+  "tradable_balance_ratio": 0.99,
+  "fiat_display_currency": "USD",
+  "timeframe": "1h",
+  "cancel_open_orders_on_exit": false,
+  "unfilledtimeout": { "entry": 10, "exit": 10, "unit": "minutes" },
+  "entry_pricing": { "price_side": "same", "use_order_book": true, "order_book_top": 1 },
+  "exit_pricing": { "price_side": "same", "use_order_book": true, "order_book_top": 1 },
+  "exchange": {
+    "name": "bitget",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "DOGE/USDT",
+      "HBAR/USDT", "SUI/USDT", "LINK/USDT", "AVAX/USDT", "LTC/USDT"
+    ],
+    "pair_blacklist": []
+  },
+  "pairlists": [{ "method": "StaticPairList" }],
+  "bot_name": "sentinel-ft-bench",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": { "process_throttle_secs": 30 },
+  "db_url": "sqlite:///tradesv3.dryrun.sqlite",
+  "loglevel": "INFO",
+  "api_server": { "enabled": false, "listen_ip_address": "127.0.0.1", "listen_port": 18099, "verbosity": "error", "jwt_secret_key": "bench-not-exposed-pad-to-32chars-ok", "username": "x", "password": "x" }
+}

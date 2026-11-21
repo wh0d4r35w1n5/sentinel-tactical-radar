@@ -1,0 +1,40 @@
+{
+ "at": 1795224726520,
+ "equity": 5.164009092781,
+ "ruinLine": 2.5820045463905,
+ "horizon": 60,
+ "sims": 50000,
+ "lanes": {
+  "unattributed": {
+   "n": 173,
+   "p": 0.428,
+   "pRuin60_at_10x_halfBook": 0.2584,
+   "levCapFor5PctRuin": 3
+  },
+  "sentinel-structure": {
+   "n": 90,
+   "p": 0.378,
+   "pRuin60_at_10x_halfBook": 0.6114,
+   "levCapFor5PctRuin": 3
+  },
+  "operator-green-recovery": {
+   "n": 31,
+   "p": 0.387,
+   "pRuin60_at_10x_halfBook": 0.0046,
+   "levCapFor5PctRuin": 5
+  },
+  "__all": {
+   "n": 300,
+   "p": 0.41,
+   "pRuin60_at_10x_halfBook": 0.2458,
+   "levCapFor5PctRuin": 3
+  }
+ },
+ "live": {
+  "positions": [
+   "SOXSUSDT:long 10x"
+  ],
+  "pRuin60_liveBook": 0.1874,
+  "marginAtRisk": 2.3307
+ }
+}

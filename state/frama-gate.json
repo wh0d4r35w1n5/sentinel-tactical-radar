@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "N": 16,
+  "K": 8,
+  "dirGateCells": ["Key Level SFP:SHORT", "Wyckoff:SHORT"],
+  "chaseLongMaxPct": 0.33,
+  "chaseExempt": [],
+  "evidence": "2026-11-02 frama-deep retro-join 6.5k episodes: SFP:SHORT gated +0.281%/ep SQN1.9 vs +0.059 ungated; Wyckoff:SHORT +0.729 SQN3.33 vs +0.487; pooled gated>counter all NxK; LONG >+0.33% above FRAMA16 = worst quintile -0.418%/ep"
+}

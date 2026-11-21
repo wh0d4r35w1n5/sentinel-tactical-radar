@@ -1,0 +1,22 @@
+[Unit]
+Description=Sentinel TradingView webhook intake (operator setups)
+After=network.target
+
+[Service]
+Type=simple
+# ubuntu, not root: the service writes state/cmd-setups.json which tg-watch
+# (ubuntu) must also write for /unsetup cancels — root-owned file would 403
+# the operator's own board.
+User=ubuntu
+WorkingDirectory=/opt/sentinel
+ExecStart=/usr/bin/python3 /opt/sentinel/scripts/tv-hook.py
+Restart=always
+RestartSec=5
+# sandboxing parity with the other sentinel units
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sentinel/state
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

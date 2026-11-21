@@ -1,0 +1,14 @@
+import './load-env.mjs';
+import { makeExchange } from './exchange/index.mjs';
+const ex = makeExchange(process.env);
+const SYM='AMKRUSDT';
+const mode = await ex.getPosMode(SYM);
+ex.setPosMode?.(mode);
+console.log('posMode',mode);
+await ex.setIsolated(SYM);
+await ex.setLeverage(SYM,20);
+console.log('lev set 20 isolated');
+const r = await ex.marketOrder(SYM,'buy','1.44','open',{clientOid:('amkr'+Date.now()).slice(0,38)});
+console.log('ORDER',JSON.stringify(r));
+const pos = await ex.getPos();
+console.log('POS',JSON.stringify((pos||[]).find(p=>p.symbol===SYM)||null));

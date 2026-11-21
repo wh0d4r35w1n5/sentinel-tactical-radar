@@ -1,0 +1,521 @@
+// deploy-manager.mjs — standing order 2026-11-14: ALL capital deployed at all
+// times, but SMART. Free margin without an armed level order = violation.
+// Arms fire openRiskEntry only when mark touches the retest level.
+import { makeExchange } from './exchange/index.mjs';
+import { openRiskEntry } from './risk-entry.mjs';
+import fs from 'node:fs';
+const ROOT = '/opt/sentinel';
+for (const line of fs.readFileSync(`${ROOT}/.env`, 'utf8').split('\n')) {
+  const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+  if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
+}
+process.env.SENTINEL_EXEC = 'live'; process.env.SENTINEL_EXCHANGE = 'bitget';
+process.env.SENTINEL_LIVE = '1'; process.env.SENTINEL_OPEN_SEASON = '1';
+process.env.SENTINEL_DEPLOY_ALL = '1';
+
+const X = makeExchange(process.env);
+X.setPosMode('hedge');
+const cm = await X.contractMap();
+// TradFi session gate (mirror exec tradfiBlock — verified bleed 2026-11-11:
+// 14 weekend RWA closes -$0.844 vs 8 weekday -$0.346; exec refuses these,
+// DM was the leak — 20 rwa-DARK seats net -1.93). contracts API flags
+// isRwa via cm; class sets mirror build-scanner assetClass().
+const IDX_SET = new Set('SPX SPY QQQ VOO IWM SP500 NDX100 NDX NAS100 US500 US30 DJT DJI DAX FTSE NI225 JP225 HSI KR200 TQQQ SQQQ QLD SPXU UDOW SDOW TNA TZA UVXY SOXL SOXS SOXX SMH XLE XLU XLK XLV XBI GDX URNM BOTZ KWEB EWJ EWY EWT INDA EWH EWZ TLT TMF TBT JEPQ SGOV BITO IBIT AGPU BITU ETHU SOLX'.split(' '));
+const METAL_SET = new Set('XAU XAG XPT XPD HG COPPER COP PAXG XAUT'.split(' '));
+const COMMODITY_SET = new Set('CL BZ NATGAS OIL UKOIL USOIL WTI BRENT CORN WHEAT SOY SUGAR COFFEE COCOA'.split(' '));
+const FX_SET = new Set('EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH USDBRL'.split(' '));
+const TRADFI_FOREIGN = /(HKD|JPY|KRW|INR|TWD|BRL|EUR|GBp|CNY|SGD|THB)/i;
+const etHM = (() => {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false });
+    return (d) => { const p = fmt.formatToParts(d); return (+p.find(x => x.type === 'hour').value % 24) * 60 + +p.find(x => x.type === 'minute').value; };
+  } catch { return () => null; }
+})();
+const tradfiBlocked = (sym) => {
+  const c = cm[sym];
+  if (!c?.isRwa) return false;
+  const now = new Date();
+  if (now.getUTCDay() === 0 || now.getUTCDay() === 6) return true;
+  const base = sym.replace(/USDT$/, '').toUpperCase();
+  const cls = IDX_SET.has(base) ? 'index' : METAL_SET.has(base) ? 'metal'
+    : COMMODITY_SET.has(base) ? 'commodity' : FX_SET.has(base) ? 'fx' : 'stock';
+  if (cls === 'stock' && !TRADFI_FOREIGN.test(sym)) {
+    const mins = etHM(now);
+    if (mins != null && (mins < 240 || mins >= 1200)) return true;
+  }
+  return false;
+};
+const J = (p, opt) => { try { return JSON.parse(fs.readFileSync(`${ROOT}/${p}`, 'utf8')); } catch { return opt; } };
+const log = (...a) => { const s = `${new Date().toISOString()} ${a.join(' ')}\n`; fs.appendFileSync(`${ROOT}/state/deploy-manager.log`, s); };
+// file-only: nohup already redirects stdout into the same log — writing both duplicated every line
+
+const DEADLINE = Date.now() + 24 * 3600e3;
+const MARGIN_PER_SEAT = 1.2;          // full-deploy: 2 probes per .41 avail (was 1.8 - left 69% of book idle)          // probe-tier: $25 notional at 14-20x rides ~$1.25-1.8 margin (was 2.5 — locked arms out at $2.38 avail)
+const COOLDOWN = 4 * 3600e3;
+const ARM_TTL = 15 * 60e3;            // unfired arms die — a stale arm is a dead move, not a seat-in-waiting
+const MAX_SAME_DIR = 8;  // operator order 2026-11-15: fill all seats — same-beta risk accepted (was 2, CLSK/JTO/SPCX rule suspended)               // correlation cap (CLSK/JTO/SPCX lesson): never >2 seats one direction
+let arms = []; // populated by the 60s scan — expires unfired after ARM_TTL
+const cooldown = new Map(Object.entries(J('state/deploy-cooldowns.json', {}))); // symbol -> until (persistent)
+const cdSave = () => fs.writeFileSync(`${ROOT}/state/deploy-cooldowns.json`, JSON.stringify(Object.fromEntries(cooldown)));
+const cdSet = (sym, until) => { cooldown.set(sym, until); cdSave(); };
+// long-side trend gate (2026-11-15 overnight massacre fix — mirrors the exec
+// lane's short-trend rule): a LONG arm is refused when BOTH 4H and 1h are
+// proven down (falling mean + LH structure). Overnight the rail bought every
+// bounce-retest in a falling tape — ~20 small bleed-outs. 4H-down + 1h-turning
+// still arms (the 1h pivot is the dip-buy edge); missing/stale data = no veto.
+const klTrend = (sym, tf) => {
+  try {
+    const row = J(`state/klines-${tf}.json`, {})?.[sym];
+    const cl = row?.payload?.closes || (Array.isArray(row?.rows) ? row.rows.map((r) => +r.c).filter(Number.isFinite) : null);
+    const at = +row?.at || 0;
+    if (!Array.isArray(cl) || cl.length < 24 || Date.now() - at > 45 * 60e3) return null;
+    const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const fast = mean(cl.slice(-4)), slow = mean(cl.slice(-12));
+    const hi1 = Math.max(...cl.slice(-24, -12)), hi2 = Math.max(...cl.slice(-12));
+    const lo1 = Math.min(...cl.slice(-24, -12)), lo2 = Math.min(...cl.slice(-12));
+    if (fast > slow * 1.0005 && lo2 > lo1) return 'up';
+    if (fast < slow * 0.9995 && hi2 < hi1) return 'down';
+    return 'flat';
+  } catch { return null; }
+};
+const hit = (a, px) => a.dir === 'LONG' ? px <= a.level : px >= a.level;
+// open-into-green rule (operator order): fire ONLY while momentum is heavy in
+// the seat's direction — shorts on live dumps, longs on live pumps (mom5 >=2%)
+const momLive = async (sym, timeoutMs = 8000) => {
+  try {
+    const r = await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=15m&limit=8`, { signal: AbortSignal.timeout(timeoutMs) });
+    const rows = (await r.json())?.data || [];
+    if (rows.length < 6) return null;
+    const last = +rows[rows.length - 1][4], base = +rows[rows.length - 6][4];
+    if (!(last > 0) || !(base > 0)) return null;
+    return (last / base - 1) * 100;
+  } catch { return null; } // null = unknown, never 0 — a 429 used to fake dead momentum and poison persistence
+};
+// ATR geometry (Van Tharp vol-adjusted stops): stop distance = 1.8×ATR14(15m)
+// so the stop sits outside the symbol's OWN noise — not a heuristic % that
+// strangles quiet names and invites disasters on wild ones. R = that distance;
+// rungs project at 1.2R/2.2R/3.2R — exits where the move's own amplitude pays.
+const atrPct = async (sym) => {
+  try {
+    const r = await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${sym}&productType=USDT-FUTURES&granularity=15m&limit=16`, { signal: AbortSignal.timeout(8000) });
+    const rows = (await r.json())?.data || [];
+    if (rows.length < 15) return 0.03;
+    let tr = 0;
+    for (let i = rows.length - 14; i < rows.length; i++) {
+      const hi = +rows[i][2], lo = +rows[i][3], pc = +rows[i - 1][4];
+      tr += Math.max(hi - lo, Math.abs(hi - pc), Math.abs(lo - pc));
+    }
+    return (tr / 14) / +rows[rows.length - 1][4];
+  } catch { return 0.03; }
+};
+let dirCapBoost = { LONG: 4.5, SHORT: 4.5 }; // regime-relative climax cap
+const heavyMom = async (a) => {
+  // youth filter (operator order 2026-11-14, ARIA/QNT lesson): heavy momentum
+  // alone buys finished moves. Fire ONLY on early momentum — |mom| in the
+  // 1.5–6% band AND mark still within 0.6% of the move's extreme (still
+  // running, not bounced). A blowoff past 6% or a mark that already
+  // retraced = the move is over; do not chase the corpse.
+  try {
+    const r = await fetch(`https://api.bitget.com/api/v2/mix/market/candles?symbol=${a.symbol}&productType=USDT-FUTURES&granularity=15m&limit=8`, { signal: AbortSignal.timeout(8000) });
+    const rows = (await r.json())?.data || [];
+    if (rows.length < 6) return false;
+    const last = +rows[rows.length - 1][4], base = +rows[rows.length - 6][4];
+    const mom = (last / base - 1) * 100;
+    const lo = Math.min(...rows.slice(-6).map(c => +c[3]));
+    const hi = Math.max(...rows.slice(-6).map(c => +c[2]));
+    if (a.dir === 'SHORT') {
+      if (mom < -dirCapBoost.SHORT || mom > -1.5) return false;
+      return (last / lo - 1) * 100 <= 1.5;    // near the low — dump is live (1.5% band: retest inside strength, not a corpse)
+    }
+    if (mom > dirCapBoost.LONG || mom < 1.5) return false;  // cap is regime-relative: isolated spike = climax, broad impulse = the move itself
+    return (hi / last - 1) * 100 <= 1.5;      // near the high — pump is live
+  } catch { return false; }
+};
+
+async function boardScan() {
+  // live screen: top |24h chg| tickers as universe; youth filter qualifies at
+  // fire time. Direction vs day-anchored session VWAP (gate's own rule).
+  const held = new Set((J('api/wealth-live.json', {})?.futures?.positions || []).map(p => p.symbol || p.k?.split(':')[0]));
+  const deny = new Set();
+  try { for (const e of J('state/auto-deny.json', {})?.entries || []) if ((e.until || 0) > Date.now()) deny.add(e.symbol); } catch {}
+  const r = await fetch('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES', { signal: AbortSignal.timeout(8000) });
+  const ticks = (await r.json())?.data || [];
+  const out = [];
+  for (const t of ticks) {
+    const sym = t.symbol, chg = +t.change24h * 100, last = +t.lastPr, vol = +t.quoteVolume || +t.baseVolume * last || 0;
+    if (!(last > 0) || Math.abs(chg) < 4 || vol < 2e6) continue;
+    if (held.has(sym) || deny.has(sym) || tradfiBlocked(sym)) continue;
+    out.push({ symbol: sym, last, mom: chg, dir: chg < 0 ? 'SHORT' : 'LONG' });
+  }
+  return out.sort((a, b) => Math.abs(b.mom) - Math.abs(a.mom));
+}
+
+function armFor(cand) {
+  const slPct = Math.max(0.025, Math.min(0.05, Math.abs(cand.mom) / 100 * 0.35 + 0.02));
+  return { symbol: cand.symbol, dir: cand.dir, level: cand.last, strategy: cand.dir === 'SHORT' ? 'downtrend-short' : 'devin-momentum',
+    slPct, tps: [[slPct * 1.2, 50], [slPct * 2.2, 30], [slPct * 3.2, 20]], armedAt: Date.now() };
+  // note: strategy resolved below — LS:SHORT went rolling-negative (sumR -2.1
+  // over 20 seats) so shorts route through the un-convicted downtrend-short lane
+}
+
+let lastScan = 0;
+let momHist = new Map(); // sym -> {v,at} last GOOD mom5 read — survives 429-null scans (was prevMoms/prevMomsAt)
+let btcMom = 0, btcMomAt = 0;             // fire-time tape proxy (75m move)
+log(`deploy-manager up; arms=${arms.length}`);
+// boot sweep: cancel resting maker orders orphaned by a previous life —
+// risk-entry journals orderIds to state/dm-resting.json at placement;
+// exchange-side preset stops keep any already-filled seat protected.
+try {
+  const rr = J('state/dm-resting.json', {});
+  for (const [sym, oid] of Object.entries(rr)) {
+    await X.cancelOrder(sym, oid).catch(() => {});
+    log(`boot-sweep cancelled resting ${sym} order ${String(oid).slice(-8)}`);
+  }
+  if (Object.keys(rr).length) fs.writeFileSync(`${ROOT}/state/dm-resting.json`, '{}');
+} catch {}
+while (Date.now() < DEADLINE) {
+  // 1) fire armed levels — expired arms drop first (corpse-watch ends)
+  for (let i = arms.length - 1; i >= 0; i--) {
+    const a = arms[i];
+    if (Date.now() - (a.armedAt || 0) > ARM_TTL) { arms.splice(i, 1); log(`ARM-EXPIRED ${a.symbol} — move died unfired`); continue; }
+    if (a.restFilled) { arms.splice(i, 1); continue; }
+    if (a.resting) { process.stdout.write(`${a.symbol}:resting `); continue; }
+    try {
+      const tk = await X.ticker(a.symbol);
+      const px = +((Array.isArray(tk) ? tk[0] : tk)?.lastPr || 0);
+      if (!(px > 0)) continue;
+      if (tradfiBlocked(a.symbol)) { arms.splice(i, 1); log(`ARM-KILLED ${a.symbol} — TradFi underlying dark`); continue; }
+      // retest gate (was dead code — arms fired on any hot tick): fire only when
+      // mark is at/better than the armed level — chasing extensions = climax-buys
+      if (!hit(a, px)) { process.stdout.write(`${a.symbol}@${px} `); continue; }
+      if (!(await heavyMom(a))) { process.stdout.write(`${a.symbol}@${px} `); continue; }
+      // fire-time tape check (2026-11-16): arm-time breadth can flip inside
+      // the 15m arm TTL — the FARTCOIN gap (armed legal, fired into dn=33%).
+      // BTC's 75m move is the always-fresh tape proxy for alts; kill arms
+      // whose direction the market impulse now runs against.
+      if (Date.now() - btcMomAt > 60e3) { const b = await momLive('BTCUSDT'); if (b != null) { btcMom = b; btcMomAt = Date.now(); } }
+      if (Date.now() - btcMomAt > 10 * 60e3) { process.stdout.write(`${a.symbol}:tape? `); continue; } // unknown tape = no fire
+      if (a.dir === 'LONG' ? btcMom <= -1.5 : btcMom >= 1.5) {
+        arms.splice(i, 1); log(`ARM-KILLED ${a.symbol} ${a.dir} — tape flipped since arm (btc75m ${btcMom.toFixed(1)}%)`); continue;
+      }
+      // massacre-governor parity (2026-11-15: DM fired KORU at dd 50% while the
+      // exec lane was frozen — the freeze must bind EVERY entry path):
+      const ddPct = +J('api/live-ledger.json', {})?.dayDDPct || 0;
+      const ddTrip = +(process.env.DM_MASSACRE_DD_PCT || process.env.SENTINEL_MASSACRE_DD_PCT || 45);
+      if (ddPct >= ddTrip) { process.stdout.write(`${a.symbol}:gov-dd${ddPct.toFixed(0)}% `); continue; }
+      // correlation cap: never >MAX_SAME_DIR seats one direction (one dip = one loss)
+      const open = (await X.getPos()).filter(p => +p.total > 0);
+      const sameDir = open.filter(p => ((p.holdSide || p.posSide || '').toLowerCase() === a.dir.toLowerCase())).length;
+      if (sameDir >= MAX_SAME_DIR) { process.stdout.write(`${a.symbol}:dirCap `); continue; }
+      // geometry at fill: ATR stop (1.8×) + R-multiple rungs 1.2/2.2/3.2R
+      const ap = await atrPct(a.symbol);
+      const slPct = Math.max(0.015, Math.min(0.06, ap * 1.8));
+      const slPx = a.dir === 'LONG' ? px * (1 - slPct) : px * (1 + slPct);
+      const tps = [[1.2, 50], [2.2, 30], [3.2, 20]].map(([r, p]) => ({ px: +(a.dir === 'LONG' ? px * (1 + slPct * r) : px * (1 - slPct * r)).toPrecision(8), pct: p }));
+      const res = await openRiskEntry(X, {
+        symbol: a.symbol, direction: a.dir, strategy: a.strategy,
+        refEntry: px, setup: true, slPx, absTps: tps, notionalUsd: (a.dir === 'SHORT' ? +(process.env.DM_SHORT_NOTIONAL || 25) : +(process.env.DM_LONG_NOTIONAL || 120)), // devin 2026-11-16: maker reverted — post-only filled 0/12 and 4h-benched every arm; level+heavyMom+persist+tape gates carry the no-chase rule. claude 2026-11-15: unproven SHORT lane = probe size
+        setupId: 'deploy-manager-2026-11-14', note: 'ATR-geometry seat; R=' + (slPct * 100).toFixed(1) + '%',
+        leverageCap: 20,   // operator grant 2026-11-15: up to 2x leverage — bandCap still guards liquidation vs stop distance
+      }, cm[a.symbol], { riskScale: 1 });
+      log(`FILLED ${a.symbol} ${a.dir} @ ${px} R=${(slPct * 100).toFixed(1)}%: ${JSON.stringify(res).slice(0, 160)}`);
+      const m0 = J('state/deploy-mfe.json', {});
+      m0[`${a.symbol}:${a.dir.toLowerCase()}`] = { best: 0, r: slPct * 100 };
+      fs.writeFileSync(`${ROOT}/state/deploy-mfe.json`, JSON.stringify(m0));
+      arms.splice(i, 1);
+    } catch (e) {
+      const msg = String(e?.message || e);
+      log(`${a.symbol} refused: ${msg.slice(0, 160)}`);
+      // cooldown by class: transient = retry soon; vwap-side = regime wait;
+      // policy (measured-losing/deny/twin) = full cooldown
+      const cd = /stale entry price|reconcil|pending|lock|unfilled|lapsed/i.test(msg) ? 15 * 60e3
+        : /vwap-side/i.test(msg) ? 60 * 60e3 : COOLDOWN;
+      cdSet(a.symbol, Date.now() + cd);
+      arms.splice(i, 1);
+    }
+  }
+  // 2) every 60s: free margin without arms = deploy more
+  if (Date.now() - lastScan > 30000) {
+    lastScan = Date.now();
+    try {
+      const w = J('api/wealth-live.json', {});
+      const avail = +w?.futures?.availableUsd || 0;
+      const seatsNeeded = Math.floor(avail / MARGIN_PER_SEAT);
+      if (seatsNeeded > arms.length) {
+        const board = await boardScan();
+        // breadth check: if >=35% of the top screened names are running one
+        // way, it's a market impulse — widen that side's cap to 7% (still
+        // excludes blow-offs); isolated tape keeps the 4.5% climax cap
+        const momSample = [], momCache = new Map();
+        // parallel fetch — 30 sequential 8s-timeout calls blocked exits for minutes
+        // chunked: 30 parallel candle calls 429'd ~30% of reads (verified
+        // 2026-11-16 — burst: 9/30 HTTP 429; chunked 6/350ms: 0 failures)
+        const top30 = board.slice(0, 30);
+        for (let i = 0; i < top30.length; i += 6) {
+          await Promise.all(top30.slice(i, i + 6).map(async (cand) => {
+            const m = await momLive(cand.symbol, 5000);
+            if (m != null) momSample.push(m);
+            momCache.set(cand.symbol, m);
+          }));
+          if (i + 6 < top30.length) await new Promise(r => setTimeout(r, 350));
+        }
+        const upB = momSample.filter(m => m >= 3).length / Math.max(1, momSample.length);
+        const dnB = momSample.filter(m => m <= -3).length / Math.max(1, momSample.length);
+        dirCapBoost.LONG = upB >= 0.35 ? 5 : 4.5;   // tape truth: every >=4.5-5% mom5 fill tonight bought the tail — broad impulse or not
+        dirCapBoost.SHORT = dnB >= 0.35 ? 5 : 4.5;
+        log(`breadth up=${(upB * 100).toFixed(0)}% dn=${(dnB * 100).toFixed(0)}% caps L=${dirCapBoost.LONG} S=${dirCapBoost.SHORT}`);
+        // Buffett Rule #1 breadth gate (2026-11-16): when >=15% of screened
+        // names are falling >=3%, the tape is uniformly down — no long arms
+        // at all this cycle. Overnight's bleed ran through dn-breadth 10-19%.
+        const tapeAllDown = dnB >= 0.15;
+        if (tapeAllDown) log(`breadth-gate: dn ${(dnB * 100).toFixed(0)}% >= 15% — longs suppressed this cycle`);
+        // mirror gate (2026-11-16): up-breadth >=15% = rising tape — CSOPS/SHELL
+        // shorts culled never-green (-1.84/-1.37) into up=20% breadth. same
+        // counter-trend bleed, opposite direction.
+        const tapeAllUp = upB >= 0.15;
+        if (tapeAllUp) log(`breadth-gate: up ${(upB * 100).toFixed(0)}% >= 15% — shorts suppressed this cycle`);
+        for (const cand of board) {
+          if (cand.dir === 'LONG' && tapeAllDown) continue;
+          if (cand.dir === 'SHORT' && tapeAllUp) continue;
+          if (arms.length >= seatsNeeded) break;
+          if (arms.some(a => a.symbol === cand.symbol)) continue;
+          const cd = cooldown.get(cand.symbol);
+          const until = (cd && typeof cd === 'object') ? cd.until : cd;
+          if ((until || 0) > Date.now()) {
+            // falsified-corpse rule (PIEVERSE-moon lesson): a culled symbol that
+            // recovers past the cull price is live tape — the blacklist was
+            // wrong, delist it instead of missing the move
+            if (cd && typeof cd === 'object' && cd.px > 0) {
+              const recovered = cd.side === 'short' ? cand.last < cd.px : cand.last > cd.px;
+              if (recovered) { cooldown.delete(cand.symbol); cdSave(); log(`DELIST ${cand.symbol} — cull falsified, recovered past ${cd.px}`); }
+              else continue;
+            } else continue;
+          }
+          // arm-time live-mom check (audit: 24h movers = finished moves):
+          // only arm symbols moving RIGHT NOW in the seat's direction
+          const m5 = momCache.has(cand.symbol) ? momCache.get(cand.symbol) : await momLive(cand.symbol, 5000);
+          momCache.set(cand.symbol, m5);
+          if (m5 == null) { process.stdout.write(`${cand.symbol}:mom5=? `); continue; } // unknown != zero — never arm or persist on a failed read
+          // arm bounds must match fire bounds (1.5..cap) — an arm outside them
+          // can NEVER fire; it just squats a slot for 15min (VVV armed at 7.0 bug)
+          const cap = cand.dir === 'SHORT' ? dirCapBoost.SHORT : dirCapBoost.LONG;
+          const live = cand.dir === 'SHORT' ? (m5 <= -1.5 && m5 >= -cap) : (m5 >= 1.5 && m5 <= cap);
+          if (!live) { process.stdout.write(`${cand.symbol}:mom5=${m5.toFixed(1)} `); continue; }
+          // momentum-persistence (anti-churn 2026-11-16): one 5m print fakes
+          // an arm — require the same-direction threshold held on a previous
+          // GOOD read <=240s (per-symbol, survives one 429-null scan).
+          const pm = momHist.get(cand.symbol);
+          const persisted = pm && (Date.now() - pm.at < 240e3) &&
+            (cand.dir === 'SHORT' ? pm.v <= -1.5 : pm.v >= 1.5);
+          momHist.set(cand.symbol, { v: m5, at: Date.now() });
+          if (!persisted) { process.stdout.write(`${cand.symbol}:no-persist `); continue; }
+          // daily-context cap — regime-relative (empty-board fix): a name +10%
+          // on the day is extended in flat tape but mid-pack in a broad impulse
+          const dayCap = cand.dir === 'LONG' ? (dirCapBoost.LONG >= 7 ? 20 : 8) : (dirCapBoost.SHORT >= 7 ? -20 : -8);
+          if (cand.dir === 'LONG' && cand.mom > dayCap) { process.stdout.write(`${cand.symbol}:day+${cand.mom.toFixed(0)}% `); continue; }
+          if (cand.dir === 'SHORT' && cand.mom < dayCap) { process.stdout.write(`${cand.symbol}:day${cand.mom.toFixed(0)}% `); continue; }
+          // confirmed-downtrend veto — tightened 2026-11-16 (operator order,
+          // MAE evidence): in a proven 4H downtrend a long arm needs the 1h
+          // PROVEN turned up — 'flat'/missing data is not a turn.
+          if (cand.dir === 'LONG' && klTrend(cand.symbol, '4H') === 'down' && klTrend(cand.symbol, '1h') !== 'up') {
+            process.stdout.write(`${cand.symbol}:long-4h-down `); continue;
+          }
+          const arm = armFor(cand);
+          arms.push(arm);
+          // maker-first resting entry (devin 2026-11-16): park a post-only
+          // bid AT the armed level while price is still above — fills on the
+          // retrace as maker (0.02% vs 0.06% taker). Lapse/reject leaves the
+          // arm armed for the taker touch-fallback; never blocks arming.
+          try {
+            const tk0 = await X.ticker(cand.symbol);
+            const q0 = Array.isArray(tk0) ? tk0[0] : tk0;
+            const px0 = +q0?.lastPr || 0;
+            const room = arm.dir === 'LONG' ? px0 > arm.level * 1.0008 : px0 < arm.level * 0.9992;
+            if (room) {
+              const ap0 = await atrPct(cand.symbol);
+              const slPct0 = Math.max(0.015, Math.min(0.06, ap0 * 1.8));
+              const dirS = arm.dir === 'SHORT' ? -1 : 1;
+              const slPx0 = +(arm.level * (1 - dirS * slPct0)).toPrecision(8);
+              const tps0 = [[1.2, 50], [2.2, 30], [3.2, 20]].map(([r, p]) => ({
+                px: +(arm.level * (1 + dirS * slPct0 * r)).toPrecision(8), pct: p }));
+              arm.resting = true;
+              openRiskEntry(X, {
+                symbol: cand.symbol, direction: arm.dir, strategy: arm.strategy,
+                refEntry: arm.level, setup: true, slPx: slPx0, absTps: tps0,
+                notionalUsd: (arm.dir === 'SHORT' ? +(process.env.DM_SHORT_NOTIONAL || 25) : +(process.env.DM_LONG_NOTIONAL || 120)),
+                setupId: 'deploy-manager-resting-2026-11-16', note: 'resting maker seat @ level',
+                leverageCap: 20, entryMode: 'resting', restPx: arm.level, restMs: 90000,
+              }, cm[cand.symbol], { riskScale: 1 })
+                .then((res) => { arm.restFilled = true; arm.resting = false; log(`REST-FILLED ${cand.symbol} ${arm.dir} entry=${res.entryPrice} notional=${res.notionalUsd}`); })
+                .catch(async (e) => {
+                  arm.resting = false;
+                  // post-fill errors must not re-arm a double entry — if the
+                  // seat exists on the exchange the arm is consumed either way
+                  try {
+                    const pp = await X.getPos();
+                    if (pp.some(p => p.symbol === cand.symbol && +p.total > 0)) {
+                      arm.restFilled = true;
+                      log(`${cand.symbol} resting: seat exists despite ${String(e?.message || e).slice(0, 80)}`);
+                      return;
+                    }
+                  } catch {}
+                  log(`${cand.symbol} resting-lapsed: ${String(e?.message || e).slice(0, 140)}`);
+                });
+            }
+          } catch (e) { /* resting is opportunistic — arming never blocks on it */ }
+          log(`ARMED ${arm.symbol} ${arm.dir} @ ${arm.level} (avail ${avail.toFixed(2)}, mom24 ${cand.mom.toFixed(1)}%, mom5 ${m5.toFixed(1)}%)`);
+        }
+      }
+    } catch (e) { log(`scan err: ${String(e?.message || e).slice(0, 120)}`); }
+  }
+  // 3) profit-watch — bank healthy winners on >=50% MFE giveback (standing order)
+  try {
+    const mfe = J('state/deploy-mfe.json', {});
+    const pos = (await X.getPos()).filter(p => +p.total > 0);
+    for (const p of pos) {
+      const sym = p.symbol, side = (p.holdSide || p.posSide || '').toLowerCase();
+      const entry = +p.openPriceAvg || +p.averageOpenPrice || 0;
+      const tk = await X.ticker(sym);
+      const px = +((Array.isArray(tk) ? tk[0] : tk)?.lastPr || 0);
+      if (!(entry > 0) || !(px > 0) || !side) continue;
+      const sign = side === 'short' ? -1 : 1;
+      const uplPct = (px / entry - 1) * 100 * sign;
+      const key = `${sym}:${side}`;
+      const rec = mfe[key] || { best: 0 };
+      rec.best = Math.max(rec.best, uplPct); rec.worst = Math.min(rec.worst ?? 0, uplPct); mfe[key] = rec;
+      // GREEN-LOCK (operator order 2026-11-15 — "only red trades is not
+      // allowed"): a seat that earned >= +1.0% MFE may never show red again —
+      // floor ratchets to +0.1% and exits unconditional at the floor (green
+      // or out). Full 1R still earns the wider +0.15 floor (Clenow). Below
+      // the lock, culls stay STRUCTURE-based (PIEVERSE lesson): down alone is
+      // noise on high-ATR names — "turned shit" = below floor AND flipped.
+      const floor = (rec.r && rec.best >= rec.r) ? 0.15
+                  : (rec.best >= 1.0 ? 0.1 : -0.7); // MAE-calibrated 2026-11-16: winners dip ~-0.57, losers never return past -0.8 — scaled-by-r let bleeders run to -1.9
+      const momNow = await momLive(sym, 5000);
+      const momTxt = momNow == null ? '?' : momNow.toFixed(1);
+      // FLIP-CULL (2026-11-16): red seat + live impulse AGAINST it = the tape
+      // flipped after entry (FARTCOIN class — filled legal, died when dn hit
+      // 33%). Cut at first red; don't donate the -0.7 ride down.
+      const impulseAgainst = momNow != null && (side === 'short' ? momNow >= 1.5 : momNow <= -1.5);
+      // REGIME-CULL (2026-11-16): a RED seat fighting the live tape impulse is
+      // what the breadth gate exists to refuse as an entry — holding it is the
+      // same mistake deferred. Cut red+contradicted at any level and free the
+      // margin for right-side entries; green seats keep their floors.
+      if (Date.now() - btcMomAt > 60e3) { const b = await momLive('BTCUSDT'); if (b != null) { btcMom = b; btcMomAt = Date.now(); } }
+      const contradict = Date.now() - btcMomAt <= 10 * 60e3 && (side === 'long' ? btcMom <= -1.5 : btcMom >= 1.5);
+      if (uplPct < 0 && contradict) {
+        log(`REGIME-CULL ${sym} ${side} upl ${uplPct.toFixed(2)}% btc75m ${btcMom.toFixed(1)}% — red seat fights the tape`);
+        cdSet(sym, { until: Date.now() + 2 * 3600e3, px, side });
+        await X.closePosition(sym, side).catch(e => log(`regime-cull err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plansR = await X.getPlans(sym).catch(() => []);
+        for (const pl of plansR || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', planType: pl.planType, orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'regime-cull' }) + '\n'); } catch {}
+        delete mfe[key]; continue;
+      }
+      if (uplPct < 0 && impulseAgainst) {
+        log(`FLIP-CULL ${sym} ${side} upl ${uplPct.toFixed(2)}% mom5 ${momTxt} — tape flipped after entry`);
+        cdSet(sym, { until: Date.now() + 2 * 3600e3, px, side });
+        await X.closePosition(sym, side).catch(e => log(`flip-cull err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plans0 = await X.getPlans(sym).catch(() => []);
+        for (const pl of plans0 || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', planType: pl.planType, orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'flip-cull' }) + '\n'); } catch {}
+        delete mfe[key]; continue;
+      }
+      const flipped = momNow != null && (side === 'short' ? momNow > 0.8 : momNow < -0.8);
+      // exhaustion cull: red past 70% of floor AND momentum faded to dead zone
+      // — thesis was "momentum carries it"; momentum's gone, seat's bleeding
+      const exhausted = momNow != null && (side === 'short' ? momNow > -0.8 : momNow < 0.8);
+      if (uplPct <= floor && (floor > 0 || flipped || (exhausted && uplPct <= floor * 0.7) || uplPct <= -0.8)) {
+        log(`CULL ${sym} ${side} upl ${uplPct.toFixed(2)}% mom5 ${momTxt} — turned shit, zero tolerance`);
+        cdSet(sym, { until: Date.now() + 2 * 3600e3, px, side }); // price+side stored for falsified-corpse delist
+        await X.closePosition(sym, side).catch(e => log(`cull err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plans = await X.getPlans(sym).catch(() => []);
+        for (const pl of plans || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', planType: pl.planType, orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'cull' }) + '\n'); } catch {}
+        delete mfe[key]; continue;
+      }
+      // GIVEBACK-EXIT (2026-11-16, INIT lesson: +0.81 MFE → -0.82 cull):
+      // sub-lock winners (best 0.6-1.0) got zero giveback protection — the
+      // profit-take tier needed >=1.0 to arm. Earned >=+0.6 then fading to
+      // <=40% of peak while still green = the move is done; bank it, don't
+      // donate the round trip. BE-cull below is the fallback at ~flat.
+      if (rec.best >= 0.6 && rec.best < 1.0 && uplPct > 0 && uplPct <= rec.best * 0.4) {
+        log(`GIVEBACK-EXIT ${sym} ${side} upl ${uplPct.toFixed(2)}% vs best ${rec.best.toFixed(2)}% — banking ${(uplPct / rec.best * 100).toFixed(0)}% of peak`);
+        cdSet(sym, { until: Date.now() + 2 * 3600e3, px, side });
+        await X.closePosition(sym, side).catch(e => log(`giveback err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plansG = await X.getPlans(sym).catch(() => []);
+        for (const pl of plansG || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', planType: pl.planType, orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'giveback' }) + '\n'); } catch {}
+        delete mfe[key]; continue;
+      }
+      // BREAKEVEN-CULL (2026-11-16, INIT lesson: +0.81 MFE → -0.82 cull):
+      // sub-lock winners (best 0.6-1.0) got zero giveback protection — the
+      // profit-take tier needed >=1.0 to arm. Earned >=+0.6 then gave back
+      // ~everything = the move is done; exit at ~flat, don't donate -0.8.
+      if (rec.best >= 0.6 && rec.best < 1.0 && uplPct <= 0.12) {
+        log(`BE-CULL ${sym} ${side} upl ${uplPct.toFixed(2)}% vs best ${rec.best.toFixed(2)}% — earned then gave back`);
+        cdSet(sym, { until: Date.now() + 2 * 3600e3, px, side });
+        await X.closePosition(sym, side).catch(e => log(`be-cull err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plans1 = await X.getPlans(sym).catch(() => []);
+        for (const pl of plans1 || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', planType: pl.planType, orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'be-cull' }) + '\n'); } catch {}
+        delete mfe[key]; continue;
+      }
+      // dust-harvest fix (audit: avgWin +$0.05 vs avgLoss -$0.30, payoff 0.18):
+      // trail arms at 1.0% peak (was 0.6%) and banks only >= +0.45% net —
+      // winners must clear ~1R before reversal insurance applies; rung-1
+      // TP territory stays reachable instead of pennies getting harvested
+      if (rec.best >= 1.0 && uplPct <= rec.best * 0.5 && uplPct > 0.45) {
+        log(`PROFIT-TAKE ${sym} ${side} upl ${uplPct.toFixed(2)}% vs best ${rec.best.toFixed(2)}% — banking on reversal`);
+        await X.closePosition(sym, side).catch(e => log(`close err ${sym}: ${String(e?.message||e).slice(0,100)}`));
+        const plans = await X.getPlans(sym).catch(() => []);
+        for (const pl of plans || []) {
+          const oid = pl.orderId || pl.planOrderId;
+          if (oid) await X.api('POST', '/api/v2/mix/order/cancel-plan-order',
+            { body: { symbol: sym, productType: 'USDT-FUTURES', marginCoin: 'USDT', orderIdList: [{ orderId: String(oid) }] } }).catch(() => {});
+        }
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym, side, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'profit-take' }) + '\n'); } catch {}
+        delete mfe[key];
+      }
+    }
+    // vanished seats = exchange-side exit (stop/TP legs filled): log the trip
+    // with its recorded MFE/MAE before dropping the record.
+    const seen = new Set((pos || []).map(p => `${p.symbol}:${(p.holdSide || p.posSide || '').toLowerCase()}`));
+    for (const [k, rec] of Object.entries(mfe)) {
+      if (!seen.has(k)) {
+        const [sym2, side2] = k.split(':');
+        try { fs.appendFileSync(`${ROOT}/state/deploy-trips.jsonl`, JSON.stringify({ ts: Date.now(), symbol: sym2, side: side2, r: rec.r ?? null, best: rec.best, worst: rec.worst ?? 0, exit: 'exchange' }) + '\n'); } catch {}
+        delete mfe[k];
+      }
+    }
+    fs.writeFileSync(`${ROOT}/state/deploy-mfe.json`, JSON.stringify(mfe));
+  } catch (e) { log(`profit-watch err: ${String(e?.message || e).slice(0, 120)}`); }
+  // heartbeat (2026-11-16): silence was indistinguishable from wedge — write
+  // per-loop status so liveness is provable from a file, not log archaeology
+  try { fs.writeFileSync(`${ROOT}/state/dm-status.json`, JSON.stringify({
+    ts: Date.now(), arms: arms.length, prevMomsAt,
+    pos: (await X.getPos().catch(() => [])).length,
+  })); } catch {}
+  await new Promise(r => setTimeout(r, 15000));
+}
+log('deploy-manager done');

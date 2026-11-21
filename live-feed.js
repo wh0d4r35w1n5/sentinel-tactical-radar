@@ -1,0 +1,448 @@
+// Live data shim for the Sentinel Tactical Radar terminal.
+// Patches window.fetch so the app's /api calls are served fresh:
+//  - GET market-scanner.json -> built live from the active venue's public
+//    futures data (live-ledger.json.exchange decides: bitget or bybit)
+//  - POST config/bot-state/trades -> persisted to localStorage (static host
+//    has no backend; makes the dry-run controls functional per-browser)
+//  - GET config/bot-state/trades -> static snapshot merged with local state
+// Any failure falls back to the original static-file fetch.
+(function () {
+  if (typeof fetch !== 'function' || typeof Response !== 'function') return;
+  var orig = fetch.bind(window);
+  var BASE = '/sentinel-tactical-radar/api/';
+  var SYM_KEY = 'str-futsyms-v3'; // venue-namespaced at use: key + '-' + venue
+  var PULSE_KEY = 'str-live-pulse';
+  var POST_KEY = 'str-post-state';
+  var MIN_QV = 250000;
+  var STABLE = {};
+  'USDC USDT USD1 USDE USDD DAI FDUSD TUSD PYUSD RLUSD USDP GUSD USDY USTB BFUSD AUSD EUR EURC GBP BRL TRY AUD USDG CUSD XUSD USDS SUSDE'
+    .split(' ').forEach(function (s) { STABLE[s] = 1; });
+
+  var tickersCache = { t: 0, data: null };
+  var postState = null;
+
+  // ---- venue resolution: the static artifacts declare which exchange the
+  // account actually runs on. live-ledger.exchange is authoritative;
+  // market-scanner.source ('bybit-direct' / 'bitget-…') is the fallback.
+  var venueCache = null;
+  function getVenue() {
+    if (venueCache) return Promise.resolve(venueCache);
+    var done = function (v) { venueCache = v; return v; };
+    return orig(BASE + 'live-ledger.json', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && (j.exchange === 'bybit' || j.exchange === 'bitget'))
+          return done({ name: j.exchange });
+        throw new Error('no venue');
+      })
+      .catch(function () {
+        return orig(BASE + 'market-scanner.json', { cache: 'no-store' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            return done({ name: /^bybit/.test((j && j.source) || '') ? 'bybit' : 'bitget' });
+          })
+          .catch(function () { return done({ name: 'bitget' }); });
+      });
+  }
+
+  // Bybit v5 rows -> the Bitget field names every downstream consumer
+  // already speaks (lastPr/high24h/changeUtc24h/quoteVolume…). WS deltas
+  // omit unchanged fields, so only defined keys are carried over.
+  var BY_TICK_MAP = {
+    lastPrice: 'lastPr', highPrice24h: 'high24h', lowPrice24h: 'low24h',
+    bid1Price: 'bidPr', ask1Price: 'askPr', turnover24h: 'quoteVolume',
+    price24hPcnt: 'changeUtc24h',
+  };
+  function normBybitTick(d, idKey) {
+    var o = {}; o[idKey] = d.symbol;
+    Object.keys(BY_TICK_MAP).forEach(function (k) {
+      if (d[k] !== undefined) o[BY_TICK_MAP[k]] = d[k];
+    });
+    return o;
+  }
+
+  // ---- live ticker stream (venue public WS, REST fallback) ----
+  var liveTick = {};       // instId -> latest ticker row
+  var liveTickAt = 0;      // last ws update
+  var ws = null, wsVenue = null, wsSubscribed = false, wsRetry = 0;
+
+  function wsConnect(pairIds) {
+    if (ws || typeof WebSocket !== 'function') return;
+    getVenue().then(function (v) {
+      if (ws) return;
+      var url = v.name === 'bybit'
+        ? 'wss://stream.bybit.com/v5/public/linear'
+        : 'wss://ws.bitget.com/v2/ws/public';
+      try { ws = new WebSocket(url); } catch (e) { return; }
+      wsVenue = v.name;
+      ws.onopen = function () {
+        wsRetry = 0;
+        var ids = pairIds || Object.keys(lastPairs || {});
+        var step = wsVenue === 'bybit' ? 10 : 100;
+        for (var i = 0; i < ids.length; i += step) {
+          ws.send(JSON.stringify({
+            op: 'subscribe',
+            args: wsVenue === 'bybit'
+              ? ids.slice(i, i + step).map(function (id) { return 'tickers.' + id; })
+              : ids.slice(i, i + step).map(function (id) {
+                  return { instType: 'USDT-FUTURES', channel: 'ticker', instId: id };
+                }),
+          }));
+        }
+        wsSubscribed = true;
+      };
+      ws.onmessage = function (e) {
+        try {
+          var m = JSON.parse(e.data);
+          if (wsVenue === 'bybit') {
+            if (m && m.topic && m.topic.indexOf('tickers.') === 0 && m.data) {
+              var d = normBybitTick(m.data, 'instId');
+              liveTick[d.instId] = Object.assign({}, liveTick[d.instId] || {}, d);
+              liveTickAt = Date.now();
+              emitTick();
+            }
+          } else if (m && m.arg && m.arg.channel === 'ticker' && Array.isArray(m.data)) {
+            m.data.forEach(function (d) { liveTick[d.instId] = d; });
+            liveTickAt = Date.now();
+            emitTick();
+          }
+        } catch (e2) {}
+      };
+      ws.onclose = ws.onerror = function () {
+        ws = null; wsSubscribed = false;
+        var delay = Math.min(30000, 2000 * ++wsRetry);
+        setTimeout(function () { wsConnect(); }, delay);
+      };
+    });
+  }
+  setInterval(function () {
+    if (ws && ws.readyState === 1) {
+      try { ws.send(wsVenue === 'bybit' ? '{"op":"ping"}' : 'ping'); } catch (e) {}
+    }
+  }, 20000);
+
+  // pub/sub: pages can repaint on every WS tick (throttled ~2s)
+  var tickSubs = [], tickTimer = 0;
+  function emitTick() {
+    if (tickTimer) return;
+    tickTimer = setTimeout(function () {
+      tickTimer = 0;
+      tickSubs.forEach(function (f) { try { f(liveTick); } catch (e) {} });
+    }, 2000);
+  }
+  window.__live = {
+    onTick: function (f) { tickSubs.push(f); },
+    price: function (sym) { var t = liveTick[sym]; return t ? +t.lastPr : null; },
+    tick: liveTick,
+  };
+
+  var lastPairs = null;
+  function maybeStream(pairs) {
+    lastPairs = pairs;
+    if (!wsSubscribed) wsConnect(Object.keys(pairs));
+  }
+  // overlay ws updates onto REST rows (ws payload uses same field names)
+  function withLive(rows) {
+    var fresh = Date.now() - liveTickAt < 30000;
+    if (!fresh) return rows;
+    return rows.map(function (t) {
+      var live = liveTick[t.symbol];
+      return live ? Object.assign({}, t, live) : t;
+    });
+  }
+
+  function J(x) {
+    return new Response(JSON.stringify(x), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  function pct(x) { return Math.round(x * 100) / 100; }
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  function loadPost() {
+    if (!postState) {
+      try { postState = JSON.parse(localStorage.getItem(POST_KEY)) || {}; }
+      catch (e) { postState = {}; }
+    }
+    postState.config = postState.config || {};
+    postState.bot = postState.bot || {};
+    postState.trades = postState.trades || [];
+    return postState;
+  }
+  function savePost() {
+    try { localStorage.setItem(POST_KEY, JSON.stringify(postState)); } catch (e) {}
+  }
+
+  async function getSymbols() {
+    var v = await getVenue();
+    var key = SYM_KEY + '-' + v.name;
+    var c = null;
+    try { c = JSON.parse(localStorage.getItem(key)); } catch (e) {}
+    if (c && Date.now() - c.ts < 6 * 3600e3) return c.data;
+    var data = [];
+    if (v.name === 'bybit') {
+      // instruments-info paginates by cursor — walk until it stops handing
+      // one back so the full ~890-contract universe lands, not page one
+      var cursor = '';
+      for (var pg = 0; pg < 6; pg++) {
+        var br = await orig('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+        var bj = await br.json();
+        ((bj.result && bj.result.list) || []).forEach(function (s) {
+          data.push({
+            symbol: s.symbol, baseCoin: s.baseCoin, quoteCoin: s.quoteCoin,
+            symbolStatus: s.status === 'Trading' ? 'normal' : 'halt',
+          });
+        });
+        cursor = bj.result && bj.result.nextPageCursor;
+        if (!cursor) break;
+      }
+    } else {
+      var r = await orig('https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES');
+      var j = await r.json();
+      data = j.data || [];
+    }
+    try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) {}
+    return data;
+  }
+  async function getTickers() {
+    if (tickersCache.data && Date.now() - tickersCache.t < 10000) return tickersCache.data;
+    var v = await getVenue();
+    if (v.name === 'bybit') {
+      var r = await orig('https://api.bybit.com/v5/market/tickers?category=linear');
+      var j = await r.json();
+      tickersCache = {
+        t: Date.now(),
+        data: ((j.result && j.result.list) || []).map(function (d) { return normBybitTick(d, 'symbol'); }),
+      };
+    } else {
+      var r = await orig('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES');
+      var j = await r.json();
+      tickersCache = { t: Date.now(), data: j.data || [] };
+    }
+    return tickersCache.data;
+  }
+
+  // asset-class labels — mirrors the server classifier so RWA badges render
+  // on the client-built board too (index/metal/fx known bases, else isRwa=stock)
+  var IDX_SET = {}, METAL_SET = {}, COMMODITY_SET = {}, FX_SET = {};
+  'SPX SPY QQQ VOO IWM SP500 NDX100 NDX NAS100 US500 US30 DJT DJI DAX FTSE NI225 JP225 HSI KR200 TQQQ SQQQ QLD SPXU UDOW SDOW TNA TZA UVXY SOXL SOXS SOXX SMH XLE XLU XLK XLV XBI GDX URNM BOTZ KWEB EWJ EWY EWT INDA EWH EWZ TLT TMF TBT JEPQ SGOV BITO IBIT AGPU BITU ETHU SOLX'.split(' ').forEach(function (s) { IDX_SET[s] = 1; });
+  'XAU XAG XPT XPD HG COPPER COP PAXG XAUT'.split(' ').forEach(function (s) { METAL_SET[s] = 1; });
+  'CL BZ NATGAS OIL UKOIL USOIL WTI BRENT CORN WHEAT SOY SUGAR COFFEE COCOA'.split(' ').forEach(function (s) { COMMODITY_SET[s] = 1; });
+  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH USDBRL'.split(' ').forEach(function (s) { FX_SET[s] = 1; });
+  function assetClass(base, isRwa) {
+    return IDX_SET[base] ? 'index' : METAL_SET[base] ? 'metal' : COMMODITY_SET[base] ? 'commodity' : FX_SET[base] ? 'fx' : isRwa ? 'stock' : 'crypto';
+  }
+
+  async function buildScanner() {
+    var syms = await getSymbols();
+    var tks = await getTickers();
+    var pairs = {}, rwaMap = {};
+    syms.forEach(function (s) {
+      if (s.symbolStatus === 'normal' &&
+          s.quoteCoin === 'USDT' && !STABLE[(s.baseCoin || '').toUpperCase()]) {
+        pairs[s.symbol.toUpperCase()] = 1;
+        rwaMap[s.symbol.toUpperCase()] = s.isRwa === 'YES';
+      }
+    });
+    maybeStream(pairs);
+    var rows = withLive(tks)
+      .filter(function (t) { return pairs[t.symbol.toUpperCase()]; })
+      .map(function (t) {
+        var last = +t.lastPr, hi = +t.high24h, lo = +t.low24h, bid = +t.bidPr, ask = +t.askPr;
+        var base = t.symbol.replace(/USDT$/i, '').toUpperCase();
+        return {
+          asset: t.symbol.replace(/USDT$/i, ''),
+          cls: assetClass(base, rwaMap[t.symbol.toUpperCase()]),
+          lastPrice: last,
+          changePct: +t.changeUtc24h * 100,
+          quoteVolume: +t.quoteVolume,
+          highPrice: hi, lowPrice: lo,
+          rangePct: lo > 0 ? ((hi - lo) / lo) * 100 : 0,
+          spreadPct: last > 0 && bid > 0 && ask > 0 ? ((ask - bid) / last) * 100 : 0,
+          rangePosition: hi > lo ? (last - lo) / (hi - lo) : 0.5,
+        };
+      })
+      .filter(function (r) { return isFinite(r.lastPrice) && r.lastPrice > 0 && r.quoteVolume >= MIN_QV; })
+      .sort(function (a, b) { return b.quoteVolume - a.quoteVolume; });
+    if (!rows.length) throw new Error('empty universe');
+
+    // momentum is scored in the TRADED direction — a dump that we short is
+    // strong momentum, so rank the signed move, not raw change (the old rank
+    // made shorts score near zero on red days and never surface)
+    var dirChgs = rows.map(function (r) { return Math.abs(r.changePct); }).sort(function (a, b) { return a - b; });
+    var vols = rows.map(function (r) { return r.quoteVolume; }).sort(function (a, b) { return a - b; });
+    var sps = rows.map(function (r) { return r.spreadPct; }).sort(function (a, b) { return a - b; });
+    function rank(a, v) { return a.filter(function (x) { return x <= v; }).length / a.length; }
+    function strat(r) {
+      if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
+      if (r.changePct < -3) return 'Momentum Breakdown';
+      return 'Momentum Confluence';
+    }
+
+    var signals = rows
+      .map(function (r) {
+        var ms = Math.round(rank(dirChgs, Math.abs(r.changePct)) * 100);
+        var vs = Math.round(rank(vols, r.quoteVolume) * 100);
+        var ls = Math.round((1 - rank(sps, r.spreadPct)) * 100);
+        var score = Math.round(ms * 0.5 + vs * 0.3 + ls * 0.2);
+        var dir = r.changePct >= 0 ? 'LONG' : 'SHORT';
+        var stg = strat(r);
+        var tp = pct(clamp(r.rangePct * 0.35, 3, 15));
+        var drv = [
+          '24h momentum ' + (r.changePct >= 0 ? '+' : '') + pct(r.changePct) + '%',
+          'Quote volume $' + (r.quoteVolume / 1e6).toFixed(1) + 'M',
+          'Range position ' + Math.round(r.rangePosition * 100) + '% · spread ' + pct(r.spreadPct) + '%',
+        ];
+        return {
+          asset: r.asset,
+          cls: r.cls,
+          grade: score >= 85 ? 'A' : score >= 75 ? 'BBB' : score >= 65 ? 'BB' : 'B',
+          score: score, social: null, symbol: r.asset + 'USD',
+          thesis: stg + ' on ' + r.asset + ' | Confluence ' + score + '/100 | ' + drv[0] + ' | ' + drv[1],
+          assetId: r.asset.toLowerCase(), drivers: drv,
+          riskPct: pct(clamp(r.spreadPct * 2 + Math.abs(r.changePct) * 0.08, 0.3, 8)),
+          summary: stg + ': ' + (dir === 'LONG' ? 'upside' : 'downside') + ' momentum on $' + (r.quoteVolume / 1e6).toFixed(0) + 'M quote volume.',
+          harmonic: null, lowPrice: r.lowPrice, rangePct: pct(r.rangePct),
+          strategy: stg, changePct: pct(r.changePct), direction: dir,
+          highPrice: r.highPrice, lastPrice: r.lastPrice, spreadPct: pct(r.spreadPct),
+          targetPct: tp, updatedAt: new Date().toISOString(), entryPrice: r.lastPrice,
+          quoteVolume: Math.round(r.quoteVolume), socialScore: 0,
+          targetPrice: dir === 'LONG' ? r.lastPrice * (1 + tp / 100) : r.lastPrice * (1 - tp / 100),
+          signalFamily: 'momentum', momentumScore: ms,
+          rangePosition: Math.round(r.rangePosition * 100) / 100,
+          reversalScore: 0, liquidityScore: ls,
+        };
+      })
+      .sort(function (a, b) { return b.score - a.score; })
+      .slice(0, 12);
+
+    var movers = rows.slice().sort(function (a, b) { return b.changePct - a.changePct; }).slice(0, 6)
+      .map(function (r) { return { price: r.lastPrice, symbol: r.asset, changePct: pct(r.changePct) }; });
+    var laggards = rows.slice().sort(function (a, b) { return a.changePct - b.changePct; }).slice(0, 6)
+      .map(function (r) { return { price: r.lastPrice, symbol: r.asset, changePct: pct(r.changePct) }; });
+    var adv = rows.filter(function (r) { return r.changePct > 0; }).length;
+    var dec = rows.filter(function (r) { return r.changePct < 0; }).length;
+    // `chgs` was never defined — the ReferenceError killed every client-side
+    // build and silently fell back to the static snapshot. The live engine
+    // has been dead since it shipped; this is the variable it always meant.
+    var chgs = rows.map(function (r) { return r.changePct; }).sort(function (a, b) { return a - b; });
+    var med = chgs.length ? pct(chgs[chgs.length >> 1]) : 0;
+    var breadth = rows.length ? pct((adv / rows.length) * 100) : 0;
+
+    // seed pulse/fx from the static snapshot on first build (its history
+    // is server-side accumulated); localStorage then extends it per-visitor
+    var hist = [];
+    try { hist = JSON.parse(localStorage.getItem(PULSE_KEY)) || []; } catch (e) {}
+    var fx = { audPerUsd: 1.5, usdPerAud: 0.667 };
+    if (!hist.length && !buildScanner._seeded) {
+      buildScanner._seeded = true;
+      try {
+        var seed = await (await orig(BASE + 'market-scanner.json', { cache: 'no-store' })).json();
+        if (seed && seed.pulse && Array.isArray(seed.pulse.series)) hist = seed.pulse.series;
+        if (seed && seed.fx) fx = seed.fx;
+      } catch (e) {}
+    }
+    var now = Date.now();
+    if (!hist.length || now - hist[hist.length - 1].ts > 30000) {
+      hist.push({ ts: now, value: pct(100 + med) });
+      hist = hist.slice(-288);
+      try { localStorage.setItem(PULSE_KEY, JSON.stringify(hist)); } catch (e) {}
+    }
+    var vals = hist.map(function (p) { return p.value; });
+
+    return {
+      fx: fx,
+      pulse: {
+        low: Math.min.apply(null, vals), high: Math.max.apply(null, vals),
+        delta: pct((vals[vals.length - 1] || 100) - (vals[0] || 100)),
+        series: hist, baseline: 100,
+      },
+      movers: movers, status: 'live', signals: signals, laggards: laggards,
+      overview: {
+        advancing: adv, declining: dec, breadthPct: breadth,
+        longSignals: signals.filter(function (s) { return s.direction === 'LONG'; }).length,
+        totalVolume: Math.round(rows.reduce(function (a, r) { return a + r.quoteVolume; }, 0)),
+        harmonicHits: 0, scannedPairs: rows.length,
+        shortSignals: signals.filter(function (s) { return s.direction === 'SHORT'; }).length,
+        socialCoverage: 0, medianChangePct: med,
+        averageSpreadPct: pct(rows.reduce(function (a, r) { return a + r.spreadPct; }, 0) / (rows.length || 1)),
+      },
+      refreshedAt: new Date().toISOString(),
+      scanWindowSeconds: 10, error: null,
+      source: (await getVenue()).name + '-live',
+      universeFilter: (await getVenue()).name + '-usdt-perps',
+    };
+  }
+
+  async function getMerged(url, init, fn) {
+    var r = await orig(url, init);
+    var j = await r.json().catch(function () { return {}; });
+    return J(fn(j));
+  }
+
+  window.fetch = function (input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = ((init && init.method) || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
+      var idx = url.indexOf(BASE);
+      if (idx === 0 || idx === location.origin.length) {
+        var name = url.slice(idx + BASE.length).split('?')[0];
+        if (method === 'GET' && name === 'market-scanner.json') {
+          return buildScanner().then(J).catch(function () { return orig(input, init); });
+        }
+        if (method === 'POST') {
+          var st = loadPost(), body = {};
+          try { body = JSON.parse((init && init.body) || '{}'); } catch (e) {}
+          if (name === 'config.json') {
+            st.config = Object.assign(st.config, body); savePost();
+            return Promise.resolve(J({ ok: true, config: st.config }));
+          }
+          if (name === 'bot-state.json') {
+            var b = body.bot || body;
+            st.bot = Object.assign(st.bot, b); savePost();
+            return Promise.resolve(J({ ok: true, bot: st.bot }));
+          }
+          if (name === 'trades.json') {
+            var tr = Object.assign({ id: 'local_' + Date.now(), createdAt: new Date().toISOString(), mode: 'dry-run' }, body);
+            st.trades.unshift(tr); st.trades = st.trades.slice(0, 50); savePost();
+            return Promise.resolve(J({ ok: true, trade: tr }));
+          }
+        }
+        if (method === 'GET') {
+          if (name === 'market-snapshot.json')
+            return (async function () {
+              var r = await orig(input, init);
+              var j = await r.json().catch(function () { return {}; });
+              try {
+                var t = (await getTickers()).find(function (x) { return x.symbol === 'SOLUSDT'; });
+                var live = liveTick['SOLUSDT'];
+                var px = +(live ? live.lastPr : t && t.lastPr);
+                var chg = +(live ? live.changeUtc24h : t && t.changeUtc24h);
+                if (isFinite(px) && j.assets && j.assets.input) {
+                  j.assets.input.usdPrice = px;
+                  j.assets.input.priceChange24h = chg * 100;
+                  j.refreshedAt = new Date().toISOString();
+                  j.source = 'bitget-live';
+                }
+              } catch (e) {}
+              return J(j);
+            })().catch(function () { return orig(input, init); });
+          if (name === 'config.json')
+            return getMerged(input, init, function (j) { return Object.assign({}, j, loadPost().config); });
+          if (name === 'bot-state.json')
+            return getMerged(input, init, function (j) { j.bot = Object.assign({}, j.bot, loadPost().bot); return j; });
+          if (name === 'trades.json')
+            return getMerged(input, init, function (j) {
+              var l = loadPost().trades;
+              if (l.length) {
+                j.trades = l.concat(j.trades || []);
+                if (j.summary) j.summary.totalTrades = (j.summary.totalTrades || 0) + l.length;
+              }
+              return j;
+            });
+        }
+      }
+    } catch (e) {}
+    return orig(input, init);
+  };
+})();

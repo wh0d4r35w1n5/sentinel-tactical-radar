@@ -1,0 +1,39 @@
+{
+ "enabled": true,
+ "cells": [
+  "Exhaustion Short:SHORT",
+  "Wyckoff:LONG",
+  "bounce:LONG",
+  "bull-flag:LONG",
+  "commod-24h:LONG",
+  "obv-stealth:LONG",
+  "sentinel-structure:LONG"
+ ],
+ "directions": [
+  "LONG"
+ ],
+ "strategyPrefixes": [
+  "Wyckoff"
+ ],
+ "evidence": {
+  "megaEpisodesAtDecision": 1401971,
+  "ladder": {
+   "n": 12073,
+   "meanNetPct": 0.1294,
+   "sqn": 2.09
+  },
+  "trailK2Interim": {
+   "n": 9367,
+   "meanNetPct": 0.101,
+   "sqn": 3.03,
+   "profitFactor": 1.13
+  },
+  "exhaustionShort": {
+   "n": 1230,
+   "meanNetPct": 0.6748,
+   "source": "mega-episodes ladder+retest+trail-k2 aggregate 2026-11-02"
+  }
+ },
+ "note": "Exact-cell gate: 'Strategy:SIDE' whole cells plus 'Strategy:SIDE:SYMBOL' pockets \u2014 each admitted on >=200-episode positive mean mega-backtest evidence.",
+ "at": "2026-11-20T12:05:05Z"
+}

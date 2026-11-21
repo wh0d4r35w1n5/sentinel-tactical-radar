@@ -1,0 +1,158 @@
+name: Refresh API snapshots
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'api/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-api
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Failover: if the VPS pushbot's last `vps:` commit on the live ledger
+      # is stale (>25min), CI takes ownership of state and trades demo.
+      # While VPS commits are fresh, CI is shadow-only — never a second live
+      # executor. CI is hard-limited to demo/shadow, regardless of repo vars.
+      - name: Failover detect
+        id: fo
+        run: |
+          LAST=$(git log -1 --format='%ct|%s' -- api/live-ledger.json)
+          TS=$(echo "$LAST" | cut -d'|' -f1); MSG=$(echo "$LAST" | cut -d'|' -f2)
+          AGE=$(( $(date -u +%s) - ${TS:-0} ))
+          case "$MSG" in vps:*) VPSSIG=1;; *) VPSSIG=0;; esac
+          echo "last='$MSG' age=${AGE}s vpssig=$VPSSIG"
+          if [ "$AGE" -lt 1500 ] && [ "$VPSSIG" = "1" ]; then
+            echo "mode=shadow" >> $GITHUB_OUTPUT
+            echo "own=0" >> $GITHUB_OUTPUT
+            echo "fresh=1" >> $GITHUB_OUTPUT
+          else
+            echo "mode=demo" >> $GITHUB_OUTPUT
+            echo "own=1" >> $GITHUB_OUTPUT
+            echo "fresh=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Bybit demo scanner snapshot
+        id: scan
+        run: node scripts/build-scanner.mjs
+        env:
+          # Scanner must use api-demo.bybit.com even in healthy-VPS shadow runs.
+          SENTINEL_EXEC: demo
+          SENTINEL_EXCHANGE: bybit
+          BYBIT_DEMO_API_KEY: ${{ secrets.BYBIT_DEMO_API_KEY }}
+          BYBIT_DEMO_API_SECRET: ${{ secrets.BYBIT_DEMO_API_SECRET }}
+          COINGLASS_API_KEY: ${{ secrets.COINGLASS_API_KEY }}
+          LUNARCRUSH_API_KEY: ${{ secrets.LUNARCRUSH_API_KEY }}
+          CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}
+          CMC_API_KEY: ${{ secrets.CMC_API_KEY }}
+          COINMARKETCAL_CLIENT_ID: ${{ secrets.COINMARKETCAL_CLIENT_ID }}
+          COINMARKETCAL_CLIENT_SECRET: ${{ secrets.COINMARKETCAL_CLIENT_SECRET }}
+
+      - name: Check Bybit scanner snapshot
+        if: steps.scan.outcome != 'success'
+        run: |
+          if [ "${{ steps.fo.outputs.fresh }}" = "1" ]; then
+            echo "Bybit demo market data unavailable from this runner; retain VPS-owned artifacts, don't claim failover or publish a stale scan."
+          else
+            echo "Bybit demo market data unavailable during failover; refusing demo execution on a stale plan."
+          fi
+          exit 1
+
+      # Executor runs AFTER the scanner so live-plan.json is fresh.
+      # CI is restricted to shadow while VPS commits are healthy, and Bybit demo
+      # only during failover; it can never reach a live account.
+      - name: Route plan (shadow or Bybit demo only)
+        run: node scripts/bitget-exec.mjs
+        env:
+          SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
+          SENTINEL_EXCHANGE: bybit
+          # epoch anchors — same constraints the VPS env carried
+          SENTINEL_EQUITY_OVERRIDE_USD: "65"
+          SENTINEL_VAULT_SHARE: "0.25"
+          SENTINEL_LONG_ONLY: "0"
+          SENTINEL_DENY_SYMS: ""
+          BYBIT_DEMO_API_KEY: ${{ steps.fo.outputs.own == '1' && secrets.BYBIT_DEMO_API_KEY || '' }}
+          BYBIT_DEMO_API_SECRET: ${{ steps.fo.outputs.own == '1' && secrets.BYBIT_DEMO_API_SECRET || '' }}
+        if: steps.scan.outcome == 'success'
+        continue-on-error: true # an exec failure must never block the snapshot commit
+
+      # Overseer: audits every invariant after exec — writes api/god.json.
+      # Always exits 0 so a red verdict still commits.
+      # Only connect to the demo account when CI owns state; healthy mode is shadow-only.
+      - name: God audit
+        run: node scripts/god.mjs
+        env:
+          SENTINEL_EXEC: ${{ steps.fo.outputs.mode }}
+          SENTINEL_EXCHANGE: bybit
+          BYBIT_DEMO_API_KEY: ${{ steps.fo.outputs.own == '1' && secrets.BYBIT_DEMO_API_KEY || '' }}
+          BYBIT_DEMO_API_SECRET: ${{ steps.fo.outputs.own == '1' && secrets.BYBIT_DEMO_API_SECRET || '' }}
+        if: steps.scan.outcome == 'success'
+        continue-on-error: true
+
+      # Scanner/executor maintain tracked caches/checksums under state/.
+      # Clean their writes after snapshot/commit on either route.
+      - name: Clean shadow runtime state
+        run: git restore --worktree -- state/
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # VPS-owned artifacts: the live VPS pushes authoritative versions of
+          # these every ~2min via sentinel-push.timer. CI builds from repo
+          # state that lags the exchange — it must never overwrite them.
+          # In healthy mode, skip the entire snapshot commit unless this run's
+          # scanner succeeded; stale CI artifacts must not be published.
+          if [ "${{ steps.fo.outputs.own }}" != "1" ] && [ "${{ steps.scan.outcome }}" != "success" ]; then
+            echo "scanner failed in healthy shadow mode; keep the latest VPS/API snapshots untouched"
+            exit 0
+          fi
+          if [ "${{ steps.fo.outputs.own }}" != "1" ]; then
+            git checkout -- api/god.json api/live-plan.json api/live-ledger.json api/health.json api/exec-catalog.json api/market-scanner.json api/coin-detail.json api/signal-ledger.json api/signal-eval.json api/signal-archive.json api/prices.json api/funding.json api/sentiment.json api/news.json api/hypotheses.json api/correlation.json api/benchmark.json api/pulse-history.json api/trades-taken.json api/sqn-report.json api/thoughts.json 2>/dev/null || true
+          else
+            echo "failover: CI owns state — keeping CI-built artifacts"
+          fi
+          git add api/
+          # Persist only the small demo-book state needed across CI failover
+          # runs. Never force-add command/control files or runtime caches.
+          if [ "${{ steps.fo.outputs.own }}" = "1" ]; then
+            for f in state/demo-fills-bybit.json state/wealth-vault-bybit.json state/rr-config.json state/checksums.json; do
+              if [ -f "$f" ]; then git add -f "$f"; fi
+            done
+          fi
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore: refresh api snapshots"
+            # CI and VPS can publish concurrently. Restore post-commit runtime
+            # writes before any merge; the committed failover state stays in
+            # the index/commit while transient caches return to their versioned
+            # baseline. Fail loudly rather than rebase a dirty tree.
+            git restore --worktree -- state/
+            if ! git diff --quiet; then
+              git status --short
+              echo "unexpected tracked edits remain after snapshot commit" >&2
+              exit 1
+            fi
+            # VPS/main wins any same-path race; our commit remains in history
+            # and the next scheduled snapshot retries if needed.
+            git push origin HEAD:main || {
+              git fetch origin main
+              git merge --no-edit -X theirs origin/main
+              git restore --worktree -- state/
+              git diff --quiet
+              git push origin HEAD:main
+            }
+          fi

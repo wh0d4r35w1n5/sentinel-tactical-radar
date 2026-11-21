@@ -1,0 +1,91 @@
+[
+ {
+  "at": 1793087342848,
+  "replacedAt": 1793139660546,
+  "reason": "operator reset: judge the leak-free book (pump-short killed, qv floor live, convicted gated)"
+ },
+ {
+  "at": 1793441557409,
+  "reason": "mix rebaseline \u2014 last-20 record was the pre-admission book (SFP abandoned, PAQ probation, Wyckoff-only allowlist since). Current admission set (Wyckoff:LONG probation + MI:SHORT chain) unmeasured live; deadlock can never clear itself. Operator order to resume; new losses re-arm every rail honestly.",
+  "replacedAt": 1793534282538
+ },
+ {
+  "at": 1793534282538,
+  "reason": "operator order 2026-11-01 (Beau): rolling breaker deadlocked again on a window dominated by now-vetoed convicted cells (44/53 post-reset entries were SFP/Sweep/PAQ, banned in all modes since 00:24Z). Re-baseline to judge the post-veto mix; 24h loss/fee/reserve/DD rails still protect.",
+  "replacedAt": 1793548482309
+ },
+ {
+  "at": 1793548482309,
+  "reason": "operator order \u2014 dead-mix recorded; forward mix changed: 7 cells demo-benched (cell-bench.json), Key Level SFP abandoned-vetoed, sqn-chain admits Momentum Ignition:SHORT. Rolling window re-baselined.",
+  "replacedAt": 1793548593362
+ },
+ {
+  "at": 1793548593362,
+  "reason": "operator standing order \u2014 ur in charge of profits / take the A-grade trades. Mix is clean: 7 cells benched, SFP vetoed, MI:SHORT sqn-admitted, BTC delegated. Window re-baselined.",
+  "replacedAt": 1793560083079
+ },
+ {
+  "at": 1793560083080,
+  "reason": "dead-mix recorded: breaker window was dip24-census dominated (-1.97 of -2.90, ~4/14 seats green). Cell benched + watcher stopped. Forward mix = funding-carry (+0.16), sentinel-structure, bounce, MI:SHORT \u2014 actually different. New losses re-arm every rail honestly."
+ },
+ {
+  "at": 1793578918932,
+  "why": "dead-mix reset #2 \u2014 window judged corpses of cells killed mid-flight: dip24-census seats + benched scanner cells resolved at stops AFTER benching. Forward emission surface verified empty: dip-watch stopped+disabled, cell-bench enforced at order layer (0 convicted entries audited). Survivors on trial: funding-carry (+.16), sentinel-structure, MI:SHORT.",
+  "deadCells": [
+   "dip24-census",
+   "Liquidity Sweep",
+   "PA Quartile",
+   "TS Momentum",
+   "Momentum Confluence",
+   "Momentum Breakdown",
+   "VWAP Reversion",
+   "Wyckoff JTC"
+  ],
+  "windowNet": -1.56,
+  "windowN": 20
+ },
+ {
+  "at": 1793620490800,
+  "why": "dead-mix reset #3 - 24h window net -80.24 USD is corpses: (a) 10:10 seat massacre was mechanical - cmd-manual-hold reclass exposed machine seats to the now-GATED stall-exit, not cell losses (SENTINEL_STALL_EXIT now default-off); (b) residual churn on the old broad-prefix mix. Forward mix verified different: allowlist is exact-cell evidence-only (100 cells/pockets, convicted cells blocked at cell level), stall-kill gated, demo stack dead.",
+  "deadCells": [
+   "Key Level SFP broad",
+   "Liquidity Sweep broad",
+   "Wyckoff:SHORT broad",
+   "Momentum Ignition",
+   "VWAP Reversion",
+   "Elliott W5 Proj",
+   "stall-exit-killed seats (mechanical kill, not cell)"
+  ],
+  "windowNet": -80.24,
+  "windowN": 70
+ },
+ {
+  "at": 1793849984499,
+  "why": "dead-mix reset #4 \u2014 43-position stream at -$0.188/ep was mechanical, not edge: (a) 1%-placed stops vs 3.3% declared sizing killed seats on noise; (b) deploy-all override forced immediate market entries without confirm \u2014 buying local tops on a mean-reverting squeeze; (c) two-loser lockout released re-armed bleeding names; (d) $0.20 seat floor filled dust positions that cannot clear the fee toll. Forward mix verified different: declared-risk stops on-exchange, universal +0.2% confirm gate, lockout restored, MIN_SEAT_MARGIN $1.25 + budget concentrates into affordable seats only.",
+  "deadCells": [
+   "slot-deploy forced-entry stream",
+   "dust-seat tail (<$1.25 margin)",
+   "lockout-bypassed re-entries",
+   "1%-stop-placed seats"
+  ],
+  "windowNet": -8.1,
+  "windowN": 43
+ },
+ {
+  "at": 1793898579116,
+  "reason": "dead-mix reset #5 - post-reset bleed attributed: Breakout Continuation:LONG (4 seats ~-2.55, CI-negative, now benched+abandoned) + funding-carry TRX -1.22 + slot-deploy legacy entries. Forward mix verifiably different: pump-fade + downtrend-short lanes (zero presence in the 129-stream), proven SFP:SHORT, sentinel-structure. New losses re-arm every rail honestly."
+ },
+ {
+  "at": 1794908709255,
+  "reason": "dead-mix reset #6 - post-massacre epoch: slot-deploy/hi-lev/short lanes convicted+disabled, mandate rails clamped, longs-only sealed. Forward mix: Wyckoff trail-rehab + Liquidity Sweep longs at <=15x.",
+  "author": "devin"
+ },
+ {
+  "at": 1795045948890,
+  "by": "devin",
+  "reason": "operator order \u2014 dead-mix epoch reset",
+  "deadMix": "broad fill-lane churn, side-blind clip, 1pct rung, lev-ETF shorts, no vault floor",
+  "newMix": "asymmetric clip + 0.4pct rung + vault floor + deep-liq shorts only + tape gates",
+  "windowNet": -17.68
+ }
+]

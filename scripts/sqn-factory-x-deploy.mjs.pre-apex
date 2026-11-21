@@ -1,0 +1,103 @@
+// SQN Factory X — deployment pass. Reads sqn-factory-x.json lastSignals +
+// promoted cells, authors armed probe setups into cmd-setups.json.
+// Only deploys cells whose BEST promoted exit has explicit geometry:
+//   tp{a}-sl{b} -> fixed SL/TP  |  h{n} -> disaster stop + TTL horizon
+// atr-trail exits are skipped v1 (exec K2 trail owns runner management).
+// Probe sizing only — backtest-promoted cells are not forward-proven.
+import fs from 'fs';
+import path from 'path';
+const STATE = '/opt/sentinel/state';
+const MAX_LIVE = 4;            // X lane cap — smaller than base factory while unproven
+const PROBE_RISK = 2;          // pct-equity risk per probe seat
+const TOPN = 10;               // best promoted trig+side combos eligible
+
+const fac = JSON.parse(fs.readFileSync(path.join(STATE, 'sqn-factory-x.json'), 'utf8'));
+const promoted = fac.promoted || {};
+const signals = fac.lastSignals || [];
+if (!signals.length) { console.log('no last-bar signals'); process.exit(0); }
+
+// group promoted cells by (tf,trig,side) -> best exit by sqn
+const best = new Map();
+for (const [key, g] of Object.entries(promoted)) {
+  const m = key.match(/^x(4h)?:([^:]+):([^:]+):(long|short)$/);
+  if (!m) continue;
+  const [, tf4, trig, exit, side] = m;
+  const tf = tf4 ? '4H' : '1D';
+  const kk = tf + '|' + trig + '|' + side;
+  const cur = best.get(kk);
+  if (!cur || g.sqn > cur.g.sqn) best.set(kk, { trig, exit, side, g, tf });
+}
+const ranked = [...best.entries()].sort((a, b) => b[1].g.sqn - a[1].g.sqn).slice(0, TOPN);
+if (!ranked.length) { console.log('no promoted x cells'); process.exit(0); }
+
+// 4H trend filter (same rule as base deploy)
+let kl4 = {};
+try { kl4 = JSON.parse(fs.readFileSync(path.join(STATE, 'klines-4H.json'), 'utf8')); } catch {}
+const trend4h = (sym) => {
+  const rows = kl4[sym] && kl4[sym].rows; if (!rows || rows.length < 25) return 0;
+  const cl = rows.map((r) => r.c), i = cl.length - 1;
+  let s = 0; for (let j = i - 19; j <= i; j++) s += cl[j];
+  const sma20 = s / 20;
+  return cl[i] > sma20 * 1.005 ? 1 : cl[i] < sma20 * 0.995 ? -1 : 0;
+};
+
+const setupPath = path.join(STATE, 'cmd-setups.json');
+const q = JSON.parse(fs.readFileSync(setupPath, 'utf8'));
+const setups = Array.isArray(q) ? q : (q.setups || []);
+let liveX = setups.filter((s) => String(s.id || '').startsWith('facx-') && s.status === 'armed').length;
+if (liveX >= MAX_LIVE) { console.log('factory-x seats full: ' + liveX); process.exit(0); }
+
+let authored = 0;
+for (const sig of signals) {
+  if (liveX + authored >= MAX_LIVE) break;
+  const hit = ranked.find(([, b]) => b.tf === sig.tf && b.trig === sig.trig && b.side === sig.side);
+  if (!hit) continue;
+  const { trig, exit, side, g, tf } = hit[1];
+  const sym = sig.sym;
+  if (setups.some((s) => s.symbol === sym && s.status === 'armed' && String(s.id || '').startsWith('facx-'))) continue;
+  const t = trend4h(sym);
+  if (side === 'short' && t > -1) continue;
+  if (side === 'long' && t < 1) continue;
+  // skip symbols the envelope has convicted — authoring setups that can
+  // only die at DENY_SYMS wastes the queue (ETH/XRP/SOL facx all rejected
+  // 'denied-symbol' 2026-11-12). Loser verdicts are symbol-wide.
+  try {
+    const envCells = JSON.parse(fs.readFileSync(path.join(STATE, 'deploy-envelope.json'), 'utf8'))?.cells || {};
+    if (envCells[sym]?.verdict === 'loser') continue;
+  } catch {}
+  const e = sig.px, sgn = side === 'long' ? 1 : -1;
+  const em = exit.match(/^(tp(\d+)-sl(\d+)|h(\d+)|atr([\d.]+))$/);
+  if (!em) continue;
+  let slPx, tps, ttlMin, note;
+  if (em[2]) {           // tp{a}-sl{b}
+    const tp = +em[2], sl = +em[3];
+    slPx = +(e * (1 - sgn * sl / 100)).toPrecision(6);
+    tps = [{ px: +(e * (1 + sgn * tp / 100)).toPrecision(6), pct: 85 }];
+    ttlMin = tf === '4H' ? 2400 : 4320;
+    note = `tp${tp}/sl${sl}`;
+  } else if (em[4]) {    // h{n} time exit
+    const h = +em[4];
+    slPx = +(e * (1 - sgn * 0.08)).toPrecision(6);  // disaster stop only — cell had no stop
+    // exec setup gate requires >=1 TP and netRR >= 1.0 — empty tps auto-
+    // rejected EVERY h-exit probe (the top SQN cells: rs-lag3:h10 sqn 3.68
+    // wr 66%, nr-comp:h5 sqn 4.51 wr 67.5%). Far TP at +9% vs 8% disaster
+    // stop = netRR ~1.07; the K2 trail/time logic manages the real exit,
+    // the TP exists so the seat can legally open.
+    tps = [{ px: +(e * (1 + sgn * 0.09)).toPrecision(6), pct: 85 }];
+    ttlMin = Math.round(h * (tf === '4H' ? 240 : 1440) * 0.9);
+    note = `time-exit h${h} ${tf}`;
+  } else continue;       // atr — skipped v1
+  setups.push({
+    id: 'facx-' + sym + '-' + Date.now(), symbol: sym, direction: side.toUpperCase(),
+    mode: 'market', entryPx: e, slPx, tps,
+    pattern: 'facx:' + trig + ':' + exit,
+    riskPct: PROBE_RISK, ttlMin, strategy: 'sqn-factory-x', auto: true,
+    createdAt: Date.now(), blockedBy: null, status: 'armed',
+    note: `sqn-factory-x ${trig}:${exit} ${side} ${note} — sqn ${g.sqn} wr ${g.wr}% n ${g.n} (${g.dirN}d) — backtest-promoted probe`,
+  });
+  authored++;
+  console.log('AUTHORED', sym, side, trig, exit, 'sqn', g.sqn);
+}
+if (Array.isArray(q)) fs.writeFileSync(setupPath, JSON.stringify(setups, null, 1));
+else { q.setups = setups; fs.writeFileSync(setupPath, JSON.stringify(q, null, 1)); }
+console.log('authored ' + authored + ' factory-x setups (live ' + (liveX + authored) + '/' + MAX_LIVE + ')');

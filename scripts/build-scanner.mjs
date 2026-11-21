@@ -1,0 +1,5241 @@
+// Builds api/market-scanner.json directly from Bitget public futures data.
+// Universe: Bitget USDT-M perpetual futures — crypto + RWA (stocks/indexes/
+// metals/FX), fiat-stable bases excluded. Signals score direction-aware
+// momentum (Wilder RSI on closed 1h klines, signed 24h change), volume and
+// liquidity ranked within the candidate pool, plus bounded TA/derivatives/
+// news confluence. Never wipes a good snapshot — failures keep the previous.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import '../harmonics.js'; // UMD side-effect: sets globalThis.Harmonics
+import '../ta-engine.js';  // sets globalThis.TAEngine
+import './load-env.mjs'; // canonical .env loader (audit F2) — every env-reading script imports this
+import { integrityNote } from './crc32.mjs';
+import * as sf from './signal-fusion.mjs';
+import { getLibEdge, OUR_FAMILY, familyTilt } from './libedge-scan.mjs';
+
+const Harmonics = globalThis.Harmonics;
+const TAEngine = globalThis.TAEngine;
+
+const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'api');
+
+// atomic artifact writes — a killed process mid-write hands consumers a
+// truncated JSON (executor reads live-plan.json; god audits all of api/).
+// tmp+rename is atomic on POSIX and Windows-over-CIFS alike. Each write
+// records its CRC32 in state/checksums.json — integrity is auditable.
+const writeJson = (file, obj) => {
+  const body = JSON.stringify(obj);
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, body);
+  fs.renameSync(tmp, file);
+  integrityNote(file, body);
+};
+// Universe = Bitget USDT-M perpetual futures: crypto + RWA contracts
+// (stocks, indexes, FX, metals) — everything tradeable from the futures account.
+const CONTRACTS_URL =
+  'https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES';
+const TICKERS_URL =
+  'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
+const CANDLES_URL = 'https://api.bitget.com/api/v2/mix/market/candles';
+// every public fetch gets a hard timeout — one stalled kline request used
+// to freeze the whole cycle with the book unprotected on the exchange.
+// AbortSignal alone is NOT enough on node20/undici: an abort that races
+// the response can leave the fetch (or its .json() body read) pending
+// FOREVER — zero sockets, event loop asleep, main() parked mid-run until
+// the watchdog kills the service (the dead-pipeline bug). Racing a real
+// reject guarantees resolution.
+const TF = () => AbortSignal.timeout(12000);
+const hardRace = (p, ms = 12000) => {
+  let timer;
+  return Promise.race([
+    p,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('hard-timeout')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
+const tfetch = (url, ms) => hardRace(fetch(url, { signal: TF() }), ms ?? 12000);
+const FX_URL = 'https://open.er-api.com/v6/latest/USD';
+const MIN_QUOTE_VOLUME = 250_000; // USDT notional — liquid listings only
+const RAPID = process.env.SENTINEL_RAPID === '1'; // local daemon lean-scan: skips third-party intel feeds + RSS
+// max-profit/max-risk profile: relaxed floors, wider heat caps, deeper DD
+// floor. Structural protections (TP/SL, liq-band leverage, fee reserve) are
+// mechanics — they apply in every profile.
+const RISK_MAX = process.env.SENTINEL_RISK_PROFILE === 'max';
+// user mandate: SENTINEL_LONG_ONLY=1 — short signals still render on the
+// board but are gated out of every order with a named 'shorts-banned' reject.
+const LONG_ONLY = process.env.SENTINEL_LONG_ONLY === '1';
+// operator mandate: shorts = mean-reversion scalps only (env-tunable).
+const SHORT_STRATS = new Set(
+  (process.env.SENTINEL_SHORT_STRATS || 'Liquidity Sweep,Key Level SFP,PA Quartile')
+    .split(',').map((x) => x.trim()).filter(Boolean)
+);
+const SHORT_MIN_RR = +(process.env.SENTINEL_SHORT_MIN_RR || 1.5);
+const SHORT_MAX_TGT = +(process.env.SENTINEL_SHORT_MAX_TGT_PCT || 2.5);
+const SHORT_MIN_SCORE = +(process.env.SENTINEL_SHORT_MIN_SCORE || 75);
+// short-only handicaps (mean-rev whitelist, net-RR 1.5, 2.5% target cap,
+// score 75, bull-tape -10 surcharge, short-class) are OFF by default since
+// 2026-11-04: both sides now face the same gates and the direction-aware
+// cell record decides. Sign-correct journal: SHORT signals +1.13% avg 24h
+// fwd vs LONG -1.31% (signal-eval byDirection, n=13.7k) — the handicaps
+// were aimed at the winning side, and the 2.5% scalp cap exits shorts
+// early: independent short episodes lost at 4h in the first half of the
+// journal and earned at 24h in both. SENTINEL_SHORT_HANDICAP=1 restores.
+const SHORT_HANDICAP = process.env.SENTINEL_SHORT_HANDICAP === '1';
+// mode-scoped fills journal — demo fills/cooldowns must never read the
+// live loss record (and vice versa).
+const BOOK_TAG =
+  (process.env.SENTINEL_EXCHANGE || 'bitget').toLowerCase() === 'bitget'
+    ? ''
+    : `-${(process.env.SENTINEL_EXCHANGE || '').toLowerCase()}`;
+const FILLS_FILE =
+  (process.env.SENTINEL_EXEC || '').toLowerCase() === 'demo'
+    ? `demo-fills${BOOK_TAG}.json`
+    : 'real-fills.json';
+// test epoch: fills older than this are pre-test history on a shared
+// demo account — excluded from cooldowns and journal pairing.
+const FILLS_SINCE = +(process.env.SENTINEL_FILLS_SINCE_MS || 0);
+// Deep-scan budget split into a fixed head (volume leaders, enriched every
+// cycle) + a rotating tail window that sweeps the rest of the liquid
+// universe (~425 names) — the old flat top-16 in rapid mode meant assets
+// ranked 17+ were never even scored. Cursor persists on disk because rapid
+// spawns a fresh scanner process per cycle.
+const KLINE_HEAD = +(process.env.SENTINEL_KLINE_HEAD || (RAPID ? 12 : 24));
+const KLINE_TAIL = +(process.env.SENTINEL_KLINE_TAIL || (RAPID ? 12 : 24));
+const MAX_SIGNALS = +(process.env.SENTINEL_MAX_SIGNALS || 12);
+const PULSE_FILE = path.join(API, 'pulse-history.json');
+const PULSE_MAX_POINTS = 144; // ~24h at a 10min cadence
+const LEDGER_FILE = path.join(API, 'signal-ledger.json');
+const FUND_URL = 'https://api.bitget.com/api/v2/mix/market/current-fund-rate';
+const FUND_HIST_URL =
+  'https://api.bitget.com/api/v2/mix/market/history-fund-rate';
+const OI_URL = 'https://api.bitget.com/api/v2/mix/market/open-interest';
+
+// ---------- venue-shimmed market data ----------
+const XCHG = (process.env.SENTINEL_EXCHANGE || 'bitget').toLowerCase();
+async function mdGet(kind, p = {}) {
+  // Bitget passthrough — the only market-data venue
+  let url;
+  switch (kind) {
+    case 'contracts': url = CONTRACTS_URL; break;
+    case 'tickers':   url = TICKERS_URL; break;
+    case 'candles':   url = `${CANDLES_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&granularity=${p.granularity}&limit=${p.limit || 200}` +
+                      (p.startTime ? `&startTime=${p.startTime}` : '') + (p.endTime ? `&endTime=${p.endTime}` : ''); break;
+    case 'fundNow':   url = `${FUND_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+    case 'fundHist':  url = `${FUND_HIST_URL}?symbol=${p.symbol}&productType=USDT-FUTURES&pageSize=${p.limit || 8}`; break;
+    case 'oi':        url = `${OI_URL}?symbol=${p.symbol}&productType=USDT-FUTURES`; break;
+    case 'book':      url = `https://api.bitget.com/api/v2/mix/market/orderbook?symbol=${p.symbol}&productType=USDT-FUTURES&limit=${p.limit || 5}&type=step0`; break;
+    default: throw new Error('mdGet unknown kind ' + kind);
+  }
+  const res = await tfetch(url);
+  const data = await hardRace(res.json().then((j) => j.data), 12000).catch(() => null);
+  return { ok: res.ok && data != null, status: res.status, json: async () => ({ data }) };
+}
+
+const LEDGER_MAX = 1_000_000_000;
+const LEDGER_TTL_MS = 24 * 3600 * 1000;
+const REENTRY_COOLDOWN_MS = 2 * 3600 * 1000;
+const UNTRACKED_TTL_MS = 3600 * 1000; // asset out of universe -> expire after 1h
+const TRADE_NOTIONAL = 1000; // dry-run $ per signal
+// frozen-rule versioning: entries carry the ruleset that created them so
+// results stay comparable across engine edits (audit requirement — keep
+// v1.0 untouched results separate from whatever follows)
+// frozen-rule versioning: v1.0 = static 10x; v1.1 = dynamic leverage +
+// cluster governor; v1.2 = forensic overhaul; v1.3 = runner rung +
+// retracement trail + six market types; v1.4 = Tharp doctrine ENFORCED —
+// market-type gating (bear tape blocks momentum longs, bull tape blocks
+// momentum shorts, chop raises the floor), volatile-regime heat haircut.
+// v1.5 = drawdown kill-switch (Tharp: stop trading when the system is
+// broken — ≥8% realized equity drawdown stands the book down) + funding
+// carry penalty at entry (paying >0.05%/8h to hold is a structural drag).
+// v1.6 = same-underlying proxy discipline: one open position per proxy
+// group (XAU/PAXG/XAUT are one gold thesis in three tickers — the book
+// actually held short XAU + short PAXG + long XAUT, paying three spreads
+// for ~one net exposure). Dupes settle as 'clustered' and route closes.
+const ENGINE_VERSION = 'v1.7';
+// append-only prospective record: every emitted signal, every run, never
+// deleted or rewritten — the out-of-sample dataset the audit asked for
+const ARCHIVE_FILE = path.join(API, 'signal-archive.json');
+const ARCHIVE_MAX_RUNS = +(process.env.SENTINEL_ARCHIVE_MAX_RUNS || 2500); // ~17 days at a 10min cadence
+// self-learning gate: doctrine weights stay DORMANT until the out-of-sample
+// set is big enough that adjustments measure edge, not luck (audit: 22
+// trades is nowhere near enough to start believing)
+const LEARN_MIN_TOTAL = 100;
+const LEARN_MIN_STRAT = 20;
+
+const pct = (x) => Math.round(x * 100) / 100;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
+
+const STABLE_FIAT = new Set([
+  'USDC', 'USDT', 'USD1', 'USDE', 'USDD', 'DAI', 'FDUSD', 'TUSD', 'PYUSD',
+  'RLUSD', 'USDP', 'GUSD', 'USDY', 'USTB', 'BFUSD', 'AUSD', 'EUR', 'EURC',
+  'GBP', 'BRL', 'TRY', 'AUD', 'USDG', 'CUSD', 'XUSD', 'USDS', 'SUSDE',
+]);
+
+// asset-class labels for RWA perps (contracts API flags isRwa but not the
+// kind). Index set covers broad indexes + index/sector/country/bond/vol and
+// leveraged-ETF perps; metal covers bullion + gold tokens; commodity is
+// energy/agri; fx is fiat pairs; remaining isRwa bases are equity perps.
+const IDX_SET = new Set(
+  'SPX SPY QQQ VOO IWM SP500 NDX100 NDX NAS100 US500 US30 DJT DJI DAX FTSE NI225 JP225 HSI KR200 TQQQ SQQQ QLD SPXU UDOW SDOW TNA TZA UVXY SOXL SOXS SOXX SMH XLE XLU XLK XLV XBI GDX URNM BOTZ KWEB EWJ EWY EWT INDA EWH EWZ TLT TMF TBT JEPQ SGOV BITO IBIT AGPU BITU ETHU SOLX'.split(' ')
+);
+const METAL_SET = new Set(
+  'XAU XAG XPT XPD HG COPPER COP PAXG XAUT'.split(' ')
+);
+const COMMODITY_SET = new Set(
+  'CL BZ NATGAS OIL UKOIL USOIL WTI BRENT CORN WHEAT SOY SUGAR COFFEE COCOA'.split(' ')
+);
+const FX_SET = new Set(
+  'EURUSD USDJPY GBPUSD AUDUSD USDCAD USDCHF NZDUSD EURGBP EURJPY GBPJPY DXY USDCNH USDBRL'.split(' ')
+);
+const assetClass = (base, isRwa) =>
+  IDX_SET.has(base)
+    ? 'index'
+    : METAL_SET.has(base)
+      ? 'metal'
+      : COMMODITY_SET.has(base)
+        ? 'commodity'
+        : FX_SET.has(base)
+          ? 'fx'
+          : isRwa
+            ? 'stock'
+            : 'crypto';
+
+// correlation governor's static fallback clusters — crypto majors vs alts
+// vs each RWA class. Used when realized correlation data is missing.
+const CRYPTO_MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'LTC', 'BCH', 'LINK', 'AVAX', 'TRX']);
+const clusterOf = (e) =>
+  e.cls === 'crypto'
+    ? CRYPTO_MAJORS.has(e.asset) ? 'crypto-major' : 'crypto-alt'
+    : e.cls ?? 'crypto';
+
+// Same-underlying proxy groups — different tickers, one price feed. This is
+// NARROWER than clusterOf: SOL+AVAX are correlated but distinct theses;
+// XAU+PAXG+XAUT are literally the same gold thesis thrice. Inside a group
+// the book holds exactly one position: a second same-direction entry is a
+// fee-doubled duplicate, an opposite one a self-hedge paying two spreads.
+const PROXY_GROUPS = [
+  ['XAU', 'PAXG', 'XAUT', 'GOLD', 'XAUUSD', 'GLD'],
+  ['XAG', 'XAGUSD', 'SILVER', 'SLV'],
+  ['XPT', 'XPTUSD', 'PLATINUM'],
+  ['XPD', 'XPDUSD', 'PALLADIUM'],
+  ['HG', 'COPPER', 'COP'],
+  ['CL', 'WTI', 'USOIL', 'USO'],
+  ['BZ', 'BRENT', 'UKOIL'],
+  ['NATGAS', 'NG', 'UNG'],
+  ['BTC', 'XBT', 'WBTC', 'BTCB'],
+  ['ETH', 'WETH'],
+  ['SPX', 'SPY', 'SP500', 'US500', 'SPCX', 'ES'],
+  ['NDX', 'NDX100', 'NAS100', 'QQQ', 'US100', 'UT100', 'NQ'],
+  ['DJI', 'US30', 'DJ30', 'YM'],
+  ['DXY', 'USDIDX', 'USDOLLAR'],
+];
+const proxyOf = (a) => {
+  const u = (a || '').toUpperCase();
+  for (let i = 0; i < PROXY_GROUPS.length; i++)
+    if (PROXY_GROUPS[i].includes(u)) return `proxy${i}`;
+  return null;
+};
+
+// Wilder RSI over the full series — average the first `period` deltas, then
+// smooth forward to the last close. (The old version only read the first 15
+// elements of a 48-close window: it reported RSI from ~34h ago.)
+function rsi(closes, period = 14) {
+  if (closes.length < period + 1) return 50;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) gain += d; else loss -= d;
+  }
+  let avgG = gain / period, avgL = loss / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgG = (avgG * (period - 1) + Math.max(d, 0)) / period;
+    avgL = (avgL * (period - 1) + Math.max(-d, 0)) / period;
+  }
+  if (avgL === 0) return 100;
+  const rs = avgG / avgL;
+  return 100 - 100 / (1 + rs);
+}
+
+// kline cache: closed 1h bars change at most once/hour, so refetching every
+// 15s cycle is ~99% wasted API load (and the burst was tripping rate limits).
+// Fresh-enough TTL: 5min — TA sees a new bar within minutes of it closing.
+const KLINE_CACHE = path.join(API, '..', 'state', 'klines-1h.json');
+let klineCache = null;
+function klineCacheLoad() {
+  if (klineCache) return klineCache;
+  try { klineCache = JSON.parse(fs.readFileSync(KLINE_CACHE, 'utf8')); }
+  catch { klineCache = {}; }
+  return klineCache;
+}
+function klineCacheSave() {
+  try {
+    fs.mkdirSync(path.dirname(KLINE_CACHE), { recursive: true });
+    const cutoff = Date.now() - 2 * 3600e3;
+    for (const k of Object.keys(klineCache || {}))
+      if (!klineCache[k].at || klineCache[k].at < cutoff) delete klineCache[k];
+    writeJson(KLINE_CACHE, klineCache || {});
+  } catch {}
+}
+const KLINE_TTL = 5 * 60e3;
+
+// --- multi-timeframe klines: TTL-gated caches per granularity.
+// 4H/1D bars barely move — fetching them on every 15s cycle is pure waste
+// and rate-limit bait. Steady-state cost of the MTF engine ≈ zero requests.
+const TF_TTLS = { '15m': 10 * 60e3, '4H': 20 * 60e3, '1D': 4 * 3600e3 };
+const TF_BARMS = { '15m': 900e3, '4H': 14400e3, '1D': 86400e3 };
+const tfCache = {};
+async function fetchTF(symbol, gran) {
+  const file = path.join(API, '..', 'state', 'klines-' + gran + '.json');
+  if (!tfCache[gran]) {
+    try { tfCache[gran] = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch { tfCache[gran] = {}; }
+  }
+  const cache = tfCache[gran], hit = cache[symbol], ttl = TF_TTLS[gran] || 600e3;
+  if (hit && hit.rows && Date.now() - hit.at < ttl) return hit.rows;
+  try {
+    const res = await mdGet('candles', { symbol, granularity: gran, limit: 120 });
+    if (!res.ok) return hit?.rows ?? null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || data.length < 20) return hit?.rows ?? null;
+    const rows = data
+      .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+      .sort((a, b) => a.t - b.t);
+    const barMs = TF_BARMS[gran] || 0;
+    if (rows.length && rows[rows.length - 1].t + barMs > Date.now()) rows.pop();
+    cache[symbol] = { at: Date.now(), rows };
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      writeJson(file, cache);
+    } catch {}
+    return rows;
+  } catch { return hit?.rows ?? null; }
+}
+
+async function fetchKlines(symbol, light = false) {
+  const cache = klineCacheLoad();
+  const hit = cache[symbol];
+  const fresh = hit && hit.payload && Date.now() - hit.at < KLINE_TTL;
+  // a light caller needs only the 1h payload; a full caller also needs the
+  // 5m tape — a cached light payload can't serve TA, so full callers refetch
+  if (fresh && (light || hit.payload.candles5m)) return hit.payload;
+  const res = await mdGet('candles', { symbol, granularity: '1H', limit: 240 });
+  // stale cache beats a blank cell — a rate-limited cycle shouldn't erase
+  // TA that was valid 6 minutes ago
+  if (!res.ok) return hit?.payload ?? null;
+  const { data } = await res.json();
+  if (!Array.isArray(data) || data.length < 20) {
+    // thin/absent 1h history (fresh listing like 🦞, or a transient 1h
+    // failure) — fall back to the 5m tape so the spark still renders
+    // (48 × 5m ≈ 4h window). sparkTf marks the swap so nothing pretends
+    // it's looking at 48h.
+    try {
+      const r5 = await mdGet('candles', { symbol, granularity: '5m', limit: 120 });
+      const d5 = r5.ok ? await r5.json() : null;
+      if (Array.isArray(d5?.data) && d5.data.length >= 20) {
+        const r5rows = d5.data
+          .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+          .sort((a, b) => a.t - b.t)
+          .filter((c) => Number.isFinite(c.c) && c.t + 300e3 <= Date.now());
+        const c5 = r5rows.map((r) => r.c);
+        const payload = {
+          rsi14: rsi(c5),
+          volRatio: 1,
+          closes: c5.slice(-48),
+          candles: r5rows.slice(-60),
+          candles5m: r5rows,
+          harmonic: Harmonics.active(r5rows.slice(-60), 8),
+          ta: TAEngine.analyze(r5rows.slice(-60), r5rows),
+          sparkTf: '5m',
+          // 5m fallback carries no 1H history — the EMA50/200 regime can't
+          // be proven here, so longs veto fail-closed downstream.
+          regime: null,
+        };
+        cache[symbol] = { at: Date.now(), payload };
+        klineCacheSave();
+        return payload;
+      }
+    } catch {}
+    return hit?.payload ?? null;
+  }
+  const rows = data
+    .map((c) => ({
+      t: Number(c[0]),
+      o: Number(c[1]),
+      h: Number(c[2]),
+      l: Number(c[3]),
+      c: Number(c[4]),
+      qv: Number(c[6]),
+    }))
+    .sort((a, b) => a.t - b.t); // oldest first
+  // drop the still-forming candle — TA on an unclosed bar paints patterns
+  // that evaporate when the hour settles
+  if (rows.length && rows[rows.length - 1].t + 3600e3 > Date.now()) rows.pop();
+  // operator mandate: longs only above BOTH EMA50 and EMA200. Computed on
+  // the full 240-bar fetch so the 200-period EMA is real (the 120-bar TA
+  // slice below can't express it); needs >200 closed bars else it can't be
+  // proven — regime stays null and the gate fails closed. rows is then
+  // truncated so downstream TA/volRatio/spark see exactly what they did.
+  const regimeMas = TAEngine.maStack ? TAEngine.maStack(rows) : null;
+  const regime =
+    regimeMas && Number.isFinite(regimeMas.ema50) && Number.isFinite(regimeMas.ema200) && rows.length > 200
+      ? { tf: '1H', bars: rows.length, ema50: regimeMas.ema50, ema200: regimeMas.ema200, px: rows[rows.length - 1].c }
+      : null;
+  // Keep the newest 141 CLOSED hours (the backtest's WIN=140 + signal bar).
+  // Assigning rows.length=120 kept the oldest half of the 240-hour fetch.
+  if (rows.length > 141) rows.splice(0, rows.length - 141);
+  // a single malformed candle field (null/undefined/NaN) poisons the whole
+  // sparkline — Math.min(...vals) → NaN → every path coord "NaN" → SVG
+  // renders blank with no error. Filter non-finite at the source.
+  const closes = rows.map((r) => r.c).filter((v) => Number.isFinite(v));
+  const last6 = rows.slice(-6).reduce((a, r) => a + r.qv, 0) / 6;
+  const prior = rows.slice(0, -6);
+  const priorAvg = prior.reduce((a, r) => a + r.qv, 0) / (prior.length || 1);
+  const candles = rows.map(({ t, o, h, l, c, qv }) => ({ t, o, h, l, c, qv }));
+  let candles5m = null;
+  try {
+    const r5 = light ? { ok: false } : await mdGet('candles', { symbol, granularity: '5m', limit: 120 });
+    if (r5.ok) {
+      const d5 = await r5.json();
+      if (Array.isArray(d5.data))
+        candles5m = d5.data
+          .map((c) => ({ t: +c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], qv: +c[6] }))
+          .sort((a, b) => a.t - b.t)
+          .filter((c) => c.t + 300e3 <= Date.now());
+    }
+  } catch {}
+  const payload = {
+    rsi14: rsi(closes),
+    volRatio: priorAvg > 0 ? last6 / priorAvg : 1,
+    closes: closes.slice(-48), // sparkline stays 48h
+    candles,
+    harmonic: Harmonics.active(candles, 8),
+    ta: TAEngine.analyze(candles, null, {}),
+    regime,
+  };
+  // light fetches cache too — without it the board pass refetches ~10
+  // symbols every 15s forever: the exact burst load that rate-limits the
+  // board blank. Reaching here means no usable fresh payload exists (a
+  // fresh full hit returned above), so a light write can't downgrade it.
+  cache[symbol] = { at: Date.now(), payload };
+  klineCacheSave();
+  return payload;
+}
+
+// ---- orderbook micro-structure (Stanford MSE448 "High Frequency Trading
+// Strategies", strat 1: the microprice). The microprice weights the mid by
+// the OPPOSING queue — a buy-heavy book lifts it above mid — the fairest
+// short-horizon estimate of the true price. microPos normalizes the
+// micro-vs-mid distance into half-spread units (−0.5..+0.5) so the read is
+// scale-free across majors and memes; imb is the 5-level queue imbalance.
+// The paper itself found it informative-but-weak alone — here it is a
+// bounded tilt + a fusion component the residual learner can re-weight.
+async function fetchBook(symbol) {
+  const res = await mdGet('book', { symbol, limit: 5 }).catch(() => null);
+  if (!res?.ok) return null;
+  const d = (await res.json())?.data;
+  const bids = (d?.bids || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  const asks = (d?.asks || []).map((x) => [+x[0], +x[1]]).filter((x) => x[0] > 0 && x[1] > 0);
+  if (!bids.length || !asks.length) return null;
+  const [bid, bidSz] = bids[0], [ask, askSz] = asks[0];
+  const mid = (bid + ask) / 2, spread = ask - bid;
+  const micro = (bid * askSz + ask * bidSz) / (bidSz + askSz);
+  const bsz = bids.reduce((a, x) => a + x[1], 0), asz = asks.reduce((a, x) => a + x[1], 0);
+  return {
+    micro,
+    microPos: spread > 0 ? Math.max(-0.5, Math.min(0.5, (micro - mid) / spread)) : 0,
+    imb: bsz + asz > 0 ? (bsz - asz) / (bsz + asz) : 0,
+    spreadPct: mid > 0 ? (spread / mid) * 100 : null,
+  };
+}
+
+// 5m candles from entry open -> now, for intraperiod settlement replay.
+// 600 bars ≈ 50h — comfortably covers the 24h TTL; the still-forming tail
+// candle is dropped (same rule as the TA klines).
+// ---- BTC-pair relative strength (operator rule): cross-reference the
+// asset-vs-BTC chart alongside USDT. Real XBTC spot candles where the pair
+// exists; synthetic XUSDT/BTCUSDT ratio everywhere else — assets without a
+// spot pair still score, they just run on synthetic RS.
+const SPOT_CANDLES_URL = 'https://api.bitget.com/api/v2/spot/market/candles';
+const SPOT_SYMBOLS_URL = 'https://api.bitget.com/api/v2/spot/public/symbols';
+const BTC_PAIR_CACHE = path.join(API, 'spot-btc-pairs.json');
+const BTC_KLINES_FILE = path.join(API, '..', 'state', 'spot-btc-klines.json');
+let spotBtcCache = null;
+const btcKCache = () => {
+  if (!spotBtcCache) { try { spotBtcCache = JSON.parse(fs.readFileSync(BTC_KLINES_FILE, 'utf8')); } catch { spotBtcCache = {}; } }
+  return spotBtcCache;
+};
+
+async function spotBtcUniverse() {
+  let j = null;
+  try { j = JSON.parse(fs.readFileSync(BTC_PAIR_CACHE, 'utf8')); } catch {}
+  if (j?.ts && Date.now() - j.ts < 86400e3) return new Set(j.syms || []);
+  try {
+    const res = await fetch(SPOT_SYMBOLS_URL, { signal: TF() });
+    const data = (await res.json()).data || [];
+    const syms = data.filter((s) => s.quoteCoin === 'BTC' && s.status === 'online').map((s) => s.baseCoin);
+    writeJson(BTC_PAIR_CACHE, { ts: Date.now(), syms });
+    return new Set(syms);
+  } catch { return new Set(j?.syms || []); }
+}
+
+async function fetchSpotBtcKlines(asset) {
+  const cache = btcKCache(), key = asset + 'BTC';
+  const hit = cache[key];
+  if (hit?.rows && Date.now() - hit.at < 10 * 60e3) return hit.rows;
+  try {
+    const res = await fetch(`${SPOT_CANDLES_URL}?symbol=${key}&granularity=1h&limit=60`, { signal: TF() });
+    const data = (await res.json()).data;
+    if (!Array.isArray(data) || data.length < 24) return hit?.rows ?? null;
+    const rows = data
+      .map((c) => ({ t: +c[0], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    cache[key] = { at: Date.now(), rows };
+    // bound the cache, same discipline as the kline cache
+    const cutoff = Date.now() - 2 * 3600e3;
+    for (const k of Object.keys(cache)) if (!cache[k].at || cache[k].at < cutoff) delete cache[k];
+    writeJson(BTC_KLINES_FILE, cache);
+    return rows;
+  } catch { return hit?.rows ?? null; }
+}
+
+// RS metrics on a ratio series — XBTC closes or synthetic XUSDT/BTCUSDT.
+// rs24 = %-outperformance vs BTC over ~24h; rsRsi = RSI of the BTC chart;
+// rsBreak = the ratio pressing its own 24-bar extreme (RS breakout/fade).
+function rsMetrics(closes) {
+  if (!closes || closes.length < 30) return null;
+  const n = closes.length, now = closes[n - 1];
+  const rs24 = ((now - closes[n - 25]) / closes[n - 25]) * 100;
+  const rsRsi = rsi(closes);
+  const win = closes.slice(-24), hi = Math.max(...win), lo = Math.min(...win);
+  const rsBreak = now >= hi * 0.995 ? 'high' : now <= lo * 1.005 ? 'low' : null;
+  return { rs24: round(rs24, 2), rsRsi: Math.round(rsRsi), rsBreak };
+}
+
+async function fetchEntryCandles(e) {
+  const out = [];
+  let start = e.ts;
+  for (let page = 0; page < 3; page++) {
+    const res = await mdGet('candles', {
+      symbol: e.asset + 'USDT', granularity: '5m',
+      startTime: start, endTime: Date.now(), limit: 200,
+    });
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || !data.length) break;
+    const rows = data
+      .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4] }))
+      .sort((a, b) => a.t - b.t);
+    for (const c of rows)
+      if (!out.length || c.t > out[out.length - 1].t) out.push(c);
+    const last = out[out.length - 1];
+    if (data.length < 200 || !last || last.t + 300e3 >= Date.now() - 300e3) break;
+    start = last.t + 300e3;
+  }
+  // drop the still-forming tail bar
+  if (out.length && out[out.length - 1].t + 300e3 > Date.now()) out.pop();
+  return out;
+}
+
+// 5m candles over an arbitrary closed range — used by the forward-outcome
+// evaluator. Paginates to cover multi-day windows; unclosed tail dropped.
+async function fetch5mRange(asset, fromMs, toMs) {
+  // Bitget serves the LAST `limit` bars inside [startTime, endTime] — startTime
+  // does not position the page. Paging forward therefore refetches the same
+  // terminal 200 bars and never reaches back; a 24h eval window silently lost
+  // its first ~7h and every horizon label failed. Page BACKWARD by endTime
+  // instead: each page ends just before the oldest bar already held.
+  const pages = [];
+  let end = toMs;
+  for (let page = 0; page < 12; page++) {
+    const res = await mdGet('candles', {
+      symbol: asset + 'USDT', granularity: '5m',
+      startTime: fromMs, endTime: end, limit: 200,
+    });
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    if (!Array.isArray(data) || !data.length) break;
+    const rows = data
+      .map((c) => ({ t: +c[0], h: +c[2], l: +c[3], c: +c[4] }))
+      .filter((c) => c.t >= fromMs && c.t <= end);
+    if (!rows.length) break;
+    pages.push(rows);
+    const first = Math.min(...rows.map((c) => c.t));
+    if (data.length < 200 || first <= fromMs + 300e3) break;
+    end = first - 1;
+  }
+  const out = [...new Map(pages.flat().map((c) => [c.t, c])).values()].sort(
+    (a, b) => a.t - b.t
+  );
+  if (out.length && out[out.length - 1].t + 300e3 > Date.now()) out.pop();
+  return out;
+}
+
+async function main() {
+  const now = Date.now();
+  const [symbolsRes, tickersRes] = await Promise.all([
+    mdGet('contracts'),
+    mdGet('tickers'),
+  ]);
+  if (!symbolsRes.ok || !tickersRes.ok)
+    throw new Error(`${XCHG} http ${symbolsRes.status}/${tickersRes.status}`);
+  const { data: symbols } = await symbolsRes.json();
+  const { data: tickers } = await tickersRes.json();
+
+  // contracts list drives the universe: every USDT-M perpetual — crypto,
+  // stocks (TSLA/NVDA/AAPL...), indexes (SPX/QQQ...), metals (XAU/XAG), FX.
+  const online = symbols.filter(
+    (s) => s.symbolStatus === 'normal' && s.quoteCoin === 'USDT'
+  );
+  const listed = new Set(online.map((s) => (s.baseCoin ?? '').toUpperCase()));
+  writeJson(path.join(API, `${XCHG}-symbols.json`), [...listed].sort());
+  const contractBySymbol = new Map(
+    online.map((s) => [s.symbol.toUpperCase(), s])
+  );
+  const usdtPairs = new Set(
+    online
+      .filter((s) => !STABLE_FIAT.has((s.baseCoin ?? '').toUpperCase()))
+      .map((s) => s.symbol.toUpperCase())
+  );
+
+  const rows = tickers
+    .filter((t) => usdtPairs.has(t.symbol.toUpperCase()))
+    .map((t) => {
+      const last = Number(t.lastPr);
+      const high = Number(t.high24h);
+      const low = Number(t.low24h);
+      const bid = Number(t.bidPr);
+      const ask = Number(t.askPr);
+      const c = contractBySymbol.get(t.symbol.toUpperCase());
+      const base = t.symbol.replace(/USDT$/i, '').toUpperCase();
+      return {
+        asset: t.symbol.replace(/USDT$/i, ''),
+        symbol: `${t.symbol.replace(/USDT$/i, '')}USD`,
+        pair: t.symbol,
+        cls: assetClass(base, c?.isRwa === 'YES'),
+        maxLever: Number(c?.maxLever) || null,
+        indexPrice: Number(t.indexPrice) || null,
+        markPrice: Number(t.markPrice) || null,
+        lastPrice: last,
+        changePct: Number(t.changeUtc24h) * 100,
+        quoteVolume: Number(t.quoteVolume),
+        highPrice: high,
+        lowPrice: low,
+        rangePct: low > 0 ? ((high - low) / low) * 100 : 0,
+        spreadPct: last > 0 && bid > 0 && ask > 0 ? ((ask - bid) / last) * 100 : 0,
+        rangePosition: high > low ? (last - low) / (high - low) : 0.5,
+      };
+    })
+    .filter(
+      (r) =>
+        Number.isFinite(r.lastPrice) &&
+        r.lastPrice > 0 &&
+        r.quoteVolume >= MIN_QUOTE_VOLUME
+    )
+    .sort((a, b) => b.quoteVolume - a.quoteVolume);
+
+  // VIP telegram confluence — fresh group signals get pulled into the
+  // candidate pool so the engine evaluates them on its own terms; they
+  // bump the score only when our analysis agrees (provenance via `vip`)
+  const TG_VIP = {};
+  try {
+    const tg = JSON.parse(
+      fs.readFileSync(path.join(API, '..', 'state', 'tg-confluence.json'), 'utf8')
+    );
+    const nowMs = Date.now();
+    for (const s of tg.signals || [])
+      if (nowMs - s.ts < 45 * 60e3 && (!TG_VIP[s.asset] || s.ts > TG_VIP[s.asset].ts))
+        TG_VIP[s.asset] = s;
+  } catch {}
+
+  // hourly klines for the top-volume candidates -> real momentum metrics
+  const enriched = new Map();
+  // environment-aware scan window: exec-catalog.json is the authoritative
+  // contract list for the ACTIVE mode. Demo lists ~45 contracts vs ~435
+  // scanned rows — letting phantoms consume the deep-scan budget starved
+  // the legal pool (only ~8 of 24 emitted signals could ever fill). In a
+  // constrained env the window is catalog-members only; on live the
+  // catalog is the full contract list so nothing changes.
+  let legalCatalog = null;
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live')
+      legalCatalog = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+  } catch {}
+  const scanRows = legalCatalog?.size
+    ? rows.filter((r) => legalCatalog.has(String(r.asset).toUpperCase()))
+    : rows;
+  const head = scanRows.slice(0, KLINE_HEAD);
+  const tail = scanRows.slice(KLINE_HEAD);
+  const cursorPath = path.join(API, '..', 'state', 'scan-cursor.json');
+  let cursor = 0;
+  try { cursor = +JSON.parse(fs.readFileSync(cursorPath, 'utf8')).i || 0; } catch {}
+  if (cursor >= tail.length) cursor = 0;
+  // wrap-around window: tail[cursor..] + tail[..cursor] keeps exactly
+  // KLINE_TAIL deep-scans per cycle while covering the whole tail
+  const candidates = [...head, ...tail.slice(cursor), ...tail.slice(0, cursor)].slice(0, KLINE_HEAD + KLINE_TAIL);
+  try { writeJson(cursorPath, { i: (cursor + KLINE_TAIL) % Math.max(1, tail.length), at: Date.now(), tailN: tail.length }); } catch {}
+  for (const r of rows)
+    if (TG_VIP[r.asset] && !candidates.includes(r)) candidates.push(r);
+  // 6-wide batches with spacing + two backoff retries — the 15s daemon
+  // bursts (klines + funding + OI + eval prefetches) were tripping rate
+  // limits, and the single retry left most of the board with no klines:
+  // empty sparkline, no RSI, ta:null (generic Momentum-* strategy names)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const missing = candidates.filter((r) => !enriched.has(r.asset));
+    if (!missing.length) break;
+    if (attempt) await new Promise((r) => setTimeout(r, 900 * attempt));
+    for (let i = 0; i < missing.length; i += 6) {
+      await Promise.all(
+        missing.slice(i, i + 6).map(async (r) => {
+          const k = await fetchKlines(r.pair).catch(() => null);
+          if (k) enriched.set(r.asset, k);
+        })
+      );
+      if (i + 6 < missing.length) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  const klineMiss = candidates
+    .filter((r) => !enriched.has(r.asset))
+    .map((r) => r.asset);
+
+  // ---- BTC-pair confluence data (operator rule: USDT chart + BTC chart
+  // together). Real XBTC spot candles for candidates whose pair exists —
+  // majors mostly; BTC's own 1h closes back the synthetic ratio for the
+  // pair-less memes so every asset still carries RS context.
+  const spotBtcSyms = await spotBtcUniverse().catch(() => new Set());
+  const btcPairKlines = {};
+  {
+    const have = candidates.filter((r) => r.asset !== 'BTC' && spotBtcSyms.has(r.asset));
+    for (let i = 0; i < have.length; i += 6) {
+      await Promise.all(
+        have.slice(i, i + 6).map(async (r) => {
+          const rows = await fetchSpotBtcKlines(r.asset).catch(() => null);
+          if (rows) btcPairKlines[r.asset] = rows;
+        })
+      );
+      if (i + 6 < have.length) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  const btcK = enriched.get('BTC') ?? (await fetchKlines('BTCUSDT', true).catch(() => null));
+  const btcCloses = btcK?.closes ?? btcK?.candles?.map((c) => c.c) ?? null;
+
+  // ---- top-of-book snapshot per scored candidate (microprice + queue
+  // imbalance). Best-effort: a missing book leaves the obi factor at 0.
+  const books = {};
+  {
+    const want = candidates.filter((r) => enriched.has(r.asset));
+    for (let i = 0; i < want.length; i += 6) {
+      await Promise.all(
+        want.slice(i, i + 6).map(async (r) => {
+          const b = await fetchBook(r.pair).catch(() => null);
+          if (b) books[r.asset] = b;
+        })
+      );
+      if (i + 6 < want.length) await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+
+  // ---- multi-timeframe deep read: 15m/1H/4H/1D frames per enriched asset.
+  // TTL caches make this near-free on steady-state cycles; each asset's
+  // stack (agreement count + HTF-lead/pullback classification) feeds the
+  // artifact, the signal payload, and the factor ledger.
+  const mtfFrames = new Map();
+  {
+    const assets = [...enriched.keys()];
+    // one pass per asset fetches all 3 frames in parallel — the old
+    // per-granularity sweep paid 3x the batch-boundary latency for the
+    // same requests (TTL cache makes most hits free anyway).
+    for (let i = 0; i < assets.length; i += 4) {
+      const batch = assets.slice(i, i + 4);
+      await Promise.all(
+        batch.map(async (a) => {
+          const m = {};
+          await Promise.all(
+            ['15m', '4H', '1D'].map(async (gran) => {
+              const rws = await fetchTF(a + 'USDT', gran).catch(() => null);
+              if (rws) m[gran] = rws;
+            })
+          );
+          if (Object.keys(m).length) mtfFrames.set(a, m);
+        })
+      );
+      if (i + 4 < assets.length) await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+  for (const [asset, k] of enriched) {
+    const m = mtfFrames.get(asset) || {};
+    k.mtf = TAEngine.mtfDeep({ '15m': m['15m'], '1H': k.candles, '4H': m['4H'], '1D': m['1D'] });
+    // recompute TA with the MTF ledger rows folded in — pure CPU, ~ms/asset
+    if (k.mtf && k.candles && !k.ta?.reasons?.[0]?.startsWith('wyckoff-'))
+      k.ta = TAEngine.analyze(k.candles, k.candles5m, { mtf: k.mtf });
+  }
+  writeJson(path.join(API, 'mtf.json'), {
+    t: new Date().toISOString(),
+    frames: ['15m', '1H', '4H', '1D'],
+    rows: Object.fromEntries(
+      [...enriched.entries()]
+        .filter(([, k]) => k.mtf)
+        .map(([a, k]) => [a, {
+          stack: k.mtf.stack, dir: k.mtf.dir, kind: k.mtf.kind,
+          agree: k.mtf.agree, n: k.mtf.n,
+          // 1H EMA50/EMA200 regime — the executor's setup/core-carry paths
+          // gate their LONG entries on the same operator rule
+          regime: k.regime ?? null,
+          cells: Object.fromEntries(
+            Object.entries(k.mtf.cells).map(([tf, c]) => [tf, {
+              dir: c.dir, str: c.str, trend: c.trend, rsi: c.rsi,
+              macd: c.macd, macdTurn: c.macdTurn, vsE20: c.vsE20,
+            }])
+          ),
+        }])
+    ),
+    scanned: enriched.size,
+  });
+
+  // ---- volume-spike core: relative-volume events on closed 1h candles.
+  // Order-flow doctrine (51% school): volume precedes price, but effort is
+  // only readable against result — huge volume + expansion = ignition,
+  // huge volume + compression = absorption, extremes at range edge = climax.
+  const volEvents = [];
+  for (const [asset, k] of enriched) {
+    const cs = k.candles;
+    if (!cs || cs.length < 26) continue;
+    const last = cs[cs.length - 1];
+    const base = cs.slice(-25, -1);
+    const avgVol = base.reduce((a, c) => a + c.qv, 0) / base.length;
+    if (!(avgVol > 0) || !(last.qv > 0)) continue;
+    const spikeX = last.qv / avgVol;
+    if (spikeX < 1.8) continue;
+    const atr =
+      base.reduce((a, c, i) => {
+        const p = base[i - 1];
+        return (
+          a +
+          (p
+            ? Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c))
+            : c.h - c.l)
+        );
+      }, 0) / base.length || 1e-9;
+    const range = last.h - last.l;
+    const effRes = range / atr;
+    const loc = range > 0 ? (last.c - last.l) / range : 0.5;
+    const hi = Math.max(...base.map((c) => c.h), last.h);
+    const lo = Math.min(...base.map((c) => c.l), last.l);
+    const rangePos = hi > lo ? (last.c - lo) / (hi - lo) : 0.5;
+    let kind = 'PRINT';
+    if (spikeX >= 3 && effRes >= 2 && (rangePos >= 0.92 || rangePos <= 0.08))
+      kind = 'CLIMAX';
+    else if (spikeX >= 2.4 && effRes <= 0.55) kind = 'ABSORPTION';
+    else if (spikeX >= 2 && effRes >= 1.5) kind = 'IGNITION';
+    const dir =
+      kind === 'ABSORPTION'
+        ? loc >= 0.6
+          ? 'LONG'
+          : loc <= 0.4
+            ? 'SHORT'
+            : 'NEUTRAL'
+        : last.c >= last.o
+          ? 'LONG'
+          : 'SHORT';
+    volEvents.push({
+      asset,
+      sym: asset + 'USDT',
+      kind,
+      dir,
+      spikeX: +spikeX.toFixed(2),
+      movePct: +(((last.c - last.o) / last.o) * 100).toFixed(2),
+      effRes: +effRes.toFixed(2),
+      rangePos: +rangePos.toFixed(2),
+      price: last.c,
+      ts: last.t,
+    });
+  }
+  volEvents.sort((a, b) => b.spikeX - a.spikeX);
+
+  // ---- funding intelligence: perp funding rates + spot/perp basis ----
+  const funding = {};
+  try {
+    const perpRes = await mdGet('tickers');
+    const perps = perpRes.ok ? (await perpRes.json()).data || [] : [];
+    const perpPx = {};
+    for (const t of perps)
+      if ((t.symbol || '').endsWith('USDT'))
+        perpPx[t.symbol.replace('USDT', '')] = +t.lastPr;
+    const fundSyms = candidates.map((r) => r.pair);
+    for (let i = 0; i < fundSyms.length; i += 12) {
+      await Promise.all(
+        fundSyms.slice(i, i + 12).map(async (sym) => {
+          try {
+            const r = await mdGet('fundNow', { symbol: sym });
+            if (!r.ok) return;
+            const d = (await r.json()).data;
+            const f = Array.isArray(d) ? d[0] : d;
+            const asset = sym.replace('USDT', '');
+            const rate = +f.fundingRate;
+            if (isFinite(rate)) {
+              const row = rows.find((x) => x.asset === asset);
+              const perp = row ? row.lastPrice : perpPx[asset] ?? null;
+              // universe is futures-native: basis is perp mark vs index price
+              const index = row?.indexPrice ?? null;
+              const annualPct = rate * 3 * 365 * 100; // 8h funding x3/day
+              const basisPct =
+                index && perp ? ((perp - index) / index) * 100 : null;
+              funding[asset] = {
+                ratePct: pct(rate * 100),
+                annualPct: pct(annualPct),
+                nextTs: f.nextUpdate ? +f.nextUpdate : null,
+                perp, index, basisPct: basisPct != null ? pct(basisPct) : null,
+                // arb math: ~0.32% round-trip to open+close the pair
+                // (spot taker + perp taker); breakeven = hours of funding
+                // needed to cover entry+exit costs
+                arb:
+                  rate > 0
+                    ? 'LONG_SPOT_SHORT_PERP'
+                    : 'SHORT_SPOT_LONG_PERP',
+                breakevenH:
+                  Math.abs(rate) > 0.00005
+                    ? Math.round((0.0032 / Math.abs(rate)) * 8 * 10) / 10
+                    : null,
+              };
+            }
+          } catch {}
+        })
+      );
+    }
+
+    // ---- derivatives + social intelligence ----
+    // Bitget public futures (keyless): open interest + funding history →
+    // positioning pressure. CoinGlass / LunarCrush activate when keys exist.
+    let KEYS = {};
+    try { KEYS = JSON.parse(fs.readFileSync(new URL('./api-keys.json', import.meta.url), 'utf8')); } catch {}
+    const CG_KEY = process.env.COINGLASS_API_KEY || KEYS.coinglass || null;
+    const LC_KEY = process.env.LUNARCRUSH_API_KEY || KEYS.lunarcrush || null;
+    const CP_KEY = process.env.CRYPTOPANIC_API_KEY || KEYS.cryptopanic || null;
+    const CP_PLAN = process.env.CRYPTOPANIC_PLAN || KEYS.cryptopanicPlan || 'growth';
+    const CMC_KEY = process.env.CMC_API_KEY || KEYS.cmc || null;
+    const CMCAL_ID = process.env.COINMARKETCAL_CLIENT_ID || KEYS.coinmarketcalId || null;
+    const CMCAL_SECRET = process.env.COINMARKETCAL_CLIENT_SECRET || KEYS.coinmarketcalSecret || null;
+    const deriv = {}, social = {}, news = {}, mcaps = {}, events = {};
+    const feedStatus = { [XCHG]: 'live', coinglass: CG_KEY ? 'live' : 'no-key', lunarcrush: LC_KEY ? 'live' : 'no-key', cryptopanic: CP_KEY ? 'live' : 'no-key', coingecko: 'live', coinmarketcap: CMC_KEY ? 'live' : 'no-key', coinmarketcal: CMCAL_ID && CMCAL_SECRET ? 'live' : 'no-key' };
+    if (RAPID) for (const k of Object.keys(feedStatus)) if (k !== XCHG) feedStatus[k] = 'rapid';
+    if (!RAPID)
+    for (let i = 0; i < fundSyms.length; i += 12) {
+      await Promise.all(
+        fundSyms.slice(i, i + 12).map(async (sym) => {
+          const asset = sym.replace('USDT', '');
+          const d = {};
+          try {
+            // open interest — size of open perp positions (Bitget public)
+            const oi = await mdGet('oi', { symbol: sym });
+            if (oi.ok) {
+              const od = (await oi.json()).data;
+              const sz = +((od && od.openInterestList && od.openInterestList[0]) || {}).size;
+              const px = perpPx[asset];
+              if (isFinite(sz) && px) { d.oiUsd = Math.round(sz * px); }
+            }
+            // funding history → trend (rising = longs paying more, crowding)
+            const fh = await mdGet('fundHist', { symbol: sym, limit: 8 });
+            if (fh.ok) {
+              const hist = (await fh.json()).data || [];
+              const rates = hist.map((x) => +x.fundingRate).filter((x) => isFinite(x));
+              if (rates.length >= 4) {
+                const now = rates[0], prevAvg = rates.slice(1).reduce((a, x) => a + x, 0) / (rates.length - 1);
+                d.fundingTrend = now > prevAvg * 1.5 + 0.00002 ? 'rising' : now < prevAvg * 0.5 - 0.00002 ? 'falling' : 'flat';
+                // crowding: sustained positive & rising → longs crowded (squeeze fuel)
+                d.crowding = now > 0.0002 && d.fundingTrend !== 'falling' ? 'longs-crowded'
+                           : now < -0.0001 ? 'shorts-crowded' : 'balanced';
+              }
+            }
+          } catch {}
+          // CoinGlass (key-gated): liquidations + long/short account ratio
+          if (CG_KEY) {
+            try {
+              const H = { headers: { 'CG-API-KEY': CG_KEY } };
+              const [lq, ls] = await Promise.all([
+                fetch(`https://open-api-v4.coinglass.com/api/futures/liquidation/aggregated-history?symbol=${asset}&interval=1d&limit=1`, { ...H, signal: TF() }),
+                fetch(`https://open-api-v4.coinglass.com/api/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=${sym}&interval=1h&limit=1`, { ...H, signal: TF() }),
+              ]);
+              if (lq.ok) {
+                const dd = (await lq.json()).data || [];
+                if (dd[0]) { d.liqLongUsd = Math.round(+dd[0].long_liquidation_usd || 0); d.liqShortUsd = Math.round(+dd[0].short_liquidation_usd || 0); }
+              }
+              if (ls.ok) {
+                const dd = (await ls.json()).data || [];
+                if (dd[0]) { d.longShortRatio = pct(+dd[0].global_account_long_percent / Math.max(1e-9, +dd[0].global_account_short_percent)); }
+              }
+            } catch {}
+          }
+          // positioning verdict: crowded side is squeeze fuel AGAINST it
+          if (d.crowding) d.dir = d.crowding === 'longs-crowded' ? 'bear' : d.crowding === 'shorts-crowded' ? 'bull' : null;
+          if (Object.keys(d).length) deriv[asset] = d;
+          // LunarCrush (key-gated): galaxy score, alt rank, sentiment, social volume
+          if (LC_KEY) {
+            try {
+              const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${asset.toLowerCase()}/v1`, { headers: { Authorization: `Bearer ${LC_KEY}` }, signal: TF() });
+              if (lc.ok) {
+                const ld = (await lc.json()).data;
+                if (ld) social[asset] = {
+                  galaxy: ld.galaxy_score ?? null, altRank: ld.alt_rank ?? null,
+                  sentiment: ld.sentiment ?? null, socialVol: ld.social_volume_24h ?? null,
+                  interactions: ld.interactions_24h ?? null,
+                  dir: (ld.galaxy_score ?? 50) >= 65 ? 'bull' : (ld.galaxy_score ?? 50) <= 35 ? 'bear' : null,
+                };
+              }
+            } catch {}
+          }
+        })
+      );
+    }
+
+    // market-cap / news / calendar intel is crypto-only — a stock perp
+    // symbol colliding with a crypto token name would attach wrong data
+    const isCrypto = new Set(
+      rows.filter((r) => r.cls === 'crypto').map((r) => r.asset.toUpperCase())
+    );
+    const cryptoOf = (syms) => syms.filter((s) => isCrypto.has(s.replace('USDT', '')));
+    if (!RAPID) {
+    // CoinGecko (keyless): market-cap intelligence — rank, float unlocked %,
+    // ATH distance, volume/mcap turnover. The CMC-equivalent quality layer.
+    try {
+      const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).join(',');
+      const cg = await fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${encodeURIComponent(syms)}&price_change_percentage=24h`,
+        { signal: TF() }
+      );
+      if (cg.ok) {
+        for (const c of (await cg.json()) || []) {
+          const a = (c.symbol || '').toUpperCase();
+          if (!a) continue;
+          const floatPct = c.max_supply ? pct((c.circulating_supply / c.max_supply) * 100) : null;
+          const volMcap = c.market_cap ? pct((c.total_volume / c.market_cap) * 100) : null;
+          mcaps[a] = {
+            mcapUsd: c.market_cap ?? null, rank: c.market_cap_rank ?? null,
+            volMcapPct: volMcap, athDistPct: c.ath_change_percentage != null ? pct(c.ath_change_percentage) : null,
+            floatPct,
+            // low float = dilution/unlock risk (bear); blue-chip near ATH =
+            // strength context; everything else neutral
+            dir: floatPct != null && floatPct < 30 ? 'bear'
+               : (c.market_cap_rank ?? 999) <= 25 && (c.ath_change_percentage ?? -100) > -25 ? 'bull' : null,
+          };
+        }
+      }
+    } catch {}
+    // CoinMarketCap (key-gated): cross-verification overlay — CMC rank,
+    // 24h volume change, tags. Cheap batch quotes call.
+    if (CMC_KEY) {
+      try {
+        const syms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const r = await fetch(
+          `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(syms)}`,
+          { headers: { 'X-CMC_PRO_API_KEY': CMC_KEY }, signal: TF() }
+        );
+        if (r.ok) {
+          const dd = (await r.json()).data || {};
+          for (const [sym, v] of Object.entries(dd)) {
+            const q = ((v || {})[0] || v).quote?.USD || {};
+            const a = sym.toUpperCase();
+            (mcaps[a] ??= {}).cmc = {
+              rank: (v[0] || v).cmc_rank ?? null,
+              volChg24h: q.volume_change_24h != null ? pct(q.volume_change_24h) : null,
+            };
+          }
+        }
+      } catch {}
+    }
+    // CoinMarketCal (key-gated): scheduled events in next 7d — token
+    // unlocks = supply-dump risk, listings/upgrades = catalysts. Event
+    // risk is a flag on the position, never a signal by itself.
+    if (CMCAL_ID && CMCAL_SECRET) {
+      try {
+        const tk = await fetch(
+          `https://api.coinmarketcal.com/oauth/v2/token?grant_type=client_credentials&client_id=${CMCAL_ID}&client_secret=${CMCAL_SECRET}`,
+          { method: 'POST', signal: TF() }
+        );
+        if (tk.ok) {
+          const tok = (await tk.json()).access_token;
+          const coins = cryptoOf(fundSyms).map((s) => s.replace('USDT', '').toLowerCase()).slice(0, 20).join(',');
+          const ev = await fetch(
+            `https://api.coinmarketcal.com/v1/events?max=30&coins=${encodeURIComponent(coins)}&dateRangeStart=${new Date().toISOString().slice(0, 10)}`,
+            { headers: { Authorization: `Bearer ${tok}`, Accept: 'application/json' }, signal: TF() }
+          );
+          if (ev.ok) {
+            for (const p of (await ev.json()).body || []) {
+              const cats = (p.categories || []).map((x) => (x.name || '').toLowerCase()).join(' ');
+              const isUnlock = /unlock|vesting|cliff/.test(cats + ' ' + (p.title?.en || ''));
+              const isCatalyst = /listing|mainnet|launch|upgrade|fork|airdrop/.test(cats + ' ' + (p.title?.en || ''));
+              const days = p.date_event ? Math.round((Date.parse(p.date_event) - Date.now()) / 864e5) : null;
+              if (days == null || days > 7) continue;
+              for (const c of p.coins || []) {
+                const a = (c.symbol || '').toUpperCase();
+                if (!isCrypto.has(a)) continue;
+                const n = (events[a] ??= { n: 0, unlocks: 0, catalysts: 0, next: [] });
+                n.n++; if (isUnlock) n.unlocks++; if (isCatalyst) n.catalysts++;
+                if (n.next.length < 2) n.next.push(`${p.title?.en?.slice(0, 60)} (${days}d)`);
+                n.dir = isUnlock ? 'bear' : isCatalyst ? 'bull' : n.dir ?? null;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // CryptoPanic (key-gated): public crypto news → bullshit-filtered.
+    // News is treated as CONTEXT, never a trigger: hype-word spam is
+    // discounted to zero, only vote-validated important posts move the
+    // needle, and the total influence is capped hard in the score.
+    if (CP_KEY) {
+      try {
+        const curList = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40).join(',');
+        const cp = await fetch(
+          `https://cryptopanic.com/api/${CP_PLAN}/v2/posts/?auth_token=${CP_KEY}&kind=news&filter=important&currencies=${encodeURIComponent(curList)}`,
+            { signal: TF() }
+        );
+        if (cp.ok) {
+          const posts = (await cp.json()).results || [];
+          const HYPE = /moon|100x|1000x|guarantee|parabolic|insane|don't miss|dont miss|lambo|rocket|🚀|next bitcoin|free money|shitcoin|pump it|bags|ape in|easily|hopium/i;
+          const nowMs = Date.now();
+          for (const p of posts) {
+            const title = p.title || '';
+            const v = p.votes || {};
+            const pos = +v.positive || 0, neg = +v.negative || 0, imp = +v.important || 0;
+            const ageH = (nowMs - Date.parse(p.published_at || 0)) / 3.6e6;
+            if (!isFinite(ageH) || ageH > 72) continue; // stale news = noise
+            const recency = Math.max(0.2, 1 - ageH / 72);
+            const hype = HYPE.test(title) ? 1 : 0;
+            const weight = recency * (1 + imp * 0.5) * (hype ? 0.15 : 1); // hype posts ~zeroed
+            for (const c of p.currencies || []) {
+              const a = (c.code || '').toUpperCase();
+              if (!a || !isCrypto.has(a)) continue;
+              const n = (news[a] ??= { n: 0, pos: 0, neg: 0, imp: 0, hype: 0, heads: [] });
+              n.n++;
+              n.pos += pos * weight; n.neg += neg * weight; n.imp += imp; n.hype += hype;
+              if (n.heads.length < 3 && title) n.heads.push(title.slice(0, 90));
+            }
+          }
+          for (const a of Object.keys(news)) {
+            const n = news[a], tot = n.pos + n.neg;
+            n.sentiment = tot > 0 ? pct((n.pos - n.neg) / tot) : null;
+            // mostly-bullshit guard: need ≥2 important posts AND a decisive
+            // vote ratio before direction is claimed; fud cluster = bear
+            n.dir = n.imp >= 2 && n.sentiment != null
+              ? n.sentiment > 0.25 ? 'bull' : n.sentiment < -0.25 ? 'bear' : null
+              : null;
+            if (n.neg > n.pos * 1.5 && n.neg > 1) n.fud = true;
+          }
+        }
+      } catch {}
+    }
+    } // end !RAPID intel gather — rapid mode leaves deriv/social/news/mcaps/events empty
+    // ---- SOCIAL SENTIMENT ENGINE — the crowd-attention layer.
+    // TTL-gated (20min) like the news wire: the VPS daemon is permanently
+    // rapid, so keyless social sources refresh on cadence, not per-cycle.
+    // Sources: CoinGecko trending (attention spikes), Fear & Greed (market
+    // mood), the RSS wire's per-asset tone, and LunarCrush galaxy/altrank/
+    // social-volume when a key exists. Heat (attention) and direction are
+    // kept separate — trending ≠ bullish; a coin can trend on FUD.
+    try {
+      const SOC_FILE = path.join(API, '..', 'state', 'social-cache.json');
+      const SOC_TTL = 20 * 60e3;
+      let socCache = null;
+      try { socCache = JSON.parse(fs.readFileSync(SOC_FILE, 'utf8')); } catch {}
+      const socDue = !socCache || !socCache.at || Date.now() - socCache.at > SOC_TTL;
+      if (socDue) {
+        const fresh = { at: Date.now(), market: {}, assets: {} };
+        // Fear & Greed — market mood (alternative.me, keyless)
+        try {
+          const fg = await fetch('https://api.alternative.me/fng/?limit=2', { signal: TF() });
+          if (fg.ok) {
+            const fd = (await fg.json()).data || [];
+            if (fd[0]) fresh.market.fg = { v: +fd[0].value, c: fd[0].value_classification };
+          }
+        } catch {}
+        // CoinGecko trending — retail attention spikes (keyless)
+        try {
+          const tr = await fetch('https://api.coingecko.com/api/v3/search/trending', { signal: TF() });
+          if (tr.ok) {
+            const td = await tr.json();
+            fresh.market.trending = (td.coins || []).slice(0, 15).map((c, i) => ({
+              sym: ((c.item || {}).symbol || '').toUpperCase(), rank: i + 1,
+              mcapRank: c.item?.market_cap_rank ?? null,
+            }));
+          }
+        } catch {}
+        // news-wire tone — the RSS wire already tags assets + tone; fold
+        // the last 48h of tagged headlines into a per-asset sentiment read
+        try {
+          const nw = JSON.parse(fs.readFileSync(path.join(API, 'news.json'), 'utf8'));
+          const cut = Date.now() - 48 * 3600e3;
+          for (const it of nw.items || []) {
+            if (!it.ts || it.ts < cut) continue;
+            for (const a of it.tags || []) {
+              const n = (fresh.assets[a] ??= { pos: 0, neg: 0, n: 0, heads: [] });
+              n.n++;
+              if (it.tone === 'bull') n.pos++; else if (it.tone === 'bear') n.neg++;
+              if (n.heads.length < 3 && it.title) n.heads.push(it.title.slice(0, 90));
+            }
+          }
+        } catch {}
+        // LunarCrush — key-gated; when present this is the real galaxy /
+        // alt-rank / social-volume feed, fetched per-asset (top 40 crypto)
+        if (LC_KEY) {
+          const lcSyms = cryptoOf(fundSyms).map((s) => s.replace('USDT', '')).slice(0, 40);
+          for (let i = 0; i < lcSyms.length; i += 8) {
+            await Promise.all(lcSyms.slice(i, i + 8).map(async (a) => {
+              try {
+                const lc = await fetch(`https://lunarcrush.com/api4/public/coins/${a.toLowerCase()}/v1`,
+                  { headers: { Authorization: `Bearer ${LC_KEY}` }, signal: TF() });
+                if (lc.ok) {
+                  const ld = (await lc.json()).data;
+                  if (ld) (fresh.assets[a] ??= { pos: 0, neg: 0, n: 0, heads: [] }).lc = {
+                    galaxy: ld.galaxy_score ?? null, altRank: ld.alt_rank ?? null,
+                    sentiment: ld.sentiment ?? null, socialVol: ld.social_volume_24h ?? null,
+                    interactions: ld.interactions_24h ?? null,
+                  };
+                }
+              } catch {}
+            }));
+            if (i + 8 < lcSyms.length) await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+        socCache = fresh;
+        try { fs.mkdirSync(path.dirname(SOC_FILE), { recursive: true }); writeJson(SOC_FILE, fresh); } catch {}
+      }
+      // composite per-asset read — dirScore = mean of directional sources
+      // (galaxy/sentiment/news-tone); heat = attention (trending rank,
+      // headline count, interaction volume). score blends both.
+      const socAssets = {}, trRanks = {};
+      (socCache.market.trending || []).forEach((x) => { if (x.sym) trRanks[x.sym] = x.rank; });
+      for (const a of new Set([...Object.keys(socCache.assets), ...Object.keys(trRanks)])) {
+        const x = socCache.assets[a] || {}, tr = trRanks[a];
+        const tone = (x.pos + x.neg) > 0 ? Math.round(50 + (50 * (x.pos - x.neg)) / (x.pos + x.neg)) : null;
+        const dv2 = [];
+        if (x.lc?.galaxy != null) dv2.push(x.lc.galaxy);
+        if (x.lc?.sentiment != null) dv2.push(x.lc.sentiment);
+        if (tone != null) dv2.push(tone);
+        const dirScore = dv2.length ? Math.round(dv2.reduce((p, c) => p + c, 0) / dv2.length) : null;
+        const heat = Math.min(100, Math.round(
+          (tr ? Math.max(20, 105 - tr * 6) : 0) * 0.5 +
+          Math.min(100, (x.n || 0) * 22) * 0.3 +
+          Math.min(100, Math.log10(1 + (x.lc?.interactions || 0) / 1000) * 40) * 0.2));
+        socAssets[a] = {
+          score: Math.round(Math.min(100, (dirScore ?? 50) * 0.6 + heat * 0.4)),
+          heat, dirScore,
+          dir: dirScore != null ? (dirScore >= 62 ? 'bull' : dirScore <= 38 ? 'bear' : null) : null,
+          trending: tr ?? null, galaxy: x.lc?.galaxy ?? null, altRank: x.lc?.altRank ?? null,
+          sentiment: x.lc?.sentiment ?? null, socialVol: x.lc?.socialVol ?? null,
+          interactions: x.lc?.interactions ?? null,
+          newsTone: tone, newsN: x.n || 0, heads: (x.heads || []).slice(0, 2),
+        };
+      }
+      for (const [a, v] of Object.entries(socAssets)) social[a] = { ...(social[a] || {}), ...v };
+      globalThis.__social = social;
+      writeJson(path.join(API, 'social.json'), {
+        t: new Date().toISOString(),
+        market: socCache.market,
+        feeds: { lunarcrush: LC_KEY ? 'live' : 'no-key', 'coingecko-trending': 'live', feargreed: 'live', 'news-tone': 'live' },
+        assets: socAssets,
+      });
+      // social factor row on every TA'd asset — lands in the SIGNAL DNA
+      // ledger (confluence.json + journal snapshots) for IC research
+      for (const [a, k] of enriched) {
+        const sc = socAssets[a];
+        if (k.ta && k.ta.factors && sc)
+          k.ta.factors.push({
+            k: 'social', dir: sc.dir || 'flat',
+            s: 'score ' + sc.score + ' · heat ' + sc.heat
+              + (sc.trending ? ' · trending #' + sc.trending : '')
+              + (sc.galaxy != null ? ' · galaxy ' + sc.galaxy : '')
+              + (sc.newsTone != null ? ' · news ' + (sc.newsTone - 50 >= 0 ? '+' : '') + (sc.newsTone - 50) + '%' : ''),
+          });
+        // the live normie channel needs the same IC audit trail — the ±6
+        // vipBoost touches the score in rapid mode but was never journaled
+        // into confl, so its predictive power was unmeasurable until now
+        const v2 = TG_VIP[a];
+        if (v2 && k.ta && k.ta.factors)
+          k.ta.factors.push({
+            k: 'vip', dir: v2.side === 'long' ? 'bull' : 'bear',
+            s: 'tg call ' + (v2.side || '?') + ' ' + Math.round((Date.now() - (v2.ts || 0)) / 60e3) + 'm ago',
+          });
+      }
+    } catch {}
+    deriv._feeds = feedStatus; social._feeds = feedStatus; news._feeds = feedStatus;
+    mcaps._feeds = feedStatus; events._feeds = feedStatus;
+    globalThis.__deriv = deriv; globalThis.__social = social; globalThis.__news = news;
+    globalThis.__mcaps = mcaps; globalThis.__events = events;
+  } catch {}
+
+  // ---- factor IC engine: every factor votes its MEASURED edge ----
+  // The composite score treated ~25 factor rows as equal votes; the
+  // 14k-signal eval panel splits them cleanly — structure/reversal factors
+  // (elliott/pattern/macro-tr/structure/SFP) predict, lagging-trend factors
+  // (MTF stack/MA stack/MTF 1D/4H/ichimoku/wyckoff/RSI/VWAP/breakout)
+  // anti-predict. Each factor's vote is weighted by its measured
+  // directional lift (agree-mean − disagree-mean on forward alpha4h), so
+  // anti-predictive factors vote contrarian automatically — the social
+  // fade generalised. Recomputed ≤ every 30min; the table is slow-moving.
+  const IC_FILE = path.join(API, '..', 'state', 'factor-ic.json');
+  // entry gates armed on this table: ic-evidence vetoes net-negative factor
+  // evidence (icAdj floor) and ic-sponsor requires at least one measured-
+  // predictive factor (lift >= this) voting with the signal. Both stay
+  // OFF when the table is stale — no fresh evidence, no evidence veto.
+  const IC_VETO = +(process.env.SENTINEL_IC_VETO ?? -2);
+  const IC_SPONSOR_LIFT = +(process.env.SENTINEL_IC_SPONSOR_LIFT ?? 0.4);
+  let factorIC = {}, icFresh = false;
+  let factorCaps = {};
+  try { factorCaps = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'factor-caps.json'), 'utf8')) || {}; } catch {}
+  try {
+    const c = JSON.parse(fs.readFileSync(IC_FILE, 'utf8'));
+    if (Date.now() - (c.at || 0) < 30 * 60e3) { factorIC = c.ic || {}; icFresh = true; }
+  } catch {}
+  if (!icFresh) {
+    try {
+      const agg = {};
+      for (const mf of fs.readdirSync(path.join(API, 'history'))) {
+        if (!/^eval-\d{4}-\d{2}\.json$/.test(mf)) continue;
+        for (const r of JSON.parse(fs.readFileSync(path.join(API, 'history', mf), 'utf8')).records || []) {
+          if (!r.complete || r.alpha4h == null) continue;
+          const want = r.direction === 'LONG' ? 'bull' : 'bear';
+          const seen = new Set();
+          for (const f of r.confl || []) {
+            if (!f.k || f.k === 'BIAS' || f.k === 'confluence' || seen.has(f.k)) continue;
+            if (f.dir !== 'bull' && f.dir !== 'bear') continue;
+            seen.add(f.k);
+            (agg[f.k] ||= { ag: [], dis: [] })[f.dir === want ? 'ag' : 'dis'].push(r.alpha4h);
+          }
+        }
+      }
+      const ic = {};
+      for (const [k2, v] of Object.entries(agg)) {
+        if (v.ag.length < 40 || v.dis.length < 40) continue;
+        const ma = v.ag.reduce((a, x) => a + x, 0) / v.ag.length;
+        const mb = v.dis.reduce((a, x) => a + x, 0) / v.dis.length;
+        const va = v.ag.reduce((a, x) => a + (x - ma) ** 2, 0) / v.ag.length;
+        const vb = v.dis.reduce((a, x) => a + (x - mb) ** 2, 0) / v.dis.length;
+        const t = (ma - mb) / Math.sqrt(va / v.ag.length + vb / v.dis.length);
+        if (Math.abs(t) >= 2)
+          ic[k2] = { lift: +(ma - mb).toFixed(3), t: +t.toFixed(1), n: v.ag.length + v.dis.length };
+      }
+      factorIC = ic;
+      writeJson(IC_FILE, { at: Date.now(), ic });
+    } catch {}
+  }
+
+  const rank = (arr, v) =>
+    arr.length ? arr.filter((x) => x <= v).length / arr.length : 0.5;
+  // ranks are computed INSIDE the candidate pool — the old version ranked
+  // the top-48-by-volume against all ~515 pairs, so every candidate scored
+  // ~95th percentile on volume for free and everything graded "A"
+  const cands = candidates;
+  const vols = cands.map((r) => r.quoteVolume).sort((a, b) => a - b);
+  const spreads = cands.map((r) => r.spreadPct).sort((a, b) => a - b);
+  const surges = [...enriched.values()].map((k) => k.volRatio).sort((a, b) => a - b);
+  // ---- measured correlation structure ----
+  // Static asset clusters are a prior; the real question is whether two
+  // books move together NOW. Compute 48h of 1h simple returns per enriched
+  // asset and pairwise Pearson — this drives BTC-beta per signal and the
+  // correlation governor's same-bet test (avg corr ≥0.6 = same trade).
+  const rets = new Map();
+  for (const [asset, k] of enriched) {
+    const cs = (k.candles || []).slice(-49).map((x) => x.c);
+    if (cs.length >= 30)
+      rets.set(asset, cs.slice(1).map((v, i) => ((v - cs[i]) / cs[i]) * 100));
+  }
+  const corrPair = (x, y) => {
+    const n = Math.min(x.length, y.length);
+    if (n < 20) return null;
+    const xs = x.slice(-n), ys = y.slice(-n);
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0, sx2 = 0, sy2 = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = xs[i] - mx, dy = ys[i] - my;
+      sxy += dx * dy; sx2 += dx * dx; sy2 += dy * dy;
+    }
+    return sx2 > 0 && sy2 > 0 ? sxy / Math.sqrt(sx2 * sy2) : null;
+  };
+  const corrTo = (a, b) =>
+    a === b ? 1 : rets.has(a) && rets.has(b) ? corrPair(rets.get(a), rets.get(b)) : null;
+  const betaTo = (a, b) => {
+    if (a === b) return 1;
+    if (!rets.has(a) || !rets.has(b)) return null;
+    const x = rets.get(a), y = rets.get(b);
+    const n = Math.min(x.length, y.length);
+    if (n < 20) return null;
+    const xs = x.slice(-n), ys = y.slice(-n);
+    const mx = xs.reduce((s, v) => s + v, 0) / n;
+    const my = ys.reduce((s, v) => s + v, 0) / n;
+    let sxy = 0, sy2 = 0;
+    for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sy2 += (ys[i] - my) ** 2; }
+    return sy2 > 0 ? round(sxy / sy2, 2) : null;
+  };
+  // ---- Tharp market type: direction × volatility, measured objectively ----
+  // Direction = market SQN of the universe-median 1h return series over
+  // 48h (√N·mean/std — Tharp's own trendiness statistic). Volatility =
+  // mean 1h ATR% across candidates, banded quiet/normal/volatile. Six
+  // types: bull/bear/side × quiet/volatile. His rule: a system designed
+  // for one type is insane to run in another — so every signal/entry/eval
+  // record carries this tag and the eval engine grades by it.
+  let marketSQN = 0, mktType = 'side-normal', atrPct = null;
+  {
+    const med1h = [];
+    for (let i = 1; i <= 48; i++) {
+      const xs = [];
+      for (const k of enriched.values()) {
+        const cs = k.candles || [];
+        if (cs.length > i && cs[cs.length - i - 1].c > 0)
+          xs.push(((cs[cs.length - i].c - cs[cs.length - i - 1].c) / cs[cs.length - i - 1].c) * 100);
+      }
+      if (xs.length > 20) {
+        xs.sort((a, b) => a - b);
+        med1h.push(xs[Math.floor(xs.length / 2)]);
+      }
+    }
+    if (med1h.length > 10) {
+      const m = med1h.reduce((a, b) => a + b, 0) / med1h.length;
+      const s = Math.sqrt(med1h.reduce((a, b) => a + (b - m) ** 2, 0) / (med1h.length - 1));
+      marketSQN = s > 0 ? round((m / s) * Math.sqrt(med1h.length), 2) : 0;
+    }
+    const atrs = [...enriched.values()].map((k) => {
+      const cs = (k.candles || []).slice(-25);
+      if (cs.length < 5) return null;
+      let s = 0;
+      for (let i = 1; i < cs.length; i++)
+        s += Math.max(cs[i].h - cs[i].l, Math.abs(cs[i].h - cs[i - 1].c), Math.abs(cs[i].l - cs[i - 1].c)) / cs[i].c;
+      return (s / (cs.length - 1)) * 100;
+    }).filter((x) => x != null);
+    atrPct = atrs.length ? round(atrs.reduce((a, b) => a + b, 0) / atrs.length, 2) : null;
+    const dirClass = marketSQN > 0.5 ? 'bull' : marketSQN < -0.5 ? 'bear' : 'side';
+    const volClass = atrPct == null ? 'normal' : atrPct < 0.55 ? 'quiet' : atrPct > 1.0 ? 'volatile' : 'normal';
+    mktType = dirClass + '-' + volClass;
+  }
+  // direction-aware momentum: a candidate is scored on the strength of the
+  // move in ITS traded direction — a −8% dump traded SHORT is strong
+  // downside momentum, not a high score riding the wrong side
+  const dirOf = (r, k) =>
+    (k && k.ta && k.ta.bias) || (r.changePct >= 0 ? 'LONG' : 'SHORT');
+  const dirMove = (r, k) => (dirOf(r, k) === 'LONG' ? r.changePct : -r.changePct);
+  const dirMoves = cands
+    .map((r) => dirMove(r, enriched.get(r.asset)))
+    .sort((a, b) => a - b);
+
+  // ---- measured excursion table — the tape's own record of what each
+  // symbol:side / strategy family actually reaches. Feeds the RR rescue
+  // below: when a signal's structural target can't carry RR_MIN against
+  // the ATR-floor stop, a measured median MFE that DOES clear it is
+  // evidence the target was under-projected — the reward estimate updates
+  // to the tape, the discipline bar itself never moves.
+  let maeMfe = { bySymbol: {}, byFamily: {} };
+  try {
+    maeMfe = JSON.parse(fs.readFileSync(path.join(API, 'mae-mfe.json'), 'utf8'));
+  } catch {}
+  // global measured prior — aggregated over every recorded episode, so an
+  // unmeasured symbol inherits the book's realized heat rather than a
+  // hardcoded noise model. n-gates keep thin records from steering.
+  const GLOBAL_CELL = (() => {
+    const eps = (maeMfe.episodes || []).slice(-200);
+    if (eps.length < 10) return null;
+    const med = (arr) => { const s = arr.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)] ?? 0; };
+    return {
+      n: eps.length,
+      medMaePct: med(eps.map((e) => Math.abs(e.maePct ?? 0))),
+      medMfePct: med(eps.map((e) => Math.abs(e.mfePct ?? 0))),
+      winShare: eps.filter((e) => (e.exit - e.entry) * (e.side === 'long' ? 1 : -1) > 0).length / eps.length,
+    };
+  })();
+  const measuredCell = (s) => {
+    const sym = maeMfe.bySymbol?.[`${s.asset}USDT:${s.direction === 'LONG' ? 'long' : 'short'}`];
+    const fam = maeMfe.byFamily?.[s.strategy];
+    // symbol:side with n>=2 is the most specific evidence; family n>=3 next;
+    // the book-wide prior last (heat is universal — noise clips everywhere)
+    if (sym && sym.n >= 2) return sym;
+    if (fam && fam.n >= 3) return fam;
+    return GLOBAL_CELL;
+  };
+  // ---- self-improvement: adapt doctrine weights to realized ledger R ----
+  let priorEntries = [];
+  try {
+    priorEntries =
+      JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8')).entries || [];
+  } catch {}
+  const stratR = {};
+  for (const e of priorEntries) {
+    if (e.status === 'open' || e.pnlPct == null) continue;
+    (stratR[e.strategy] ??= []).push(
+      e.pnlPct / (e.stopPct ?? Math.max(4, e.targetPct || 4))
+    );
+  }
+  // Bayesian-shrunk adjustments, GATED: the audit is right that ~22 trades
+  // is nowhere near enough for the machine to start believing it found which
+  // strategies work — learning random luck is overfitting. Adjustments stay
+  // dormant until ≥LEARN_MIN_TOTAL closed signals AND ≥LEARN_MIN_STRAT per
+  // strategy; below that the shrinkage math still runs for reporting but
+  // the score input is zeroed.
+  const closedTotal = priorEntries.filter(
+    (e) => e.status !== 'open' && e.pnlPct != null
+  ).length;
+  const learnActive = closedTotal >= LEARN_MIN_TOTAL;
+  const stratAdj = Object.fromEntries(
+    Object.entries(stratR).map(([k, v]) => {
+      const n = v.length;
+      const avg = v.reduce((a, b) => a + b, 0) / n;
+      const shrunk = avg * (n / (n + 10));
+      const adj = Math.round(clamp(shrunk * 4, -4, 4) * 10) / 10;
+      return [k, learnActive && n >= LEARN_MIN_STRAT ? adj : 0];
+    })
+  );
+
+  // ---- prospective-evidence gate: signal-eval.json grades every emitted
+  // signal's real forward returns at 1h/4h/24h. A strategy with a
+  // meaningful record and negative alpha, or a hit rate under ~12% (the
+  // R-multiple floor our capped targets need), is blocked at the ORDER
+  // level — it keeps emitting board signals for evidence but can't take
+  // real positions until its record recovers. Positive-alpha strategies
+  // earn a bounded score lift. Bayesian n/(n+10) shrinkage damps small
+  // samples. (The ledger-fed stratAdj above is legacy reporting — the
+  // ledger entries array is empty post-purge, so it outputs zeros.)
+  let evalStatsFull = {};
+  try {
+    evalStatsFull =
+      JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
+        .stats || {};
+  } catch {}
+  const evalByStrat = evalStatsFull.byStrategy || {};
+  const EVAL_MIN_N = 20;
+  const stratBlock = new Set();
+  const stratBoost = {};
+  for (const [k, v] of Object.entries(evalByStrat)) {
+    const n = v.n || 0;
+    if (n < EVAL_MIN_N) { stratBoost[k] = 0; continue; }
+    const shrunkAlpha = (v.avgAlpha24h ?? 0) * (n / (n + 10));
+    // hit-rate gate toward the 70% target: a strategy with a real record
+    // (n>=20) whose Bayesian-shrunk hit rate can't clear 40% is a proven
+    // bleeder — it keeps emitting board signals for evidence but can't take
+    // positions. Prior: Beta(15,15) shrunk toward 50%.
+    const shrunkHit =
+      v.hitRate == null ? 50 : (v.hitRate * n + 50 * 15) / (n + 15);
+    // expectancy-first: a strategy is a bleeder when its shrunk ALPHA is
+    // negative — hit-rate blocks only degenerate payouts (rarely reaches
+    // target AND has no expectancy cushion to justify tail risk). Verified
+    // on ~6k prospective signals: the old hit<45 gate killed every
+    // positive-alpha fat-tail family and left the book flat.
+    const degenerate = n >= 30 && shrunkHit < 20 && shrunkAlpha < 0.3;
+    if (shrunkAlpha < -0.3 || degenerate) {
+      stratBlock.add(k);
+      stratBoost[k] = 0;
+    } else {
+      stratBoost[k] = Math.min(6, Math.round(clamp(shrunkAlpha * 3, -4, 6) * 10) / 10);
+    }
+  }
+  // ---- regime-conditional strategy ratings: "switch strategy per regime"
+  // done by measurement, not rule-of-thumb. Each strategy's alpha IN the
+  // current mktType overrides its global rating once the cell has depth
+  // (n>=15); a strategy globally-fine but measured-negative IN this tape is
+  // blocked for this regime only — it re-earns entry when the tape turns
+  // or its record recovers. The eval engine already tags every sealed
+  // record with mktType — this is the consumption side.
+  const evalByStratMkt = evalStatsFull.byStrategyMkt || {};
+  const stratRegBlock = new Set();
+  const stratRegBoost = {};
+  {
+    const strats = new Set([
+      ...Object.keys(stratBoost),
+      ...Object.keys(evalByStratMkt).map((x) => x.split('|')[0]),
+    ]);
+    for (const k of strats) {
+      const reg = evalByStratMkt[`${k}|${mktType}`];
+      if (!reg || (reg.n || 0) < 15) continue;
+      const regAlpha = (reg.avgAlpha24h ?? 0) * (reg.n / (reg.n + 10));
+      if (regAlpha < -0.3) stratRegBlock.add(k);
+      else stratRegBoost[k] = Math.min(6, Math.round(clamp(regAlpha * 3, -4, 6) * 10) / 10);
+    }
+  }
+  // REHAB lane — state/trail-strategies.json (shared by exec + liq-guard):
+  // cells whose edge was MEASURED under ATR-trail exits (90d full-backtest:
+  // SFP LONG +2.28 SQN n=1708, Liquidity Sweep LONG +1.75 n=1923 under
+  // K=2.5 trail vs buried under the ladder) bypass the eval-alpha block for
+  // LONG signals only — their live seats ride the trail profile they were
+  // proven on, and forward episodes grade THAT geometry, not the ladder's.
+  // Not a pardon — the block still owns every non-trail seat.
+  let rehabSet = new Set();
+  try {
+    const ts = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', 'trail-strategies.json'), 'utf8'));
+    rehabSet = new Set(ts.strategies || []);
+  } catch {}
+  // ---- direction-aware cells (2026-11-04). A strategy's LONGs and SHORTs
+  // are different bets. Pooled by strategy, the losing longs condemned the
+  // winning shorts, while the rehab carve-out and the score>=75 override
+  // waved the losing longs through anyway (59% of signals clear 75).
+  // Walk-forward on the Oct-Nov journal (no lookahead, 0.17% cost, 24h
+  // hold): pooled admission -0.59%/trade n=614; per-cell +0.37%/trade
+  // n=519. A cell with its own record (strategy|direction n>=EVAL_MIN_N,
+  // in-regime strategy|direction|mktType n>=15) is judged on its own net
+  // P&L after cost, both ways: no carve-out and no score override. Thin
+  // cells inherit the pooled verdict exactly as before.
+  const CELL_COST = +(process.env.SENTINEL_CELL_COST_PCT || 0.17);
+  const evalByStratDir = evalStatsFull.byStrategyDir || {};
+  const evalByStratDirMkt = evalStatsFull.byStrategyDirMkt || {};
+  const cellNet = (v) => (v && Number.isFinite(v.avgFwd24h) ? (v.avgFwd24h - CELL_COST) * (v.n / (v.n + 10)) : null);
+  const cellOf = (s) => {
+    const v = evalByStratDir[`${s.strategy}|${s.direction}`];
+    return v && (v.n || 0) >= EVAL_MIN_N && cellNet(v) != null ? v : null;
+  };
+  const cellRegOf = (s) => {
+    const v = evalByStratDirMkt[`${s.strategy}|${s.direction}|${mktType}`];
+    return v && (v.n || 0) >= 15 && cellNet(v) != null ? v : null;
+  };
+  const cellHardBlocked = (s) => {
+    const c = cellOf(s);
+    if (!c) return false;
+    const r = cellRegOf(s);
+    return cellNet(c) < 0 || (r != null && cellNet(r) < 0);
+  };
+  const stratBlockedNow = (s) => cellOf(s)
+    ? cellHardBlocked(s)
+    : (stratBlock.has(s.strategy) || stratRegBlock.has(s.strategy)) && !(s.direction === 'LONG' && rehabSet.has(s.strategy));
+  const stratEff = (k, dir) => {
+    if (dir) {
+      const s = { strategy: k, direction: dir };
+      if (cellOf(s)) {
+        if (cellHardBlocked(s)) return 0;
+        return Math.min(6, Math.round(clamp(cellNet(cellRegOf(s) || cellOf(s)) * 3, -4, 6) * 10) / 10);
+      }
+    }
+    return stratRegBoost[k] ?? (stratBoost[k] || 0);
+  };
+
+  const strategyFor = (r, k) => {
+    if (r.changePct > 3 && r.rangePosition > 0.75) return 'Breakout Continuation';
+    if (k && k.volRatio > 1.8 && r.changePct > 0) return 'Volume Surge';
+    if (r.changePct < -3) return 'Momentum Breakdown';
+    if (k && k.rsi14 < 35) return 'Oversold Reversal';
+    return 'Momentum Confluence';
+  };
+  // doctrine-driven naming when the TA engine produced a bias signal
+  const stratName = (r, k) => {
+    const ta = k && k.ta;
+    if (ta && ta.bias) {
+      if (ta.reasons[0] === 'liq-sweep') return 'Liquidity Sweep';
+      if (ta.sfp) return 'Key Level SFP';
+      if (ta.reasons[0] === 'elliott-w5')
+        return ta.elliott.shortTop ? 'Elliott W5 Short' : 'Elliott W5 Bottom';
+      // Backtest evidence (api/full-backtest.json): the pooled Wyckoff event
+      // family LONG cell (spring/test/jtc/lps) is the strongest edge in the
+      // system — SQN +2.13, WR 48.3% at 2R payoff, n=145 over 90d/25 syms.
+      // Episode attribution pools into ONE name so the forward track judges
+      // the family the backtest proved, not slow fragments. The event tag
+      // stays in ta.reasons for per-event forensics.
+      if (ta.reasons[0]?.startsWith('wyckoff-')) return 'Wyckoff Event';
+      if (ta.reasons[0] === 'smc-choch') return 'SMC CHoCH';
+      if (ta.reasons[0] === 'smc-bos') return 'SMC BOS';
+      if (ta.reasons[0] === 'ignition') return 'Momentum Ignition';
+      if (ta.reasons[0] === 'vwap-reversion') return 'VWAP Reversion';
+      if (ta.reasons[0] === 'eq-edge') return 'PA Quartile';
+      if (ta.reasons[0] === 'tsmom') return 'TS Momentum';
+      if (ta.reasons[0] === 'capitulation') return 'Capitulation Reclaim';
+      if (ta.reasons[0] === 'exhaust-short') return 'Exhaustion Short';
+      if (ta.reasons[0] === 'breakout-cont') return 'Breakout Continuation';
+    }
+    return strategyFor(r, k);
+  };
+
+  // signals need momentum metrics; pairs whose kline fetch failed get a
+  // neutral profile instead of being dropped from the board entirely
+  const neutral = { rsi14: 50, volRatio: 1, closes: null };
+  // trader.dev library edge — public KPI mass per pair. Cached 12h; a
+  // failed refresh returns whatever the last good pull had (never blocks)
+  let libEdge = {};
+  try {
+    libEdge = (await getLibEdge(candidates.map((r) => r.asset), { log: (m) => console.log(m) })).map || {};
+  } catch (e) { console.warn('libedge refresh failed — scoring without it: ' + e.message); }
+  const ranked = candidates
+    .map((r) => {
+      const k = enriched.get(r.asset) ?? neutral;
+      const dir0 = dirOf(r, k);
+      // score the move in the direction we would trade it — the old rank
+      // paid upside momentum to every coin including the ones we shorted
+      const momentumRank = rank(dirMoves, dirMove(r, k));
+      // RSI tilt toward the traded side: for a LONG, hot RSI reads strength;
+      // for a SHORT, cold RSI reads weakness — both momentum, one axis
+      const rsiTilt =
+        dir0 === 'LONG'
+          ? clamp((k.rsi14 - 30) / 40, 0, 1)
+          : clamp((70 - k.rsi14) / 40, 0, 1);
+      const momentumScore = Math.round(momentumRank * 60 + rsiTilt * 40);
+      const volumeScore = Math.round(rank(vols, r.quoteVolume) * 100);
+      const liquidityScore = Math.round((1 - rank(spreads, r.spreadPct)) * 100);
+      const surgeScore = Math.round(rank(surges, k.volRatio) * 100);
+      const strategy = stratName(r, k);
+      // positioning pressure: crowded side is squeeze fuel — riding WITH
+      // the crowd's unwind direction boosts, joining the crowd costs
+      const dp = (globalThis.__deriv || {})[r.asset];
+      const derivBoost = dp && dp.dir
+        ? (dir0 === 'LONG' ? 'bull' : 'bear') === dp.dir ? 3 : -2
+        : 0;
+      // news context — hard-capped ±2; hype posts already zeroed upstream,
+      // a FUD cluster actively costs longs (avoidance, not trigger)
+      const nw = (globalThis.__news || {})[r.asset];
+      const newsBoost = nw
+        ? (nw.dir && ((dir0 === 'LONG' ? 'bull' : 'bear') === nw.dir ? 2 : -2))
+          + (nw.fud && dir0 === 'LONG' ? -2 : 0)
+        : 0;
+      // market-cap quality + event risk — low float into an unlock is the
+      // classic dump setup; catalysts are context, never a trigger
+      const mc = (globalThis.__mcaps || {})[r.asset];
+      const ev2 = (globalThis.__events || {})[r.asset];
+      const mcapBoost = (mc && mc.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === mc.dir ? 2 : -1) : 0)
+        + (ev2 && ev2.unlocks > 0 && dir0 === 'LONG' ? -3 : 0)
+        + (ev2 && ev2.dir ? ((dir0 === 'LONG' ? 'bull' : 'bear') === ev2.dir ? 1 : 0) : 0);
+      // VIP telegram confluence — fresh group call agreeing with our read
+      // earns +6, contradicting it costs −6; bounded, and tagged for audit
+      const vip = TG_VIP[r.asset];
+      const vipBoost = vip
+        ? (dir0 === 'LONG' ? 'long' : 'short') === vip.side ? 6 : -6
+        : 0;
+      // social sentiment — CONTRARIAN evidence (14k graded eval signals,
+      // Welch t=-7.8): signals where crowd direction agrees with ours mean
+      // -0.15% alpha4h vs +0.07% when it disagrees; CoinGecko-trending
+      // top5 names mean -0.32% vs +0.38%; attention heat>=50 means -1.01%
+      // vs +0.18%. The crowd is fade material, never a trigger — social
+      // dir is scored AGAINST agreement, and attention-rich names pay a
+      // hard penalty stacked like the climax rule.
+      const sc2 = (globalThis.__social || {})[r.asset];
+      const socialBoost = sc2 && sc2.dir
+        ? ((dir0 === 'LONG' ? 'bull' : 'bear') === sc2.dir ? -3 : 3)
+        : 0;
+      const socialPenalty = sc2
+        ? Math.max(-8,
+            (sc2.trending != null && sc2.trending <= 5 ? -4 : 0)
+            + (sc2.heat >= 50 ? -4 : 0))
+        : 0;
+      // climax-entry penalty: the ledger's forensic finding — the highest
+      // scores fired on overextended moves and entered late (85+ bucket
+      // avg +0.03% vs <75 bucket +0.72%). A LONG at RSI>75 or already +8%
+      // is buying the top; score pays for the entry, not the move.
+      const climax =
+        dir0 === 'LONG'
+          ? k.rsi14 > 75 || r.changePct > 8
+          : k.rsi14 < 25 || r.changePct < -8;
+      // factor IC: every confl row votes with its measured directional
+      // lift — predictors reward agreement, anti-predictors reward
+      // disagreement (fade). ±2.5 per factor, bounded ±8 total.
+      const wantDir = dir0 === 'LONG' ? 'bull' : 'bear';
+      let icAdj = 0, icSponsor = false;
+      for (const f of k?.ta?.factors || []) {
+        const ic = factorIC[f.k];
+        if (!ic || (f.dir !== 'bull' && f.dir !== 'bear')) continue;
+        icAdj += clamp(ic.lift * 2.5, -2.5, 2.5) * (f.dir === wantDir ? 1 : -1) * (icFresh ? 1 : (factorCaps[f.k] ?? 1));
+        // sponsor = a factor with a MEASURED positive lift voting with the
+        // signal — without one, the setup is built of noise + anti-predictors
+        if (f.dir === wantDir && ic.lift >= IC_SPONSOR_LIFT) icSponsor = true;
+      }
+      icAdj = clamp(icAdj, -8, 8);
+      // extreme funding — contrarian: the paying side is crowded. Lit:
+      // extreme-neg funding → +~0.5% next-24h (Binance intraday study);
+      // top-decile positive funding → −1.18% median 72h on BTC.
+      const fr = funding[r.asset]?.ratePct;
+      const fundBoost = fr != null && Math.abs(fr) >= 0.05
+        ? (dir0 === 'LONG' ? (fr < 0 ? 2 : -2) : (fr > 0 ? 2 : -2))
+        : 0;
+      // BTC-pair cross-read (operator rule): an asset up on USDT AND up on
+      // BTC is real strength; up on USDT but down on BTC is pure beta.
+      // Real XBTC candles where the pair exists, synthetic XUSDT/BTCUSDT
+      // ratio otherwise — pair-less assets still score on synth RS.
+      let btcPair = null;
+      {
+        let ratio = null, src = null;
+        if (btcPairKlines[r.asset]?.length) {
+          ratio = btcPairKlines[r.asset].map((c) => c.c); src = 'pair';
+        } else if (k.closes && btcCloses && k.closes.length >= 30 && btcCloses.length >= 30) {
+          const m = Math.min(k.closes.length, btcCloses.length);
+          ratio = k.closes.slice(-m).map((c, i) => c / btcCloses[btcCloses.length - m + i]);
+          src = 'synth';
+        }
+        if (ratio) {
+          const m = rsMetrics(ratio);
+          if (m) btcPair = { pair: src === 'pair' ? r.asset + 'BTC' : 'XUSDT/BTC', src, ...m };
+        }
+      }
+      const rsBoost = !btcPair ? 0 : (dir0 === 'LONG' ? 1 : -1) * clamp(
+        (btcPair.rs24 > 2 ? 2 : btcPair.rs24 > 0.5 ? 1 : btcPair.rs24 < -2 ? -2 : btcPair.rs24 < -0.5 ? -1 : 0) +
+        (btcPair.rsBreak === 'high' ? 1.5 : btcPair.rsBreak === 'low' ? -1.5 : 0) +
+        (btcPair.rsRsi > 60 ? 0.5 : btcPair.rsRsi < 40 ? -0.5 : 0),
+        -4, 4
+      );
+      // microprice + queue imbalance (MSE448 strat 1): microPos is the
+      // signed micro-vs-mid distance in half-spread units, imb the 5-level
+      // queue split — a LONG whose book is bid-heavy with micro above mid
+      // has flow confluence; sellers absorbing pays negative. Bounded
+      // ±3.5 — the paper graded it informative-but-weak alone.
+      const book = books[r.asset] || null;
+      const obiBoost = book
+        ? (dir0 === 'LONG' ? 1 : -1) * clamp(book.microPos * 3 + book.imb * 2, -3.5, 3.5)
+        : 0;
+      // library edge density (trader.dev public backtest mass): pairs with
+      // many independently-profitable strategies are empirically easier
+      // tape; pairs where the whole library failed pay a small tax.
+      // Archetype agreement (+1) when OUR strategy family matches the
+      // library's dominant archetype for this symbol — unsigned prior,
+      // tape quality isn't directional.
+      const le = libEdge[r.asset];
+      const famTilt = familyTilt(le, strategy);
+      const libBoost = !le || !le.n
+        ? 0
+        : clamp(le.edge + famTilt, -2, 3.5);
+      const score = Math.round(
+        clamp(
+          momentumScore * 0.4 + volumeScore * 0.25 + liquidityScore * 0.2 +
+            surgeScore * 0.15 +
+            Math.min((k.ta?.confluence || 0) * 3, 12) +
+            (stratAdj[strategy] || 0) +
+            stratEff(strategy, dir0) +
+            derivBoost +
+            newsBoost +
+            mcapBoost +
+            vipBoost +
+            socialBoost +
+            socialPenalty +
+            icAdj +
+            fundBoost +
+            rsBoost +
+            obiBoost +
+            libBoost +
+            (climax ? -10 : 0),
+          0,
+          100
+        )
+      );
+      // raw fusion components — the four-step combiner consumes these;
+      // the emitted z-map is journaled so the residual-weight learner can
+      // join it to realized alpha later
+      const fz = {
+        mom: momentumScore, vol: volumeScore, liq: liquidityScore, surg: surgeScore,
+        confl: Math.min((k.ta?.confluence || 0) * 3, 12),
+        ic: icAdj, strat: (stratAdj[strategy] || 0) + stratEff(strategy, dir0),
+        deriv: derivBoost, news: newsBoost, mc: mcapBoost, vip: vipBoost,
+        soc: socialBoost + socialPenalty, fund: fundBoost, rs: rsBoost, obi: obiBoost, lib: libBoost, clim: climax ? -10 : 0,
+      };
+      return { ...r, k, strategy, dir: dir0, momentumScore, volumeScore, liquidityScore, surgeScore, score, fz,
+        btcPair, rsBoost, book, obiBoost, libBoost,
+        libedge: le && le.n ? { density: le.density, topSharpe: le.topSharpe, domArch: le.domArch, domTf: le.domTf, famTilt, famEdge: OUR_FAMILY(strategy) ? le.archEdge?.[OUR_FAMILY(strategy)] ?? null : null } : null,
+        icAdj, icSponsor,
+        vip: vip ? { side: vip.side, ageMin: Math.round((Date.now() - vip.ts) / 60e3) } : null };
+    })
+    .sort((a, b) => b.score - a.score);
+  // ---- Stanford fusion pass: serial-demean each component vs its rolling
+  // EMA, z-score cross-sectionally across this board, combine by the
+  // ridge-learned residual weights (shrunk to priors until evidence is
+  // deep), blend into score by evidence weight, then re-rank.
+  try { sf.fuseBoard(ranked, path.join(API, '..', 'state')); } catch {}
+  ranked.sort((a, b) => b.score - a.score);
+  // fillable-first emission: the active environment's contract catalog
+  // (exec-catalog.json) is authoritative — a signal that can't route is
+  // board intel, not a candidate. Demo lists ~45 contracts vs the ~435
+  // scanned; letting phantoms occupy top-N slots starved the legal pool.
+  // Tradeable symbols take the slots first; phantoms pad any remainder so
+  // the eval engine still grades them and the veto stays falsifiable.
+  let legalSyms = null;
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live')
+      legalSyms = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+  } catch {}
+  const rankedEmit = legalSyms?.size
+    ? [...ranked.filter((r) => legalSyms.has(String(r.asset).toUpperCase())),
+       ...ranked.filter((r) => !legalSyms.has(String(r.asset).toUpperCase()))]
+    : ranked;
+  const signals = rankedEmit
+    .slice(0, MAX_SIGNALS)
+    .map((r, boardIdx) => {
+      const ta = r.k.ta ?? null;
+      const direction = r.dir;
+      const strategy = r.strategy;
+      // forensic finding: 15% targets almost never fill (won=9%) while the
+      // paired 7–9% stops fill constantly — asymmetric suicide. Targets cap
+      // at 8% (moves that actually complete in <24h) and stops at half that
+      // (≤4%) so a stop-out costs ~-2R not -9R.
+      let targetPct = pct(clamp(r.rangePct * 0.35, 3, 8));
+      let stopPct = null;
+      const liq = ta && ta.liquidity;
+      if (liq && liq.setup) {
+        // TTC liquidity doctrine: the draw is the OPPOSING pool, and the
+        // invalidation is the sweep wick itself — not a generic fraction of
+        // the daily range.
+        if (liq.targetDistPct) targetPct = pct(clamp(liq.targetDistPct, 2, 8));
+        if (liq.setup.wickPx)
+          stopPct = pct(
+            clamp((Math.abs(r.lastPrice - liq.setup.wickPx) / r.lastPrice) * 115, 1.5, 4)
+          );
+      }
+      // R-max pass: where the detector itself declares invalidation, the
+      // seat trades THAT stop — Wyckoff measured +3.91 SQN on the spring/
+      // UTAD extreme vs the flat grid (n=164, net +375%); exhaustion shorts
+      // sit above the climax high. Buffer 5% for wick room.
+      if (stopPct == null && /wyckoff/i.test(strategy)) {
+        const inv = ta?.wyckoff?.invalid;
+        if (inv && ((direction === 'LONG' && inv < r.lastPrice) || (direction === 'SHORT' && inv > r.lastPrice)))
+          stopPct = pct(clamp((Math.abs(r.lastPrice - inv) / r.lastPrice) * 105, 1.5, 8));
+      }
+      const exsStop = ta?.exhaustShort?.stop;
+      if (stopPct == null && exsStop && direction === 'SHORT' && exsStop > r.lastPrice)
+        stopPct = pct(clamp(((exsStop - r.lastPrice) / r.lastPrice) * 100, 1.5, 8));
+      const hasK = enriched.has(r.asset);
+      const drivers = [
+        liq && liq.setup
+          ? `${liq.setup.dir === 'SHORT' ? 'Buy' : 'Sell'}-side liquidity swept @ ${liq.setup.levelPx} (grade ${liq.setup.grade}) — draw is opposing pool${liq.targetPx ? ` @ ${liq.targetPx}` : ''}`
+          : null,
+        `24h momentum ${r.changePct >= 0 ? '+' : ''}${pct(r.changePct)}%`,
+        hasK
+          ? `RSI(1h) ${Math.round(r.k.rsi14)} · volume ${round(r.k.volRatio, 1)}× baseline`
+          : `Quote volume $${(r.quoteVolume / 1e6).toFixed(1)}M`,
+        `Range position ${Math.round(r.rangePosition * 100)}% · spread ${pct(r.spreadPct)}%`,
+      ].filter(Boolean);
+      if (r.vip) drivers.push(`VIP group ${r.vip.side.toUpperCase()} ${r.vip.ageMin}m ago — engine-evaluated`);
+      return {
+        asset: r.asset,
+        cls: r.cls,
+        maxLever: r.maxLever,
+        ver: ENGINE_VERSION,
+        boardRank: boardIdx + 1, // position on the emitted board this run
+        grade: r.score >= 85 ? 'A' : r.score >= 75 ? 'BBB' : r.score >= 65 ? 'BB' : 'B',
+        score: r.score,
+        fusedScore: r.fusedScore ?? null,
+        fusedZ: r.fusedZ ?? null,
+        fusion: r.fusion ?? null,
+        btcPair: r.btcPair ?? null,
+        book: r.book ?? null,
+        libedge: r.libedge ?? null,
+        vip: r.vip || undefined,
+        symbol: r.symbol,
+        thesis: `${strategy} on ${r.asset} | Confluence ${r.score}/100 | ${drivers[0]} | ${drivers[1]}`,
+        assetId: r.asset.toLowerCase(),
+        drivers,
+        riskPct: pct(clamp(r.spreadPct * 2 + Math.abs(r.changePct) * 0.08, 0.3, 8)),
+        summary: hasK
+          ? `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum, RSI(1h) ${Math.round(r.k.rsi14)}, volume ${round(r.k.volRatio, 1)}× baseline.`
+          : `${strategy}: ${direction === 'LONG' ? 'upside' : 'downside'} momentum on $${(r.quoteVolume / 1e6).toFixed(0)}M quote volume.`,
+        harmonic: r.k.harmonic
+          ? {
+              type: r.k.harmonic.type,
+              dir: r.k.harmonic.dir,
+              quality: r.k.harmonic.quality,
+              ratios: r.k.harmonic.ratios,
+              dPrice: r.k.harmonic.dPrice,
+              // the validated XABCD geometry itself — the journal chart draws
+              // this exact pattern rather than re-detecting a lookalike
+              pts: (r.k.harmonic.points || []).map((p) => ({
+                t: p.t,
+                p: p.p,
+                ty: p.type,
+              })),
+            }
+          : null,
+        lowPrice: r.lowPrice,
+        rangePct: pct(r.rangePct),
+        strategy,
+        changePct: pct(r.changePct),
+        // after-cost edge: gross target minus round-trip taker fees,
+        // half-spread and modeled exit slippage — the number that pays
+        netTargetPct: pct(targetPct - 0.12 - 0.08 - (r.spreadPct ?? 0.2) / 2),
+        // raw features for per-component IC evaluation
+        rsi: hasK ? round(r.k.rsi14, 1) : null,
+        volRatio: hasK ? round(r.k.volRatio, 2) : null,
+        momScore: r.momentumScore != null ? round(r.momentumScore, 1) : null,
+        // measured market structure — beta + realized correlation to BTC
+        // over the last 48h of 1h returns (null when klines are missing)
+        betaBtc: betaTo(r.asset, 'BTC'),
+        corrBtc: corrTo(r.asset, 'BTC') != null ? round(corrTo(r.asset, 'BTC'), 2) : null,
+        mktType,
+        // operator mandate context: 1H EMA50/EMA200 regime levels for the
+        // long gate (null when >200 closed bars can't be proven)
+        emaRegime: r.k?.regime ?? null,
+        direction,
+        // measured factor-evidence for the ic gates: net IC contribution +
+        // whether any proven-predictive factor sponsors this direction
+        icAdj: r.icAdj ?? null,
+        icSponsor: r.icSponsor === true,
+        highPrice: r.highPrice,
+        lastPrice: r.lastPrice,
+        spreadPct: pct(r.spreadPct),
+        targetPct,
+        updatedAt: new Date().toISOString(),
+        entryPrice: r.lastPrice,
+        quoteVolume: Math.round(r.quoteVolume),
+        socialScore: (globalThis.__social || {})[r.asset]?.score ?? 0,
+        targetPrice:
+          direction === 'LONG'
+            ? r.lastPrice * (1 + targetPct / 100)
+            : r.lastPrice * (1 - targetPct / 100),
+        signalFamily: 'momentum',
+        // carry: perp funding context — shorts collect when rate>0, longs pay
+        funding: funding[r.asset] ?? null,
+        carry:
+          funding[r.asset] == null
+            ? null
+            : funding[r.asset].ratePct === 0
+              ? 'flat'
+              : (direction === 'SHORT') === (funding[r.asset].ratePct > 0)
+                ? 'earn'
+                : 'pay',
+        deriv: (globalThis.__deriv || {})[r.asset] ?? null,
+        social: (globalThis.__social || {})[r.asset] ?? null,
+        news: (globalThis.__news || {})[r.asset] ?? null,
+        mcap: (globalThis.__mcaps || {})[r.asset] ?? null,
+        events: (globalThis.__events || {})[r.asset] ?? null,
+        stopPct: stopPct ?? pct(clamp(targetPct / 2, 1.5, 4)),
+        ta: ta
+          ? {
+              bias: ta.bias,
+              confluence: ta.confluence,
+              reasons: ta.reasons,
+              sfp: ta.sfp
+                ? { type: ta.sfp.type, level: ta.sfp.level, strength: ta.sfp.strength, age: ta.sfp.age }
+                : null,
+              elliott: ta.elliott
+                ? { dir: ta.elliott.dir, shortTop: ta.elliott.shortTop, longBottom: ta.elliott.longBottom, quality: ta.elliott.quality, ratios: ta.elliott.ratios }
+                : null,
+              wyckoff: ta.wyckoff
+                ? {
+                    type: ta.wyckoff.type,
+                    phase: ta.wyckoff.phase,
+                    event: ta.wyckoff.event ?? null,
+                    quality: ta.wyckoff.quality,
+                    volX: ta.wyckoff.eventDetail?.volX ?? null,
+                    tr: ta.wyckoff.tr ?? null,
+                    events: ta.wyckoff.events ?? [],
+                    springHold: ta.wyckoff.springHold ?? null,
+                    uthrHold: ta.wyckoff.uthrHold ?? null,
+                    target: ta.wyckoff.target ?? null,
+                    invalid: ta.wyckoff.invalid ?? null,
+                    phaseConf: ta.wyckoff.phaseConf ?? null,
+                  }
+                : null,
+              ewProj: ta.ewProj
+                ? {
+                    dir: ta.ewProj.dir, live: ta.ewProj.live,
+                    targetLo: ta.ewProj.targetLo, targetHi: ta.ewProj.targetHi,
+                    invalid: ta.ewProj.invalid, age: ta.ewProj.age,
+                  }
+                : null,
+              effort: ta.effort
+                ? { dir: ta.effort.dir, absorb: ta.effort.absorb, supply: ta.effort.supply,
+                    drive: ta.effort.drive, strength: ta.effort.strength, label: ta.effort.label }
+                : null,
+              smc: ta.smc
+                ? {
+                    bos: ta.smc.bos, choch: ta.smc.choch, trend: ta.smc.trend,
+                    zone: ta.smc.zone, inOB: ta.smc.inOB
+                      ? { dir: ta.smc.inOB.dir, top: ta.smc.inOB.top, bot: ta.smc.inOB.bot }
+                      : null,
+                    eqh: ta.smc.eqh, eql: ta.smc.eql,
+                  }
+                : null,
+              eq: ta.eq
+                ? {
+                    lastQ: ta.eq.lastQ, respect: ta.eq.respect, swept: ta.eq.swept,
+                    wick: ta.eq.wick, rangeQ: ta.eq.rangeQ, rangePos: ta.eq.rangePos,
+                  }
+                : null,
+              liquidity: ta.liquidity
+                ? {
+                    setup: ta.liquidity.setup,
+                    sweep: ta.liquidity.sweep,
+                    zone: ta.liquidity.zone,
+                    bsl: ta.liquidity.bsl,
+                    ssl: ta.liquidity.ssl,
+                    inducement: ta.liquidity.inducement,
+                    targetPx: ta.liquidity.targetPx,
+                    targetDistPct: ta.liquidity.targetDistPct,
+                  }
+                : null,
+              candles: ta.candles,
+              candleDir: ta.candles?.dir ?? null,
+              candleClv: ta.candles?.clv ?? null,
+              candleClv3: ta.candles?.clv3 ?? null,
+              candleEdge: ta.candles?.atEdge ?? null,
+              sakata: ta.sakata
+                ? { dir: ta.sakata.dir, sanpo: ta.sakata.sanpo, sansen: ta.sakata.sansen,
+                    sanku: ta.sakata.sanku, sanzan: ta.sakata.sanzan, pause: ta.sakata.pause,
+                    dstreak: ta.sakata.dstreak, label: ta.sakata.label }
+                : null,
+              harmPrz: ta.harmPrz
+                ? { dir: ta.harmPrz.dir, inZone: ta.harmPrz.inZone,
+                    consensus: ta.harmPrz.consensus, zones: ta.harmPrz.zones?.length ?? 0,
+                    label: ta.harmPrz.label }
+                : null,
+              fvgOpen: ta.fvgs.length,
+              fvgNearest: ta.fvgs[0] ?? null,
+              goldenPocket: ta.fib?.goldenPocket ?? false,
+              fibClusters: ta.fib?.clusters ?? 0,
+              trend: ta.structure?.trend ?? null,
+              vwap: ta.vwap ? { z: ta.vwap.z, devPct: ta.vwap.devPct, fade: ta.vwap.fade } : null,
+              atrPct: ta.atrPct ?? null,
+              ignition: ta.ignition ?? null,
+              cps: ta.cps ?? null,
+              mtf: ta.mtf
+                ? {
+                    stack: ta.mtf.stack, dir: ta.mtf.dir, kind: ta.mtf.kind,
+                    agree: ta.mtf.agree, n: ta.mtf.n,
+                    cells: ta.mtf.cells,
+                  }
+                : null,
+              brk: ta.brk
+                ? { state: ta.brk.state, dir: ta.brk.dir, level: ta.brk.level, age: ta.brk.age, volX: ta.brk.volX, coil: ta.brk.coil, target: ta.brk.target }
+                : null,
+              factors: ta.factors ?? null,
+              eng: ta.eng
+                ? Object.fromEntries(
+                    Object.entries(ta.eng).map(([k, x]) => [k, x ? {
+                      dir: x.dir, label: x.label, confirmed: x.confirmed,
+                      leadBull: x.leadBull, leadBear: x.leadBear,
+                      unconfirmedBreak: x.unconfirmedBreak,
+                      failSwing: x.failSwing, histDiv: x.histDiv, fanning: x.fanning,
+                    } : null])
+                  )
+                : null,
+            }
+          : null,
+        momentumScore: r.momentumScore,
+        rangePosition: round(r.rangePosition),
+        reversalScore: r.surgeScore,
+        liquidityScore: r.liquidityScore,
+        // speed-to-TP1 estimate (hours) — computed at build time so it
+        // serializes into the artifact AND drives entry ordering later:
+        // TP1 distance (0.55x target) / per-bar ATR velocity, discounted
+        // when a breakout is already running in the trade direction.
+        etaH: (() => {
+          const vel = Math.max(0.05, ta?.atrPct ?? 0.5);
+          const runMul =
+            ta?.ignition?.dir === direction ? 0.5 :
+            (r.momentumScore ?? 0) >= 70 ? 0.75 : 1;
+          return +(((targetPct ?? 2) * 0.55) / vel * runMul).toFixed(2);
+        })(),
+      };
+    });
+
+  const movers = rows
+    .slice()
+    .sort((a, b) => b.changePct - a.changePct)
+    .slice(0, 6)
+    .map((r) => ({ price: r.lastPrice, symbol: r.asset, changePct: pct(r.changePct) }));
+  const laggards = rows
+    .slice()
+    .sort((a, b) => a.changePct - b.changePct)
+    .slice(0, 6)
+    .map((r) => ({ price: r.lastPrice, symbol: r.asset, changePct: pct(r.changePct) }));
+
+  const advancing = rows.filter((r) => r.changePct > 0).length;
+  const declining = rows.filter((r) => r.changePct < 0).length;
+  const sorted = rows.map((r) => r.changePct).sort((a, b) => a - b);
+  const medianChangePct = sorted.length ? pct(sorted[Math.floor(sorted.length / 2)]) : 0;
+  const breadthPct = rows.length ? pct((advancing / rows.length) * 100) : 0;
+  // measured tape regime — drives dynamic leverage + heat budget AND is
+  // archived per run so eval can grade signals by the tape they called in
+  const regime =
+    medianChangePct > 0.5 && breadthPct > 55
+      ? 'risk-on'
+      : medianChangePct < -0.5 && breadthPct < 45
+        ? 'risk-off'
+        : 'mixed';
+
+  let history = [];
+  try {
+    history = JSON.parse(fs.readFileSync(PULSE_FILE, 'utf8'));
+  } catch {}
+  if (!RAPID) {
+    history.push({ ts: Date.now(), value: pct(100 + medianChangePct) });
+    history = history.slice(-PULSE_MAX_POINTS);
+    writeJson(PULSE_FILE, history);
+  }
+  const values = history.map((p) => p.value);
+
+  let fx = { audPerUsd: 1.5, usdPerAud: 0.667 };
+  try {
+    const fxJson = await (await fetch(FX_URL, { signal: TF() })).json();
+    const aud = fxJson?.rates?.AUD;
+    if (aud) fx = { audPerUsd: aud, usdPerAud: round(1 / aud, 4) };
+  } catch {}
+
+  // ---- signal pressure: near-miss candidates + what's blocking them ----
+  const FACTORS = [
+    ['momentumScore', 'momentum'],
+    ['volumeScore', 'quote volume'],
+    ['liquidityScore', 'liquidity'],
+    ['surgeScore', 'vol surge'],
+  ];
+  const cutoff = ranked[MAX_SIGNALS - 1]?.score ?? 0;
+  const pressureList = rankedEmit
+    .slice(MAX_SIGNALS, MAX_SIGNALS + 10)
+    .map((r) => ({
+      asset: r.asset,
+      score: r.score,
+      gap: Math.max(0, cutoff - r.score),
+      lean: r.changePct >= 0 ? 'LONG' : 'SHORT',
+      blocker: FACTORS.reduce((a, b) => (r[b[0]] < r[a[0]] ? b : a))[1],
+    }));
+  const pressurePct = cutoff
+    ? Math.round(
+        (pressureList.reduce((a, c) => a + c.score, 0) /
+          (pressureList.length || 1) /
+          cutoff) *
+          100
+      )
+    : 0;
+
+  const snap = {
+    fx,
+    pressure: {
+      pct: Math.min(pressurePct, 99),
+      cutoff,
+      candidates: pressureList,
+      scanning: ranked.length,
+    },
+    pulse: {
+      low: Math.min(...values),
+      high: Math.max(...values),
+      delta: pct((values.at(-1) ?? 100) - (values[0] ?? 100)),
+      series: history,
+      baseline: 100,
+    },
+    movers,
+    status: 'live',
+    signals,
+    laggards,
+    overview: {
+      advancing,
+      declining,
+      breadthPct,
+      longSignals: signals.filter((s) => s.direction === 'LONG').length,
+      totalVolume: Math.round(rows.reduce((a, r) => a + r.quoteVolume, 0)),
+      harmonicHits: 0,
+      scannedPairs: rows.length,
+      shortSignals: signals.filter((s) => s.direction === 'SHORT').length,
+      socialCoverage: 0,
+      medianChangePct,
+      regime,
+      mktType,
+      marketSQN,
+      atrPct,
+      averageSpreadPct: pct(rows.reduce((a, r) => a + r.spreadPct, 0) / (rows.length || 1)),
+    },
+    refreshedAt: new Date().toISOString(),
+    scanWindowSeconds: 600,
+    error: null,
+    source: `${XCHG}-direct`,
+    universeFilter: `${XCHG}-usdt-m-futures`,
+  };
+
+  // ---- board enrichment: every ranked signal gets klines too — the board
+  // ranks by score, not volume, so top-N volume coverage alone leaves most
+  // rows with no sparkline and no RSI. Same pattern as the TG_VIP pass.
+  const pairByAsset = new Map(rows.map((r) => [r.asset, r.pair]));
+  const boardMissing = signals.filter((s) => !enriched.has(s.asset));
+  if (boardMissing.length) {
+    // same 6-wide batched retry as the candidates pass — a bare Promise.all
+    // burst on a rate-limited cycle blanks the whole board's 48h cells at once
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const missing = boardMissing.filter((s) => !enriched.has(s.asset));
+      if (!missing.length) break;
+      if (attempt) await new Promise((r) => setTimeout(r, 900 * attempt));
+      for (let i = 0; i < missing.length; i += 6) {
+        await Promise.all(
+          missing.slice(i, i + 6).map(async (s) => {
+            const pair = pairByAsset.get(s.asset);
+            if (!pair) return;
+            const k = await fetchKlines(pair, true).catch(() => null);
+            if (k) enriched.set(s.asset, k);
+          })
+        );
+        if (i + 6 < missing.length) await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    for (const s of boardMissing) if (!enriched.has(s.asset)) klineMiss.push(s.asset);
+  }
+  // embed each signal's 48h spark INSIDE the signal row — the scanner file is
+  // authored by two producers (VPS rapid + GH shadow) whose coin-detail files
+  // disagree; a spark living on the signal row renders correctly no matter
+  // which producer's coin-detail the browser pairs it with
+  // prev detail loads BEFORE the signal embed — a signal that missed this
+  // cycle's klines still carries its persisted spark rather than going blank
+  let prevDetail = { refreshedAt: null, coins: {} };
+  try {
+    prevDetail = JSON.parse(
+      fs.readFileSync(path.join(API, 'coin-detail.json'), 'utf8')
+    );
+  } catch {}
+  const prevFresh =
+    prevDetail.refreshedAt && Date.now() - Date.parse(prevDetail.refreshedAt) < 6 * 3600e3;
+  for (const s of signals) {
+    const k = enriched.get(s.asset);
+    if (k && k.closes && k.closes.length > 1) {
+      s.spark = k.closes;
+      if (k.sparkTf) s.sparkTf = k.sparkTf;
+      else delete s.sparkTf;
+    }
+    if (!s.spark || s.spark.length < 2) {
+      const prev = prevFresh && prevDetail.coins && prevDetail.coins[s.asset];
+      if (prev && prev.spark && prev.spark.length > 1) {
+        s.spark = prev.spark;
+        if (prev.sparkTf) s.sparkTf = prev.sparkTf;
+      }
+    }
+  }
+  writeJson(path.join(API, 'market-scanner.json'), snap);
+  writeJson(path.join(API, 'volcore.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    counts: {
+      ignition: volEvents.filter((e) => e.kind === 'IGNITION').length,
+      absorption: volEvents.filter((e) => e.kind === 'ABSORPTION').length,
+      climax: volEvents.filter((e) => e.kind === 'CLIMAX').length,
+      print: volEvents.filter((e) => e.kind === 'PRINT').length,
+    },
+    events: volEvents.slice(0, 24),
+  });
+
+  // ---- confluence core: full factor ledger per enriched asset — the
+  // "what led to the read" evidence trail (ichimoku, MAs+crosses, RSI+divs,
+  // MACD, fibs, chart patterns, harmonics, SMC/wyckoff, liquidity) ----
+  const confl = {};
+  for (const [asset, k] of enriched) {
+    const t = k.ta;
+    if (!t) continue;
+    confl[asset] = {
+      bias: t.bias ?? null,
+      confluence: t.confluence ?? 0,
+      reasons: t.reasons ?? [],
+      harmonic: k.harmonic ?? null,
+      factors: (t.factors ?? []).slice(0, 40),
+    };
+  }
+  writeJson(path.join(API, 'confluence.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    coins: confl,
+  });
+
+  // ---- breakout radar: every enriched asset's lifecycle state — coils are
+  // the watchlist (pre-break ammo), breaks/retests the live events, fails
+  // the trap ledger ----
+  const brkEvents = [];
+  for (const [asset, k] of enriched) {
+    const b = k.ta && k.ta.brk;
+    if (!b || !b.state) continue;
+    brkEvents.push({
+      asset,
+      sym: asset + 'USDT',
+      state: b.state,
+      dir: b.dir ?? null,
+      level: b.level ?? null,
+      age: b.age ?? null,
+      volX: b.volX ?? null,
+      coil: b.coil ?? null,
+      dcH: b.dcH ?? null,
+      dcL: b.dcL ?? null,
+      target: b.target ?? null,
+      px: k.candles?.at(-1)?.c ?? null,
+    });
+  }
+  const brkRank = { RETEST: 0, BREAKOUT: 1, FAILED: 2, COMPRESSION: 3 };
+  brkEvents.sort(
+    (a, b) => (brkRank[a.state] ?? 9) - (brkRank[b.state] ?? 9) || (b.volX ?? 0) - (a.volX ?? 0)
+  );
+  writeJson(path.join(API, 'breakouts.json'), {
+    refreshedAt: snap.refreshedAt,
+    scanned: enriched.size,
+    counts: {
+      compression: brkEvents.filter((e) => e.state === 'COMPRESSION').length,
+      breakout: brkEvents.filter((e) => e.state === 'BREAKOUT').length,
+      retest: brkEvents.filter((e) => e.state === 'RETEST').length,
+      failed: brkEvents.filter((e) => e.state === 'FAILED').length,
+    },
+    events: brkEvents.slice(0, 30),
+  });
+
+  // ---- coin detail: sparklines + metrics for every kline-enriched pair ----
+  const priceByAsset = new Map(rows.map((r) => [r.asset, r.lastPrice]));
+  const coinDetail = {};
+  const detailAssets = new Set([
+    ...candidates.map((r) => r.asset),
+    ...signals.map((s) => s.asset),
+  ]);
+  for (const asset of detailAssets) {
+    const r = rows.find((x) => x.asset === asset);
+    const k = enriched.get(asset);
+    if (!r) continue;
+    if (!k) {
+      const prev = prevFresh && prevDetail.coins && prevDetail.coins[asset];
+      if (prev && prev.spark && prev.spark.length) {
+        coinDetail[asset] = {
+          ...prev,
+          price: r.lastPrice,
+          changePct: pct(r.changePct),
+          stale: true,
+        };
+      }
+      continue;
+    }
+    coinDetail[asset] = {
+      price: r.lastPrice,
+      changePct: pct(r.changePct),
+      quoteVolume: Math.round(r.quoteVolume),
+      rsi14: Math.round(k.rsi14),
+      volRatio: round(k.volRatio, 2),
+      spark: k.closes,
+      ...(k.sparkTf ? { sparkTf: k.sparkTf } : {}),
+      sparkAt: Date.now(), // fresh-enrich stamp — carries age carried coins
+    };
+  }
+  // carry-forward: any coin enriched inside its own 6h window stays
+  // renderable even after rotating off the board — the old from-scratch
+  // rebuild deleted exotic-board sparks whenever the board flipped back
+  // to watchlist, and blanks reappeared on every rate-limited re-entry
+  for (const [asset, prev] of Object.entries(prevDetail.coins || {}))
+    if (
+      !coinDetail[asset] && prev && prev.spark && prev.spark.length &&
+      Date.now() - (prev.sparkAt || Date.parse(prevDetail.refreshedAt) || 0) < 6 * 3600e3
+    )
+      coinDetail[asset] = { ...prev, stale: true };
+  writeJson(path.join(API, 'coin-detail.json'), { refreshedAt: snap.refreshedAt, coins: coinDetail });
+
+  // ---- measured correlation structure → api/correlation.json ----
+  try {
+    const board = signals.map((s) => s.asset);
+    const matrix = board.map((a) =>
+      board.map((b) => (corrTo(a, b) != null ? round(corrTo(a, b), 2) : null))
+    );
+    const corrList = [...rets.keys()].map((a) => ({
+      asset: a,
+      corrBtc: corrTo(a, 'BTC') != null ? round(corrTo(a, 'BTC'), 2) : null,
+      corrEth: corrTo(a, 'ETH') != null ? round(corrTo(a, 'ETH'), 2) : null,
+      betaBtc: betaTo(a, 'BTC'),
+      cluster: clusterOf({ asset: a, cls: (rows.find((r) => r.asset === a) || {}).cls }),
+    }));
+    // universe coupling: mean pairwise corr across the board — high coupling
+    // means diversification is an illusion right now
+    const pairs = [];
+    for (let i = 0; i < board.length; i++)
+      for (let j = i + 1; j < board.length; j++)
+        if (matrix[i][j] != null) pairs.push(matrix[i][j]);
+    writeJson(path.join(API, 'correlation.json'), {
+        refreshedAt: snap.refreshedAt,
+        note: `realized 48h pairwise correlation of 1h returns, ${XCHG} USDT-M candidates. The risk governor treats corr>=0.6 as the same bet.`,
+        windowHours: 48,
+        boardAssets: board,
+        boardMatrix: matrix,
+        meanBoardCorr: pairs.length ? round(pairs.reduce((a, b) => a + b, 0) / pairs.length, 2) : null,
+        assets: corrList,
+      });
+  } catch {}
+
+  // ---- funding intelligence: write api/funding.json ----
+  try {
+    const rows2 = Object.entries(funding)
+      .map(([asset, f]) => ({ asset, ...f }))
+      .sort((a, b) => Math.abs(b.annualPct) - Math.abs(a.annualPct));
+    writeJson(path.join(API, 'funding.json'), {
+        refreshedAt: snap.refreshedAt,
+        note: `delta-neutral funding harvest: long spot + short perp collects positive 8h funding. indicative estimates, ${XCHG} USDT-FUTURES.`,
+        best: rows2.slice(0, 10),
+        rows: rows2,
+      });
+  } catch {}
+
+  // ---- derivatives + social intelligence: write api/sentiment.json ----
+  try {
+    const dv = globalThis.__deriv || {}, so = globalThis.__social || {}, nw2 = globalThis.__news || {},
+          mcap = globalThis.__mcaps || {}, evs = globalThis.__events || {};
+    const assets = {};
+    for (const a of new Set([...Object.keys(dv), ...Object.keys(so), ...Object.keys(nw2), ...Object.keys(mcap), ...Object.keys(evs)])) {
+      if (a === '_feeds') continue;
+      assets[a] = { ...(dv[a] || {}), ...(so[a] || {}), ...(mcap[a] || {}), news: nw2[a] ?? null, events: evs[a] ?? null, dir: (dv[a] || {}).dir ?? (so[a] || {}).dir ?? (mcap[a] || {}).dir ?? null };
+    }
+    writeJson(path.join(API, 'sentiment.json'), {
+        refreshedAt: snap.refreshedAt,
+        feeds: dv._feeds || {},
+        note: `positioning pressure: open interest + funding trend (${XCHG} public futures). CoinGlass liquidations/long-short and LunarCrush galaxy/sentiment activate when API keys are configured (scripts/api-keys.json or env). Crowded positioning is treated as squeeze fuel against the crowd.`,
+        assets,
+      });
+  } catch {}
+
+  // ---- intelligence wire: RSS headlines, asset-tagged → api/news.json ----
+  // Key-free public feeds. Headlines are tagged to universe assets and a
+  // keyword tone estimate — display context, deliberately NOT a score input
+  // (headline sentiment is noise until the eval engine proves otherwise).
+  // rapid mode skips RSS per-cycle but must still refresh on a slow cadence —
+  // the VPS daemon runs EVERY cycle rapid, so !RAPID meant the wire froze
+  // permanently (god warned 'items older than 24h' forever). Refresh when the
+  // existing wire is >15min old: ~4 RSS fetches/hour, not per-cycle spam.
+  const newsDue = (() => {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(API, 'news.json'), 'utf8'));
+      return Date.now() - Date.parse(j.refreshedAt || 0) > 15 * 60e3;
+    } catch { return true; }
+  })();
+  if (!RAPID || newsDue)
+  try {
+    const FEEDS = [
+      { src: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
+      { src: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
+    ];
+    const NAME_MAP = {
+      BTC: /\bbitcoin\b|\bbtc\b/i, ETH: /\bethereum\b|\bether\b|\beth\b/i,
+      SOL: /\bsolana\b|\bsol\b/i, XRP: /\bxrp\b|\bripple\b/i,
+      DOGE: /\bdoge\b|\bdogecoin\b/i, BNB: /\bbnb\b|\bbinance\b/i,
+      ADA: /\bcardano\b|\bada\b/i, LINK: /\bchainlink\b/i,
+      XAU: /\bgold\b|\bbullion\b/i, XAG: /\bsilver\b/i,
+      CL: /\boil\b|\bcrude\b|\bwti\b/i, SPX: /\bs&p\b|\bspx\b/i,
+      NDX100: /\bnasdaq\b/i, DXY: /\bdollar index\b|\bdxy\b/i,
+    };
+    const BULL = /surge|soar|rally|record|all-time high|\bath\b|etf inflow|adoption|approve|breakout|rebound|accumulat|bullish|pump/i;
+    const BEAR = /crash|plunge|hack|exploit|ban|lawsuit|selloff|sell-off|dump|bearish|liquidat|fraud|collapse|outflow|fear|recession|tariff/i;
+    const items = [];
+    for (const f of FEEDS) {
+      try {
+        // strip RSS tracking junk (utm_*, fbclid, gclid, mc_*, ref...) —
+        // wire links should land on the article, not feed analytics
+        const cleanUrl = (u) => {
+          try {
+            const x = new URL((u || '').trim());
+            for (const k of [...x.searchParams.keys()])
+              if (/^(utm_|fbclid|gclid|mc_|_ga|ref_|ref$|spm|igshid)/i.test(k)) x.searchParams.delete(k);
+            return x.toString();
+          } catch { return (u || '').trim(); }
+        };
+        const res = await fetch(f.url, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) continue;
+        const xml = await res.text();
+        for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+          const b = m[1];
+          const title = (b.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || b.match(/<title>(.*?)<\/title>/) || [])[1];
+          const link = (b.match(/<link><!\[CDATA\[(.*?)\]\]><\/link>/) || b.match(/<link>(.*?)<\/link>/) || [])[1];
+          const pub = (b.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1];
+          if (!title) continue;
+          const t = title.trim();
+          const ts = Date.parse(pub || 0) || now;
+          const tags = [];
+          for (const [a, re] of Object.entries(NAME_MAP)) if (re.test(t)) tags.push(a);
+          // also tag any universe symbol explicitly named in the headline
+          for (const r of candidates)
+            if (new RegExp(`\\b${r.asset}\\b`, 'i').test(t) && !tags.includes(r.asset)) tags.push(r.asset);
+          const tone = BULL.test(t) ? 'bull' : BEAR.test(t) ? 'bear' : 'neutral';
+          items.push({ ts, src: f.src, title: t.slice(0, 140), link: cleanUrl(link), tags: tags.slice(0, 6), tone });
+        }
+      } catch {}
+    }
+    items.sort((a, b) => b.ts - a.ts);
+    const fresh = items.filter((i) => now - i.ts < 24 * 3600e3);
+    writeJson(path.join(API, 'news.json'), {
+        refreshedAt: snap.refreshedAt,
+        note: 'public RSS wire — headlines tagged to universe assets; tone is a keyword estimate, context only, never a score input',
+        items: fresh.slice(0, 40),
+      });
+  } catch {}
+
+  // headline prices for the landing header chips
+  const majors = {};
+  for (const sym of ['BTC', 'ETH', 'SOL']) {
+    const r = rows.find((x) => x.asset === sym);
+    if (r) majors[sym] = { price: r.lastPrice, changePct: pct(r.changePct) };
+  }
+  writeJson(path.join(API, 'prices.json'), { refreshedAt: snap.refreshedAt, majors });
+
+  // ---- signal ledger: open entries + settled outcomes ----
+  const EQUITY = 10000; // paper account, USD model
+  const NOTIONAL = 1000; // legacy fallback notional (pre-leverage entries)
+  const MAX_DEPLOYED = EQUITY * (RISK_MAX ? 40 : 4); // notional exposure cap
+  // portfolio heat cap — regime-scaled: the book is allowed to carry more
+  // total risk when the measured tape supports the traded direction, less
+  // for counter-trend trades in a hostile regime
+  // SENTINEL_HEAT_CAP / SENTINEL_CLUSTER_HEAT: absolute %-of-equity ceilings.
+  // Needed on dust accounts — one 85%-margin position at breakout leverage
+  // carries ~40% stop-risk, so the conservative 4-6% defaults can never
+  // pass a mandated deployment. Unset = regime defaults below.
+  const HEAT_OVR = +(process.env.SENTINEL_HEAT_CAP || 0);
+  const heatCapFor = (dir) => {
+    if (HEAT_OVR > 0) return HEAT_OVR;
+    const aligned =
+      (dir === 'LONG' && regime === 'risk-on') ||
+      (dir === 'SHORT' && regime === 'risk-off');
+    const counter =
+      (dir === 'LONG' && regime === 'risk-off') ||
+      (dir === 'SHORT' && regime === 'risk-on');
+    return aligned ? (RISK_MAX ? 12 : 6) : counter ? (RISK_MAX ? 8 : 2.5) : (RISK_MAX ? 10 : 4);
+  };
+  // correlation governor: BTC+ETH+SOL+alts aren't independent bets — during
+  // a shock they're the same crypto risk. Cap heat per correlated cluster
+  // so the book can't stack 15 disguised copies of one bet.
+  const CLUSTER_HEAT_CAP = +(process.env.SENTINEL_CLUSTER_HEAT || 0) || (RISK_MAX ? 8 : 2.5); // % of equity at risk per correlated cluster
+  // measured-corr heat: an open position counts against the candidate's
+  // cluster when their realized 48h correlation is ≥0.6 — the "same bet"
+  // test. Falls back to the static asset-class cluster when either side
+  // lacks kline data. This is the governor Will described: fifteen crypto
+  // longs stop being fifteen risks the moment the tape says they're one.
+  const SAME_BET_CORR = 0.6;
+  // REAL-book heat — the paper ledger retired; heat now measures the live
+  // exchange positions: stop distance comes from the executor's own plan
+  // dump (live-ledger.plans), sized against real equity. A ratcheted stop
+  // above entry = locked profit = zero heat. A position whose stop can't
+  // be read prices a conservative 1.2% tail so it still counts.
+  const livePlans = (() => {
+    try {
+      return (
+        JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).plans || {}
+      );
+    } catch { return {}; }
+  })();
+  const liveEquityUsd = (() => {
+    try {
+      const q = +JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).equityUsd;
+      return q > 0 ? q : EQUITY;
+    } catch { return EQUITY; }
+  })();
+  const liveStopRiskUsd = (p) => {
+    const notional = Math.abs(+p.size || 0) * (+p.entry || 0);
+    if (!(notional > 0) || !(p.entry > 0)) return 0;
+    const sgn = p.side === 'long' ? 1 : -1;
+    const stop = (livePlans[p.symbol] || []).find(
+      (x) => /loss|stop|moving/i.test(x.planType || '') && +x.triggerPrice > 0
+    );
+    const riskPct = stop
+      ? Math.max(0, (sgn * (p.entry - +stop.triggerPrice)) / p.entry)
+      : 0.012;
+    const stopUsd = notional * riskPct;
+    // liq-guard LOSS-CAP: upl <= -(MAXLOSS_PCT x posted margin) force-closes
+    // the position BEFORE the band fires. True tail risk is the smaller of
+    // stop-distance and the margin cap — the raw stop distance overstates
+    // heat on every book the floor protects.
+    const capPct = +(process.env.LIQ_GUARD_MAXLOSS_PCT || 0.55);
+    const capUsd = (+p.margin || +p.marginSize || 0) * capPct;
+    return capUsd > 0 ? Math.min(stopUsd, capUsd) : stopUsd;
+  };
+  const clusterOfSym = (a) =>
+    clusterOf({
+      asset: a,
+      cls:
+        assetClass(
+          a.toUpperCase(),
+          contractBySymbol.get(`${a}USDT`.toUpperCase())?.isRwa === 'YES'
+        ),
+    });
+  const openRiskByCluster = (candidate) =>
+    (livePosNow
+      .filter((p) => {
+        // same-direction only: a +0.9-correlated SHORT against an open LONG
+        // is a hedge, not a stacked bet — counting it as heat double-charges
+        // the cluster for risk that nets out
+        const pDir = p.side === 'long' ? 'LONG' : 'SHORT';
+        if (pDir !== candidate.direction) return false;
+        const c = corrTo(candidate.asset, liveSymOf(p));
+        return c != null ? c >= SAME_BET_CORR : clusterOfSym(liveSymOf(p)) === clusterOfSym(candidate.asset);
+      })
+      .reduce((a, p) => a + liveStopRiskUsd(p), 0) / liveEquityUsd) * 100;
+  // no-trade floor: below BBB the board is noise — signals still emit and
+  // archive (the eval engine grades them) but no position opens. Standing
+  // down is a legitimate output.
+  const MIN_ENTRY_SCORE = +(process.env.SENTINEL_MIN_SCORE || (RISK_MAX ? 55 : 70));
+  const STRAT_OVERRIDE = +(process.env.SENTINEL_STRAT_OVERRIDE || 75);
+  // the score override reaches pooled (thin-cell) blocks only: the composite
+  // score measures non-predictive (score IC24h 0.006 on sign-correct
+  // independent episodes); a cell's own forward record is evidence
+  const stratAdmits = (s, score) => !stratBlockedNow(s) || (score >= STRAT_OVERRIDE && !cellHardBlocked(s));
+  // ---- Tharp's core law enforced: no system works in every market type.
+  // bear tape → only reversal-family LONGs trade; bull tape → only
+  // exhaustion-family SHORTs; sideways chop → momentum needs a higher bar
+  // (the forensic bleeders were exactly momentum-in-chop). Volatile tapes
+  // get a 0.75× heat haircut — chop is where books die.
+  const REV_LONG = new Set(['Wyckoff Spring', 'Oversold Reversal', 'Elliott W5 Bottom', 'SMC CHoCH', 'VWAP Reversion', 'PA Quartile', 'Key Level SFP', 'Liquidity Sweep']);
+  const EXH_SHORT = new Set(['Elliott W5 Short', 'Wyckoff Upthrust', 'Wyckoff Ice Break', 'Key Level SFP', 'Momentum Breakdown', 'Liquidity Sweep']);
+  const MEANREV = new Set([...REV_LONG, ...EXH_SHORT]);
+  // SENTINEL_MKT_ALLOW_BOTH=1 — operator override: trade BOTH directions in
+  // any regime. Default (unset) keeps the measured regime doctrine below
+  // (side tape = shorts only — longs of both families bleed sideways).
+  const MKT_BOTH = process.env.SENTINEL_MKT_ALLOW_BOTH === '1';
+  const mktAllows = (s) => {
+    if (MKT_BOTH) return true; // operator mandate: direction gates off
+    if (mktType.startsWith('bear')) return s.direction === 'SHORT' || REV_LONG.has(s.strategy);
+    if (mktType.startsWith('bull')) return s.direction === 'LONG';
+    // eval n=14,952 full-history split: sideways tape is where the P&L is
+    // decided (~92% of the record) — and LONG entries of BOTH families
+    // bleed it (meanrev −0.44%, t=−9.2 on n=7,026 — the single largest
+    // losing cell ever measured; trend −0.06% on n=186). SHORT entries are
+    // the only proven side-tape cell (trend +0.13%, t=+6.2 on n=361;
+    // meanrev +0.04% flat on n=6,791). Side tape = shorts only.
+    if (mktType.startsWith('side')) return s.direction === 'SHORT';
+    return MEANREV.has(s.strategy);
+  };
+  const volHaircut = RISK_MAX ? 1 : mktType.endsWith('volatile') ? 0.75 : 1;
+  const entryFloor = MIN_ENTRY_SCORE + (mktType.endsWith('volatile') ? 5 : 0);
+  // measured inversion: side-tape Liquidity Sweep shorts EARN at score
+  // 50-79 (60-69: +3.81% alpha4h n=32; <60: +1.24% n=34) and LOSE at
+  // >=80 (-0.14% n=34). For that cell the composite floor is
+  // anti-predictive — high-confluence fades are the late ones — so it
+  // gets a two-sided band instead of the global floor. Every other gate
+  // (icAdj, sponsor, funding, chasing, chain) still applies; eval grades
+  // band-rejected signals so the carve-out is falsifiable.
+  const LS_SIDE_BAND = String(process.env.SENTINEL_LS_SIDE_BAND || '50,80').split(',').map(Number);
+  const inLsSideCell = (s) => mktType.startsWith('side') && s.direction === 'SHORT' && s.strategy === 'Liquidity Sweep';
+  const scorePass = (s, score) => inLsSideCell(s)
+    ? score >= LS_SIDE_BAND[0] && score < LS_SIDE_BAND[1]
+    : score >= entryFloor;
+  // sponsorship waiver — an A-grade composite (>=80) clears the fake-move
+  // veto: OBV/Dow disagreement is one factor voting no inside a stack of
+  // yes. Below the waiver it stays a hard veto (chop-chase protection).
+  const SPONSOR_WAIVER = +(process.env.SENTINEL_SPONSOR_WAIVER || 80);
+  // funding drag penalty: paying >0.05%/8h to hold is a structural cost the
+  // raw confluence score doesn't see. The archive keeps the raw score (the
+  // eval engine grades that); the ENTRY decision is what pays the carry,
+  // so the trade score is what adjusts. Shared by the gate + freshDir.
+  const carryPenaltyOf = (s) =>
+    s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.05 ? 5 : 0;
+  // positive carry tilt — funding is income: between otherwise-equal
+  // candidates the one that COLLECTS the 8h rate ranks ahead (operator
+  // mandate: exploit funding for extra income). Continuous bonus ~1pt per
+  // 0.05%/8h, capped +5 — symmetric to the payer penalty, tilts without
+  // overriding evidence gates.
+  const carryBonusOf = (s) =>
+    s.carry === 'earn' ? Math.min(5, Math.abs(s.funding?.ratePct ?? 0) * 20) : 0;
+  // prospective record (full-history split, n=14,952): SHORTs in side
+  // tape are a PROVEN cell (trend +0.13%, t=+6.2) — the old class-wide
+  // claim (n=826, sideways+bull pooled) was refuted by the regime split.
+  // The surcharge now binds only where shorts are vetoed anyway (bull/
+  // mixed) — bear and side tapes are the legal short cells.
+  const shortPenaltyOf = (s) =>
+    SHORT_HANDICAP && s.direction === 'SHORT' && !mktType.startsWith('bear') && !mktType.startsWith('side')
+      ? 10
+      : 0;
+  // MTF-alignment surcharge: a signal fighting its multi-timeframe trend
+  // stack needs extra score to justify the entry (confirmation layer)
+  const mtfPenaltyOf = (s) => (s.ta?.eng?.mtf && s.ta.eng.mtf.aligned === false ? 4 : 0);
+  const tradeScoreOf = (s) => s.score + carryBonusOf(s) - carryPenaltyOf(s) - shortPenaltyOf(s) - mtfPenaltyOf(s);
+  const FEE_PCT = 0.12; // Bitget USDT-M perp taker ~0.06% x2 sides
+  // taker slippage beyond the half-spread already priced on entry — market
+  // exits (stops, trails, time-outs, reversals, liq) never fill the level.
+  // External teardown flagged "paper fills lie": without this the ledger
+  // harvests unrealistically good exits on every stop.
+  const SLIP_PCT = 0.08;
+  const SLIPPED_EXITS = new Set([
+    'stopped', 'trailed', 'breakeven', 'liquidated', 'reversed', 'expired', 'clustered',
+  ]);
+  const LEVERAGE = 10; // 10x isolated perpetuals
+  const LIQ_PCT = 9.2; // ~1/lev − maintenance margin ≈ 9.2% adverse = liquidation
+  let ledger = { entries: [], stats: {} };
+  let ledgerCorrupt = false;
+  try {
+    ledger = JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf8'));
+  } catch (err) {
+    ledgerCorrupt = err.code !== 'ENOENT'; // file exists but won't parse
+  }
+  ledger.entries ??= [];
+  // paper-trade purge: simulated position entries are retired entirely —
+  // only real exchange fills/positions are processed or displayed. Any
+  // legacy sim entries still on disk are dropped here and never rewritten.
+  ledger.entries = [];
+  // executor feedback: symbols the active environment cannot hold. Two
+  // sources — exec-catalog.json (authoritative: the environment's contract
+  // list + persisted runtime rejections, survives ledger rewrites) and
+  // live-ledger.json (same-run rejections). Entries are blocked below and
+  // existing open entries settle as 'untradeable' at their live mark.
+  const untradeable = new Set();
+  try {
+    const cat = JSON.parse(fs.readFileSync(path.join(API, 'exec-catalog.json'), 'utf8'));
+    if (cat.mode === 'demo' || cat.mode === 'live') {
+      const catalog = new Set((cat.symbols || []).map((s) => String(s).replace(/USDT$/i, '').toUpperCase()));
+      if (catalog.size)
+        for (const r of rows) if (!catalog.has(r.asset.toUpperCase())) untradeable.add(r.asset.toUpperCase());
+      for (const s of cat.untradeable || [])
+        untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
+    }
+  } catch {}
+  // exchange position set (demo|live modes) — used below to void sim entries
+  // whose plan was never executed; an open ledger entry that never reached
+  // the exchange is a ghost, not a position
+  const exchangeOpen = new Set();
+  let execMode = null;
+  try {
+    const el = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+    execMode = el.mode;
+    for (const s of el.untradeable || [])
+      untradeable.add(String(s).replace(/USDT$/i, '').toUpperCase());
+    for (const p of el.positionsAfter || [])
+      exchangeOpen.add(String(p.symbol).toUpperCase());
+  } catch {}
+  // re-tag asset classes from the live contract list — the taxonomy has
+  // grown (index/commodity/metal/fx were once all 'stock'), and a stale
+  // label on an open entry is a data bug, not entry-time evidence
+  for (const e of ledger.entries) {
+    const c = contractBySymbol.get(`${e.asset}USDT`.toUpperCase());
+    if (c) e.cls = assetClass(e.asset.toUpperCase(), c.isRwa === 'YES');
+  }
+  // any open position on the asset blocks a new entry — a LONG+SHORT on the
+  // same symbol isn't a hedge, it's two fees and a flat book pretending to
+  // trade. Direction flips settle via the reversal path before re-entry.
+  // dedup keys off the REAL exchange book now — the paper ledger is retired
+  // (only real trading data is processed), so "is this asset already held"
+  // is answered by live-ledger.json positions, not sim entries.
+  const livePosNow = (() => {
+    try {
+      const ll = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      return (ll.positions || ll.positionsAfter || []);
+    } catch { return []; }
+  })();
+  const liveSymOf = (p) => (p.symbol || '').replace(/USDT$/, '');
+  const openFor = (a, d) =>
+    livePosNow.some((p) => liveSymOf(p) === a);
+  // one position per same-underlying proxy group — XAU short + PAXG short
+  // is the same gold bet paying two fees; XAUT long against them is a
+  // self-hedge paying a third.
+  const proxyBlocked = (s) => {
+    const g = proxyOf(s.asset);
+    return (
+      g != null &&
+      livePosNow.some((p) => proxyOf(liveSymOf(p)) === g)
+    );
+  };
+  // exchange-truth cooldowns (paper ledger is retired — key off real fills).
+  // A same-direction close inside the window blocks re-entry: re-firing a
+  // still-valid signal 30s after a stop-out is the fee-churn vector. An
+  // opposite-direction close inside the window means whipsaw — don't flip.
+  let recentFills = [];
+  try {
+    recentFills = (
+      JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', FILLS_FILE), 'utf8')
+      ).fills || []
+    ).filter((f) => !FILLS_SINCE || (+f.ts || 0) >= FILLS_SINCE);
+  } catch {}
+  const RECENT_CLOSED_MS = +(process.env.SENTINEL_RECENT_CLOSED_MS || 15 * 60e3);
+  // a close fill's `side` is the closed POSITION's side ('sell' = was short)
+  const fillDir = (f) => (f.side === 'sell' ? 'SHORT' : 'LONG');
+  const recentClosed = (asset, direction) =>
+    recentFills.some(
+      (f) =>
+        (f.tradeSide || '').includes('close') && f.symbol === asset + 'USDT' &&
+        fillDir(f) === direction && Date.now() - f.ts < RECENT_CLOSED_MS
+    );
+  const recentReversed = (asset, direction) =>
+    recentFills.some(
+      (f) =>
+        (f.tradeSide || '').includes('close') && f.symbol === asset + 'USDT' &&
+        fillDir(f) !== direction && Date.now() - f.ts < RECENT_CLOSED_MS
+    );
+  // LowProfitPairs (freqtrade's canonical protection, absent here): a symbol
+  // whose trailing-24h net-of-fee record is a proven bleed gets locked out.
+  // Class-level gates catch bad strategies; this catches bad SYMBOLS — the
+  // demo ETH pair (−$362 then −$913 in 30min) is the case study. Needs >=2
+  // closes so a single unlucky fill doesn't ban a symbol.
+  const LOW_PROFIT_MS = 24 * 3600e3;
+  // SQN-optimal strategy chain — read the report the optimizer wrote last
+  // cycle (10-min TTL). Applies only to strategies with enough history to
+  // rank; a family with <20 graded signals earns probe-size routing rather
+  // than a blanket ban — otherwise no strategy could ever qualify.
+  const sqnAllowed = (() => {
+    try {
+      const a = JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', 'sqn-allowed.json'), 'utf8')
+      );
+      return a.ts && Date.now() - a.ts < 30 * 60e3 && Array.isArray(a.strategies) && a.strategies.length >= 1
+        ? { set: new Set(a.strategies), dirN: a.dirN || null }
+        : null;
+    } catch { return null; }
+  })();
+  // dir-scoped members ('Liquidity Sweep:SHORT') admit only that direction —
+  // the graded record shows the sides earn differently (LS longs −0.39R,
+  // shorts +0.16R), so the gate honors the cell that actually measured green.
+  // When dirN rides the allowlist the gate checks the DIRECTION cell's sample
+  // size: <EVAL_MIN_N graded trades in that direction is unproven — probe
+  // routing, not a ban (same courtesy blended-unproven strategies already get).
+  const sqnAllows = (s, score) => {
+    // policy deference (operator order 2026-10-10): the lifecycle board is
+    // the authority on who may trade. sqn-chain is at most as strict as the
+    // strat-blocked gate it defers to — same condition, same override: a
+    // strategy the board hasn't condemned, or a score strong enough to
+    // clear STRAT_OVERRIDE, probes through. The chain's refusal is reserved
+    // for cells the eval system also measured negative. Without this the
+    // two evidence systems disagreed — and a stale allowlist failing
+    // CLOSED vetoed every proven-name candidate — the book starved.
+    if (stratAdmits(s, score)) return true;
+    // missing/stale allowlist fails CLOSED for proven strategies — a dead
+    // optimizer must never re-open measured-negative cells
+    if (!sqnAllowed)
+      return !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N);
+    if (sqnAllowed.set.has(s.strategy) || sqnAllowed.set.has(`${s.strategy}:${s.direction}`)) return true;
+    if (sqnAllowed.dirN) return (sqnAllowed.dirN[`${s.strategy}:${s.direction}`] ?? 0) < EVAL_MIN_N;
+    return !(evalByStrat[s.strategy] && (evalByStrat[s.strategy].n || 0) >= EVAL_MIN_N);
+  };
+  const lowProfitPair = (() => {
+    const bySym = {};
+    for (const f of recentFills) {
+      if (!(f.tradeSide || '').includes('close')) continue;
+      if (Date.now() - f.ts >= LOW_PROFIT_MS) continue;
+      const net = (f.profit || 0) - (f.fee || 0) - (f.notionalUsd || 0) * 0.0006;
+      (bySym[f.symbol] ??= { net: 0, closes: 0 });
+      bySym[f.symbol].net += net;
+      bySym[f.symbol].closes++;
+    }
+    const banLine = -Math.max(1, (liveEquityUsd || 0) * 0.01);
+    return new Set(
+      Object.keys(bySym).filter(
+        (k) => bySym[k].closes >= 2 && bySym[k].net < banLine
+      )
+    );
+  })();
+  // portfolio cap: total open notional can't exceed 400% of equity (= 40%
+  // margin posted at 10x) — signals are score-sorted so the best setups get
+  // slots first.
+  // Tharp risk-based sizing: target 1% of equity AT RISK per trade, i.e.
+  // notional = 1% / stop distance — tighter stops carry bigger notional for
+  // the same dollar risk. 10x isolated: margin = notional/10, so a 30%
+  // notional position only locks 3% margin. Conviction scales the risk
+  // (A=full, B=half); notional capped at 30% of equity — concentration is
+  // still concentration regardless of how little margin it posts.
+  // SENTINEL_RISK_PCT overrides; max profile triples risk-per-trade (3% of
+  // equity at stop distance vs the 1% Van Tharp baseline) and widens the
+  // per-position notional cap so tripled sizes aren't clamped back down.
+  const RISK_PCT = +(process.env.SENTINEL_RISK_PCT || (RISK_MAX ? 0.03 : 0.01));
+  const MAX_POS_PCT = RISK_MAX ? 0.6 : 0.3;
+  const MIN_POS_USD = EQUITY * 0.05;
+  // remaining open fraction after partial banks — banked rungs freed the
+  // capital, so the exposure cap counts only what's still working
+  const deployed = () =>
+    // real exchange exposure: notional = size × entry across held positions
+    livePosNow.reduce((a, p) => a + (Math.abs(+p.size || 0) * (+p.entry || 0)), 0);
+  // Tharp kill-switch: a system in a deep realized drawdown is more likely
+  // broken than unlucky — stand down at ≥8% equity DD instead of feeding
+  // fresh risk into a tape that has already disproven the current regime
+  // read. Recovery re-arms automatically when the equity path heals.
+  const ddKillPct = +(process.env.SENTINEL_SCAN_DD_KILL_PCT || process.env.SENTINEL_DD_KILL_PCT || (RISK_MAX ? 35 : 8));
+  const ddNow = (() => {
+    // real-account drawdown first — the executor persists the real equity
+    // peak each run (state/equity-peak-<mode>.json); the sim ledger's equity
+    // is only the fallback when no real equity has been observed yet
+    try {
+      const live = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      // the executor scopes its DD tape by mode — read the tape matching the
+      // ledger's mode so demo equity can't read as a live wipeout
+      const bookTag = (live.exchange || 'bitget') === 'bitget' ? '' : `-${live.exchange}`;
+      const peakFile = JSON.parse(fs.readFileSync(path.join(API, '..', 'state', `equity-peak-${live.mode || 'live'}${bookTag}.json`), 'utf8'));
+      if (peakFile.peak > 0 && live.equityUsd > 0)
+        return ((peakFile.peak - live.equityUsd) / peakFile.peak) * 100;
+    } catch {}
+    let eq = 1, peak = 1;
+    for (const e of [...ledger.entries]
+      .filter((x) => x.status !== 'open')
+      .sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0))) {
+      eq *= 1 + ((e.pnlPct ?? 0) / 100) * ((e.notional ?? NOTIONAL) / EQUITY);
+      peak = Math.max(peak, eq);
+    }
+    return ((peak - eq) / peak) * 100;
+  })();
+  // live-execution plan — emitted every build regardless of executor state.
+  // orders = gate-passed entries this run; closes/trails filled post-settle.
+  const livePlan = { orders: [], closes: [], trails: [], rejects: [], mktType, marketSQN,
+    // evidence-feed diagnostics — visible in api/live-plan.json so the
+    // rescue's data plumbing is auditable without a console
+    evidFeed: { epsN: (maeMfe.episodes || []).length, global: GLOBAL_CELL } };
+  // portfolio heat: total equity at risk if every live stop fired right
+  // now — positions with locked-profit stops contribute zero. Tharp's
+  // heat rule caps the whole book, not just each trade.
+  const openRiskPct = () =>
+    (livePosNow.reduce((a, p) => a + liveStopRiskUsd(p), 0) / liveEquityUsd) * 100;
+  // speed-to-TP1 ordering — "a quick game is a good game". etaH is stamped
+  // at signal build time (TP1 distance / ATR velocity, discounted when a
+  // breakout is already running) — pursue whichever reaches TP1 first in
+  // TIME, not just space.
+  // phantom candidates — scored signals on symbols the active account's
+  // contract catalog can't even hold (Bitget demo lists ~45 of ~200 scanned
+  // names). They were never real opportunities: their rejections bury the
+  // feed's actual decisions and their scoring work is waste. Dropped before
+  // gating, kept as a compact tally so the digest stays honest about why
+  // the universe looks thin. The 'untradeable' gate below stays as the net.
+  const phantoms = signals.filter((s) => untradeable.has(s.asset.toUpperCase()));
+  if (phantoms.length)
+    livePlan.phantom = phantoms.map((s) => `${s.asset}:${s.direction}`);
+  const rankedByEta = signals
+    .filter((s) => !untradeable.has(s.asset.toUpperCase()))
+    .sort((a, b) => (a.etaH ?? 99) - (b.etaH ?? 99));
+  // balanced-book mandate: the operator's structure is up to 5 longs + 5
+  // shorts held concurrently — per-direction plan cap keeps one tape bias
+  // from crowding the whole book. Capacity, not quota: only gate-passing
+  // cells fill slots — an empty side is better than a forced loser.
+  const SIDE_CAP = +(process.env.SENTINEL_SIDE_CAP || 5);
+  const dirPlanned = { LONG: 0, SHORT: 0 };
+  for (const s of rankedByEta) {
+    // dynamic leverage — scales with MEASURED regime alignment and
+    // conviction, never with narrative. Under 1%-risk sizing leverage
+    // doesn't multiply profit; it sets margin efficiency and liquidation
+    // distance, so the binding constraint is the liquidation band the
+    // stop must live inside: lev <= 80/(stopPct + 0.64) keeps the
+    // designed stop at <=80% of the band. Tight stops earn leverage,
+    // wide stops don't.
+    const dirUp = s.direction === 'LONG';
+    const aligned =
+      (dirUp && regime === 'risk-on') || (!dirUp && regime === 'risk-off');
+    const counter =
+      (dirUp && regime === 'risk-off') || (!dirUp && regime === 'risk-on');
+    const levTarget = aligned && s.score >= 85 ? 20 : aligned ? 15 : counter ? 5 : 10;
+    // stop floor at ~1.8x 1h ATR — a stop inside the noise band gets clipped
+    // by chop before the thesis can play out (PHA 0.5x, ENA 1.0x were the
+    // noise-clipped red rows). Wider stop = same $ risk at lower leverage.
+    const atrFloor = Math.min(4.5, 1.8 * (s.ta?.atrPct ?? 0));
+    // measured-heat floor — the trail-era exits cap realized heat far below
+    // the 1.8xATR noise floor (medMae on recent cells runs ~0.25-0.5%). When
+    // this cell's median MAE ×2.5 (tail margin — MAE medians understate the
+    // bad half) sits lower, the floor may tighten toward it. Never below
+    // 0.6%, never above the ATR floor — evidence can tighten, not widen.
+    const mCell = measuredCell(s);
+    const floorEff =
+      mCell?.medMaePct != null
+        ? Math.max(0.6, Math.min(atrFloor, mCell.medMaePct * 2.5))
+        : atrFloor;
+    if (floorEff < atrFloor) s.evidStop = true;
+    const stopWant = Math.max(
+      s.stopPct ?? Math.max(4, s.targetPct || 4),
+      atrFloor
+    );
+    // ≥RR_MIN:1 net R:R gate — user directive (env-tunable): only take
+    // setups whose reward, net of ALL costs, is at least RR_MIN x the risk
+    // including costs.
+    //   netReward = targetPct - costPct   (costs eat the win)
+    //   netRisk   = stopPct  + costPct   (costs deepen the loss)
+    // The maximum stop the geometry can carry is (netReward/RR) - costPct.
+    // When the noise-floor stop fits inside it, tighten the stop to that
+    // boundary — the setup then trades at exactly ≥RR net. When even the
+    // ATR-floor stop is wider, the ratio is impossible without a noise-
+    // clipping stop — stand down, don't fake the ratio.
+    // "after ALL fees" includes funding — a carry-pay position bleeds every
+    // 8h it's held. Charge the expected drag over the etaH hold window
+    // (capped at one interval — a scalp rarely crosses two timestamps).
+    const RR_MIN = +(process.env.SENTINEL_MIN_RR || 2);
+    // anti-chase zone: fraction of the 24h range that counts as "the
+    // extreme" — shorts into the bottom slice / longs into the top slice
+    // are vetoed. 0.25 = never enter in the outer quartile.
+    const CHASE_ZONE = +(process.env.SENTINEL_CHASE_ZONE || 0.25);
+    const fundDrag =
+      s.carry === 'pay'
+        ? Math.abs(s.funding?.ratePct ?? 0) * Math.min(s.etaH ?? 1, 8) / 8
+        : 0;
+    const rrCostPct = FEE_PCT + SLIP_PCT + (s.spreadPct ?? 0.2) / 2 + fundDrag;
+    let rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
+    // evidence rescue — the measured tape can legitimately widen the reward
+    // estimate two ways (audited: evidTgt / evidRr flags ride the order):
+    //   path 1 — measured reach: this cell's median MFE clears RR_MIN at the
+    //     noise-floor stop. Target extends to 80% of measured MFE (max 8%);
+    //     the bar itself doesn't move, the projection was just stale.
+    //   path 2 — measured-positive cell: winShare >= 60% over n>=3 earns the
+    //     same 1.05:1 net bar shorts already face. Expectancy = WR×R is
+    //     positive where the record says so — capacity only into cells the
+    //     tape has already paid, never into measured-negative ones.
+    if (rrMaxStop < floorEff) {
+      if (mCell) {
+        const tgt2 = Math.min(8, (mCell.medMfePct ?? 0) * 0.8);
+        const ms2 = (tgt2 - rrCostPct) / RR_MIN - rrCostPct;
+        if (ms2 >= floorEff) {
+          s.targetPct = pct(tgt2); rrMaxStop = ms2; s.evidTgt = true;
+        } else if ((mCell.winShare ?? 0) >= 0.6 && (mCell.n ?? 0) >= 3) {
+          const ms3 = (s.targetPct - rrCostPct) / 1.05 - rrCostPct;
+          if (ms3 >= floorEff) { rrMaxStop = ms3; s.evidRr = true; }
+        }
+      }
+      // geometry rescue — the noise-floor stop is real (1.8xATR) but the
+      // fixed ~2% target made net-RR mathematically impossible, vetoing the
+      // ENTIRE funnel on volatile tape (observed: every candidate died on
+      // 'rr<1:1 atr-floor stop can't fit'). Instead of refusing, extend the
+      // target to exactly what RR_MIN needs at the floor stop — the ratio
+      // holds honestly, the trade just plays out over a wider objective.
+      // Capped at 8% like the evidence path — past that on 1h tape is a
+      // fantasy target, not a trade. Audited via atrTgt on the order.
+      if (rrMaxStop < floorEff && floorEff > 0) {
+        // +0.05 headroom — the extension lands exactly ON the boundary and
+        // pct()'s 2dp rounding can shave it back below floorEff, vetoing by
+        // epsilon (observed: tgt 2.94% extended then still failed rr<1:1)
+        const needTgt = RR_MIN * (floorEff + rrCostPct) + rrCostPct + 0.05;
+        // shorts are scalps by mandate (SHORT_MAX_TGT) — extending past that
+        // cap would just trade an rr veto for a short-tgt veto
+        const tgtCap = SHORT_HANDICAP && s.direction === 'SHORT' ? Math.min(8, SHORT_MAX_TGT) : 8;
+        if (needTgt > s.targetPct && needTgt <= tgtCap) {
+          s.targetPct = pct(needTgt);
+          rrMaxStop = (s.targetPct - rrCostPct) / RR_MIN - rrCostPct;
+          s.atrTgt = true;
+        }
+      }
+    }
+    const rrStop = Math.min(stopWant, rrMaxStop);
+    const rrOk = rrMaxStop >= floorEff;
+    const levMax = Math.max(3, Math.floor(80 / (rrStop + 0.64)));
+    const lev = Math.max(3, Math.min(levTarget, levMax, s.maxLever ?? 20));
+    const liqPct = Math.round((100 / lev - 0.8) * 10) / 10;
+    // the stop must fire INSIDE the liquidation band — a stop wider than
+    // ~80% of the band is fiction (liq executes first), so clamp it there
+    const stopPct = Math.min(
+      rrStop,
+      Math.max(1, Math.round(liqPct * 0.8 * 10) / 10)
+    );
+    const stopFrac = stopPct / 100;
+    const tradeScore = tradeScoreOf(s);
+    // expectancy-weighted conviction — stratBoost is the strategy's
+    // shrunk forward alpha (Wyckoff Spring +1.94/hit 57% vs momentum
+    // families under water). Capital follows measured edge, not the
+    // inverted composite: high score + negative alpha now sizes SMALL.
+    const conv = Math.round(
+      clamp(0.35 + stratEff(s.strategy, s.direction) * 0.1 + (tradeScore - 60) * 0.004, 0.25, 1.05) * 100
+    ) / 100;
+    // strategy circuit-breaker — a doctrine that has already bled on ≥3
+    // closed trades gets half-size until its record clears. Risk control,
+    // not learning: the adaptation gate stays dormant.
+    let stratN = 0, stratPnl = 0;
+    for (const e of ledger.entries)
+      if (e.status !== 'open' && e.strategy === s.strategy) { stratN++; stratPnl += e.pnlPct || 0; }
+    const stratMul = stratN >= 3 && stratPnl < 0 ? 0.5 : 1;
+    const notional = Math.round(
+      clamp((EQUITY * RISK_PCT * conv * stratMul) / stopFrac, MIN_POS_USD, EQUITY * MAX_POS_PCT)
+    );
+    // candidate heat measured against the SAME equity the live book uses.
+    // The executor sizes to min(freeMargin, 85% equity) x lev — the paper
+    // EQUITY=10000 notional understated new-position risk ~5000x at a $2
+    // account, silently unbinding the heat cap whenever a position existed.
+    const execNotional = liveEquityUsd * +(process.env.SENTINEL_POS_CAP_PCT || 0.85) * lev;
+    const newHeatPct = (stopFrac * Math.min(notional, execNotional)) / liveEquityUsd * 100;
+    // gate audit — every rejection names its gate so the plan is
+    // self-explaining: 'why didn't it trade' is answered by the artifact,
+    // not by digging through code. First failure wins (eval order).
+    const gateFails = [];
+    const gate = (ok, name) => { if (!ok) gateFails.push(name); return ok; };
+    // RELAX (SENTINEL_GATES_RELAX=1): operator deployment mandate — bypass
+    // advisory gates (score/rr/sponsorship/noise/strat-record/recency/
+    // sqn-chain) that refuse marginal setups. Structural gates stay
+    // enforced regardless: price sanity, cost floor, spread, anti-chase,
+    // dd-kill, mkt-type, duplicate/position caps.
+    const RELAX = process.env.SENTINEL_GATES_RELAX === '1';
+    const DENY_SYMS = new Set(
+      (process.env.SENTINEL_DENY_SYMS || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)
+    );
+    // RELAX lowers the generic floor to 35 — but the measured side-LS-short
+    // band is evidence, not advisory: score >=80 in that cell is a
+    // measured-losing bucket (-0.14% n=34), same class as ic-evidence.
+    gate(inLsSideCell(s) ? scorePass(s, tradeScore) : tradeScore >= (RELAX ? 35 : entryFloor),
+      `score ${tradeScore}${inLsSideCell(s) ? ` outside band ${LS_SIDE_BAND[0]}-${LS_SIDE_BAND[1]}` : `<${RELAX ? 35 : entryFloor}`}`);
+    gate(Number.isFinite(s.entryPrice) && s.entryPrice > 0, 'no-price');
+    gate(!DENY_SYMS.has(s.asset.toUpperCase() + 'USDT'), 'denied-symbol');
+    // net-of-cost floor, proportional: costs can't eat more than 60% of
+    // the target AND the net must still be worth taking. An absolute 2%
+    // floor banned every 2% target by construction — fees scale with
+    // the move, so the bar must too. Volatile tape keeps a higher share.
+    gate(RELAX || (() => {
+      const net = s.targetPct - FEE_PCT - SLIP_PCT - (s.spreadPct ?? 0.2) / 2;
+      return net >= 0.8 && net >= s.targetPct * (mktType.endsWith('volatile') ? 0.5 : 0.4);
+    })(), 'net-edge');
+    gate(RELAX || rrOk, `rr<${RR_MIN}:1 (tgt ${s.targetPct}%, ${floorEff === atrFloor ? 'atr-floor' : `meas-floor ${pct(floorEff)}%`} stop can't fit)`);
+    // with a fresh factor-IC table, sponsorship is the ic-sponsor gate's job
+    // (a MEASURED-predictive factor voting with the signal). This legacy list
+    // leans on OBV/Dow/Wyckoff agreement, which the same table measures as
+    // anti-predictive (lift OBV -0.38, Dow -1.36, wyckoff -0.42), so it
+    // vetoed the better setups. It stays the fallback when IC is stale.
+    gate(RELAX || icFresh ||
+      (s.ta?.eng?.obv?.dir ?? null) === (dirUp ? 'bull' : 'bear') ||
+      (s.ta?.eng?.dow?.confirmed === true && s.ta?.eng?.dow?.dir === (dirUp ? 'bull' : 'bear')) ||
+      s.ta?.ignition?.dir === s.direction ||
+      (s.ta?.wyckoff?.springHold === true && dirUp) ||
+      (s.ta?.wyckoff?.uthrHold === true && !dirUp) ||
+      (s.ta?.ewProj?.live === true && s.ta?.ewProj?.dir === (dirUp ? 'bull' : 'bear')) ||
+      (s.ta?.effort?.dir === (dirUp ? 'bull' : 'bear') && (s.ta?.effort?.strength ?? 0) >= 0.4) ||
+      !s.ta?.eng?.obv ||
+      tradeScore >= SPONSOR_WAIVER,
+      'fake-move (no OBV/Dow/Wyckoff/EW sponsorship)');
+    // effort-vs-result hard veto — high effort + no result AT the signal's
+    // destination means the move is walking into absorption. Longs can't
+    // run into supply absorption at highs; shorts can't run into absorbed
+    // demand at lows. (Wyckoff's 2nd law, enforced.)
+    gate(RELAX || !(
+      (dirUp && (s.ta?.effort?.supply ?? 0) >= 2) ||
+      (!dirUp && (s.ta?.effort?.absorb ?? 0) >= 2)),
+      'effort-absorbed');
+    // OBV-unconfirmed breakout: price at a range extreme while OBV never
+    // broke out = the break lacks sponsorship — classic bull/bear trap.
+    gate(RELAX || s.strategy !== 'Breakout Continuation' ||
+      !s.ta?.eng?.obv?.unconfirmedBreak, 'obv-unconfirmed-break');
+    gate(RELAX || (s.ta?.atrPct ?? 0) <= 3.5, 'noise-cap');
+    // anti-chase: never sell the bottom quartile of the day's range nor buy
+    // the top quartile — the move already happened and the entry inherits
+    // the reversal risk, not the trend. Breakout Continuation is exempt:
+    // buying strength IS that strategy's thesis.
+    gate(
+      s.strategy === 'Breakout Continuation' ||
+        (dirUp ? (s.rangePosition ?? 0.5) <= 1 - CHASE_ZONE : (s.rangePosition ?? 0.5) >= CHASE_ZONE),
+      'chasing-extreme');
+    gate((s.spreadPct ?? 0) <= 0.4, 'spread');
+    gate(RELAX || !(s.carry === 'pay' && Math.abs(s.funding?.ratePct ?? 0) > 0.1), 'funding-drag');
+    gate(ddNow < ddKillPct, 'dd-kill');
+    gate(mktAllows(s), 'mkt-type');
+    // short-class: shorts are legal where the eval record says they earn —
+    // bear tape and side tape (trend +0.13% t=6.2, meanrev +0.04% flat) —
+    // plus the two exempt sweep strategies and any risk-off regime.
+    gate(RELAX || !SHORT_HANDICAP || s.direction !== 'SHORT' || mktType.startsWith('bear') || mktType.startsWith('side') || regime === 'risk-off' ||
+      s.strategy === 'Liquidity Sweep' || s.strategy === 'Key Level SFP', 'short-class');
+    gate(!LONG_ONLY || s.direction !== 'SHORT' || SHORT_STRATS.has(s.strategy) || (sqnAllowed && (sqnAllowed.set.has(s.strategy) || sqnAllowed.set.has(s.strategy + ':SHORT'))), 'shorts-banned');
+    // operator mandate: shorts are mean-reversion scalps ONLY — fade
+    // families that short the overextension back to mean (sweep/SFP/
+    // quartile), never trend-followed breakdowns. Bar is higher than the
+    // general floor: net-RR >= SHORT_MIN_RR after ALL costs, target
+    // capped at SHORT_MAX_TGT so exits are quick, and a high score floor
+    // — "extreme sense" entries only. RELAX does not soften this block.
+    if (SHORT_HANDICAP && s.direction === 'SHORT') {
+      gate(SHORT_STRATS.has(s.strategy) || (sqnAllowed && sqnAllowed.set.has(s.strategy + ':SHORT')), 'short-strat (mean-rev only)');
+      const shortNetRR = (s.targetPct - rrCostPct) / (stopPct + rrCostPct);
+      gate(shortNetRR >= SHORT_MIN_RR, `short-rr<${SHORT_MIN_RR}:1 net`);
+      gate((s.targetPct ?? 99) <= SHORT_MAX_TGT, `short-tgt>${SHORT_MAX_TGT}% (scalp-only)`);
+      gate(tradeScore >= SHORT_MIN_SCORE, `short-score<${SHORT_MIN_SCORE}`);
+    }
+    gate(dirPlanned[s.direction] < SIDE_CAP, 'side-cap');
+    // conviction override: an A-grade composite (>=STRAT_OVERRIDE) overrides
+    // the eval block — the strategy's record stays on the board for
+    // evidence, but exceptional confluence may still route. Default 75;
+    // set high to restore the strict block.
+    gate(RELAX || stratAdmits(s, tradeScore), 'strat-blocked');
+    gate(!openFor(s.asset, s.direction), 'already-open');
+    gate(!proxyBlocked(s), 'proxy-dup');
+    gate(!untradeable.has(s.asset.toUpperCase()), 'untradeable');
+    gate(RELAX || !recentClosed(s.asset, s.direction), 'recent-closed');
+    gate(RELAX || !recentReversed(s.asset), 'recent-reversed');
+    gate(RELAX || !lowProfitPair.has(s.asset + 'USDT'), 'low-profit-pair');
+    gate(RELAX || sqnAllows(s, tradeScore), 'sqn-chain');
+    // measured-evidence gates — the IC table is the engine's own record of
+    // which votes predict. Net-negative factor evidence (icAdj < IC_VETO)
+    // is a veto; so is a signal with no measured-predictive sponsor. Hard
+    // gates (no RELAX bypass): the Monte-Carlo already proved trading at
+    // negative edge loses — the veto IS the profit. Eval still grades every
+    // vetoed signal, so a wrong veto shows up in the record itself.
+    gate(!icFresh || (s.icAdj ?? 0) >= IC_VETO, 'ic-evidence');
+    gate(!icFresh || s.icSponsor === true, 'ic-sponsor');
+    gate(deployed() + notional <= MAX_DEPLOYED, 'deployed-cap');
+    gate(openRiskPct() + newHeatPct <= heatCapFor(s.direction) * volHaircut, 'heat-cap');
+    gate(openRiskByCluster(s) + newHeatPct <= CLUSTER_HEAT_CAP * volHaircut, 'cluster-heat');
+    // fading-runner: never short a +3% mover holding the upper half of its
+    // range — fighting live momentum donates margin (the QNT lesson).
+    // Enforced even under RELAX: deployment mandate covers entries, not
+    // directionally wrong entries. Breakout-continuation longs are exempt
+    // the other way; shorts have no symmetric exemption.
+    gate(
+      s.direction !== 'SHORT' ||
+        !(s.changePct > 3 && (s.rangePosition ?? 0.5) > 0.6),
+      'fading-runner');
+    if (gateFails.length) {
+      livePlan.rejects.push({
+        symbol: s.asset + 'USDT', direction: s.direction, score: s.score,
+        strategy: s.strategy ?? null,
+        targetPct: s.targetPct, gates: gateFails,
+        rangePosition: s.rangePosition ?? null, changePct: s.changePct ?? null,
+        mktType: s.mktType ?? null,
+        // markout ledger: reject-time stamp+price so the veto scoreboard can
+        // measure what would have happened to every refused candidate
+        px: s.entryPrice ?? s.lastPrice ?? null, ts: Date.now(),
+      });
+      continue;
+    }
+    {
+      const fillPx =
+        s.spreadPct != null
+          ? s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (s.spreadPct / 200 + SLIP_PCT / 100))
+          : s.entryPrice * (1 + (s.direction === 'LONG' ? 1 : -1) * (SLIP_PCT / 100));
+      // live-exec intent: the scanner is the ONLY decision engine — the
+      // executor (bitget-exec.mjs) routes exactly this, sized from the real
+      // account equity it reads from the exchange. No paper position is
+      // recorded — the exchange fill IS the position record.
+      dirPlanned[s.direction]++;
+      livePlan.orders.push({
+        symbol: s.asset + 'USDT',
+        asset: s.asset,
+        cls: s.cls ?? null,
+        direction: s.direction,
+        signalTimeframe: enriched.get(s.asset)?.candles?.length >= 141 ? '1H' : null,
+        signalClosedAt: enriched.get(s.asset)?.candles?.at(-1)?.t != null
+          ? enriched.get(s.asset).candles.at(-1).t + 3600000 : null,
+        signalReason: s.ta?.reasons?.[0] || null,
+        notionalUsd: notional,
+        leverage: lev,
+        refEntry: fillPx,
+        targetPct: s.targetPct,
+        stopPct,
+        netRR: pct((s.targetPct - rrCostPct) / (stopPct + rrCostPct)),
+        costPct: rrCostPct,
+        // evidence-rescue audit trail — set when measured excursion data
+        // widened the reward estimate (evidTgt) or admitted a proven cell
+        // at the 1.05 bar (evidRr). Null = passed the raw RR_MIN gate.
+        evidTgt: s.evidTgt || null,
+        evidRr: s.evidRr || null,
+        evidStop: s.evidStop || null,
+        // atrTgt: target was extended to the RR_MIN-required distance at the
+        // ATR noise-floor stop — honest geometry, not a loosened gate
+        atrTgt: s.atrTgt || null,
+        etaH: s.etaH ?? null,
+        // runner distance scales with confluence — a high-confluence setup
+        // earns a longer tail (1.6x..2.4x), thin ones bank the tail sooner
+        runnerMult: Math.min(2.4, 1.6 + (s.ta?.confluence ?? 0) * 0.08),
+        conv,
+        // funding-carry income — expected daily yield while held (8h x3).
+        // 'earn' = the position collects; journaled so the book's carry
+        // income is auditable per position against realized funding.
+        carry: s.carry ?? null,
+        carryYieldDayPct: s.carry === 'earn' && s.funding?.ratePct != null
+          ? pct(Math.abs(s.funding.ratePct) * 3)
+          : s.carry === 'pay' && s.funding?.ratePct != null
+            ? -pct(Math.abs(s.funding.ratePct) * 3)
+            : null,
+        reason: s.ta?.reasons?.[0] || null,
+        ver: s.ver ?? ENGINE_VERSION,
+        strategy: s.strategy ?? null,
+        grade: s.grade ?? null,
+        // entry-quality telemetry — the exec journals these so the
+        // calibration layer can correlate fills with range/confluence
+        rangePosition: s.rangePosition ?? null,
+        changePct: s.changePct ?? null,
+        score: s.score ?? null,
+        // regime at decision time — exec vets direction-vs-regime again at
+        // fill time and journals this onto the position's record, so the
+        // per-regime expectancy table attributes every R to its market type
+        mktType,
+        // structural evidence from the new engines — journaled so every fill
+        // carries the indicator thesis it was taken on (and the level that
+        // would falsify it)
+        structInvalid: s.ta?.ewProj?.live && s.ta.ewProj.dir === (s.direction === 'LONG' ? 'bull' : 'bear')
+          ? s.ta.ewProj.invalid
+          : s.ta?.wyckoff?.invalid ?? null,
+        wyckInvalid: s.ta?.wyckoff?.invalid ?? null,
+        ewTarget: s.ta?.ewProj?.live ? { lo: s.ta.ewProj.targetLo, hi: s.ta.ewProj.targetHi } : null,
+        wyckTarget: s.ta?.wyckoff?.target ?? null,
+        effortDir: s.ta?.effort?.dir ?? null,
+      });
+    }
+  }
+  // thesis-flip signals for the executor: a graded liquidity sweep or SFP
+  // against an OPEN position's direction means its thesis just died —
+  // emitted for every signal regardless of the order gates, so positions
+  // can be exited on evidence the book can't act on as an entry.
+  livePlan.thesisFlips = signals
+    .filter(
+      (s) =>
+        s.ta &&
+        (s.ta.reasons?.[0] === 'liq-sweep' || s.ta.sfp) &&
+        s.ta.liquidity?.setup?.grade !== 'C'
+    )
+    .map((s) => ({ symbol: s.asset + 'USDT', direction: s.direction }));
+  // reversal triggers only from signals that would actually trade — a
+  // sub-floor or market-type-gated opposite signal was force-closing open
+  // positions the engine itself would never enter on
+  const freshDir = new Map(
+    signals
+      .filter((s) => scorePass(s, tradeScoreOf(s)) && mktAllows(s) && stratAdmits(s, tradeScoreOf(s)))
+      .map((s) => [s.asset, s.direction])
+  );
+
+  // ---- intraperiod settlement: prefetch 5m candles for every open entry ----
+  // The audit's sharpest question: can a 10-minute sampling cadence award
+  // targets that never filled, or miss stops that triggered between builds?
+  // Tick extremes can't see wicks — candles can. We replay each open
+  // position through the 5m tape chronologically and let levels fire on the
+  // candles that actually traded them.
+  const openEntries = ledger.entries.filter((e) => e.status === 'open');
+  const openCandles = new Map();
+  for (let i = 0; i < openEntries.length; i += 12) {
+    await Promise.all(
+      openEntries.slice(i, i + 12).map(async (e) => {
+        const cs = await fetchEntryCandles(e).catch(() => null);
+        if (cs && cs.length) openCandles.set(e, cs);
+      })
+    );
+  }
+
+  // proxy-group reconciliation — open duplicates on one underlying are a
+  // bookkeeping error, not positions. Keep the highest-conviction member
+  // (score, then newest); the rest settle through the normal path as
+  // 'clustered' and their exchange positions get real close orders.
+  {
+    const byProxy = new Map();
+    for (const e of ledger.entries) {
+      if (e.status !== 'open') continue;
+      const g = proxyOf(e.asset);
+      if (!g) continue;
+      const arr = byProxy.get(g) || [];
+      arr.push(e);
+      byProxy.set(g, arr);
+    }
+    for (const members of byProxy.values()) {
+      if (members.length < 2) continue;
+      members.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.ts ?? 0) - (a.ts ?? 0));
+      for (const e of members.slice(1)) e.dedup = true;
+    }
+  }
+  // untradeable symbols: the exchange can't hold them, so the sim must not
+  // either — the flag settles them at the live mark, and settle() emits
+  // the exchange close itself (harmless no-op if none was ever opened)
+  for (const e of ledger.entries) {
+    if (e.status !== 'open' || !untradeable.has(e.asset.toUpperCase())) continue;
+    e.untradable = true;
+  }
+  // unrouted ghosts: the ledger admitted the entry but the exchange never
+  // filled it (stale plan, skipped order, executor down that cycle). If the
+  // symbol is routable, the position has no exchange counterpart, and the
+  // entry is older than a full pipeline cycle — it will never fill. Void it
+  // rather than letting the sim book pretend the position exists.
+  const UNROUTED_AGE_MS = 25 * 60e3;
+  if (execMode === 'demo' || execMode === 'live')
+    for (const e of ledger.entries) {
+      if (e.status !== 'open' || e.untradable) continue;
+      if (now - e.ts < UNROUTED_AGE_MS) continue;
+      const sym = `${e.asset}USDT`.toUpperCase();
+      if (!exchangeOpen.has(sym)) e.unrouted = true;
+    }
+
+  for (const e of ledger.entries) {
+    if (e.status !== 'open') continue;
+    const px = priceByAsset.get(e.asset);
+    const age = now - e.ts;
+    let pnl = e.pnlPct;
+    const sgn = e.direction === 'LONG' ? 1 : -1;
+    const dirPnl = (price) =>
+      pct((sgn * (price - e.entry)) / e.entry * 100);
+    // blended P&L: banked split fractions are locked at their hit prices,
+    // the remainder marks live — this is the true realized+open position
+    const blended = (livePnl) => {
+      if (!e.tps) return e.lockPnl != null ? (e.lockPnl + livePnl) / 2 : livePnl;
+      const banked = e.tps.filter((t) => t.hit).reduce((a, t) => a + t.frac * t.pnl, 0);
+      // runner residual marks at the live print like any unhit rung —
+      // dropping it zeroed the trailing 15% out of every settle
+      const rem =
+        e.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (e.runner ?? 0);
+      return banked + rem * livePnl;
+    };
+    const fee = e.feePct ?? FEE_PCT;
+    // funding accrues on the fraction still open — banked rungs stopped
+    // earning/paying when they closed; computed lazily so mid-replay settles
+    // charge the fraction actually open at that moment
+    // funding accrues to the SETTLE timestamp, not now — a candle-replay
+    // settle at hour-3 was being charged funding for the full position age
+    // fraction still open: unhit rungs + runner (non-ladder entries are 1).
+    // Was called below with NO definition — a ReferenceError landmine that
+    // would kill the whole settle loop on the first funded entry.
+    const remFracOf = (x) =>
+      !x.tps
+        ? 1
+        : x.tps.filter((t) => !t.hit).reduce((a, t) => a + t.frac, 0) + (x.runner ?? 0);
+    const fundPnlNow = (tsC) =>
+      e.funding && e.carry && e.carry !== 'flat'
+        ? Math.abs(e.funding.ratePct || 0) * (((tsC ?? now) - e.ts) / 2.88e7) * (e.carry === 'earn' ? 1 : -1) * remFracOf(e)
+        : 0;
+    const settle = (status, exitPx, rawPnl, tsC) => {
+      // market exits slip past the level — only limit TP fills ('won',
+      // ladder rungs) settle at their quoted price
+      const slip = SLIPPED_EXITS.has(status) ? SLIP_PCT : 0;
+      e.status = status;
+      e.exitPrice = slip ? exitPx * (1 - (sgn * slip) / 100) : exitPx;
+      e.exitTs = tsC ?? now;
+      // the closing print is one more taker fill — charged on the fraction
+      // still open, not a flat half (a laddered trade was paying 2.5× fees)
+      e.feesPaid = (e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e);
+      const fp = fundPnlNow(tsC);
+      e.fundingPnl = pct(fp);
+      e.pnlPct = pct(blended(rawPnl) - slip - e.feesPaid + fp);
+      // alpha vs market drift: did the signal beat just riding the universe?
+      if (e.mkt0 != null) {
+        const drift = medianChangePct - e.mkt0;
+        e.alphaPct = pct(e.pnlPct - (e.direction === 'LONG' ? drift : -drift));
+      }
+      // every sim settle means the exchange must be flat on this symbol —
+      // emitted here so NO exit path can leave a real position orphaned:
+      // expiry/breakeven/timeouts have no exchange counterpart, and a
+      // settled-here entry never reaches the plan-emission loop. Executor
+      // treats 'already flat' closes as benign no-ops.
+      livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction, reason: status });
+    };
+    const stopLevel = () =>
+      e.tps
+        ? e.stopAt ?? -(e.stopPct ?? Math.max(4, e.targetPct))
+        : -(e.stopPct ?? Math.max(4, e.targetPct));
+    // favorable excursion: peak, rung banks, stop ratchets — limit orders
+    // fill at their level even when the mark later retraces
+    const applyFavorable = (fav, tsC) => {
+      e.peakPnl = Math.max(e.peakPnl ?? -Infinity, fav);
+      if (e.tps) {
+        for (const tp of e.tps)
+          if (!tp.hit && e.peakPnl >= tp.at * e.targetPct) {
+            tp.hit = true; tp.pnl = pct(tp.at * e.targetPct); tp.ts = tsC ?? now;
+            // each rung pays taker on ITS fraction — a flat half-round-trip
+            // per rung overcharged a full ladder by ~2.5×
+            e.feesPaid = (e.feesPaid ?? FEE_PCT / 2) + (FEE_PCT / 2) * tp.frac;
+          }
+        // retracement trail (Tharp: give back at most half the excursion):
+        // past 40% of target the stop floors at breakeven AND trails at
+        // 50% of the running peak — a fade keeps half the move instead of
+        // round-tripping to a +0.3% scratch. Forensic capture was 16%.
+        if (e.peakPnl >= e.targetPct * 0.4)
+          e.stopAt = Math.max(e.stopAt, Math.max(0, e.peakPnl * 0.5));
+        if (e.peakPnl >= e.targetPct * 0.9)
+          e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.65);
+        // past target the runner trails at 55% of peak — wide enough to
+        // breathe through continuation pullbacks, tight enough to keep
+        // most of an overshoot
+        if (e.peakPnl > e.targetPct) e.stopAt = Math.max(e.stopAt, e.peakPnl * 0.55);
+      } else if (e.lockPnl == null && fav >= e.targetPct / 2) {
+        e.lockPnl = fav;
+        e.lockedAt = tsC ?? now;
+        e.beStop = true;
+      }
+    };
+    // adverse check — liquidation first, then stop family; settles at the
+    // level that filled (or the mark if it gapped through). Returns true
+    // when the entry just closed.
+    const checkAdverse = (adv, markPx, tsC) => {
+      e.troughPnl = Math.min(e.troughPnl ?? Infinity, adv);
+      if ((e.lev || 0) > 1 && adv <= -(e.liqPct ?? LIQ_PCT)) {
+        settle('liquidated',
+          e.entry * (1 - (sgn * (e.liqPct ?? LIQ_PCT)) / 100),
+          -100 / (e.lev || LEVERAGE), tsC);
+        return true;
+      }
+      const sl = stopLevel();
+      if (!e.tps && e.beStop && adv <= 0) {
+        settle('breakeven', e.entry, 0, tsC);
+        return true;
+      }
+      if (sl != null && adv <= sl) {
+        settle(
+          sl > 0 ? 'trailed' : sl === 0 && e.tps ? 'breakeven' : 'stopped',
+          adv < sl ? markPx : e.entry * (1 + (sgn * sl) / 100),
+          Math.min(adv, sl), tsC
+        );
+        return true;
+      }
+      return false;
+    };
+    const checkFavorable = (fav, markPx, tsC) => {
+      applyFavorable(fav, tsC);
+      if (e.peakPnl >= e.targetPct) {
+        // v1.3+: the ladder's last rung banks at target but a 15% runner
+        // stays on and trails — the trade only settles when the trail,
+        // stop, reversal or TTL closes it. Older entries (no runner field)
+        // keep their original settle-at-target semantics.
+        if (e.runner) e.targetHit = e.targetHit ?? tsC ?? now;
+        else {
+          settle('won', e.targetPrice ?? markPx, e.targetPct, tsC);
+          return true;
+        }
+      }
+      return false;
+    };
+    // dead-zone time-stop: >6h old, no rung banked, mark under +0.3% —
+    // the thesis didn't work, so the stop tightens to a −0.3% scratch line.
+    // Forensic: the 6–12h bucket held every catastrophic stop-out (−7.6%
+    // total); trades that go nowhere get scratched early instead of riding
+    // the full designed stop to settlement.
+    const DEAD_MS = 6 * 3600e3;
+    const timeStop = (tsNow, curPnl) => {
+      if (!e.tps) return;
+      if (!e.tps.some((t) => t.hit) && tsNow - e.ts > DEAD_MS && (curPnl ?? -1) < 0.3)
+        e.stopAt = Math.max(e.stopAt ?? -Infinity, -0.3);
+    };
+
+    // candle replay: adverse extreme first within each bar — when a single
+    // bar covers both levels the order is unknowable, so we resolve the
+    // pessimistic path (the ledger must never flatter itself). The replay
+    // only runs when the tape reaches back to entry: persisted stop/ladder
+    // state has already ratcheted, so old candles must be judged against a
+    // reset entry-time state — all replayed fields are deterministic
+    // functions of the tape and rebuild identically every build.
+    const cs = openCandles.get(e);
+    if (cs && cs.length && cs[0].t <= e.ts + 6e5) {
+      e.peakPnl = e.troughPnl = undefined;
+      if (e.tps) {
+        for (const tp of e.tps) { tp.hit = false; tp.pnl = null; tp.ts = null; }
+        e.stopAt = -(e.stopPct ?? Math.max(4, e.targetPct));
+        e.feesPaid = FEE_PCT / 2; // replay re-derives exit fills deterministically
+      } else {
+        e.lockPnl = null; e.beStop = false;
+      }
+      for (const c of cs) {
+        // the bar CONTAINING the entry mixes pre-entry price action with
+        // post-entry — its extremes may predate the position entirely. Test
+        // triggers only on bars that open after the entry exists.
+        if (c.t < e.ts && e.ts < c.t + 300e3) {
+          e.lastPrice = c.c; e.rawPnl = dirPnl(c.c);
+          continue;
+        }
+        const advPx = sgn > 0 ? c.l : c.h;
+        timeStop(c.t + 300e3, dirPnl(advPx));
+        if (checkAdverse(dirPnl(advPx), advPx, c.t + 300e3)) break;
+        const favPx = sgn > 0 ? c.h : c.l;
+        if (checkFavorable(dirPnl(favPx), favPx, c.t + 300e3)) break;
+      }
+      if (e.status === 'open') {
+        // last closed candle is a better mark than a stale tick when the
+        // symbol momentarily drops off the ticker list
+        e.lastPrice = cs[cs.length - 1].c;
+        e.rawPnl = dirPnl(e.lastPrice);
+      }
+    }
+    // live tick — same touch logic on the freshest mark; cumulative
+    // peak/trough covers the candle-less fallback path too
+    if (e.status === 'open' && px) {
+      pnl = dirPnl(px);
+      e.lastPrice = px;
+      e.rawPnl = pnl;
+      timeStop(now, pnl);
+      // adverse test uses THIS tick's print only — cumulative troughPnl
+      // predates the ratcheted stop and was phantom-stopping trades on dips
+      // that happened before the trail existed. Chronological ordering is
+      // the candle replay's job; the live tick sees the mark as it is now.
+      if (!checkAdverse(pnl, px))
+        checkFavorable(Math.max(e.peakPnl ?? -Infinity, pnl), px);
+    }
+    // still open: reversal / expiry / live mark. NOTE the unpriced path keeps
+    // the stored mark — re-blending e.pnlPct would compound banked rungs
+    // every tick (that was a real bug for untracked entries)
+    if (e.status === 'open') {
+      const reversed =
+        px && freshDir.get(e.asset) && freshDir.get(e.asset) !== e.direction;
+      const expired = age > LEDGER_TTL_MS || (!px && age > UNTRACKED_TTL_MS);
+      if (e.dedup)
+        settle('clustered', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      else if (e.untradable)
+        settle('untradeable', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      // unrouted entries void at entry — the position never existed on the
+      // exchange, so flat at cost, not a real mark-to-market outcome
+      else if (e.unrouted) settle('unrouted', e.entry, 0);
+      else if (reversed) settle('reversed', px, pnl);
+      else if (expired)
+        // e.pnlPct is already blended — feeding it back through blended()
+        // double-counts banked rungs and re-charges fees; rawPnl is the raw
+        // directional mark blended() expects
+        settle('expired', px ?? e.lastPrice ?? e.entry, px ? pnl : e.rawPnl ?? 0);
+      else if (px)
+        e.pnlPct = pct(blended(pnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e)) + fundPnlNow());
+      else if (e.rawPnl != null)
+        e.pnlPct = pct(blended(e.rawPnl) - ((e.feesPaid ?? fee - FEE_PCT / 2) + (FEE_PCT / 2) * remFracOf(e)) + fundPnlNow());
+    }
+  }
+  ledger.entries = ledger.entries.slice(0, LEDGER_MAX);
+  // finish the live plan now that settlement has run: closes = open entries
+  // whose asset flipped to a tradeable opposite signal; trails = current
+  // ratcheted stop levels the executor should amend on the exchange
+  for (const e of ledger.entries) {
+    if (e.status !== 'open') continue;
+    const fd = freshDir.get(e.asset);
+    if (fd && fd !== e.direction)
+      livePlan.closes.push({ symbol: e.asset + 'USDT', direction: e.direction });
+    // trails intentionally not emitted — stops stay at the entry-set level
+  }
+  // Emit the execution plan BEFORE the eval/research tail: the tail is the
+  // heaviest part of the cycle (multi-MB archive parse — it OOM-killed the
+  // scanner for ~3h on 2026-10-09 and every cycle died before the late write
+  // while market-scanner.json kept refreshing). Executor health must never
+  // depend on the R&D tail completing. The write repeats at the end so a
+  // healthy run still refreshes ts.
+  try {
+    writeJson(path.join(API, 'live-plan.json'), {
+      refreshedAt: snap.refreshedAt,
+      ts: now,
+      ttlMs: 90 * 60e3,
+      engine: ENGINE_VERSION,
+      killSwitch: ddNow >= ddKillPct,
+      ddPct: pct(ddNow),
+      ...livePlan,
+    });
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan early write: ${e.message}\n`
+      );
+    } catch {}
+  }
+  const closed = ledger.entries.filter((e) => e.status !== 'open');
+  // money truth: a profitable exit is a win regardless of which rule closed it
+  const wins = closed.filter((e) => (e.pnlPct ?? 0) > 0).length;
+  const losses = closed.filter((e) => (e.pnlPct ?? 0) < 0).length;
+  const byStatus = {};
+  closed.forEach((e) => (byStatus[e.status] = (byStatus[e.status] || 0) + 1));
+  ledger.stats = {
+    open: ledger.entries.filter((e) => e.status === 'open').length,
+    openRiskPct: pct(openRiskPct()), // portfolio heat — equity at risk if every stop fires
+    ddKill: { thresholdPct: ddKillPct, currentPct: pct(ddNow), active: ddNow >= ddKillPct },
+    closed: closed.length,
+    wins,
+    losses,
+    flat: closed.length - wins - losses,
+    byStatus,
+    winRate: closed.length >= 5 ? pct((wins / closed.length) * 100) : null,
+    avgPnlPct: closed.length
+      ? pct(closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length)
+      : null,
+    // did signals beat the market? avg excess return over universe-median
+    // drift — the honest answer to "does this predict anything"
+    avgAlphaPct: (() => {
+      const a = closed.filter((e) => e.alphaPct != null);
+      return a.length
+        ? pct(a.reduce((s, e) => s + e.alphaPct, 0) / a.length)
+        : null;
+    })(),
+    // full audit reporting: profit factor, max drawdown on the realized
+    // equity path, avg winner/loser — net expectancy after costs is
+    // avgPnlPct above (fees + funding are already inside pnlPct)
+    profitFactor: (() => {
+      const gW = closed.filter((e) => (e.pnlPct ?? 0) > 0).reduce((a, e) => a + e.pnlPct, 0);
+      const gL = Math.abs(closed.filter((e) => (e.pnlPct ?? 0) < 0).reduce((a, e) => a + e.pnlPct, 0));
+      return gL > 0 ? round(gW / gL, 2) : gW > 0 ? Infinity : null;
+    })(),
+    maxDrawdownPct: (() => {
+      let eq = 0, peak = 0, mdd = 0;
+      for (const e of [...closed].sort((a, b) => (a.exitTs ?? 0) - (b.exitTs ?? 0))) {
+        eq += (e.pnlPct ?? 0) * ((e.notional ?? NOTIONAL) / EQUITY);
+        peak = Math.max(peak, eq);
+        mdd = Math.max(mdd, peak - eq);
+      }
+      return closed.length ? pct(mdd) : null;
+    })(),
+    avgWinPct: (() => {
+      const w = closed.filter((e) => (e.pnlPct ?? 0) > 0);
+      return w.length ? pct(w.reduce((a, e) => a + e.pnlPct, 0) / w.length) : null;
+    })(),
+    avgLossPct: (() => {
+      const l = closed.filter((e) => (e.pnlPct ?? 0) < 0);
+      return l.length ? pct(l.reduce((a, e) => a + e.pnlPct, 0) / l.length) : null;
+    })(),
+    byGrade: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.grade ?? '?';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+    byVersion: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.ver ?? 'v0.x';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+    // review ask #4: results BY REGIME — an edge that only exists in one
+    // market type isn't an edge, it's a regime bet. Entries carry both the
+    // breadth regime and the Tharp six-type tag from entry time.
+    byRegime: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.regime ?? 'unknown';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+    byMktType: (() => {
+      const g = {};
+      for (const e of closed) {
+        const k = e.mktType ?? 'unknown';
+        (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+        g[k].wins += e.pnlPct > 0 ? 1 : 0;
+        g[k].pnl = pct(g[k].pnl + (e.pnlPct ?? 0));
+      }
+      for (const k in g) g[k].winRate = pct((g[k].wins / g[k].n) * 100);
+      return g;
+    })(),
+  };
+  // review ask #2: uncertainty is a first-class output — a 70% win rate at
+  // n=20 and n=2000 are different statements. Wilson 95% interval for the
+  // win rate; mean ± 1.96·SE for expectancy and alpha.
+  const Z = 1.96;
+  const wilson = (w, n) => {
+    if (!n) return null;
+    const p = w / n, z2 = Z * Z;
+    const c = (p + z2 / (2 * n)) / (1 + z2 / n);
+    const h = (Z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+    return { lo: pct(Math.max(0, c - h) * 100), hi: pct(Math.min(1, c + h) * 100) };
+  };
+  const meanCI = (xs) => {
+    const n = xs.length;
+    if (n < 2) return null;
+    const m = xs.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+    const h = (Z * sd) / Math.sqrt(n);
+    return { lo: round(m - h, 2), hi: round(m + h, 2), n };
+  };
+  ledger.stats.winRateCI = wilson(wins, closed.length);
+  ledger.stats.avgAlphaCI = meanCI(closed.filter((e) => e.alphaPct != null).map((e) => e.alphaPct));
+  // evidence maturity — the review's headline box: where the prospective
+  // record actually stands
+  const firstTs = ledger.entries.length
+    ? Math.min(...ledger.entries.map((e) => e.ts))
+    : now;
+  ledger.stats.maturity = {
+    ver: ENGINE_VERSION,
+    daysLive: round(Math.max(0, (now - firstTs) / 86400e3), 1),
+    closedTrades: closed.length,
+    openTrades: ledger.entries.filter((e) => e.status === 'open').length,
+    note: 'prospective validation in progress — no backfilled results',
+  };
+  // Van Tharp: R-multiples + SQN — the actual holy grail metric
+  const Rs = closed
+    .filter((e) => e.pnlPct != null)
+    .map((e) => e.pnlPct / (e.stopPct ?? Math.max(4, e.targetPct || 4)));
+  const avgR = Rs.length ? Rs.reduce((a, b) => a + b, 0) / Rs.length : null;
+  const stdR =
+    Rs.length > 1
+      ? Math.sqrt(Rs.reduce((a, b) => a + (b - avgR) ** 2, 0) / (Rs.length - 1))
+      : null;
+  const sqn = Rs.length >= 30 && stdR > 1e-9 * Math.max(1, Math.abs(avgR)) ? (avgR / stdR) * Math.sqrt(Math.min(Rs.length, 100)) : null; /* sqn-guard */
+  ledger.stats.avgR = avgR != null ? round(avgR, 2) : null;
+  ledger.stats.expectancyR = ledger.stats.avgR;
+  ledger.stats.sharpeR = stdR ? round(avgR / stdR, 2) : null; // per-trade Sharpe — SQN is this × √N
+  ledger.stats.sqn = sqn != null ? round(sqn, 2) : null;
+  ledger.stats.sqnBand =
+    sqn == null
+      ? null
+      : sqn >= 7
+        ? 'holy grail'
+        : sqn >= 5
+          ? 'superb'
+          : sqn >= 3
+            ? 'excellent'
+            : sqn >= 2.5
+              ? 'good'
+              : sqn >= 2.0
+                ? 'average'
+                : sqn >= 1.6
+                  ? 'below average'
+                  : 'poor';
+  // Tharp: the system IS its R-multiple distribution — publish the shape
+  const rHist = { '≤-1R': 0, '-1..-0.5': 0, '-0.5..0': 0, '0..+0.5': 0, '+0.5..1': 0, '+1..2': 0, '≥+2': 0 };
+  for (const r of Rs)
+    rHist[r <= -1 ? '≤-1R' : r <= -0.5 ? '-1..-0.5' : r < 0 ? '-0.5..0' : r < 0.5 ? '0..+0.5' : r < 1 ? '+0.5..1' : r < 2 ? '+1..2' : '≥+2']++;
+  ledger.stats.rDist = rHist;
+  ledger.stats.maxR = Rs.length ? round(Math.max(...Rs), 2) : null;
+  ledger.stats.minR = Rs.length ? round(Math.min(...Rs), 2) : null;
+  ledger.stats.expectancyCI = meanCI(Rs.map((r) => round(r, 4)));
+  // Sortino-SQN — downside deviation only. A moon-bag winner stretches
+  // the right tail and inflates total σ; that variance is profit, not
+  // risk. Deviations measured below target 0 (semi-deviation over all
+  // trades, MAR=0), so consistent winners score higher than the classic
+  // SQN gives them credit for.
+  if (Rs.length > 1 && avgR != null) {
+    const dsd = Math.sqrt(Rs.reduce((a, r) => a + Math.min(0, r) ** 2, 0) / Rs.length);
+    ledger.stats.sqnSortino = Rs.length >= 30 && dsd > 1e-9 ? round((avgR / dsd) * Math.sqrt(Math.min(Rs.length, 100)), 2) : null; /* sqn-guard */
+    ledger.stats.downsideDevR = round(dsd, 3);
+  }
+  // Deflated SQN (Bailey–López de Prado DSR): a SQN picked from a grid of
+  // T trials needs a haircut — expected max SR under T zero-edge trials is
+  // not zero. PSR-style significance: P(true SR > E[max SR across T null
+  // trials]), given skew/kurtosis of the realized R-multiples. Trials =
+  // the optimizer's ranked config cells (real search breadth, not a guess).
+  try {
+    const opt = JSON.parse(fs.readFileSync(path.join(API, 'rr-optimize.json'), 'utf8'));
+    const srs = (opt.ranked || []).map((r) => (r.sqn100 ?? 0) / 10).filter(Number.isFinite);
+    const T = srs.length, n = Rs.length;
+    if (T > 2 && n > 2 && stdR > 0 && avgR != null) {
+      const erf = (x) => Math.tanh(1.128379167 * x + 0.2726679 * x * x * x); // Φ via tanh approx
+      const Phi = (x) => 0.5 * (1 + erf(x / Math.SQRT2));
+      const invPhi = (p) => {
+        const a = [2.5066282, -18.6150006, 41.3911977, -25.4410605];
+        const b = [-8.4735109, 23.0833674, -21.0622410, 3.1308291];
+        const c = [0.3374755, 0.9761690, -0.6639323, -0.5958186, -0.1363116, -0.0178944, -0.0083913];
+        const y = p - 0.5;
+        if (Math.abs(y) < 0.42) {
+          const r = y * y;
+          return (y * (((a[3] * r + a[2]) * r + a[1]) * r + a[0])) / ((((b[3] * r + b[2]) * r + b[1]) * r + b[0]) * r + 1);
+        }
+        let r = p, q;
+        if (y > 0) r = 1 - p;
+        r = Math.log(-Math.log(r));
+        q = c[0] + r * (c[1] + r * (c[2] + r * (c[3] + r * (c[4] + r * (c[5] + r * c[6])))));
+        return y < 0 ? -q : q;
+      };
+      const sr = avgR / stdR;
+      const vSr = srs.reduce((a, x) => a + (x - srs.reduce((b, y) => b + y, 0) / T) ** 2, 0) / (T - 1);
+      const EU = 0.5772156649;
+      const srStar = Math.sqrt(Math.max(0, vSr)) * ((1 - EU) * invPhi(1 - 1 / T) + EU * invPhi(1 - 1 / (T * Math.E)));
+      const m3 = Rs.reduce((a, r) => a + Math.pow(r - avgR, 3), 0) / n;
+      const m4 = Rs.reduce((a, r) => a + Math.pow(r - avgR, 4), 0) / n;
+      const skew = m3 / Math.pow(stdR, 3), kurt = m4 / Math.pow(stdR, 4);
+      const denom = Math.sqrt(Math.max(1e-9, 1 - skew * sr + ((kurt - 1) / 4) * sr * sr));
+      ledger.stats.deflatedSqn = {
+        trials: T,
+        srStar: round(srStar, 3),
+        dsr: round(Phi(((sr - srStar) * Math.sqrt(n - 1)) / denom), 4),
+        note: 'P(observed SR exceeds best-of-T null) — the multiple-testing haircut',
+      };
+    }
+  } catch {}
+  // cost decomposition — what the frictions actually ate. pnlPct is net of
+  // fees+funding, so gross = net + fees − funding carry. If fees consume
+  // the edge, the "strategy" is just churn dressed as signal.
+  const feeSum = closed.reduce((a, e) => a + (e.feesPaid ?? e.feePct ?? FEE_PCT), 0);
+  const fundSum = closed.reduce((a, e) => a + (e.fundingPnl ?? 0), 0);
+  const netSum = closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0);
+  ledger.stats.costDrag = {
+    grossPct: pct(netSum + feeSum - fundSum),
+    feesPct: pct(feeSum),
+    fundingPct: pct(fundSum),
+    netPct: pct(netSum),
+    n: closed.length,
+  };
+  // Kelly fraction — the sizing ceiling implied by the realized record.
+  // Read-only sanity check: if Kelly says ≤0, the book has no edge to size.
+  const kW = closed.length ? wins / closed.length : null;
+  const kB =
+    ledger.stats.avgWinPct && ledger.stats.avgLossPct
+      ? ledger.stats.avgWinPct / Math.abs(ledger.stats.avgLossPct)
+      : null;
+  ledger.stats.kellyPct = kW != null && kB ? round(Math.max(-1, kW - (1 - kW) / kB) * 100, 1) : null;
+  // Monte-Carlo bootstrap — resample the realized per-trade equity deltas
+  // (with replacement, same n) to get the DISTRIBUTION of outcomes this
+  // record could have produced: P(final<0), median DD, worst decile.
+  // This is the honest answer to "was the P&L skill or sequence luck?"
+  ledger.stats.monteCarlo = (() => {
+    const deltas = closed.map((e) => (((e.pnlPct ?? 0) / 100) * (e.notional ?? NOTIONAL)) / EQUITY);
+    const n = deltas.length;
+    if (n < 10) return null;
+    const SIMS = 500;
+    const finals = [], mdds = [];
+    for (let s = 0; s < SIMS; s++) {
+      let eq = 1, peak = 1, mdd = 0;
+      for (let i = 0; i < n; i++) {
+        eq *= 1 + deltas[(Math.random() * n) | 0];
+        peak = Math.max(peak, eq);
+        mdd = Math.max(mdd, (peak - eq) / peak);
+      }
+      finals.push(eq - 1);
+      mdds.push(mdd);
+    }
+    finals.sort((a, b) => a - b);
+    mdds.sort((a, b) => a - b);
+    const q = (xs, p) => pct(xs[Math.min(xs.length - 1, Math.floor(p * xs.length))] * 100);
+    return {
+      sims: SIMS, n,
+      p5: q(finals, 0.05), p50: q(finals, 0.5), p95: q(finals, 0.95),
+      pLoss: pct((finals.filter((f) => f < 0).length / SIMS) * 100),
+      dd50: q(mdds, 0.5), dd95: q(mdds, 0.95),
+      pDdOver10: pct((mdds.filter((d) => d > 0.1).length / SIMS) * 100),
+    };
+  })();
+  // capture efficiency: how much of each trade's favorable excursion was
+  // actually banked — the forensic leak metric (was 16%)
+  const cap = closed.filter((e) => e.peakPnl != null && e.peakPnl > 0);
+  ledger.stats.capturePct = cap.length
+    ? pct((closed.reduce((a, e) => a + (e.pnlPct ?? 0), 0) / closed.length) /
+        (cap.reduce((a, e) => a + e.peakPnl, 0) / cap.length) * 100)
+    : null;
+  // Tharp's first rule: objectives come BEFORE the system. Stated openly,
+  // measured every build — the dashboard grades us against them.
+  ledger.stats.objectives = {
+    sqn: { target: 'SQN ≥ 2.5 at n≥100', cur: ledger.stats.sqn, n: closed.length, ok: (sqn ?? 0) >= 2.5 && closed.length >= 100 },
+    capture: { target: 'capture ≥ 40% of excursion', cur: ledger.stats.capturePct, ok: (ledger.stats.capturePct ?? 0) >= 40 },
+    expectancy: { target: 'expectancy ≥ +0.25R', cur: ledger.stats.avgR, ok: (avgR ?? 0) >= 0.25 },
+    maxdd: { target: 'max drawdown < 5%', cur: ledger.stats.maxDrawdownPct, ok: (ledger.stats.maxDrawdownPct ?? 0) < 5 },
+    sample: { target: '≥100 closed for a real verdict', cur: closed.length, ok: closed.length >= 100 },
+  };
+  // self-improving: doctrine weights learned from realized performance —
+  // DORMANT until the sample is large enough to distinguish edge from luck
+  ledger.model = {
+    stratAdj,
+    // evidence-driven adaptation — sourced from prospective signal-eval,
+    // not the (purged) paper ledger. Blocked strategies can't open real
+    // positions; positive-alpha strategies earn a bounded score lift.
+    evalGate: {
+      source: 'signal-eval.json byStrategy · min n=20',
+      blocked: [...stratBlock],
+      boosts: stratBoost,
+      mktType,
+      regimeBlocked: [...stratRegBlock],
+      regimeBoosts: stratRegBoost,
+      // direction-aware cells — the admission that actually binds whenever a
+      // strategy|direction has its own record (see cellOf/cellHardBlocked)
+      cellRule: `strategy|direction n>=${EVAL_MIN_N} (in-regime n>=15) judged on own avg fwd24h - ${CELL_COST}% cost; thin cells use the pooled rule`,
+      cellsBlocked: Object.entries(evalByStratDir)
+        .filter(([, v]) => (v.n || 0) >= EVAL_MIN_N && cellNet(v) < 0).map(([k]) => k),
+      cellsAdmitted: Object.entries(evalByStratDir)
+        .filter(([, v]) => (v.n || 0) >= EVAL_MIN_N && cellNet(v) >= 0).map(([k]) => k),
+      hitGate: 'blocked when Bayesian-shrunk hitRate < 40% (n>=20)',
+      shortGate: SHORT_HANDICAP
+        ? 'SHORTs: banned in bull tape; sideways allows Liquidity Sweep / Key Level SFP / exhaustion family; +10 score surcharge outside bear tape'
+        : 'symmetric: shorts and longs face the same gates; mkt-type doctrine + direction-aware cell records decide (SENTINEL_SHORT_HANDICAP=1 restores the old short-only bar)',
+      atrStopFloor: 'stop >= min(4.5%, 1.8 x 1h ATR) — stops inside the noise band get clipped',
+    },
+    // Chat With Traders corpus — transcripts distilled into doctrine themes;
+    // each theme records how many episodes argued it and where it's encoded
+    // in this codebase. Evidence, not decoration.
+    wisdom: (() => {
+      try {
+        const w = JSON.parse(
+          fs.readFileSync(path.join(API, 'cwt-wisdom.json'), 'utf8')
+        );
+        const impl = {
+          cut_losers_fast: 'stall-exit 2h / thesis-flip / decay 5h',
+          let_winners_run: 'TP ladder 40/30/15 + 15% moon-bag trail',
+          position_sizing: 'RISK_PCT × conv × stratMul / stopFrac',
+          survival_first: `${ddKillPct}% DD kill / ${RISK_MAX ? 25 : 6}% daily halt / never-naked`,
+          edge_evidence: 'prospective eval gates (n>=20, shrunk hit/alpha)',
+          discipline_process: 'score floors + heat caps + profile rails',
+          journal_review: 'real-fills journal + net-of-fee scoreboard',
+          overtrading: 'daily entry cap + per-symbol cooldown + MIN_SCORE',
+          loss_streak_size: '2-loss symbol cooldown + DD throttle on riskMul',
+          avoid_leverage: 'lev <= 80/(stop+0.64) — stop inside liq band',
+          dont_average_losers: 'one position per symbol — no adding',
+          risk_reward: 'net-of-cost floor + ladder R:R geometry',
+          regime_adapt: 'regime/mktType gates + SHORT class rule',
+          emotion_control: 'rules are code — no discretion in the loop',
+          know_why: 'strategy + reasons provenance on every signal',
+        };
+        return {
+          source: w.source,
+          episodes: w.episodes,
+          themes: Object.fromEntries(
+            Object.entries(impl).map(([k, v]) => [
+              k,
+              { episodes: w.themeHits?.[k] ?? 0, impl: v },
+            ])
+          ),
+        };
+      } catch {
+        return null;
+      }
+    })(),
+    learning: {
+      active: learnActive,
+      closedN: closedTotal,
+      gate: { total: LEARN_MIN_TOTAL, perStrategy: LEARN_MIN_STRAT },
+    },
+    samples: Object.fromEntries(
+      Object.entries(stratR).map(([k, v]) => [k, v.length])
+    ),
+    updatedAt: snap.refreshedAt,
+  };
+  // ---- discipline scorecard — ledger is empty post-paper-purge; keep the
+  // shape so consumers don't break, but never echo the old model's equity ----
+  const closedAll = closed.filter((e) => e.pnlPct != null);
+  const rrList = closedAll.map(
+    (e) => (e.targetPct || 4) / (e.stopPct ?? Math.max(4, e.targetPct || 4))
+  );
+  const riskPctList = closedAll.map(
+    (e) =>
+      ((e.stopPct ?? Math.max(4, e.targetPct || 4)) * (e.notional ?? NOTIONAL)) /
+      EQUITY
+  ); // stop% × actual notional → $ risk → % of paper equity
+  let maxConsecL = 0,
+    cur = 0;
+  for (const e of [...closedAll].sort((a, b) => a.exitTs - b.exitTs)) {
+    cur = e.pnlPct < 0 ? cur + 1 : 0;
+    if (cur > maxConsecL) maxConsecL = cur;
+  }
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  ledger.stats.discipline = {
+    avgRiskPctAcct: closedAll.length ? round(avg(riskPctList), 2) : null,
+    avgRR: closedAll.length ? round(avg(rrList), 2) : null,
+    rr12plus: closedAll.length
+      ? pct(rrList.filter((r) => r >= 1.9).length / closedAll.length * 100)
+      : null,
+    maxConsecLosses: maxConsecL,
+    journalCoverage: 100, // every entry carries a generated synopsis by construction
+    stopsHonored: 100, // every close is rule-based — no discretionary overrides exist
+    closedSample: closedAll.length,
+    // fee intelligence: modeled round-trip fees actually paid, and carry
+    // earned/paid by open positions' funding alignment
+    feesPaidUsd: round(
+      closedAll.reduce((a, e) => a + ((e.notional ?? NOTIONAL) * (e.feePct ?? FEE_PCT)) / 100, 0),
+      2
+    ),
+    carryOpen: {
+      earn: ledger.entries.filter((e) => e.status === 'open' && e.carry === 'earn').length,
+      pay: ledger.entries.filter((e) => e.status === 'open' && e.carry === 'pay').length,
+    },
+  };
+  const by = (key) => {
+    const g = {};
+    for (const e of closed) {
+      const k = e[key] ?? 'other';
+      (g[k] ??= { n: 0, wins: 0, pnl: 0 }).n++;
+      g[k].wins += (e.pnlPct ?? 0) > 0 ? 1 : 0;
+      g[k].pnl += e.pnlPct ?? 0;
+    }
+    return Object.fromEntries(
+      Object.entries(g).map(([k, v]) => [
+        k,
+        { n: v.n, winRate: pct((v.wins / v.n) * 100), avgPnlPct: pct(v.pnl / v.n) },
+      ])
+    );
+  };
+  ledger.stats.byDirection = by('direction');
+  ledger.stats.byStrategy = by('strategy');
+  const sortedClosed = [...closed].sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0));
+  ledger.stats.best = sortedClosed.at(-1)?.asset ?? null;
+  ledger.stats.worst = sortedClosed[0]?.asset ?? null;
+  if (!ledgerCorrupt) writeJson(LEDGER_FILE, ledger);
+
+  // ---- append-only prospective record: the full emitted board every run,
+  // including signals that never became positions. Nothing is rewritten or
+  // deleted except trimming whole oldest runs at the cap — this is the
+  // unaltered out-of-sample dataset the audit called for.
+  let archive = { runs: [] };
+  try {
+    archive = JSON.parse(fs.readFileSync(ARCHIVE_FILE, 'utf8'));
+  } catch {}
+  archive.runs ??= [];
+  // dedup guard: a manual rebuild inside the same cadence window would push
+  // a near-identical board — and the eval engine would count its signals
+  // twice (keys differ by run.ts). One board per cadence only.
+  const lastRunTs = archive.runs.length ? archive.runs[archive.runs.length - 1].ts : 0;
+  const skipArchive = now - lastRunTs < 4 * 60e3;
+  if (!skipArchive)
+    archive.runs.push({
+    ts: now,
+    ver: ENGINE_VERSION,
+    universeSize: rows.length,
+    poolN: candidates.length,
+    medianChangePct,
+    breadth: breadthPct,
+    regime,
+    mktType,
+    marketSQN,
+    signals: signals.map((s) => ({
+      asset: s.asset,
+      cls: s.cls,
+      direction: s.direction,
+      score: s.score,
+      grade: s.grade,
+      strategy: s.strategy,
+      entry: s.entryPrice,
+      targetPct: s.targetPct,
+      stopPct: s.stopPct,
+      spreadPct: s.spreadPct,
+      boardRank: s.boardRank,
+      // raw feature values — the evaluator correlates each against forward
+      // returns to measure WHICH component carries predictive power
+      rsi: s.rsi ?? null,
+      volRatio: s.volRatio ?? null,
+      momScore: s.momScore ?? null,
+      changePct: s.changePct ?? null,
+      // factor ledger at emission — the eval engine reads this back to freeze
+      // each signal's DNA into its journal record (ta itself is too heavy to
+      // archive; factors are the evidence that matters)
+      confl: s.ta?.factors ?? null,
+    })),
+  });
+  // permanent record: every run also lands in its monthly history file
+  // (api/history/archive-YYYY-MM.json) — trimming the hot window below can
+  // never lose a signal. Dedup by timestamp keeps re-runs idempotent.
+  // Flush is cadence-gated: the hot archive already holds every run, so a
+  // per-cycle merge was re-reading+rewriting ~60MB of JSON for at most one
+  // new run — the dominant scan cost on IO-throttled disks. The hot file is
+  // the durable record; a crash between flushes loses nothing.
+  const histDir = path.join(API, 'history');
+  fs.mkdirSync(histDir, { recursive: true });
+  const HIST_FLUSH_MS = +(process.env.SENTINEL_HIST_FLUSH_MS || 15 * 60e3);
+  const histStatePath = path.join(API, '..', 'state', 'hist-flush.json');
+  let histState = { at: 0, month: '', runs: 0, signals: 0 };
+  try { histState = { ...histState, ...JSON.parse(fs.readFileSync(histStatePath, 'utf8')) }; } catch {}
+  const curMonth = new Date().toISOString().slice(0, 7);
+  if (Date.now() - histState.at > HIST_FLUSH_MS || histState.month !== curMonth) {
+    const byMonth = new Map();
+    for (const r of archive.runs) {
+      const m = new Date(r.ts).toISOString().slice(0, 7);
+      if (!byMonth.has(m)) byMonth.set(m, []);
+      byMonth.get(m).push(r);
+    }
+    for (const [m, rs] of byMonth) {
+      const hf = path.join(histDir, `archive-${m}.json`);
+      let h = { runs: [] };
+      try {
+        h = JSON.parse(fs.readFileSync(hf, 'utf8'));
+      } catch {}
+      h.runs ??= [];
+      const seen = new Set(h.runs.map((x) => x.ts));
+      for (const r of rs) if (!seen.has(r.ts)) h.runs.push(r);
+      h.runs.sort((a, b) => a.ts - b.ts);
+      writeJson(hf, h);
+    }
+    let histRuns = 0;
+    let histSignals = 0;
+    for (const f of fs.readdirSync(histDir)) {
+      if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
+      try {
+        const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+        for (const r of h.runs || []) {
+          histRuns++;
+          histSignals += (r.signals || []).length;
+        }
+      } catch {}
+    }
+    histState = { at: Date.now(), month: curMonth, runs: histRuns, signals: histSignals };
+    writeJson(histStatePath, histState);
+  }
+  const runsBeforeTrim = archive.runs.length;
+  archive.runs = archive.runs.slice(-ARCHIVE_MAX_RUNS);
+  // 20MB write only when a run actually landed or the trim changed the file
+  if (!skipArchive || archive.runs.length !== runsBeforeTrim) writeJson(ARCHIVE_FILE, archive);
+  // surface the permanent record's depth on the ledger itself — counters
+  // refresh on flush cadence, persisted between flushes so no re-scan.
+  ledger.stats.archiveRuns = histState.runs;
+  ledger.stats.signalsArchived = histState.signals;
+
+  // ---- forward-outcome evaluation: EVERY emitted signal gets measured ----
+  // The position ledger only ever samples the ~1-2 signals that became
+  // trades. This evaluator scores the whole board: for each archived
+  // signal, the 5m tape after emission determines forward returns at
+  // +1h/+4h/+24h, whether TP touched before SL inside 24h (adverse-first,
+  // same pessimism as settlement), and alpha vs a BTC/ETH/SOL median
+  // benchmark over the identical window. Complete records are sealed into
+  // monthly eval files (api/eval-YYYY-MM.json) — the predictive-power
+  // dataset accumulates ~10x faster than the traded ledger can.
+  const EVAL_FILE = path.join(API, 'signal-eval.json');
+  let evalBook = { records: [] };
+  try {
+    evalBook = JSON.parse(fs.readFileSync(EVAL_FILE, 'utf8'));
+  } catch {}
+  evalBook.records ??= [];
+  const evalMap = new Map(evalBook.records.map((r) => [r.key, r]));
+  const HORIZONS = [3600e3, 4 * 3600e3, 24 * 3600e3];
+  // keys already sealed into monthly eval files — never re-evaluate
+  const sealedKeys = new Set();
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^eval-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const eh = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const r of eh.records || []) sealedKeys.add(r.key);
+    } catch {}
+  }
+  const pending = [];
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^archive-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const h = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const run of h.runs || [])
+        for (const s of run.signals || []) {
+          const key = `${run.ts}|${s.asset}|${s.direction}`;
+          if (sealedKeys.has(key)) continue;
+          const rec = evalMap.get(key);
+          if (rec && rec.complete) continue;
+          pending.push({ key, run, s, rec });
+        }
+    } catch {}
+  }
+  // bound API spend: evaluate at most 24 signals per build; backlog clears
+  // within a few builds and steady-state is ~12 new signals per run anyway
+  const toEval = pending
+    .filter((p) => now - p.run.ts >= HORIZONS[0])
+    .slice(0, 24);
+  if (toEval.length) {
+    const minTs = Math.min(...toEval.map((p) => p.run.ts));
+    // shared market benchmark tape — BTC/ETH/SOL median same-window return
+    const mktSeries = {};
+    await Promise.all(
+      ['BTC', 'ETH', 'SOL'].map(async (a) => {
+        mktSeries[a] = await fetch5mRange(a, minTs, now).catch(() => null);
+      })
+    );
+    const mktAt = (t0, t1) => {
+      const rets = [];
+      for (const a of ['BTC', 'ETH', 'SOL']) {
+        const cs = mktSeries[a];
+        if (!cs || !cs.length) continue;
+        const c0 = cs.find((c) => c.t >= t0);
+        let c1 = null;
+        for (const c of cs) if (c.t <= t1) c1 = c;
+        if (c0 && c1 && c1.t > c0.t) rets.push((c1.c - c0.c) / c0.c);
+      }
+      if (!rets.length) return null;
+      rets.sort((a, b) => a - b);
+      return rets[Math.floor(rets.length / 2)] * 100;
+    };
+    // parallel prefetch: one fetch per ASSET over the union of its pending
+    // windows (was one serial fetch per record — same tape refetched 24×)
+    const byAsset = new Map();
+    for (const p of toEval) {
+      const w = byAsset.get(p.s.asset) ?? { min: p.run.ts, end: 0 };
+      w.min = Math.min(w.min, p.run.ts);
+      w.end = Math.max(w.end, Math.min(p.run.ts + HORIZONS[2], now));
+      byAsset.set(p.s.asset, w);
+    }
+    const assetCandles = new Map();
+    {
+      const assets = [...byAsset.keys()];
+      for (let i = 0; i < assets.length; i += 6) {
+        await Promise.all(
+          assets.slice(i, i + 6).map(async (a) => {
+            const w = byAsset.get(a);
+            assetCandles.set(a, await fetch5mRange(a, w.min, w.end).catch(() => null));
+          })
+        );
+      }
+    }
+    for (const p of toEval) {
+      const { key, run, s } = p;
+      const sgn = s.direction === 'LONG' ? 1 : -1;
+      const end = Math.min(run.ts + HORIZONS[2], now);
+      const all = assetCandles.get(s.asset);
+      const cs = all && all.filter((c) => c.t >= run.ts - 300e3 && c.t <= end + 300e3);
+      if (!cs || !cs.length) continue;
+      // entry fill: emission mark plus adverse half-spread (worst case)
+      const half = (s.spreadPct ?? 0) / 200;
+      const entry = s.entry * (1 + sgn * half);
+      const r = p.rec ?? {
+        key,
+        runTs: run.ts,
+        asset: s.asset,
+        cls: s.cls,
+        direction: s.direction,
+        score: s.score,
+        grade: s.grade,
+        strategy: s.strategy,
+        ver: s.ver ?? run.ver ?? ENGINE_VERSION,
+        regime: run.regime ?? null,
+        mktType: run.mktType ?? null,
+        rsi: s.rsi ?? null,
+        volRatio: s.volRatio ?? null,
+        momScore: s.momScore ?? null,
+        fusion: s.fusion ?? null,
+        boardRank: s.boardRank ?? null,
+        entry,
+        // bracket the signal designed — journal charts need it to draw the
+        // actual risk geometry, not a post-hoc guess
+        targetPct: s.targetPct ?? null,
+        stopPct: s.stopPct ?? null,
+        targetPrice: s.targetPrice ?? null,
+        // evidence ledger snapshotted at emission — what led to the signal,
+        // frozen so the journal grades the read, not a retrofitted story
+        confl: s.confl ?? s.ta?.factors ?? null,
+      };
+      const closeAt = (T) => {
+        let c1 = null;
+        for (const c of cs) if (c.t <= T) c1 = c;
+        return c1 && c1.t >= run.ts ? c1.c : null;
+      };
+      for (let i = 0; i < 3; i++) {
+        const H = HORIZONS[i];
+        if (end < run.ts + H) continue;
+        const c = closeAt(run.ts + H);
+        if (c == null) continue;
+        const fwd = sgn * ((c - entry) / entry) * 100;
+        const mkt = mktAt(run.ts, run.ts + H);
+        r['fwd' + H / 3600e3 + 'h'] = pct(fwd);
+        if (mkt != null) r['mkt' + H / 3600e3 + 'h'] = pct(mkt);
+        // alpha vs a SAME-DIRECTION basket — a short signal's benchmark is
+        // shorting the basket (−mkt), not holding it; raw fwd−mkt was paying
+        // shorts 2× the market move (ledger uses the signed convention too)
+        if (mkt != null) r['alpha' + H / 3600e3 + 'h'] = pct(fwd - sgn * mkt);
+      }
+      // tp-before-sl inside the 24h window — adverse-first within a bar,
+      // identical pessimism to position settlement
+      if (!r.outcome) {
+        const tgt = s.targetPct ?? 8;
+        const stp = s.stopPct ?? Math.max(4, tgt);
+        const tPx = entry * (1 + (sgn * tgt) / 100);
+        const sPx = entry * (1 - (sgn * stp) / 100);
+        for (const c of cs) {
+          const advPx = sgn > 0 ? c.l : c.h;
+          if (sgn > 0 ? advPx <= sPx : advPx >= sPx) {
+            r.outcome = 'sl';
+            r.outcomePct = pct(-stp);
+            break;
+          }
+          const favPx = sgn > 0 ? c.h : c.l;
+          if (sgn > 0 ? favPx >= tPx : favPx <= tPx) {
+            r.outcome = 'tp';
+            r.outcomePct = pct(tgt);
+            break;
+          }
+        }
+        if (!r.outcome && end >= run.ts + HORIZONS[2] - 300e3) {
+          r.outcome = 'timeout';
+          const lastC = cs[cs.length - 1].c;
+          r.outcomePct = pct(sgn * ((lastC - entry) / entry) * 100);
+        }
+      }
+      r.complete = end >= run.ts + HORIZONS[2] - 300e3;
+      r.evaluatedAt = now;
+      evalMap.set(key, r);
+    }
+  }
+  // seal complete records into monthly eval files keyed by signal month
+  const evalByMonth = new Map();
+  for (const r of evalMap.values()) {
+    if (!r.complete) continue;
+    const m = new Date(r.runTs).toISOString().slice(0, 7);
+    if (!evalByMonth.has(m)) evalByMonth.set(m, []);
+    evalByMonth.get(m).push(r);
+  }
+  const allComplete = [];
+  for (const [m, rs] of evalByMonth) {
+    const ef = path.join(histDir, `eval-${m}.json`);
+    let eh = { records: [] };
+    try {
+      eh = JSON.parse(fs.readFileSync(ef, 'utf8'));
+    } catch {}
+    eh.records ??= [];
+    const seen = new Set(eh.records.map((x) => x.key));
+    for (const r of rs) if (!seen.has(r.key)) eh.records.push(r);
+    writeJson(ef, eh);
+  }
+  for (const f of fs.readdirSync(histDir)) {
+    if (!/^eval-\d{4}-\d{2}\.json$/.test(f)) continue;
+    try {
+      const eh = JSON.parse(fs.readFileSync(path.join(histDir, f), 'utf8'));
+      for (const r of eh.records || []) allComplete.push(r);
+    } catch {}
+  }
+  // Stanford step 3 — residual weighting: ridge-fit every sealed signal's
+  // emitted fusion z-map onto its realized 24h alpha, shrunk toward priors.
+  // fuseBoard consumes the persisted weights next cycle.
+  try {
+    const fitRows = [];
+    for (const r of allComplete)
+      if (r.alpha24h != null && r.fusion)
+        fitRows.push({ c: r.fusion, a: Math.max(-8, Math.min(8, +r.alpha24h)) });
+    const fit = sf.fitWeights(fitRows.slice(-6000));
+    if (fit) sf.saveWeights(path.join(API, '..', 'state'), fit);
+  } catch {}
+  // predictive-power stats. Per-horizon metrics (dirAcc, avgFwd, alpha)
+  // use every record that has that field — a signal labeled at +1h counts
+  // for 1h accuracy immediately instead of waiting 24h. Outcome-dependent
+  // stats (hit rate, expectancy, IC) stay on complete records only.
+  const labeled = [...allComplete];
+  for (const r of evalBook.records) if (r.hit24h == null) labeled.push(r);
+  const evStats = { n: allComplete.length, labeled: labeled.length };
+  const evAvg = (xs) => (xs.length ? pct(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  const fld = (k) => labeled.map((r) => r[k]).filter((v) => v != null);
+  evStats.hitRate24h = allComplete.length
+    ? pct((allComplete.filter((r) => r.outcome === 'tp').length / allComplete.length) * 100)
+    : null;
+  evStats.avgFwd1h = evAvg(fld('fwd1h'));
+  evStats.avgFwd4h = evAvg(fld('fwd4h'));
+  evStats.avgFwd24h = evAvg(fld('fwd24h'));
+  evStats.avgAlpha1h = evAvg(fld('alpha1h'));
+  evStats.avgAlpha4h = evAvg(fld('alpha4h'));
+  evStats.avgAlpha24h = evAvg(fld('alpha24h'));
+  evStats.expectancyPct = evAvg(fld('outcomePct'));
+  // directional accuracy — % of evaluated signals whose forward return
+  // was positive in the traded direction at each horizon
+  const dirAcc = (k) => {
+    const xs = fld(k);
+    return xs.length ? pct((xs.filter((v) => v > 0).length / xs.length) * 100) : null;
+  };
+  evStats.dirAcc1h = dirAcc('fwd1h');
+  evStats.dirAcc4h = dirAcc('fwd4h');
+  evStats.dirAcc24h = dirAcc('fwd24h');
+  // median alpha — the outlier-robust centre, not just the mean
+  const med = (xs) =>
+    xs.length
+      ? (xs.sort((a, b) => a - b), xs.length % 2
+          ? xs[(xs.length - 1) / 2]
+          : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2)
+      : null;
+  evStats.medAlpha24h = med(fld('alpha24h').slice());
+  evStats.medFwd24h = med(fld('fwd24h').slice());
+  // information coefficients: Pearson corr of each feature vs 24h alpha —
+  // THE quant answer to "which component actually predicts". Score IC is
+  // the headline; feature ICs say where the signal lives.
+  const pearson = (pairs) => {
+    if (pairs.length < 10) return null;
+    const mx = pairs.reduce((a, p) => a + p[0], 0) / pairs.length;
+    const my = pairs.reduce((a, p) => a + p[1], 0) / pairs.length;
+    let num = 0, dx = 0, dy = 0;
+    for (const [x, y] of pairs) {
+      num += (x - mx) * (y - my);
+      dx += (x - mx) ** 2;
+      dy += (y - my) ** 2;
+    }
+    return dx > 0 && dy > 0 ? round(num / Math.sqrt(dx * dy), 3) : null;
+  };
+  const pairUp = (k) =>
+    allComplete
+      .filter((r) => r[k] != null && r.alpha24h != null)
+      .map((r) => [r[k], r.alpha24h]);
+  evStats.ic24h = pearson(pairUp('score'));
+  evStats.icRsi = pearson(pairUp('rsi'));
+  evStats.icVol = pearson(pairUp('volRatio'));
+  evStats.icMom = pearson(pairUp('momScore'));
+  evStats.icRank = pearson(
+    allComplete
+      .filter((r) => r.boardRank != null && r.alpha24h != null)
+      .map((r) => [-r.boardRank, r.alpha24h])
+  );
+  const group = (kf) => {
+    const g = {};
+    for (const r of allComplete) {
+      const k = kf(r);
+      (g[k] ??= { n: 0, tp: 0, alpha: [], fwd: [] }).n++;
+      if (r.outcome === 'tp') g[k].tp++;
+      if (r.alpha24h != null) g[k].alpha.push(r.alpha24h);
+      if (r.fwd24h != null) g[k].fwd.push(r.fwd24h);
+    }
+    for (const k in g) {
+      g[k].hitRate = pct((g[k].tp / g[k].n) * 100);
+      g[k].avgAlpha24h = evAvg(g[k].alpha);
+      g[k].avgFwd24h = evAvg(g[k].fwd);
+      delete g[k].alpha; delete g[k].fwd; delete g[k].tp;
+    }
+    return g;
+  };
+  evStats.byGrade = group((r) => r.grade ?? '?');
+  evStats.byDirection = group((r) => r.direction ?? '?');
+  evStats.byStrategy = group((r) => r.strategy ?? '?');
+  evStats.byScoreBand = group((r) =>
+    r.score >= 90 ? '90+' : r.score >= 80 ? '80-89' : '<80'
+  );
+  evStats.byRegime = group((r) => r.regime ?? 'unknown');
+  evStats.byMktType = group((r) => r.mktType ?? 'unknown');
+  // regime-conditional strategy table — the scorer's regime-switch input:
+  // strategy alpha measured PER mktType, not just globally
+  evStats.byStrategyMkt = group((r) => (r.strategy ?? '?') + '|' + (r.mktType ?? 'unknown'));
+  // direction-aware cells — a strategy's longs and shorts graded apart (the
+  // admission gate's input; pooled tables hid opposite-signed sides)
+  evStats.byStrategyDir = group((r) => (r.strategy ?? '?') + '|' + (r.direction ?? '?'));
+  evStats.byStrategyDirMkt = group((r) => (r.strategy ?? '?') + '|' + (r.direction ?? '?') + '|' + (r.mktType ?? 'unknown'));
+  // calibration: does the score ORDER predict? Monotone hit rate across
+  // deciles = a ranking that means something; flat/inverted = decoration.
+  evStats.calibration = group((r) =>
+    r.score >= 90 ? '90-100' : r.score >= 80 ? '80-89' : r.score >= 70 ? '70-79'
+      : r.score >= 60 ? '60-69' : r.score >= 50 ? '50-59' : '<50'
+  );
+  // hour-of-day: does the board read better at some UTC sessions? Edge
+  // concentrated in dead hours would say the score chases illiquid moves
+  evStats.byUtcHour = group((r) => {
+    const h = new Date(r.runTs).getUTCHours();
+    return h < 4 ? '00-04' : h < 8 ? '04-08' : h < 12 ? '08-12'
+      : h < 16 ? '12-16' : h < 20 ? '16-20' : '20-24';
+  });
+  // hot file: pending (incomplete) + most recent completes for the UI
+  const incomplete = [...evalMap.values()].filter((r) => !r.complete);
+  const recent = allComplete.sort((a, b) => b.runTs - a.runTs).slice(0, 200);
+  writeJson(EVAL_FILE, {
+      refreshedAt: snap.refreshedAt,
+      note: 'forward-outcome labels for EVERY emitted signal — monthly eval-YYYY-MM.json files hold the complete permanent set',
+      stats: evStats,
+      pending: incomplete.length,
+      records: [...incomplete, ...recent],
+    });
+
+  // ---- hypothesis engine → api/hypotheses.json ----
+  // The self-improvement layer, done honestly: registered falsifiable claims
+  // scored prospectively from the eval labels + ledger. Status escalates
+  // with evidence n — UNTESTED <10, EARLY <30, SUGGESTIVE <100, then
+  // SUPPORTED/REFUTED at 100+. The system states what it believes AND how
+  // much evidence that belief rests on — no claim outruns its sample.
+  try {
+    const HYPO_FILE = path.join(API, 'hypotheses.json');
+    let hypoBook = { claims: [] };
+    try { hypoBook = JSON.parse(fs.readFileSync(HYPO_FILE, 'utf8')); } catch {}
+    const prior = new Map((hypoBook.claims || []).map((h) => [h.id, h]));
+    const statusFor = (n, pass) =>
+      n < 10 ? 'UNTESTED'
+        : n < 30 ? 'EARLY SIGNAL'
+        : n < 100 ? (pass == null ? 'MIXED' : pass ? 'SUGGESTIVE' : 'WEAKENING')
+        : pass == null ? 'MIXED' : pass ? 'SUPPORTED' : 'REFUTED';
+    const bg = evStats.byGrade || {}, bd = evStats.byDirection || {}, bb = evStats.byScoreBand || {};
+    // regime alignment needs direction×regime — compute from labeled records
+    const al = labeled.filter((r) => r.alpha24h != null &&
+      ((r.direction === 'LONG' && r.regime === 'risk-on') || (r.direction === 'SHORT' && r.regime === 'risk-off')));
+    const ct = labeled.filter((r) => r.alpha24h != null &&
+      ((r.direction === 'LONG' && r.regime === 'risk-off') || (r.direction === 'SHORT' && r.regime === 'risk-on')));
+    const meanOf = (xs) => xs.length ? xs.reduce((a, r) => a + r.alpha24h, 0) / xs.length : null;
+    const tests = [
+      {
+        id: 'score-ranks-alpha',
+        claim: 'Higher scores predict higher 24h alpha',
+        metric: `score→alpha IC = ${evStats.ic24h ?? '—'}`,
+        value: evStats.ic24h, n: evStats.n,
+        pass: evStats.ic24h == null ? null : evStats.ic24h > 0.05 ? true : evStats.ic24h <= 0 ? false : null,
+      },
+      {
+        id: 'grade-orders',
+        claim: 'Grade A signals beat lower grades',
+        metric: `A hitRate ${bg.A?.hitRate ?? '—'}% vs B ${bg.B?.hitRate ?? '—'}%`,
+        value: bg.A?.hitRate != null && bg.B?.hitRate != null ? pct(bg.A.hitRate - bg.B.hitRate) : null,
+        n: Math.min(bg.A?.n ?? 0, bg.B?.n ?? 0),
+        pass: bg.A?.hitRate != null && bg.B?.hitRate != null ? bg.A.hitRate >= bg.B.hitRate : null,
+      },
+      {
+        id: 'short-edge',
+        claim: 'SHORT signals carry more edge than LONGs',
+        metric: `SHORT α ${bd.SHORT?.avgAlpha24h ?? '—'}% vs LONG α ${bd.LONG?.avgAlpha24h ?? '—'}%`,
+        value: bd.SHORT?.avgAlpha24h != null && bd.LONG?.avgAlpha24h != null ? pct(bd.SHORT.avgAlpha24h - bd.LONG.avgAlpha24h) : null,
+        n: Math.min(bd.SHORT?.n ?? 0, bd.LONG?.n ?? 0),
+        pass: bd.SHORT?.avgAlpha24h != null && bd.LONG?.avgAlpha24h != null ? bd.SHORT.avgAlpha24h > bd.LONG.avgAlpha24h : null,
+      },
+      {
+        id: 'regime-align',
+        claim: 'Regime-aligned signals beat counter-trend ones',
+        metric: `aligned α ${al.length ? pct(meanOf(al)) : '—'}% vs counter α ${ct.length ? pct(meanOf(ct)) : '—'}%`,
+        value: al.length && ct.length ? pct(meanOf(al) - meanOf(ct)) : null,
+        n: Math.min(al.length, ct.length),
+        pass: al.length && ct.length ? meanOf(al) > meanOf(ct) : null,
+      },
+      {
+        id: 'vol-edge',
+        claim: 'Volume ratio predicts forward alpha',
+        metric: `volRatio IC = ${evStats.icVol ?? '—'}`,
+        value: evStats.icVol, n: evStats.n,
+        pass: evStats.icVol == null ? null : evStats.icVol > 0.05,
+      },
+      {
+        id: 'rsi-edge',
+        claim: 'RSI(1h) carries predictive information',
+        metric: `rsi IC = ${evStats.icRsi ?? '—'}`,
+        value: evStats.icRsi, n: evStats.n,
+        pass: evStats.icRsi == null ? null : Math.abs(evStats.icRsi) > 0.05,
+      },
+      {
+        id: 'entry-floor-valid',
+        claim: 'Signals ≥80 score outperform <80 (entry floor is real)',
+        // pool both ≥80 buckets — the old metric compared only 80-89 while
+        // n summed 80-89+90+, so the stat and its sample never matched
+        ...(() => {
+          const hi = ['80-89', '90+'].map((k) => bb[k]).filter(Boolean);
+          const hiN = hi.reduce((a, b) => a + b.n, 0);
+          const hiHit = hiN ? hi.reduce((a, b) => a + b.hitRate * b.n, 0) / hiN : null;
+          const lo = bb['<80'];
+          return {
+            metric: `80+ hitRate ${hiHit != null ? pct(hiHit) : '—'}% vs <80 ${lo?.hitRate ?? '—'}%`,
+            value: hiHit != null && lo?.hitRate != null ? pct(hiHit - lo.hitRate) : null,
+            n: Math.min(hiN, lo?.n ?? 0),
+            pass: hiHit != null && lo?.hitRate != null ? hiHit > lo.hitRate : null,
+          };
+        })(),
+      },
+    ];
+    const claims = tests.map((t) => {
+      const p = prior.get(t.id);
+      const hist = [...(p?.history || []), { ts: now, value: t.value, n: t.n }].slice(-300);
+      return {
+        id: t.id, claim: t.claim, metric: t.metric, value: t.value, n: t.n,
+        status: statusFor(t.n, t.pass),
+        prev: p ? { value: p.value, n: p.n } : null,
+        history: hist,
+      };
+    });
+    writeJson(HYPO_FILE, {
+        refreshedAt: snap.refreshedAt,
+        note: 'registered falsifiable claims scored prospectively from eval labels + ledger. Status: UNTESTED<10, EARLY<30, SUGGESTIVE<100, then SUPPORTED/REFUTED. The engine only gets to believe what the sample has earned.',
+        claims,
+      });
+  } catch {}
+
+  // ---- EINSTEIN · Head of R&D (IT/DevOps) — autonomous research layer ----
+  // Reads every artifact each cycle, measures which engines actually predict
+  // alpha (per-factor lift from the confl ledger), audits the pipeline,
+  // watches structural clustering, and publishes findings + improvement
+  // proposals to a persistent lab notebook. Authority: full write access to
+  // the intelligence surface; execution & risk rails stay GOD-gated.
+  try {
+    const EIN_FILE = path.join(API, '..', 'state', 'einstein.json');
+    let ein = { log: [], proposals: [] };
+    try { ein = JSON.parse(fs.readFileSync(EIN_FILE, 'utf8')); } catch {}
+    ein.log = Array.isArray(ein.log) ? ein.log.slice(-60) : [];
+    ein.proposals = Array.isArray(ein.proposals) ? ein.proposals.slice(-30) : [];
+    const findings = [];
+    const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+    // factor effectiveness — alpha when a factor's vote aligned with the
+    // signal vs when it sat flat vs counter. The per-engine P&L of opinion.
+    const fac = {};
+    for (const r of allComplete) {
+      if (r.alpha24h == null || !Array.isArray(r.confl)) continue;
+      const sgn = r.direction === 'LONG' ? 'bull' : 'bear';
+      const seen = new Set();
+      for (const f of r.confl) {
+        if (!f || !f.k || f.k === 'BIAS' || f.k === 'confluence' || seen.has(f.k)) continue;
+        seen.add(f.k);
+        const g = (fac[f.k] ??= { n: 0, aligned: [], flat: [], counter: [] });
+        g.n++;
+        g[f.dir === 'flat' ? 'flat' : f.dir === sgn ? 'aligned' : 'counter'].push(r.alpha24h);
+      }
+    }
+    const factorIC = Object.entries(fac)
+      .map(([k, g]) => {
+        const a = mean(g.aligned), c = mean(g.counter), fl = mean(g.flat);
+        return {
+          k, n: g.n, na: g.aligned.length, nc: g.counter.length,
+          alignedAlpha: a != null ? +a.toFixed(2) : null,
+          flatAlpha: fl != null ? +fl.toFixed(2) : null,
+          counterAlpha: c != null ? +c.toFixed(2) : null,
+          lift: a != null && fl != null ? +(a - fl).toFixed(2) : null,
+        };
+      })
+      .sort((a, b) => (b.lift ?? -9) - (a.lift ?? -9));
+    for (const f of factorIC) {
+      if (f.n >= 10 && f.lift != null && f.lift >= 0.5)
+        findings.push({ key: 'fac-' + f.k, type: 'edge', txt: f.k + ' votes carry +' + f.lift + '% alpha lift when aligned (n=' + f.n + ') — engine earns its seat' });
+      else if (f.n >= 10 && f.lift != null && f.lift <= -0.5)
+        findings.push({ key: 'fac-' + f.k, type: 'decay', txt: f.k + ' votes anti-predictive (' + f.lift + '% lift, n=' + f.n + ') — proposal filed to downweight' });
+    }
+
+    // structural clustering across the breakout board
+    const coils = brkEvents.filter((e) => e.state === 'COMPRESSION').length;
+    const fails = brkEvents.filter((e) => e.state === 'FAILED').length;
+    const rts = brkEvents.filter((e) => e.state === 'RETEST').length;
+    if (coils >= 5) findings.push({ key: 'coil-cluster', type: 'watch', txt: coils + ' assets coiled — sector-wide expansion pressure building' });
+    if (fails >= 4) findings.push({ key: 'trap-cluster', type: 'risk', txt: fails + ' failed breaks on the board — fakeout regime, chase risk elevated' });
+    if (rts >= 3) findings.push({ key: 'retest-cluster', type: 'edge', txt: rts + ' live retests — the highest-quality entry pattern is on the board' });
+
+    // diagnostics — pipeline health is R&D telemetry too
+    if (klineMiss.length)
+      findings.push({ key: 'kline-miss', type: 'diag', txt: 'klines missing for ' + klineMiss.length + ' candidate(s): ' + klineMiss.slice(0, 5).join(', ') });
+    const pend = [...evalMap.values()].filter((r) => !r.complete).length;
+    if (pend > 60)
+      findings.push({ key: 'eval-backlog', type: 'diag', txt: pend + ' signals inside grading windows — evidence pipeline busy' });
+    try {
+      const god = JSON.parse(fs.readFileSync(path.join(API, 'god.json'), 'utf8'));
+      const gf = (god.checks || []).filter((c) => c.status === 'FAIL' || c.ok === false);
+      if (gf.length)
+        findings.push({ key: 'god-fail', type: 'critical', txt: 'GOD audit failing: ' + gf.map((c) => c.name || c.id || c.k).slice(0, 4).join(', ') });
+    } catch {}
+
+    // proposals — filed with honest scope tags; advisory until applied
+    // through the deploy path (execution changes never auto-apply)
+    const want = [];
+    for (const f of factorIC)
+      if (f.n >= 15 && f.lift != null && f.lift <= -0.5)
+        want.push({ id: 'cap-' + f.k, txt: 'cap "' + f.k + '" vote weight at 0.25 — measured ' + f.lift + '% lift across ' + f.n + ' graded signals', scope: 'scanner', auto: true, ts: now, target: 'state/factor-caps.json', params: { [f.k]: 0.25 } });
+    const seenP = new Set(ein.proposals.map((p) => p.id));
+    for (const w of want) if (!seenP.has(w.id)) ein.proposals.push(w);
+
+    // lab notebook — upsert by key; repeated findings accrue a seen-count
+    const seenL = new Map(ein.log.map((e) => [e.key, e]));
+    for (const f of findings) {
+      const p = seenL.get(f.key);
+      if (p) { p.txt = f.txt; p.lastTs = now; p.seen = (p.seen || 1) + 1; }
+      else ein.log.push({ ...f, firstTs: now, lastTs: now, seen: 1 });
+    }
+    ein.log.sort((a, b) => b.lastTs - a.lastTs);
+    writeJson(EIN_FILE, { log: ein.log.slice(0, 60), proposals: ein.proposals });
+    writeJson(path.join(API, 'einstein.json'), {
+      refreshedAt: snap.refreshedAt,
+      role: 'Head of R&D · autonomous research, diagnostics & improvement',
+      authority: 'full write access to the intelligence surface; execution & risk rails remain GOD-gated by design',
+      scanned: enriched.size,
+      evalPool: allComplete.length,
+      factorIC,
+      findings: ein.log.slice(0, 30),
+      proposals: ein.proposals.slice(-15).reverse(),
+    });
+  } catch {}
+
+  // vault retired — it compounded gains from simulated (paper) trades.
+  // Real-account accounting lives in live-ledger.json only.
+
+  // ---- live-execution intent → api/live-plan.json ----
+  // The scanner decides; bitget-exec.mjs routes. A plan older than the TTL
+  // is stale intent — the executor refuses it rather than trade old prices.
+  try {
+    writeJson(path.join(API, 'live-plan.json'), {
+        refreshedAt: snap.refreshedAt,
+        ts: now,
+        ttlMs: 90 * 60e3,
+        engine: ENGINE_VERSION,
+        killSwitch: ddNow >= ddKillPct,
+        ddPct: pct(ddNow),
+        ...livePlan,
+      });
+  } catch (e) {
+    try {
+      fs.appendFileSync(
+        path.join(API, '..', 'state', 'scanner-errors.log'),
+        `${new Date().toISOString()} live-plan late write: ${e.message}\n`
+      );
+    } catch {}
+  }
+
+  // ---- boring benchmark (review ask #3): does the intelligence add value
+  // beyond doing something trivial? Track BTC buy&hold, an equal-weight
+  // BTC/ETH/SOL basket, and a mechanical "buy the top-3 board scores, hold
+  // 1h" baseline chained from the eval labels — all against the same clock.
+  try {
+    const BENCH_FILE = path.join(API, 'benchmark.json');
+    let bench = { startedAt: null, series: [] };
+    try { bench = JSON.parse(fs.readFileSync(BENCH_FILE, 'utf8')); } catch {}
+    bench.series ??= [];
+    // Sentinel's curve is the REAL exchange account — equityUsd from
+    // live-ledger.json against the first real-equity observation this file
+    // recorded. No simulated book feeds this number.
+    let sentPctNow = null;
+    try {
+      const ll = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8'));
+      const baseKey = `sentBase_${XCHG}`;
+      if (ll?.equityUsd > 0) {
+        bench[baseKey] ??= ll.equityUsd;
+        sentPctNow = pct(((ll.equityUsd - bench[baseKey]) / bench[baseKey]) * 100);
+      }
+    } catch {}
+    const lastB = bench.series.length ? bench.series[bench.series.length - 1].ts : 0;
+    if (now - lastB >= 4 * 60e3) {
+      bench.series.push({
+        ts: now,
+        btc: priceByAsset.get('BTC') ?? null,
+        eth: priceByAsset.get('ETH') ?? null,
+        sol: priceByAsset.get('SOL') ?? null,
+        sent: sentPctNow,
+      });
+      bench.series = bench.series.slice(-3000);
+    }
+    const s0 = bench.series.find((s) => s.btc && s.eth && s.sol);
+    const sN = bench.series.length ? bench.series[bench.series.length - 1] : null;
+    bench.startedAt ??= s0 ? new Date(s0.ts).toISOString() : null;
+    const holdPct = (a, b) => (a && b ? pct(((b - a) / a) * 100) : null);
+    bench.btcHoldPct = s0 && sN ? holdPct(s0.btc, sN.btc) : null;
+    bench.basketHoldPct =
+      s0 && sN
+        ? pct(
+            (((sN.btc / s0.btc - 1) + (sN.eth / s0.eth - 1) + (sN.sol / s0.sol - 1)) / 3) * 100
+          )
+        : null;
+    // mechanical momentum baseline: every run, buy the 3 highest-scored
+    // signals, hold exactly 1h, repeat — same labels the eval engine grades,
+    // zero discretion, zero risk engine. This is the bar to beat.
+    const byRun = new Map();
+    for (const r of evalMap.values()) {
+      if (r.fwd1h == null) continue;
+      (byRun.get(r.runTs) ?? byRun.set(r.runTs, []).get(r.runTs)).push(r);
+    }
+    let naiveEq = 1, naiveN = 0;
+    for (const ts of [...byRun.keys()].sort((a, b) => a - b)) {
+      const top3 = byRun.get(ts).sort((a, b) => b.score - a.score).slice(0, 3);
+      const mean = top3.reduce((a, r) => a + r.fwd1h, 0) / top3.length;
+      naiveEq *= 1 + mean / 100;
+      naiveN++;
+    }
+    bench.naiveBoardPct = pct((naiveEq - 1) * 100);
+    bench.naiveRuns = naiveN;
+    bench.sentinelPct = sentPctNow;
+    delete bench.combinedPct;
+    bench.note =
+      `BTC hold and the B/E/S basket are passive; naive-board is mechanical top-3-score 1h holds from the same signal labels. Sentinel = real ${XCHG} account equity return since first observation.`;
+    writeJson(BENCH_FILE, { refreshedAt: snap.refreshedAt, ...bench });
+  } catch {}
+
+  // final unconditional ledger write — stats computed after the first
+  // write must still persist
+  if (!ledgerCorrupt) writeJson(LEDGER_FILE, ledger);
+
+  // pipeline health for the landing footer — only keys this pipeline owns;
+  // the retired Jupiter/Solana snapshot used to leave a stale 'snapshot' key
+  let health = {};
+  try {
+    health = JSON.parse(fs.readFileSync(path.join(API, 'health.json'), 'utf8'));
+  } catch {}
+  delete health.snapshot;
+  health.scanner = {
+    ok: true,
+    at: snap.refreshedAt,
+    pairs: rows.length,
+    signals: signals.length,
+    klineEnriched: enriched.size,
+    klineCached: Object.keys(klineCache || {}).length,
+    klineMiss: klineMiss.length ? klineMiss : undefined,
+    ledgerOpen: ledger.stats.open,
+    rejects: livePlan.rejects.length || undefined,
+  };
+  // The Holy Secret — the ouroboros. The system consumes its own record to
+  // regenerate: every emitted signal is labeled by its real forward outcome,
+  // the labels gate the next cycle's strategies and symbols, the fills
+  // journal feeds cooldowns and the per-symbol ban, and the hypothesis
+  // engine escalates or kills beliefs on sample size. Red serpent (losses)
+  // and green serpent (wins) are one body — both feed the regeneration.
+  // The loop is only closed if every stage's bite mark is non-zero, so
+  // they're emitted here — auditable, not claimed.
+  try {
+    const evS =
+      JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8'))
+        .stats || {};
+    health.scanner.ouroboros = {
+      doctrine:
+        'the serpent eats its tail — today\'s outcomes are tomorrow\'s gates',
+      loop: 'emit → execute → journal → label → adapt → emit',
+      emittedThisCycle: signals.length,
+      journaledFills: recentFills.length || 0,
+      labelsGraded: evS.n || 0,
+      stratsBlocked: [...stratBlock],
+      stratsBoosted: Object.fromEntries(
+        Object.entries(stratBoost).filter(([, b]) => b > 0)
+      ),
+      symbolsBanned: [...lowProfitPair],
+    };
+  } catch {}
+  // Neptune Book Logic — Logic Driver weights: which book's doctrine steered
+  // THIS cycle, measured from real gate firings and decisions, not prose.
+  // Every reject gate belongs to a book's domain; the active side adds
+  // conviction (Hill), executed risk-sizing (Tharp), pattern adjudication
+  // (Bulkowski via the eval gate), and treasury guards (Clason).
+  try {
+    const GATE_BOOK = [
+      [/rr<|net-edge|dd-kill|heat-cap|cluster-heat|deployed-cap|^score |equity-floor|shorts-banned|short-strat|sqn-chain|longs-only/, 'tharp'],
+      [/fake-move|noise-cap|spread|mkt-type|carry|below-ema50\/200/, 'murphy'],
+      [/strat-blocked/, 'bulkowski'],
+      [/low-profit-pair|recent-closed|recent-reversed|funding-drag|untradeable/, 'clason'],
+      [/already-open|proxy-dup/, 'pape'],
+    ];
+    const w = { tharp: 1, murphy: 1, pape: 1, bulkowski: 1, kiyosaki: 1, hill: 1, clason: 1 };
+    for (const r of livePlan.rejects || []) {
+      for (const g of r.gates || []) {
+        const hit = GATE_BOOK.find(([re]) => re.test(g));
+        if (hit) w[hit[1]]++;
+      }
+    }
+    // active-side weights: orders routed = conviction expressed (Hill) under
+    // risk rails (Tharp); eval adjudication running = Bulkowski; per-symbol
+    // bans armed = Clason; banked winners in the journal = Kiyosaki.
+    const ordersN = (livePlan.orders || []).length;
+    w.tharp += ordersN;
+    w.hill += ordersN;
+    w.bulkowski += stratBlock.size;
+    w.hill += Object.values(stratBoost).filter((b) => b > 0).length;
+    w.clason += lowProfitPair.size;
+    // kiyosaki counts real banks, not dust: a fee-lock that books +$0.001 is
+    // not "retained profit" — weight by dollars banked (x5 keeps the scale
+    // beside the event-count books) plus a count of closes worth >=2 cents.
+    const bankedUsd = recentFills.reduce(
+      (a, f) => a + ((f.tradeSide || '').includes('close') ? Math.max(0, (f.profit || 0) - (f.fee || 0)) : 0), 0);
+    w.kiyosaki += Math.round(bankedUsd * 5) + recentFills.filter(
+      (f) => (f.tradeSide || '').includes('close') && (f.profit || 0) - (f.fee || 0) >= 0.02
+    ).length;
+    // barefoot floor: the safety net is always on (margin reserve + equity
+    // floor armed) — a standing pulse, stronger when the floor is live.
+    w.pape += (process.env.SENTINEL_MIN_EQUITY && +process.env.SENTINEL_MIN_EQUITY > 0) ? 2 : 0;
+    const tot = Object.values(w).reduce((a, b) => a + b, 0);
+    const BOOK_NAME = {
+      tharp: 'Super Trader — Van Tharp',
+      murphy: 'Technical Analysis — Murphy',
+      pape: 'Barefoot Investor — Pape',
+      bulkowski: 'Encyclopedia of Chart Patterns — Bulkowski',
+      kiyosaki: 'Rich Dad Poor Dad — Kiyosaki',
+      hill: 'Think and Grow Rich — Hill',
+      clason: 'Richest Man in Babylon — Clason',
+    };
+    const weights = Object.fromEntries(
+      Object.entries(w).map(([k, v]) => [k, Math.round((v / tot) * 100)])
+    );
+    const dominant = Object.keys(w).reduce((a, b) => (w[b] > w[a] ? b : a));
+    health.scanner.logicDrivers = {
+      doctrine: 'seven books, weighted by what actually gated or steered decisions this cycle',
+      weights,
+      dominant,
+      dominantName: BOOK_NAME[dominant],
+      names: BOOK_NAME,
+      modules: {
+        tharp: 'risk sizing · RR gate · expectancy · DD rails',
+        murphy: 'TA sponsorship · regime mapping · noise floor',
+        pape: 'margin reserve · equity floor · allocation buffers',
+        bulkowski: 'pattern statistics · eval gate adjudication',
+        kiyosaki: 'PnL retention · banked winners · runner trails',
+        hill: 'conviction scoring · boost amplifiers',
+        clason: 'treasury guard · per-symbol ban · cooldown jaws',
+      },
+    };
+  } catch {}
+  writeJson(path.join(API, 'health.json'), health);
+
+  // ---- taken-trades journal: FIFO-pair real fills per symbol+side into
+  // round-trips the dashboard can show beside the emitted-signal book.
+  try {
+    const fills = (
+      JSON.parse(
+        fs.readFileSync(path.join(API, '..', 'state', FILLS_FILE), 'utf8')
+      ).fills || []
+    ).filter((f) => !FILLS_SINCE || (+f.ts || 0) >= FILLS_SINCE);
+    const bySym = {};
+    for (const f of [...fills].sort((a, b) => a.ts - b.ts))
+      (bySym[f.symbol + '|' + f.side] = bySym[f.symbol + '|' + f.side] || []).push(f);
+    // signal linkage: eval records give the taken trade its provenance
+    // (strategy/score/grade at emission) — matched on symbol, direction,
+    // entry price within 1.5%, and emitted <=20min before the fill.
+    let evRecs2 = [];
+    try {
+      evRecs2 = JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8')).records || [];
+    } catch {}
+    const linkSignal = (symbol, dir, entryPx, entryTs) => {
+      const base = symbol.replace(/USDT$/, '');
+      let best = null;
+      for (const r of evRecs2) {
+        if (r.asset !== base || r.direction !== dir || !r.entry || !r.runTs) continue;
+        const dt = entryTs - r.runTs;
+        if (dt < -5 * 60e3 || dt > 20 * 60e3) continue;
+        const pd = Math.abs(r.entry - entryPx) / entryPx;
+        if (pd > 0.015) continue;
+        const score = pd * 1e6 + Math.abs(dt);
+        if (!best || score < best.score) best = { r, score };
+      }
+      return best ? { strategy: best.r.strategy, score: best.r.score, grade: best.r.grade, runTs: best.r.runTs } : null;
+    };
+    // operator setups attribute via the executor's entriesLog — every
+    // setup-driven entry attempt carries setupId+setupMode; match on
+    // symbol+direction inside a 10min window of the episode's first fill
+    let entryLog = [];
+    try {
+      entryLog = JSON.parse(fs.readFileSync(path.join(API, 'live-ledger.json'), 'utf8')).entriesLog || [];
+    } catch {}
+    const linkSetup = (symbol, dir, entryTs) => {
+      let best = null;
+      for (const e of entryLog) {
+        if (!e.setupId || e.symbol !== symbol || e.direction !== dir || !e.ts) continue;
+        const dt = Math.abs(e.ts - entryTs);
+        if (dt > 10 * 60e3) continue;
+        if (!best || dt < best.dt) best = { e, dt };
+      }
+      return best
+        ? { strategy: best.e.strategy || 'vema-setup', setupId: best.e.setupId, setupMode: best.e.setupMode || null, note: best.e.note || null }
+        : null;
+    };
+    const trades = [];
+    for (const [k, list] of Object.entries(bySym)) {
+      const [symbol, side] = k.split('|');
+      let ep = null; // open episode: remaining qty + immutable open totals + tranche exits
+      const finish = (last) => {
+        const entryPx = ep.cost0 / ep.qty0;
+        const exitPx = ep.closeQty > 0 ? ep.closeCost / ep.closeQty : null;
+        const sgn = side === 'sell' ? -1 : 1;
+        const t = {
+          symbol, dir: side === 'sell' ? 'SHORT' : 'LONG',
+          entryTs: ep.ts, exitTs: last ? last.ts : null,
+          status: last ? undefined : 'open',
+          entryPx: pct(entryPx * 1000000) / 1000000,
+          exitPx: exitPx != null ? pct(exitPx * 1000000) / 1000000 : null,
+          qty: ep.qty0,
+          notional: pct(ep.notional0 * 100) / 100,
+          fees: pct(ep.fees * 1000000) / 1000000,
+          pnl: pct(ep.pnl * 10000) / 10000,
+          net: pct((ep.pnl - ep.fees) * 10000) / 10000,
+          pnlPct: entryPx > 0 && exitPx != null ? pct((exitPx - entryPx) / entryPx * sgn * 100 * 100) / 100 : null,
+          holdMin: last ? pct((last.ts - ep.ts) / 60000 * 10) / 10 : pct((Date.now() - ep.ts) / 60000 * 10) / 10,
+          exits: ep.exits,
+        };
+        const sig = linkSetup(symbol, t.dir, ep.ts) || linkSignal(symbol, t.dir, entryPx, ep.ts);
+        if (sig) Object.assign(t, sig);
+        trades.push(t);
+        ep = null;
+      };
+      for (const f of list) {
+        const px = +f.price || 0, qty = +f.size || 0, fee = +f.fee || 0, pnl = +f.profit || 0;
+        if (f.tradeSide === 'open') {
+          if (!ep) ep = { ts: f.ts, qty: 0, qty0: 0, cost0: 0, notional0: 0, fees: 0, pnl: 0, closeQty: 0, closeCost: 0, exits: [] };
+          ep.qty += qty; ep.qty0 += qty; ep.cost0 += px * qty; ep.fees += fee; ep.notional0 += qty * px;
+        } else if (f.tradeSide === 'close' && ep && ep.qty > 0) {
+          const portion = Math.min(qty, ep.qty);
+          // a close can exceed the tracked remainder (foreign/missed opens)
+          // — credit only this episode's share of the fill's pnl and fee,
+          // not the whole fill's values
+          const frac = qty > 0 ? portion / qty : 1;
+          ep.closeQty += portion; ep.closeCost += px * portion;
+          ep.fees += fee * frac; ep.pnl += pnl * frac;
+          ep.exits.push({ ts: f.ts, px, qty: portion, pnl: pct(pnl * frac * 10000) / 10000 });
+          ep.qty -= portion;
+          if (ep.qty <= 1e-9) finish(f);
+        }
+      }
+      if (ep) finish(null);
+    }
+    trades.sort((a, b) => (b.exitTs ?? b.entryTs) - (a.exitTs ?? a.entryTs));
+    const closed = trades.filter((t) => t.exitTs);
+    writeJson(path.join(API, 'trades-taken.json'), {
+      generated: new Date().toISOString(),
+      trades,
+      stats: {
+        scope: 'reconstructed position episodes — laddered tranches merged; foreign fills included but unattributed',
+        n: closed.length,
+        wins: closed.filter((t) => t.net > 0).length,
+        net: pct(closed.reduce((a, t) => a + t.net, 0) * 100) / 100,
+        fees: pct(closed.reduce((a, t) => a + t.fees, 0) * 100) / 100,
+        open: trades.filter((t) => t.status === 'open').length,
+      },
+    });
+  } catch (e) { console.warn('taken-trades skipped:', e.message); }
+
+  // ---- Van Tharp SQN engine: which strategy CHAIN maximizes System
+  // Quality Number on the real graded record? Every evaluated signal is an
+  // R-multiple: R = (outcomePct - round-trip cost%) / stopPct. Pools are
+  // ranked by shrunk SQN_100; a greedy pass builds the best joint chain;
+  // the finalists get a 10,000-path x 100-trade (1M roll) Monte Carlo of
+  // the equity curve — median terminal equity, median/p95 max drawdown,
+  // and ruin probability at 1%-risk fixed-fractional sizing. The winning
+  // chain writes state/sqn-allowed.json — the next cycle's sqn-chain gate.
+  try {
+    const sqnReportPath = path.join(API, 'sqn-report.json');
+    let sqnStale = true;
+    try { sqnStale = Date.now() - fs.statSync(sqnReportPath).mtimeMs > 600e3; } catch {}
+    if (sqnStale) {
+      const COST_PCT = 0.20; // 0.12 taker x2 + 0.08 exit slippage, as % of notional
+      const RISK = 0.01;     // fixed-fractional 1% equity risk per trade
+      const T = 100, PATHS = 10000; // 1M rolls on the table per finalist pool
+      const evRecs =
+        JSON.parse(fs.readFileSync(path.join(API, 'signal-eval.json'), 'utf8')).records || [];
+      const R_of = (r) =>
+        Number.isFinite(r.outcomePct) && r.stopPct > 0
+          ? (r.outcomePct - COST_PCT) / r.stopPct
+          : null;
+      const poolStats = (rs) => {
+        const R = rs.map(R_of).filter((x) => x != null);
+        const n = R.length;
+        if (n < 30) return null; /* sqn-guard: SQN means nothing under 30 trades */
+        const E = R.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n);
+        if (!(sd > 1e-9 * Math.max(1, Math.abs(E)))) return null; /* sqn-guard: zero spread used to divide by 1e-9 */
+        const sqn = (E / sd) * Math.sqrt(Math.min(n, 100)); /* sqn-guard: N capped at 100, never projected up */
+        return {
+          n, E: pct(E * 100) / 100, sd: pct(sd * 100) / 100,
+          sqn100: pct(sqn * 100) / 100,
+          shrunkSqn: pct((sqn * n) / (n + 15) * 100) / 100,
+          hit: pct((R.filter((x) => x > 0).length / n) * 10000) / 100,
+          R,
+        };
+      };
+      const monteCarlo = (R) => {
+        const terminal = [], maxDds = [];
+        for (let p = 0; p < PATHS; p++) {
+          let eq = 1, peak = 1, dd = 0;
+          for (let t = 0; t < T; t++) {
+            eq *= 1 + R[(Math.random() * R.length) | 0] * RISK;
+            if (eq > peak) peak = eq;
+            dd = Math.max(dd, (peak - eq) / peak);
+          }
+          terminal.push(eq); maxDds.push(dd);
+        }
+        terminal.sort((a, b) => a - b); maxDds.sort((a, b) => a - b);
+        const q = (a, x) => a[Math.min(a.length - 1, Math.floor(x * a.length))];
+        return {
+          medianTerminal: pct(q(terminal, 0.5) * 100) / 100,
+          meanTerminal: pct((terminal.reduce((a, b) => a + b, 0) / PATHS) * 100) / 100,
+          medianMaxDD: pct(q(maxDds, 0.5) * 10000) / 100,
+          p95MaxDD: pct(q(maxDds, 0.95) * 10000) / 100,
+          pRuin: pct((terminal.filter((e) => e < 0.5).length / PATHS) * 10000) / 100,
+        };
+      };
+      const byStrat = {};
+      for (const r of evRecs) {
+        if (!r.strategy) continue;
+        (byStrat[r.strategy] = byStrat[r.strategy] || []).push(r);
+      }
+      const perStrategy = [];
+      // direction-scoped pools ride alongside blended ones — a strategy can
+      // be poison one way and profitable the other (live record: Liquidity
+      // Sweep longs −0.39R, shorts +0.16R). Blending them buries the only
+      // positive cell inside a negative pool. Members name ':SHORT'/':LONG'.
+      const dirPools = [];
+      for (const [strat, rs] of Object.entries(byStrat)) {
+        const base = poolStats(rs);
+        if (!base) continue;
+        const variants = {};
+        for (const [tag, f] of [
+          ['LONG', (r) => r.direction === 'LONG'],
+          ['SHORT', (r) => r.direction === 'SHORT'],
+          ['score<85', (r) => (r.score ?? 100) < 85],
+          ['score>=85', (r) => (r.score ?? 0) >= 85],
+        ]) {
+          const v = poolStats(rs.filter(f));
+          if (v) variants[tag] = { n: v.n, E: v.E, sqn100: v.sqn100, hit: v.hit };
+        }
+        perStrategy.push({ strategy: strat, ...(({ R, ...rest }) => rest)(base), variants, R: base.R });
+        for (const dir of ['LONG', 'SHORT']) {
+          const v = poolStats(rs.filter((r) => r.direction === dir));
+          if (v) dirPools.push({ strategy: `${strat}:${dir}`, ...(({ R, ...rest }) => rest)(v), R: v.R });
+        }
+      }
+      // greedy optimal chain — add the pool that most raises joint shrunk
+      // SQN until nothing improves it. This is the Tharp portfolio
+      // selection step: SQN of the MIX, not of members. One pool per root
+      // strategy — a blended pool and its direction variants share R rows,
+      // so admitting both double-counts the same trades.
+      const jointStats = (R) => {
+        const n = R.length;
+        const E = R.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(R.reduce((a, b) => a + (b - E) ** 2, 0) / n);
+        const sqn = n >= 30 && sd > 1e-9 * Math.max(1, Math.abs(E)) ? (E / sd) * Math.sqrt(Math.min(n, 100)) : 0; /* sqn-guard */
+        return { n, E, sd, sqn100: sqn, shrunkSqn: (sqn * n) / (n + 15), hit: R.filter((x) => x > 0).length / n };
+      };
+      const ranked = perStrategy.concat(dirPools).sort((a, b) => b.shrunkSqn - a.shrunkSqn);
+      const usedRoots = new Set();
+      let chain = [], chainR = [], chainStat = null;
+      for (const c of ranked) {
+        const root = c.strategy.split(':')[0];
+        if (usedRoots.has(root)) continue;
+        const cand = chainR.concat(c.R);
+        const st = jointStats(cand);
+        if (!chain.length || st.shrunkSqn > (chainStat?.shrunkSqn ?? -9) + 0.02) {
+          chain.push(c.strategy); chainR = cand; chainStat = st; usedRoots.add(root);
+        }
+      }
+      const baseline = poolStats(evRecs);
+      const finalists = [
+        { name: 'optimal-chain', members: chain, R: chainR, st: chainStat },
+        { name: 'all-signals', members: null, R: evRecs.map(R_of).filter((x) => x != null), st: baseline },
+      ];
+      // overlay variants of the winning chain — direction and inversion cuts
+      // dir-aware: 'Liquidity Sweep:SHORT' admits only that direction's rows
+      const inChain = (r) => chain.includes(r.strategy) || chain.includes(`${r.strategy}:${r.direction}`);
+      const chainRecs = evRecs.filter(inChain);
+      for (const [tag, f] of [
+        ['chain-longs', (r) => r.direction === 'LONG'],
+        ['chain-score<85', (r) => (r.score ?? 100) < 85],
+      ]) {
+        const v = poolStats(chainRecs.filter(f));
+        if (v && v.n >= 30) finalists.push({ name: tag, members: chain, R: chainRecs.filter(f).map(R_of).filter((x) => x != null), st: v });
+      }
+      const mc = {};
+      for (const f of finalists) mc[f.name] = { ...(f.st ? { sqn100: pct(f.st.sqn100 * 100) / 100, shrunkSqn: pct(f.st.shrunkSqn * 100) / 100, E: pct(f.st.E * 100) / 100, n: f.st.n } : {}), mc: f.R.length >= 30 ? monteCarlo(f.R) : null };
+      const best = finalists.slice(1).sort((a, b) => (b.st?.shrunkSqn ?? -9) - (a.st?.shrunkSqn ?? -9))[0] || finalists[0];
+      writeJson(sqnReportPath, {
+        generated: new Date().toISOString(),
+        model: { riskPct: 1, costPct: COST_PCT, tradesPerPath: T, paths: PATHS, totalRolls: T * PATHS },
+        perStrategy: perStrategy.map(({ R, ...rest }) => rest),
+        chain: { members: chain, n: chainStat?.n, E: pct((chainStat?.E ?? 0) * 100) / 100, sqn100: pct((chainStat?.sqn100 ?? 0) * 100) / 100, shrunkSqn: pct((chainStat?.shrunkSqn ?? 0) * 100) / 100, hit: pct((chainStat?.hit ?? 0) * 10000) / 100 },
+        baselineAll: baseline ? { n: baseline.n, E: baseline.E, sqn100: baseline.sqn100 } : null,
+        bestVariant: best.name,
+        monteCarlo: mc,
+      });
+      // the gate's proof bar is measured-positive expectancy, not greedy
+      // portfolio membership — admit EVERY dir-scoped pool whose shrunk SQN
+      // is positive (chain membership is an optimality overlay for the
+      // report, not a ban list). dirN carries each direction cell's graded
+      // count so the gate can tell "proven-negative" from "unproven":
+      // a cell with <EVAL_MIN_N graded trades probes rather than bans.
+      const positiveCells = ranked.filter((p) => p.shrunkSqn > 0).map((p) => p.strategy);
+      const dirN = {};
+      for (const p of ranked) if (p.strategy.includes(':')) dirN[p.strategy] = p.n;
+      writeJson(path.join(API, '..', 'state', 'sqn-allowed.json'), {
+        ts: Date.now(), strategies: positiveCells.length ? positiveCells : chain, dirN,
+        note: 'all shrunk-SQN-positive dir cells admitted (chain in sqn-report); TTL-gated sqn-chain gate',
+      });
+    }
+  } catch (e) { console.warn('sqn-optimizer skipped:', e.message); }
+
+  console.log(
+    `scanner: ${signals.length} signals / ${movers.length} movers / ${laggards.length} laggards / ${rows.length} pairs (${enriched.size} kline-enriched) | ledger ${ledger.stats.open} open, ${wins}/${closed.length} won`
+  );
+}
+
+// silent-exit guard — under socket pressure the event loop can empty while
+// main() still has a pending promise (a fetch whose handle died), and node
+// then exits code 0 mid-run: no output, no plan write, the loop flags the
+// cycle clean while live-plan.json rots for hours. A ref'd interval keeps
+// the loop alive until main() settles; a true hang still hits rapid's
+// 600s child cap and flags correctly.
+const keepAlive = setInterval(() => {}, 30_000);
+// main() deadline — if ANY await inside parks forever (the undici abort
+// edge, a lost timer, anything), the scan must still terminate LOUD so
+// rapid flags the failed cycle instead of a stale plan aging silently.
+// 540s sits under the 600s spawn cap so the catch — not the watchdog —
+// reports it.
+hardRace(main(), +(process.env.SENTINEL_SCAN_DEADLINE_MS || 540_000))
+  .catch((e) => {
+    console.warn(`scanner build failed, keeping last snapshot: ${e.message}`);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    clearInterval(keepAlive);
+    // hung fetch handles must not orphan the process — a scanner that
+    // stays resident past its spawn window just starves the next one.
+    process.exit(process.exitCode ?? 0);
+  });

@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+# mc-million.py — million-cell discovery sweep over the eval journal +
+# real-fill exit replay. Answers Will's audit mechanically: every reported
+# cell must stay net-positive AFTER costs in BOTH the train (first 67% by
+# time) and holdout (last 33%) halves. Selection bias is the enemy; the
+# holdout is the antibody.
+import json, math, os, sys, datetime
+from collections import defaultdict
+
+API = '/opt/sentinel/api'
+STATE = '/opt/sentinel/state'
+COSTS = {'taker': 0.17, 'maker': 0.05}   # RT % — matches edge-attribution costModelPct
+HORIZONS = ['fwd1h', 'fwd4h', 'fwd24h']
+
+def readJ(p, d=None):
+    try: return json.load(open(p))
+    except Exception: return d
+
+# ---------- load eval records -> episodes ----------
+recs = []
+for f in ['history/eval-2026-09.json', 'history/eval-2026-10.json', 'signal-eval.json']:
+    d = readJ(os.path.join(API, f))
+    for r in (d.get('records') or (d if isinstance(d, list) else [])):
+        if r and r.get('runTs') and r.get('asset'): recs.append(r)
+seen = set(); uniq = []
+for r in sorted(recs, key=lambda x: x['runTs']):
+    k = r.get('key') or f"{r['runTs']}|{r['asset']}|{r['direction']}"
+    if k in seen: continue
+    seen.add(k); uniq.append(r)
+
+EP_GAP = 24 * 36e5
+eps = {}
+for r in uniq:
+    k = f"{r['asset']}|{r['direction']}"
+    e = eps.get(k)
+    if e and r['runTs'] - e['lastTs'] < EP_GAP:
+        e['lastTs'] = r['runTs']; continue
+    eps[k] = None
+    episodes_append = dict(r); episodes_append['lastTs'] = r['runTs']
+    eps[k] = episodes_append  # newest episode dict
+# proper ordered episode list
+episodes = []
+last_by_key = {}
+for r in uniq:
+    k = f"{r['asset']}|{r['direction']}"
+    le = last_by_key.get(k)
+    if le and r['runTs'] - le['lastTs'] < EP_GAP:
+        le['lastTs'] = r['runTs']; le['members'] += 1; continue
+    e = dict(r); e['lastTs'] = r['runTs']; e['members'] = 1
+    last_by_key[k] = e; episodes.append(e)
+episodes.sort(key=lambda e: e['runTs'])
+
+# ---------- attribute bucketing ----------
+def b_score(s): s=+s or 0; return '<50' if s<50 else '50-65' if s<65 else '65-78' if s<78 else '78-88' if s<88 else '88+'
+def b_rsi(x):
+    if x is None: return 'na'
+    x=+x; return '<30' if x<30 else '30-45' if x<45 else '45-55' if x<55 else '55-70' if x<70 else '70+'
+def b_vol(x):
+    if x is None: return 'na'
+    x=+x; return '<1' if x<1 else '1-2' if x<2 else '2-4' if x<4 else '4+'
+def b_mom(x):
+    if x is None: return 'na'
+    x=+x; return '<40' if x<40 else '40-55' if x<55 else '55-70' if x<70 else '70+'
+def b_rank(x):
+    if x is None: return 'na'
+    x=+x; return '1' if x<=1 else '2-3' if x<=3 else '4-10' if x<=10 else '11+'
+def b_chg(x):
+    if x is None: return 'na'
+    x=+x; return '<-5' if x<-5 else '-5--1' if x<-1 else '-1-1' if x<1 else '1-5' if x<5 else '5+'
+def b_hour(ts): return f"{(datetime.datetime.utcfromtimestamp(ts/1000).hour//3)*3:02d}-{(datetime.datetime.utcfromtimestamp(ts/1000).hour//3)*3+3:02d}Z"
+def b_stop(x):
+    if x is None: return 'na'
+    x=+x; return '<1' if x<1 else '1-1.5' if x<1.5 else '1.5-2.5' if x<2.5 else '2.5+'
+def b_tgt(x):
+    if x is None: return 'na'
+    x=+x; return '<1.5' if x<1.5 else '1.5-2.5' if x<2.5 else '2.5-4' if x<4 else '4+'
+
+ATTRS = {
+    'strategy': lambda r: r.get('strategy') or 'na',
+    'dir': lambda r: r.get('direction') or 'na',
+    'grade': lambda r: r.get('grade') or 'na',
+    'score': lambda r: b_score(r.get('score')),
+    'regime': lambda r: r.get('regime') or 'na',
+    'mkt': lambda r: r.get('mktType') or 'na',
+    'cls': lambda r: r.get('cls') or 'na',
+    'rsi': lambda r: b_rsi(r.get('rsi')),
+    'vol': lambda r: b_vol(r.get('volRatio')),
+    'mom': lambda r: b_mom(r.get('momScore')),
+    'rank': lambda r: b_rank(r.get('boardRank')),
+    'chg': lambda r: b_chg(r.get('changePct')),
+    'hour': lambda r: b_hour(r['runTs']),
+    'stop': lambda r: b_stop(r.get('stopPct')),
+    'tgt': lambda r: b_tgt(r.get('targetPct')),
+    'asset': lambda r: r.get('asset'),
+}
+ATTR_KEYS = list(ATTRS.keys())
+
+import itertools
+CELL_DIMS = []
+CELL_DIMS += [(a,) for a in ATTR_KEYS]
+CELL_DIMS += list(itertools.combinations(ATTR_KEYS, 2))
+CURATED3 = [
+    ('strategy','dir','regime'), ('strategy','grade','score'), ('cls','regime','score'),
+    ('strategy','rsi','mom'), ('hour','strategy','dir'), ('strategy','dir','grade'),
+    ('asset','regime','dir'), ('mkt','strategy','dir'), ('cls','strategy','dir'),
+    ('score','regime','dir'), ('vol','strategy','dir'), ('chg','strategy','dir'),
+    ('rank','strategy','dir'), ('stop','tgt','strategy'), ('asset','strategy', 'dir'),
+]
+CELL_DIMS += CURATED3
+
+def cells_of(ep):
+    vals = {a: ATTRS[a](ep) for a in ATTR_KEYS}
+    out = []
+    for dims in CELL_DIMS:
+        key = '|'.join(dims) + '=' + '|'.join(str(vals[d]) for d in dims)
+        out.append(key)
+    return out
+
+# ---------- Engine A: sweep ----------
+n_total = len(episodes)
+split_i = int(n_total * 0.67)
+train_eps, test_eps = episodes[:split_i], episodes[split_i:]
+print(f"episodes: {n_total} (train {len(train_eps)} / holdout {len(test_eps)})")
+
+acc = {True: defaultdict(lambda: defaultdict(lambda: [0.0,0.0,0.0,0])),   # train
+       False: defaultdict(lambda: defaultdict(lambda: [0.0,0.0,0.0,0]))} # holdout
+tests = 0
+for half_eps, is_train in ((train_eps, True), (test_eps, False)):
+    for ep in half_eps:
+        sign = -1.0 if ep.get('direction') == 'SHORT' else 1.0
+        keys = cells_of(ep)
+        for h in HORIZONS:
+            f = ep.get(h)
+            if f is None: continue
+            v = sign * f
+            for k in keys:
+                a = acc[is_train][h][k]
+                a[0] += v; a[1] += v*v; a[2] += 1 if v > 0 else 0; a[3] += 1
+        tests += len(keys) * len(HORIZONS)
+print(f"engine-A tests: {tests:,}")
+
+def stats(a):
+    n=a[3]; m=a[0]/n; var=max(1e-12,(a[1]-a[0]*a[0]/n)/max(1,n-1)); sd=math.sqrt(var)
+    return n, m, sd, a[2]/n, (m/sd)*10 if sd>0 else 0
+
+def report(h, cost):
+    out=[]
+    for k,a in acc[True][h].items():
+        n,m,sd,wr,sqn = stats(a)
+        if n < 15: continue
+        mn = m - cost
+        b = acc[False][h].get(k)
+        if not b: continue
+        n2,m2,sd2,wr2,sqn2 = stats(b)
+        mn2 = m2 - cost
+        out.append(dict(cell=k, n=n, nOos=n2, tr=round(mn,3), oos=round(mn2,3),
+                        sqn=round(sqn,1), sqnOos=round(sqn2,1),
+                        wr=round(wr*100), wrOos=round(wr2*100)))
+    return out
+
+findings = {}
+for h in HORIZONS:
+    for cname,cost in COSTS.items():
+        r = report(h, cost)
+        both_pos = [x for x in r if x['tr']>0 and x['oos']>0]
+        both_pos.sort(key=lambda x: -x['oos'])
+        findings[f'{h}|{cname}'] = dict(tested=len(r), robust=len(both_pos), top=both_pos[:25])
+
+# ---------- Engine B: exit-policy replay on real fills ----------
+fills = (readJ(os.path.join(STATE,'real-fills.json')) or {}).get('fills') or []
+by_sym = defaultdict(list)
+for f in fills: by_sym[f.get('symbol')].append(f)
+real_eps = []
+for sym, fl in by_sym.items():
+    opens=[]
+    for f in sorted(fl, key=lambda x:+x['ts']):
+        if f.get('tradeSide')=='open': opens.append(f)
+        elif opens:
+            o=opens.pop(0)
+            real_eps.append(dict(sym=sym, entry=+o['price'], exit=+f['price'], t0=+o['ts'], t1=+f['ts'],
+                                 real_net=(+f.get('profit') or 0)-abs(+f.get('fee') or 0)-abs(+o.get('fee') or 0)))
+print(f"real episodes: {len(real_eps)}")
+
+k15 = readJ(os.path.join(STATE,'klines-15m.json')) or {}
+k4h = readJ(os.path.join(STATE,'klines-4H.json')) or {}
+def rows_of(d,s):
+    v=d.get(s) or {}
+    arr = v.get('rows') if isinstance(v,dict) else v
+    return arr or []
+
+def path_for(ep):
+    a15 = rows_of(k15, ep['sym']+'USDT' if not ep['sym'].endswith('USDT') else ep['sym']) or rows_of(k15, ep['sym'])
+    a4  = rows_of(k4h, ep['sym']+'USDT' if not ep['sym'].endswith('USDT') else ep['sym']) or rows_of(k4h, ep['sym'])
+    cand = a15 if a15 and a15[-1]['t']>=ep['t0'] else a4
+    return [c for c in (cand or []) if c['t']>=ep['t0']-15*60e3]
+
+STOP_PCTS=[0.4,0.6,0.9,1.2,1.6,2.0,2.5,3.0,4.0,5.0]
+TP_STYLES=[('flat0.5',[(0.5,1.0)]),('flat1',[(1.0,1.0)]),('flat1.5',[(1.5,1.0)]),('flat2',[(2.0,1.0)]),('flat3',[(3.0,1.0)]),
+           ('stg-357',[(0.15,0.35),(0.35,0.30),(0.7,0.20)]),('stg-124',[(1.0,0.4),(2.0,0.4),(4.0,0.2)]),('trail-only',[])]
+TRAILS=[(0.15,0.25,0.10),(0.18,0.32,0.12),(0.25,0.35,0.15),(0.4,0.40,0.25),(0.6,0.45,0.35),(1.0,0.50,0.6),(None,None,None)]
+HOLDS=[30*60e3, 2*36e5, 8*36e5, 24*36e5, 999*36e5]
+
+policies=[]
+for sp in STOP_PCTS:
+    for tn,legs in TP_STYLES:
+        for tr in TRAILS:
+            for hc in HOLDS:
+                for mk in ('taker','maker'):
+                    policies.append(dict(stop=sp,tpn=tn,legs=legs,trail=tr,hold=mk,holdMs=hc,fee=mk))
+print(f"engine-B policies: {len(policies):,}")
+
+def sim(ep, pol, path):
+    e=ep['entry']; stop=e*(1-pol['stop']/100); feeC=COSTS[pol['fee']]/100
+    lev=70.0
+    notional=1.0
+    peak=0.0; rung_hit=[False]*len(pol['legs']); rem=1.0; pnl_pct=0.0
+    arm,gb,lock=pol['trail']
+    armed=False; trail_px=None; peak_px=e
+    t_end=ep['t0']+pol['holdMs']
+    for c in path:
+        if c['t']>t_end: break
+        lo,hi,cl=c['l'],c['h'],c['c']
+        move_hi=(hi-e)/e; move_lo=(lo-e)/e
+        if lo<=stop:
+            pnl_pct += rem*((stop-e)/e); rem=0; break
+        # TP legs on the way up (fill fraction at each level)
+        for i,(lvl,frac) in enumerate(pol['legs']):
+            tp=e*(1+lvl*pol['stop']/100)
+            if not rung_hit[i] and hi>=tp:
+                rung_hit[i]=True
+                take=min(frac,rem)
+                pnl_pct += take*((tp-e)/e); rem-=take
+                if rem<=0.02: rem=0; break
+        if rem<=0: break
+        # fee-lock arm + trail
+        if arm is not None:
+            if not armed and move_hi*100>=arm: armed=True; trail_px=e*(1+lock/100)
+            if armed:
+                peak_px=max(peak_px,hi)
+                dd=(peak_px-lo)/e*100
+                give=gb*max(0.0001,(peak_px-e)/e*100)
+                if lo<=trail_px or dd>=give:
+                    exit_px=min(trail_px,cl) if lo<=trail_px else peak_px*(1-give/100)
+                    pnl_pct += rem*((exit_px-e)/e); rem=0; break
+    if rem>0:
+        lastc = path[-1]['c'] if path else ep['exit']
+        pnl_pct += rem*((lastc-e)/e)
+    return (pnl_pct/100 - feeC)*lev* (ep.get('margin',1.0))  # usd-ish R: notional=1 margin
+
+res=[]
+for pol in policies:
+    nets=[]
+    for ep in real_eps:
+        path=path_for(ep)
+        if not path: continue
+        nets.append(sim(ep,pol,path))
+    if len(nets)<10: continue
+    m=sum(nets)/len(nets); sd=math.sqrt(max(1e-12,sum(x*x for x in nets)/len(nets)-m*m))
+    res.append(dict(pol=pol,n=len(nets),mean=round(m,4),sd=round(sd,4),sqn=round(m/sd*10,1),wr=round(100*sum(1 for x in nets if x>0)/len(nets))))
+res.sort(key=lambda x:-x['mean'])
+print(f"engine-B evaluated: {len(res):,} policies over paths")
+
+realized = sum(e['real_net'] for e in real_eps)
+out = dict(
+    at=datetime.datetime.utcnow().isoformat()+'Z',
+    episodes=n_total, trainN=len(train_eps), holdN=len(test_eps), engineATests=tests,
+    findings=findings,
+    engineB=dict(policies=len(policies), evaluated=len(res), realEpisodes=len(real_eps),
+                 realizedNet=round(realized,3), top=res[:30],
+                 realizedMean=round(realized/max(1,len(real_eps)),4)),
+)
+write = os.path.join(API,'mc-million.json')
+json.dump(out, open(write+'.tmp','w')); os.rename(write+'.tmp', write)
+print('wrote', write)

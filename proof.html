@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SENTINEL — Verified Track Record</title>
+<style>
+  :root{--bg:#0a0d12;--card:#11161e;--line:#1e2632;--txt:#dfe6ee;--dim:#7d8896;--up:#2fe6a8;--dn:#ff5c6c;--gold:#f0b429}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.5 'SF Mono','Cascadia Code',Consolas,monospace;padding:28px 18px;max-width:960px;margin:0 auto}
+  h1{font-size:17px;letter-spacing:.22em;color:var(--gold)}
+  .sub{color:var(--dim);font-size:11px;margin:4px 0 22px;letter-spacing:.04em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .k{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
+  .v{font-size:22px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  .up{color:var(--up)}.dn{color:var(--dn)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:7px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid #161d27;font-variant-numeric:tabular-nums}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:8px}
+  .badge{display:inline-block;font-size:9px;border:1px solid #3a4554;border-radius:3px;padding:0 4px;color:var(--dim);margin-left:5px}
+  .warn{border-color:#f0b42966;color:var(--gold)}
+  .foot{color:#39424f;font-size:10px;margin-top:18px;text-align:center;line-height:1.7}
+  canvas{display:block;width:100%}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--up);margin-right:6px}
+</style>
+</head>
+<body>
+<h1>SENTINEL</h1>
+<div class="sub"><span class="dot" id="dot"></span>VERIFIED TRACK RECORD · every figure below is reconstructed from exchange fill data, not simulation · auto-refresh 15s</div>
+
+<div class="grid">
+  <div class="card"><div class="k">Equity (A$)</div><div class="v" id="eq">—</div></div>
+  <div class="card"><div class="k">Session Net</div><div class="v" id="ses">—</div></div>
+  <div class="card"><div class="k">Closed Episodes</div><div class="v" id="nep">—</div></div>
+  <div class="card"><div class="k">Net All-Time (USD)</div><div class="v" id="net">—</div></div>
+  <div class="card"><div class="k">Liq-Guard Violations</div><div class="v" id="viol">0</div></div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Equity curve</h2>
+  <canvas id="eqc" height="120"></canvas>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Pattern board — per-tag audited statistics <span class="badge">episode = one full seat, open→flat, all fees included</span></h2>
+  <div style="color:var(--dim);font-size:12px;margin:-6px 0 10px">Bulkowski pattern classes (b-flag / b-pennant / b-dtb / b-rect-up / b-run-up) tagged at open — each class earns or loses deployment against its published prior (Δpub). Weak structures (b-run-up, conf&lt;0.5) are rejected by the pattern gate before entry. Tags below ~20 episodes carry the n&lt;20 flag — thin samples are flagged, not sold.</div>
+  <table><thead><tr><th>Tag</th><th>Ep</th><th>WR</th><th>Wilson LB</th><th>PF</th><th>Exp/ep</th><th>Avg W / L</th><th>Δpub</th><th>Net</th></tr></thead>
+  <tbody id="tags"></tbody></table>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Episode journal — every closed trade, tagged with its entry reason</h2>
+  <table><thead><tr><th>Closed</th><th>Symbol</th><th>Tag</th><th>Hold</th><th>Legs</th><th>Net (USD)</th></tr></thead>
+  <tbody id="eps"></tbody></table>
+</div>
+
+<div class="card">
+  <h2>Open book</h2>
+  <table><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Mark</th><th>uPnL</th><th>Protection</th><th>Why</th></tr></thead>
+  <tbody id="pos"></tbody></table>
+</div>
+
+<div class="foot">
+  Liq-guard invariant: every stop-loss armed strictly above the position's own liquidation price, verified per seat.<br>
+  Wilson LB = 95% lower confidence bound on win rate (honest small-sample math). PF = gross wins ÷ gross losses.<br>
+  SENTINEL · <span id="ts"></span>
+</div>
+
+<script>
+(function(){
+  let last=Date.now();
+  const b=document.createElement('div');
+  b.style.cssText='display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;padding:12px 16px;font:600 14px/1.5 monospace;text-align:center';
+  b.innerHTML='FEED LOST — this page cannot reach the live server.<br>Live proof: <a href="https://52-65-5-228.sslip.io/proof.html" style="color:#ffe08a">https://52-65-5-228.sslip.io/proof.html</a> (bookmark this, old IP is dead)';
+  document.body.prepend(b);
+  const of=window.fetch;
+  window.fetch=function(){const a=arguments;return of.apply(this,a).then(r=>{if(r.ok)last=Date.now();return r;});};
+  setInterval(()=>{b.style.display=(Date.now()-last>25000)?'block':'none';},5000);
+})();
+const $=id=>document.getElementById(id);
+const fmt=(n,d=2)=>n==null||isNaN(n)?'—':Number(n).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d});
+const cls=n=>n>0?'up':n<0?'dn':'';
+let firstT=null;
+function curve(id,pts,lab){
+  const c=$(id),x=c.getContext('2d'),W=c.clientWidth,H=c.clientHeight;
+  c.width=W*2;c.height=H*2;x.scale(2,2);x.clearRect(0,0,W,H);
+  if(!pts||pts.length<2){x.fillStyle='#39424f';x.font='10px monospace';x.textAlign='center';x.fillText('accumulating…',W/2,H/2);return}
+  const vs=pts.map(p=>p[1]),mn=Math.min(...vs),mx=Math.max(...vs),rg=(mx-mn)||1e-9;
+  const X=i=>4+i/(pts.length-1)*(W-8),Y=v=>H-6-((v-mn)/rg)*(H-12);
+  const up=vs[vs.length-1]>=vs[0],col=up?'#2fe6a8':'#ff5c6c';
+  x.strokeStyle='rgba(125,136,150,.12)';for(let g=1;g<4;g++){x.beginPath();x.moveTo(0,H*g/4);x.lineTo(W,H*g/4);x.stroke()}
+  if(mn<0&&mx>0){x.strokeStyle='rgba(255,255,255,.2)';x.beginPath();x.moveTo(0,Y(0));x.lineTo(W,Y(0));x.stroke()}
+  x.strokeStyle=col;x.lineWidth=1.8;x.beginPath();
+  pts.forEach((p,i)=>i?x.lineTo(X(i),Y(p[1])):x.moveTo(X(i),Y(p[1])));x.stroke();
+  x.fillStyle='#39424f';x.font='9px monospace';x.textAlign='left';x.fillText(mx.toFixed(2),5,10);x.fillText(mn.toFixed(2),5,H-4);
+}
+async function tick(){
+  try{
+    const d=await (await fetch('status.json?'+Date.now(),{cache:'no-store'})).json();
+    $('dot').style.background='var(--up)';
+    const r=d.rate||1.5;
+    if(d.total_aud!=null){$('eq').textContent='A$'+fmt(d.total_aud);if(firstT===null)firstT=d.total_aud;
+      const dl=d.total_aud-firstT;$('ses').textContent=(dl>=0?'+':'')+'A$'+fmt(dl,2);$('ses').className='v '+cls(dl)}
+    const tg=Object.entries(d.tags||{}).sort((a,b)=>(b[1].net||0)-(a[1].net||0));
+    $('nep').textContent=tg.reduce((s,[,v])=>s+v.ep,0);
+    const net=tg.reduce((s,[,v])=>s+(v.net||0),0);
+    $('net').textContent=(net>=0?'+':'')+'$'+fmt(net,2);$('net').className='v '+cls(net);
+    $('viol').textContent=(d.pos||[]).filter(p=>p.liqok===false).length;
+    $('viol').className='v '+((d.pos||[]).some(p=>p.liqok===false)?'dn':'up');
+    curve('eqc',(d.hist||[]).map(h=>[h[0],h[1]*r]));
+    $('tags').innerHTML=tg.length?tg.map(([t,v])=>
+      `<tr><td style="color:var(--gold)">${t}${v.ep<20?'<span class="badge warn">n&lt;20</span>':''}</td>
+       <td>${v.ep}</td><td>${v.wr}%</td><td>${v.wlb!=null?v.wlb+'%':'—'}</td>
+       <td>${v.pf!=null?v.pf:'—'}</td>
+       <td class="${cls(v.exp)}">${v.exp>=0?'+':''}$${fmt(v.exp,3)}</td>
+       <td>${v.aw!=null?'$'+v.aw:'—'} / ${v.al!=null?'$'+v.al:'—'}</td>
+       <td class="${cls(v.d)}">${v.d!=null?(v.d>=0?'+':'')+v.d+'pts':'—'}</td>
+       <td class="${cls(v.net)}">${v.net>=0?'+':''}$${fmt(v.net,2)}</td></tr>`).join('')
+      :'<tr><td colspan="9" style="color:var(--dim)">no closed episodes yet</td></tr>';
+    $('eps').innerHTML=(d.eps||[]).length?(d.eps||[]).slice(0,25).map(e=>{
+      const t=new Date(e.end);
+      return `<tr><td style="color:var(--dim)">${t.toUTCString().slice(5,22)}</td>
+        <td><a style="color:inherit;text-decoration:none" href="https://www.bitget.com/futures/usdt/${e.sym}" target="_blank" rel="noopener">${e.sym}</a></td>
+        <td style="color:var(--gold)">${e.tag}</td><td>${Math.round(e.dur_s/60)}m</td><td>${e.legs}</td>
+        <td class="${cls(e.net)}">${e.net>=0?'+':''}$${fmt(e.net,3)}</td></tr>`}).join('')
+      :'<tr><td colspan="6" style="color:var(--dim)">none yet</td></tr>';
+    $('pos').innerHTML=(d.pos||[]).length?(d.pos||[]).map(p=>
+      `<tr><td><a style="color:inherit;text-decoration:none" href="https://www.bitget.com/futures/usdt/${p.sym}" target="_blank" rel="noopener">${p.sym}</a></td>
+       <td>${p.side}</td><td>${p.entry||'—'}</td><td>${p.mark||'—'}</td>
+       <td class="${cls(p.upl)}">${p.upl!=null?(p.upl>=0?'+':'')+'$'+fmt(p.upl,3):'—'}</td>
+       <td>${p.liqok==null?'—':p.liqok?'<span class="up">✓ above liq</span>':'<span class="dn">✗ VIOLATION</span>'} <span style="color:var(--dim)">SL ${p.stop_px||'—'}</span></td>
+       <td style="color:var(--dim);font-size:11px">${p.reason||'—'} <b style="color:var(--gold)">${p.rtag||''}</b></td></tr>`).join('')
+      :'<tr><td colspan="7" style="color:var(--dim)">flat — no open seats</td></tr>';
+    $('ts').textContent='updated '+new Date().toUTCString().slice(17,25)+' UTC';
+  }catch(e){$('dot').style.background='var(--dn)'}
+}
+tick();setInterval(tick,15000);
+</script>
+</body>
+</html>
